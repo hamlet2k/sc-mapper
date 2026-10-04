@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import type { AssignSource, PadInfo, PadKind, PadLike } from '../lib/devices';
-import { parseProfileProduct } from '../lib/devices';
-import type { Group, Profile, ProfileDevice } from '../lib/types';
+import { padLabel, parseProfileProduct } from '../lib/devices';
+import type { DeviceSettings } from '../lib/devopts';
+import type { Group, OptionTree, Profile, ProfileDevice } from '../lib/types';
+import { ChromiumBanner } from './ChromiumBanner';
+import { DeviceSettingsEditor } from './DeviceSettings';
 import { InputTester } from './InputTester';
 
 type OnAssign = (key: string, v: { kind?: PadKind; instance?: number }) => void;
@@ -31,7 +35,7 @@ export function DeviceList({ pads, group, activity, onAssign, onReset, profileDe
           <div key={p.key} data-testid="device-row" data-device={p.name} className={`rounded border px-3 py-2 text-xs ${group && p.kind === group ? 'border-hud/50 bg-hud/5' : 'border-edge/70 bg-black/20'}`}>
             <div className="flex flex-wrap items-center gap-2">
               {activity && <span className={`h-2 w-2 rounded-full ${live ? 'bg-ok shadow-[0_0_8px_var(--color-ok)]' : 'bg-slate-600'}`} />}
-              <span className="min-w-[10rem] flex-1 font-semibold text-slate-100" title={p.id}>{p.name}</span>
+              <span className="min-w-[10rem] flex-1 font-semibold text-slate-100" title={p.id}>{padLabel(p)}</span>
               <span className="flex flex-wrap items-center gap-2">
               <select value={p.kind} onChange={(e) => onAssign(p.key, { kind: e.target.value as PadKind })} aria-label="Use as"
                 className="rounded border border-edge bg-panel2 px-1.5 py-0.5 font-mono text-[11px] text-slate-200">
@@ -43,7 +47,7 @@ export function DeviceList({ pads, group, activity, onAssign, onReset, profileDe
                   {Array.from({ length: maxJs }, (_, i) => i + 1).map((n) => {
                     const pd = profileDevices.find((d) => d.slot === 'js' && d.instance === n);
                     const other = pads.find((x) => x !== p && x.kind === 'js' && x.instance === n);
-                    return <option key={n} value={n}>js{n}{pd ? ` · ${devName(pd)} (profile)` : ''}{other ? ` · used by ${other.name}` : ''}</option>;
+                    return <option key={n} value={n}>js{n}{pd ? ` · ${devName(pd)} (profile)` : ''}{other ? ` · used by ${padLabel(other)}` : ''}</option>;
                   })}
                 </select>
               ) : <span className="rounded border border-edge px-1.5 py-0.5 font-mono text-[11px] text-slate-300">gp1</span>}
@@ -52,6 +56,7 @@ export function DeviceList({ pads, group, activity, onAssign, onReset, profileDe
             <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[10px] text-slate-500">
               <span>#{p.index} · {p.mapping || 'raw'} mapping · {p.buttons} btn · {p.axes} axes{p.vendor ? ` · USB ${p.vendor}:${p.productId}` : ''}</span>
               <span className={`rounded border px-1 ${src.cls}`} data-testid="device-source">{src.text}{p.matched && p.source !== 'manual' ? `: ${p.matched}` : ''}</span>
+              {p.ambiguous && <span className="rounded border border-mod/50 px-1 text-mod" data-testid="device-ambiguous" title="Identical USB ids: the browser can't tell which physical device the game numbers first">identical device: order is a guess, press a button to check</span>}
               {!compact && p.source === 'manual' && onReset && (
                 <button type="button" onClick={() => onReset(p.key)} className="rounded border border-edge px-1 text-slate-400 hover:border-hud/60 hover:text-hud2">↺ automatic</button>
               )}
@@ -70,19 +75,30 @@ export function DeviceList({ pads, group, activity, onAssign, onReset, profileDe
 }
 
 /** Edit → Controllers: devices declared in the profile, devices the browser sees, the mapping between them, and a live tester */
-export function ControllersPanel({ profile, pads, describe, onAssign, onReset, onClose }: {
+export function ControllersPanel({ profile, pads, describe, onAssign, onReset, onClose, settings, tree, onSettings, initialTab = 'devices' }: {
   profile: Profile | null; pads: PadInfo[]; describe: (l: readonly PadLike[]) => PadInfo[]; onAssign: OnAssign; onReset: (key?: string) => void; onClose: () => void;
+  settings?: DeviceSettings; tree?: OptionTree; onSettings?: (label: string, fn: (s: DeviceSettings) => DeviceSettings) => void; initialTab?: 'devices' | 'settings';
 }) {
+  const [tab, setTab] = useState<'devices' | 'settings'>(initialTab);
   const declared = (profile?.devices ?? []).slice().sort((a, b) => 'kbmogpjs'.indexOf(a.slot) - 'kbmogpjs'.indexOf(b.slot) || a.instance - b.instance);
   const ctrl = declared.filter((d) => d.slot === 'js' || d.slot === 'gp');
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-void/85 p-4 backdrop-blur-sm" onClick={onClose} data-testid="controllers-panel">
       <div className="hud-panel hud-corners my-4 w-full max-w-6xl rounded-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 border-b border-edge px-5 py-3">
-          <h2 className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">🕹 Controllers &amp; input tester</h2>
+          <h2 className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">🕹 Controllers</h2>
+          <div className="ml-4 flex rounded-md border border-edge p-0.5" role="tablist">
+            {([['devices', 'Devices & input tester'], ['settings', 'Axis settings & curves']] as const).map(([k, l]) => (
+              <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} data-testid={`tab-${k}`}
+                className={`rounded px-3 py-1 font-display text-sm font-semibold uppercase tracking-wider ${tab === k ? 'bg-hud/20 text-hud2' : 'text-slate-400 hover:text-slate-200'}`}>{l}</button>
+            ))}
+          </div>
           <button type="button" onClick={onClose} className="ml-auto rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2">✕</button>
         </div>
         <div className="space-y-4 p-5">
+          <ChromiumBanner detected={pads.length} />
+          {tab === 'settings' && settings && onSettings && <DeviceSettingsEditor profile={profile} settings={settings} tree={tree} pads={pads} onChange={onSettings} />}
+          {tab === 'devices' && <>
           <div className="rounded border border-hud/30 bg-hud/5 p-3 text-xs leading-relaxed text-slate-300">
             Star Citizen refers to controllers by <b>instance number</b>: <code className="text-hud2">js1_</code>, <code className="text-hud2">js2_</code>… for joysticks, throttles and pedals,
             <code className="text-hud2"> gp1_</code> for a gamepad (<code>kb1_</code>/<code>mo1_</code> are keyboard and mouse). Every binding, and the file you export, uses those numbers.
@@ -121,6 +137,18 @@ export function ControllersPanel({ profile, pads, describe, onAssign, onReset, o
                 <h3 className="font-display text-sm font-bold uppercase tracking-[0.2em] text-hud">Detected by this browser</h3>
                 {pads.some((p) => p.source === 'manual') && <button type="button" onClick={() => onReset()} className="ml-auto rounded border border-edge px-1.5 py-0.5 text-[10px] text-slate-400 hover:text-hud2">↺ reset all to automatic</button>}
               </div>
+              {!profile && pads.length > 0 && (
+                <p className="mt-2 rounded border border-edge/70 bg-black/20 px-3 py-2 text-[11px] text-slate-400" data-testid="no-profile-hint">
+                  Numbers below follow the browser&apos;s order (a guess). Import your <code>actionmaps.xml</code> and devices are matched to the game&apos;s numbers by USB id instead.
+                </p>
+              )}
+              {pads.some((p) => p.dup) && (
+                <p className="mt-2 rounded border border-mod/40 bg-mod/5 px-3 py-2 text-[11px] text-slate-300" data-testid="dup-hint">
+                  Some devices share a USB id ({[...new Set(pads.filter((p) => p.dup).map((p) => p.name))].join(', ')}): a device can expose several interfaces, or you have two of the same model.
+                  They&apos;re told apart by their button counts. Press a button on each in the tester below to see which is which, then set its number.
+                  The game also stores deadzone/saturation by product name, so identical devices share those.
+                </p>
+              )}
               <div className="mt-2"><DeviceList pads={pads} onAssign={onAssign} onReset={onReset} profileDevices={profile?.devices} /></div>
             </section>
           </div>
@@ -129,6 +157,7 @@ export function ControllersPanel({ profile, pads, describe, onAssign, onReset, o
             <p className="mb-2 mt-0.5 text-[11px] text-slate-500">Everything the browser reports, live. &quot;last&quot; shows the Star Citizen input a press or move would be captured as. If a device or button doesn&apos;t show up here, the browser can&apos;t see it.</p>
             <InputTester describe={describe} />
           </section>
+          </>}
         </div>
       </div>
     </div>

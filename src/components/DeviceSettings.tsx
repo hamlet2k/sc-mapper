@@ -1,0 +1,410 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { JS_AXES } from '../lib/capture';
+import { getPads, parseProfileProduct, type PadInfo } from '../lib/devices';
+import {
+  axisBlockName, axisValues, blockInstance, blockProduct, blockType, curveAt, groupValues, JOYSTICK_SETTING_INSTANCES, JS_AXIS_INPUTS, optionsBlock,
+  resetGroup, response, setAxis, setGroup, type DeviceSettings, type OptionsBlock, type AxisBlock,
+} from '../lib/devopts';
+import type { OptionTree, OptionTreeGroup, Profile } from '../lib/types';
+
+type Change = (label: string, fn: (s: DeviceSettings) => DeviceSettings) => void;
+interface Pt { x: number; y: number }
+
+const shortName = (product?: string) => (product ? parseProfileProduct(product).name || product.trim() : '');
+
+/**
+ * Per-device settings the game stores in actionmaps.xml / layout exports: deadzone & saturation per axis (<deviceoptions>, per
+ * device model) and invert / exponent / custom curve per option group (<options type="joystick" instance="N">).
+ */
+export function DeviceSettingsEditor({ profile, settings, tree, pads, onChange }: {
+  profile: Profile | null; settings: DeviceSettings; tree?: OptionTree; pads: PadInfo[]; onChange: Change;
+}) {
+  const [inst, setInst] = useState(1);
+  const [sel, setSel] = useState<string>('flight_move_pitch');
+  const [filter, setFilter] = useState('');
+  const maxInst = tree?.instances ?? JOYSTICK_SETTING_INSTANCES;
+
+  const productOf = (n: number) => {
+    const b = optionsBlock(settings, 'joystick', n);
+    return (b && blockProduct(b)) || profile?.devices.find((d) => d.slot === 'js' && d.instance === n)?.rawProduct
+      || profile?.devices.find((d) => d.slot === 'js' && d.instance === n)?.product || pads.find((p) => p.kind === 'js' && p.instance === n)?.product;
+  };
+  const product = productOf(inst);
+  const pad = pads.find((p) => p.kind === 'js' && p.instance === inst);
+  const groups = useMemo(() => (tree?.groups ?? []).filter((g) => g.showCurve !== 0 || g.showInvert !== 0), [tree]);
+  const byName = useMemo(() => new Map((tree?.groups ?? []).map((g) => [g.name, g])), [tree]);
+  const pathOf = (g: OptionTreeGroup) => {
+    const out: string[] = [];
+    for (let p = g.parent ? byName.get(g.parent) : undefined; p && p.depth >= 3; p = p.parent ? byName.get(p.parent) : undefined) out.unshift(p.label);
+    return out.join(' › ');
+  };
+  const block = optionsBlock(settings, 'joystick', inst);
+  const unknown = (block?.groups ?? []).filter((g) => !byName.has(g.name));
+  const q = filter.trim().toLowerCase();
+  const shown = groups.filter((g) => !q || `${g.label} ${g.name} ${pathOf(g)}`.toLowerCase().includes(q));
+  const selTree = byName.get(sel);
+  const vals = groupValues(settings, 'joystick', inst, sel);
+  const axes = product ? axisValues(settings, product) : {};
+  const jsProducts = Array.from({ length: maxInst }, (_, k) => shortName(productOf(k + 1))).filter(Boolean);
+  const others = settings.blocks.filter((b) => (b.tag === 'deviceoptions' ? !jsProducts.includes(shortName(axisBlockName(b))) : blockType(b) !== 'joystick' || blockInstance(b) > maxInst));
+  const set = (label: string, fn: (s: DeviceSettings) => DeviceSettings) => onChange(`${label} (js${inst})`, fn);
+
+  return (
+    <div className="space-y-4" data-testid="device-settings">
+      <div className="rounded border border-hud/30 bg-hud/5 p-3 text-xs leading-relaxed text-slate-300">
+        These are the controller settings Star Citizen saves in <code>actionmaps.xml</code> and exported layouts, read from your imported file and written back on export.
+        <b> Invert</b>, <b>exponent</b> and <b>custom curves</b> are set per joystick number and per control (pitch, yaw, strafe…).
+        <b> Deadzone</b> and <b>saturation</b> are set per axis of a device <i>model</i>: the game stores them by product name, so identical devices share them.
+        The game keeps settings for <b>js1–js{maxInst}</b> only (its option tree declares {maxInst} joystick instances); devices numbered higher can be bound but have no settings.
+        The chart is an approximation: the game&apos;s exact maths isn&apos;t published.
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Joystick">
+        {Array.from({ length: maxInst }, (_, i) => i + 1).map((n) => {
+          const b = optionsBlock(settings, 'joystick', n);
+          const name = shortName(productOf(n));
+          return (
+            <button key={n} type="button" role="tab" aria-selected={inst === n} onClick={() => setInst(n)} data-testid={`settings-js${n}`}
+              className={`rounded border px-2 py-1 text-left font-mono text-[11px] ${inst === n ? 'border-hud bg-hud/15 text-hud2' : 'border-edge text-slate-400 hover:border-hud/60'}`}>
+              <b>js{n}</b>{name ? <span className="ml-1 font-sans text-[10px] text-slate-400">{name.slice(0, 22)}</span> : null}
+              {b?.groups.length ? <span className="ml-1 rounded bg-mod/20 px-1 text-[9px] text-mod">{b.groups.length}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+        <section className="space-y-3">
+          <div className="text-xs text-slate-400">
+            <span className="font-mono font-bold text-hud2">js{inst}</span>{' '}
+            {product ? <span className="text-slate-100">{shortName(product)}</span> : <span className="text-slate-500">no device known for this number (import a profile or connect it)</span>}
+            {pad && <span className="ml-2 rounded border border-ok/40 px-1 font-mono text-[10px] text-ok">connected: {pad.name}</span>}
+          </div>
+          <div>
+            <div className="flex items-baseline gap-2">
+              <h4 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-mod">Controls</h4>
+              <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="filter: pitch, strafe, turret…"
+                className="ml-auto w-48 rounded border border-edge bg-black/40 px-2 py-0.5 text-[11px] text-slate-200 outline-none focus:border-hud" />
+            </div>
+            <ul className="mt-2 max-h-[420px] space-y-0.5 overflow-y-auto pr-1 scrollbar-thin" data-testid="settings-groups">
+              {shown.map((g) => {
+                const v = groupValues(settings, 'joystick', inst, g.name);
+                const head = g.showCurve === -1 || g.showInvert === -1;
+                return (
+                  <li key={g.name}>
+                    <button type="button" onClick={() => setSel(g.name)} data-group={g.name}
+                      className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs ${sel === g.name ? 'bg-hud/15 text-hud2' : 'text-slate-300 hover:bg-white/5'}`}
+                      style={{ paddingLeft: 8 + Math.max(0, g.depth - 3) * 12 }}>
+                      <span className={head ? 'font-semibold uppercase tracking-wide text-slate-400' : ''}>{g.label}</span>
+                      <span className="font-mono text-[9px] text-slate-600">{g.name}</span>
+                      <span className="ml-auto flex gap-1 font-mono text-[9px]">
+                        {v?.invert !== undefined && <span className={`rounded px-1 ${v.invert ? 'bg-mod/25 text-mod' : 'bg-white/5 text-slate-400'}`}>{v.invert ? 'inverted' : 'not inv.'}</span>}
+                        {v?.exponent !== undefined && <span className="rounded bg-hud/20 px-1 text-hud2">exp {v.exponent}</span>}
+                        {v?.curve && <span className="rounded bg-hud/20 px-1 text-hud2">curve {v.curve.length}pt</span>}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+              {unknown.map((g) => (
+                <li key={`u-${g.name}`} className="flex items-center gap-2 rounded px-2 py-1 text-xs text-slate-500" title="Kept as imported">
+                  <span className="font-mono text-[10px]">{g.name}</span><span className="text-[10px]">not in this game version&apos;s option tree (kept as is)</span>
+                  <button type="button" onClick={() => set(`Remove ${g.name}`, (s) => resetGroup(s, 'joystick', inst, g.name))} className="ml-auto text-[10px] text-slate-500 hover:text-alert">remove</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <AxisTable product={product} axes={axes} onSet={(input, key, v) => product && set(`${key} ${input}`, (s) => setAxis(s, product, input, key, v))} />
+        </section>
+
+        <section className="rounded-lg border border-edge/70 bg-black/25 p-3">
+          {selTree ? (
+            <GroupEditor key={`${inst}:${sel}`} g={selTree} path={pathOf(selTree)} vals={vals} axes={axes} pad={pad}
+              onPatch={(label, patch) => set(label, (s) => setGroup(s, 'joystick', inst, sel, patch, product))}
+              onReset={() => set(`Reset ${sel}`, (s) => resetGroup(s, 'joystick', inst, sel))} />
+          ) : <p className="text-xs text-slate-500">Pick a control on the left.</p>}
+        </section>
+      </div>
+
+      {others.length > 0 && (
+        <details className="rounded border border-edge/60 bg-black/20 p-3 text-xs text-slate-400">
+          <summary className="cursor-pointer font-display text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Other settings in this profile ({others.length}) · kept unchanged on export</summary>
+          <ul className="mt-2 space-y-1 font-mono text-[10px]">
+            {others.map((b, i) => <li key={i}>{describeBlock(b)}</li>)}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function describeBlock(b: OptionsBlock | AxisBlock): string {
+  if (b.tag === 'deviceoptions') {
+    const name = b.attrs.find((a) => a[0] === 'name')?.[1] ?? '';
+    return `deviceoptions “${shortName(name)}”: ${b.entries.map((e) => e.filter(([k]) => k !== 'input').map(([k, v]) => `${e.find((x) => x[0] === 'input')?.[1]} ${k}=${v}`).join(' ')).filter((x, i, a) => a.indexOf(x) === i).join(', ') || 'empty'}`;
+  }
+  return `${blockType(b)}${blockInstance(b)} ${shortName(blockProduct(b))}: ${b.groups.map((g) => `${g.name}${g.attrs.map(([k, v]) => ` ${k}=${v}`).join('')}${g.curve?.points.length ? ` curve(${g.curve.points.length})` : ''}`).join(', ') || 'no settings'}`;
+}
+
+function AxisTable({ product, axes, onSet }: { product?: string; axes: Record<string, { deadzone?: number; saturation?: number }>; onSet: (input: string, key: 'deadzone' | 'saturation', v: number | null) => void }) {
+  const inputs = [...JS_AXIS_INPUTS, ...Object.keys(axes).filter((k) => !JS_AXIS_INPUTS.includes(k))];
+  return (
+    <div data-testid="axis-table">
+      <h4 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-mod">Axis deadzone &amp; saturation</h4>
+      {!product ? <p className="mt-1 text-[11px] text-slate-500">Needs the device&apos;s product name: import a profile that lists this joystick, or connect it and assign it to this number.</p> : (
+        <>
+          <p className="mt-0.5 text-[10px] text-slate-500">For every “{shortName(product)}” (stored by product name). Empty = game default.</p>
+          <table className="mt-1 w-full text-[11px]">
+            <thead><tr className="text-left font-mono text-[9px] uppercase tracking-widest text-slate-500"><th className="py-0.5">Axis</th><th>Deadzone</th><th>Saturation</th></tr></thead>
+            <tbody>
+              {inputs.map((a) => (
+                <tr key={a} className="border-t border-edge/40">
+                  <td className="py-0.5 font-mono text-slate-300">{a}</td>
+                  {(['deadzone', 'saturation'] as const).map((k) => (
+                    <td key={k} className="pr-2">
+                      <NumField key={product} value={axes[a]?.[k]} min={0} max={1} step={0.005} label={`${k} ${a}`} onSet={(v) => onSet(a, k, v)} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  );
+}
+
+function NumField({ value, min, max, step, label, onSet }: { value?: number; min: number; max: number; step: number; label: string; onSet: (v: number | null) => void }) {
+  const [text, setText] = useState(value === undefined ? '' : String(value));
+  useEffect(() => setText(value === undefined ? '' : String(value)), [value]);
+  const commit = () => {
+    const t = text.trim();
+    if (!t) { if (value !== undefined) onSet(null); return; }
+    const n = Number(t);
+    if (!Number.isFinite(n)) { setText(value === undefined ? '' : String(value)); return; }
+    const c = Math.max(min, Math.min(max, n));
+    if (c !== value) onSet(c);
+  };
+  return (
+    <span className="flex items-center gap-1">
+      <input aria-label={label} value={text} inputMode="decimal" placeholder="default" onChange={(e) => setText(e.target.value)} onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        className="w-20 rounded border border-edge bg-black/40 px-1.5 py-0.5 font-mono text-[11px] text-slate-100 outline-none placeholder:text-slate-600 focus:border-hud" />
+      {value !== undefined && <button type="button" title="Back to game default" onClick={() => onSet(null)} className="text-[10px] text-slate-500 hover:text-alert">✕</button>}
+      <span className="sr-only">{step}</span>
+    </span>
+  );
+}
+
+type Patch = Parameters<typeof setGroup>[4];
+function GroupEditor({ g, path, vals, axes, pad, onPatch, onReset }: {
+  g: OptionTreeGroup; path: string; vals: ReturnType<typeof groupValues>; axes: Record<string, { deadzone?: number; saturation?: number }>; pad?: PadInfo;
+  onPatch: (label: string, p: Patch) => void; onReset: () => void;
+}) {
+  const mode: 'default' | 'exponent' | 'curve' = vals?.curve ? 'curve' : vals?.exponent !== undefined ? 'exponent' : 'default';
+  const defExp = g.exponent !== undefined ? Number(g.exponent) : undefined;
+  const defCurve = g.curve?.map(([x, y]) => ({ x, y }));
+  const [draft, setDraft] = useState<Pt[] | null>(null);
+  const [axis, setAxisSel] = useState<string>('');
+  const points = draft ?? vals?.curve ?? null;
+  const live = useLiveAxis(pad, axis);
+  const shape = {
+    exponent: mode === 'exponent' ? vals?.exponent : mode === 'default' ? defExp : undefined,
+    curve: mode === 'curve' ? points ?? undefined : mode === 'default' ? defCurve : undefined,
+    ...(axis ? axes[axis] ?? {} : {}),
+  };
+  const canCurve = g.showCurve !== 0;
+  const canInvert = g.showInvert !== 0;
+  const toPoints = (exp: number) => Array.from({ length: 9 }, (_, i) => ({ x: (i + 1) / 10, y: Math.pow((i + 1) / 10, exp) }));
+
+  return (
+    <div className="space-y-3" data-testid="group-editor">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h4 className="font-display text-base font-bold uppercase tracking-wider text-hud2">{g.label}</h4>
+        <code className="font-mono text-[10px] text-slate-500">{g.name}</code>
+        {path && <span className="text-[10px] text-slate-500">{path}</span>}
+        {(vals?.invert !== undefined || vals?.exponent !== undefined || vals?.curve || vals?.emptyCurve) && (
+          <button type="button" onClick={onReset} className="ml-auto rounded border border-edge px-2 py-0.5 text-[10px] text-slate-400 hover:border-alert hover:text-alert">↺ game default</button>
+        )}
+      </div>
+      {(g.showCurve === -1 || g.showInvert === -1) && <p className="text-[10px] text-slate-500">Group heading: in game this setting is shown for the whole group; whether it overrides the controls below it is not documented.</p>}
+      <div className="flex flex-wrap items-center gap-4 text-xs">
+        {canInvert && (
+          <label className="flex items-center gap-2">
+            <span className="text-slate-400">Invert</span>
+            <select aria-label="Invert" value={vals?.invert === undefined ? '' : vals.invert ? '1' : '0'}
+              onChange={(e) => onPatch(`Invert ${g.name}`, { invert: e.target.value === '' ? null : e.target.value === '1' })}
+              className="rounded border border-edge bg-panel2 px-1.5 py-0.5 font-mono text-[11px] text-slate-200">
+              <option value="">game default ({g.invert === '1' ? 'inverted' : 'not inverted'})</option>
+              <option value="1">inverted (invert=&quot;1&quot;)</option>
+              <option value="0">not inverted (invert=&quot;0&quot;)</option>
+            </select>
+          </label>
+        )}
+        {canCurve && (
+          <span className="flex items-center gap-1" role="radiogroup" aria-label="Response">
+            <span className="mr-1 text-slate-400">Response</span>
+            {(['default', 'exponent', 'curve'] as const).map((m) => (
+              <button key={m} type="button" role="radio" aria-checked={mode === m}
+                onClick={() => {
+                  if (m === mode) return;
+                  if (m === 'default') onPatch(`Response ${g.name}`, { exponent: null, curve: null });
+                  else if (m === 'exponent') onPatch(`Exponent ${g.name}`, { exponent: vals?.exponent ?? defExp ?? 1.5, curve: null });
+                  else onPatch(`Curve ${g.name}`, { curve: vals?.exponent !== undefined ? toPoints(vals.exponent) : defCurve ?? toPoints(defExp ?? 1.5) });
+                }}
+                className={`rounded border px-2 py-0.5 font-mono text-[11px] ${mode === m ? 'border-hud bg-hud/15 text-hud2' : 'border-edge text-slate-400 hover:border-hud/60'}`}>
+                {m === 'default' ? 'game default' : m === 'exponent' ? 'exponent' : 'custom curve'}
+              </button>
+            ))}
+          </span>
+        )}
+      </div>
+      {canCurve && mode === 'exponent' && (
+        <label className="flex items-center gap-3 text-xs">
+          <span className="text-slate-400">Exponent</span>
+          <input type="range" min={0.2} max={5} step={0.05} value={vals?.exponent ?? 1} aria-label="Exponent slider"
+            onChange={(e) => onPatch(`Exponent ${g.name}`, { exponent: Number(e.target.value) })} className="w-56 accent-[var(--color-hud)]" />
+          <NumField value={vals?.exponent} min={0.1} max={10} step={0.05} label="Exponent" onSet={(v) => onPatch(`Exponent ${g.name}`, { exponent: v })} />
+          <span className="text-[10px] text-slate-500">1 = linear, &gt;1 = finer near centre</span>
+        </label>
+      )}
+      <div className="flex flex-wrap gap-4">
+        <CurveChart shape={shape} invert={vals?.invert ?? g.invert === '1'} editable={canCurve && mode === 'curve'} points={points ?? []}
+          defaultShape={{ exponent: defExp, curve: defCurve }} live={live}
+          onDrag={(p) => setDraft(p)} onCommit={(p) => { setDraft(null); onPatch(`Curve ${g.name}`, { curve: p }); }} />
+        <div className="min-w-[200px] flex-1 space-y-2 text-xs">
+          <label className="flex items-center gap-2 text-[11px] text-slate-400">
+            Preview with axis
+            <select value={axis} onChange={(e) => setAxisSel(e.target.value)} aria-label="Preview axis" className="rounded border border-edge bg-panel2 px-1 py-0.5 font-mono text-[11px] text-slate-200">
+              <option value="">— (curve only)</option>
+              {JS_AXIS_INPUTS.map((a) => <option key={a} value={a}>{a}{axes[a] ? ` · dz ${axes[a].deadzone ?? '-'} / sat ${axes[a].saturation ?? '-'}` : ''}</option>)}
+            </select>
+          </label>
+          {axis && <p className="text-[10px] text-slate-500">{pad ? `Move ${axis} on ${pad.name} to see it on the curve.` : 'Connect and assign the device to see its live position.'}</p>}
+          {canCurve && mode === 'curve' && points && (
+            <div data-testid="curve-points">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">Points (in → out)</span>
+                <button type="button" onClick={() => onPatch(`Curve ${g.name}`, { curve: addPoint(points) })} className="rounded border border-edge px-1.5 text-[10px] text-slate-300 hover:border-hud/60">+ point</button>
+                <button type="button" onClick={() => onPatch(`Curve ${g.name}`, { curve: [{ x: 0, y: 0 }, { x: 1, y: 1 }] })} className="rounded border border-edge px-1.5 text-[10px] text-slate-300 hover:border-hud/60">linear</button>
+              </div>
+              <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto pr-1 scrollbar-thin">
+                {points.map((p, i) => (
+                  <li key={i} className="flex items-center gap-1">
+                    <PtField v={p.x} label={`point ${i + 1} in`} onSet={(x) => onPatch(`Curve ${g.name}`, { curve: points.map((q, j) => (j === i ? { ...q, x } : q)) })} />
+                    <span className="text-slate-600">→</span>
+                    <PtField v={p.y} label={`point ${i + 1} out`} onSet={(y) => onPatch(`Curve ${g.name}`, { curve: points.map((q, j) => (j === i ? { ...q, y } : q)) })} />
+                    {points.length > 1 && <button type="button" title="Remove point" onClick={() => onPatch(`Curve ${g.name}`, { curve: points.filter((_, j) => j !== i) })} className="text-[10px] text-slate-500 hover:text-alert">✕</button>}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[10px] text-slate-500">Drag points on the chart, double-click it to add one. Written as &lt;nonlinearity_curve&gt;&lt;point in out/&gt;.</p>
+            </div>
+          )}
+          {mode === 'default' && canCurve && <p className="text-[10px] text-slate-500">Game default: {defCurve ? `curve with ${defCurve.length} points` : defExp !== undefined ? `exponent ${defExp}` : 'linear'} (from defaultProfile.xml).</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const addPoint = (pts: Pt[]): Pt[] => {
+  const s = [...pts].sort((a, b) => a.x - b.x);
+  const all = [{ x: 0, y: 0 }, ...s, { x: 1, y: 1 }];
+  let gi = 0, gap = 0;
+  for (let i = 1; i < all.length; i++) if (all[i].x - all[i - 1].x > gap) { gap = all[i].x - all[i - 1].x; gi = i; }
+  const x = (all[gi].x + all[gi - 1].x) / 2;
+  return [...s, { x, y: curveAt(s, x) }].sort((a, b) => a.x - b.x);
+};
+
+function PtField({ v, label, onSet }: { v: number; label: string; onSet: (n: number) => void }) {
+  const [t, setT] = useState(String(v));
+  useEffect(() => setT(String(Math.round(v * 1e4) / 1e4)), [v]);
+  return (
+    <input aria-label={label} value={t} onChange={(e) => setT(e.target.value)} inputMode="decimal"
+      onBlur={() => { const n = Number(t); if (Number.isFinite(n) && n !== v) onSet(Math.max(0, Math.min(1, n))); else setT(String(v)); }}
+      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      className="w-16 rounded border border-edge bg-black/40 px-1 py-0.5 font-mono text-[10px] text-slate-100 outline-none focus:border-hud" />
+  );
+}
+
+/** live value of one joystick axis (by Star Citizen axis name) of a connected device */
+function useLiveAxis(pad: PadInfo | undefined, axis: string): number | undefined {
+  const [v, setV] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    const idx = JS_AXES.indexOf(axis);
+    if (!pad || idx < 0) { setV(undefined); return; }
+    let raf = 0, last = 0;
+    const loop = (now: number) => {
+      if (now - last > 33) {
+        last = now;
+        const p = getPads().find((g) => g.index === pad.index);
+        setV(p ? p.axes[idx] : undefined);
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [pad, axis]);
+  return v;
+}
+
+const W = 260, PAD = 22;
+function CurveChart({ shape, defaultShape, invert, editable, points, live, onDrag, onCommit }: {
+  shape: Parameters<typeof response>[1]; defaultShape: Parameters<typeof response>[1]; invert: boolean; editable: boolean; points: Pt[]; live?: number;
+  onDrag: (p: Pt[]) => void; onCommit: (p: Pt[]) => void;
+}) {
+  const svg = useRef<SVGSVGElement>(null);
+  const drag = useRef<{ i: number; pts: Pt[] } | null>(null);
+  const S = W - PAD * 2;
+  const X = (x: number) => PAD + x * S, Y = (y: number) => PAD + (1 - y) * S;
+  const path = (o: Parameters<typeof response>[1]) => Array.from({ length: 101 }, (_, i) => `${i ? 'L' : 'M'}${X(i / 100).toFixed(1)},${Y(response(i / 100, o)).toFixed(1)}`).join(' ');
+  const toPt = (e: { clientX: number; clientY: number }) => {
+    const r = svg.current!.getBoundingClientRect();
+    return { x: Math.max(0, Math.min(1, (e.clientX - r.left - PAD * (r.width / W)) / (S * (r.width / W)))), y: Math.max(0, Math.min(1, 1 - (e.clientY - r.top - PAD * (r.height / W)) / (S * (r.height / W)))) };
+  };
+  const lx = live === undefined ? undefined : Math.min(1, Math.abs(live));
+  return (
+    <div>
+      <svg ref={svg} viewBox={`0 0 ${W} ${W}`} width={W} height={W} data-testid="curve-chart" className="select-none rounded border border-edge/70 bg-black/40"
+        onDoubleClick={(e) => { if (editable) onCommit([...points, toPt(e)].sort((a, b) => a.x - b.x)); }}
+        onPointerMove={(e) => {
+          const d = drag.current;
+          if (!d) return;
+          const p = toPt(e);
+          const s = d.pts.map((q, j) => (j === d.i ? p : q));
+          d.pts = s;
+          onDrag(s);
+        }}
+        onPointerUp={() => { const d = drag.current; drag.current = null; if (d) onCommit(d.pts); }}>
+        {[0, 0.25, 0.5, 0.75, 1].map((t) => (
+          <g key={t}>
+            <line x1={X(t)} y1={Y(0)} x2={X(t)} y2={Y(1)} stroke="rgba(148,163,184,.15)" />
+            <line x1={X(0)} y1={Y(t)} x2={X(1)} y2={Y(t)} stroke="rgba(148,163,184,.15)" />
+          </g>
+        ))}
+        <line x1={X(0)} y1={Y(0)} x2={X(1)} y2={Y(1)} stroke="rgba(148,163,184,.35)" strokeDasharray="4 4" />
+        <path d={path(defaultShape)} fill="none" stroke="rgba(148,163,184,.45)" strokeWidth={1.2} />
+        <path d={path(shape)} fill="none" stroke="var(--color-hud)" strokeWidth={2.2} data-testid="curve-path" />
+        {editable && points.map((p, i) => (
+          <circle key={i} data-pt={i} cx={X(p.x)} cy={Y(p.y)} r={5.5} fill="var(--color-mod)" stroke="#000" strokeWidth={1} className="cursor-grab"
+            onPointerDown={(e) => { (e.target as Element).setPointerCapture?.(e.pointerId); drag.current = { i, pts: points }; }}
+            onDoubleClick={(e) => { e.stopPropagation(); if (points.length > 1) onCommit(points.filter((_, j) => j !== i)); }} />
+        ))}
+        {lx !== undefined && (
+          <g data-testid="curve-live">
+            <line x1={X(lx)} y1={Y(0)} x2={X(lx)} y2={Y(1)} stroke="var(--color-ok)" strokeOpacity={0.4} />
+            <circle cx={X(lx)} cy={Y(Math.abs(response(lx, shape)))} r={4.5} fill="var(--color-ok)" />
+          </g>
+        )}
+        <text x={X(1)} y={W - 5} fill="#64748b" fontSize="9" textAnchor="end">input →</text>
+        <text x={6} y={PAD - 8} fill="#64748b" fontSize="9">output{invert ? ' (inverted)' : ''}</text>
+      </svg>
+      <div className="mt-1 flex gap-3 font-mono text-[9px] text-slate-500">
+        <span><span className="mr-1 inline-block h-0.5 w-3 bg-hud align-middle" />this setting</span>
+        <span><span className="mr-1 inline-block h-0.5 w-3 bg-slate-500 align-middle" />game default</span>
+        {lx !== undefined && <span className="text-ok">● live {live!.toFixed(3)}</span>}
+      </div>
+    </div>
+  );
+}
