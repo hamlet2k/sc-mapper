@@ -66,3 +66,15 @@ body {
 .flash-key { animation: flash-chip 1.8s ease-out; }
 .flash-row { animation: flash-row 1.8s ease-out; }
 @media (prefers-reduced-motion: reduce) { .flash-chip, .flash-key, .flash-row { animation-duration: 0.01s; outline: 2px solid var(--color-mod); } }
+
+/* printable device view: only the device picture with its callouts */
+@media print {
+  @page { size: landscape; margin: 8mm; }
+  body { background: #04070c !important; }
+  body * { visibility: hidden; }
+  .scanline { display: none; }
+  [data-print-area], [data-print-area] * { visibility: visible; }
+  [data-print-area] { position: fixed; inset: 0; overflow: visible !important; }
+  [data-print-area] [data-testid="device-canvas"] { min-width: 0 !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
