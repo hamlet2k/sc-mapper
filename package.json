@@ -1,0 +1,40 @@
+{
+  "name": "sc-mapper",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/ensure-data.mjs",
+    "dev": "vite",
+    "prebuild": "node scripts/ensure-data.mjs",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "oxlint",
+    "data": "node scripts/ensure-data.mjs --force",
+    "data:fetch": "bash scripts/fetch-game-data.sh && node scripts/build-defaults.mjs",
+    "test": "tsx scripts/selftest.ts public/samples/actionmaps.xml",
+    "test:e2e": "node scripts/e2e.mjs"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "24.19.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "@xmldom/xmldom": "0.9.12",
+    "fast-xml-parser": "5.11.2",
+    "oxlint": "1.86.0",
+    "playwright": "1.63.0",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vite": "8.3.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
