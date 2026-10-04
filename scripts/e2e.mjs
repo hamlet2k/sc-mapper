@@ -546,13 +546,10 @@ check((await dv.locator('[data-callout="xy"]').getAttribute('data-active')) === 
 await page.screenshot({ path: shots + '24-device-view.png' });
 await page.evaluate(() => { window.__axis(1, 9, 9 / 7); window.__axis(1, 0, 0); });
 check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button12"]').getAttribute('title')), 'js1_button12 (Autoland) shown as the push of hat 1');
-{ // the classic generic stick is still available; it has no callout for button 12, so that binding goes to the list beside the picture
-  await dv.getByTestId('template-select').selectOption('builtin-stick-classic');
-  await page.waitForTimeout(250);
-  const ov = await dv.getByTestId('device-overflow').innerText();
-  check((await dv.locator('[data-callout]').count()) === 12 && (await dv.locator('[data-overflow="button12"]').count()) === 1 && /Autoland/.test(ov), `classic stick template: bound inputs without a callout listed beside the picture (${ov.replace(/\n/g, ' ')})`);
-  await dv.getByTestId('template-select').selectOption('');
-  await page.waitForTimeout(250);
+{ // the classic stick/throttle templates are gone; the gamepad template stays
+  const names = await dv.getByTestId('template-select').locator('option').allInnerTexts();
+  check(!names.some((n) => /classic/i.test(n)) && names.some((n) => /^Generic stick/.test(n)) && names.some((n) => /^Generic throttle/.test(n)) && names.some((n) => /^Gamepad/.test(n)),
+    `template picker: no classic templates; default stick, throttle and gamepad listed (${names.filter((n) => !n.startsWith('Automatic')).join(' | ')})`);
 }
 { // the default holographic throttle: 21 callouts; the keypad, E1 push and the left lever glow on input
   await dv.getByTestId('template-select').selectOption('builtin-throttle');
@@ -667,6 +664,10 @@ await page.waitForTimeout(500);
 check(await te.count() === 0, 'template saved, editor closed');
 check(/linked to this device \(USB 231D:0200\)/.test(await dv.getByTestId('device-status').innerText()), 'saved template auto-applies to the EVO R by USB id');
 check((await dv.locator('[data-callout]').count()) === 4 && (await dv.innerText()).includes('Decoy'), 'device view uses the new template (B3 shows its Decoy binding)');
+{ // the 4-callout template has no callout for button 12, so that binding is listed beside the picture
+  const ov = await dv.getByTestId('device-overflow').innerText();
+  check((await dv.locator('[data-overflow="button12"]').count()) === 1 && /Autoland/.test(ov), `bound inputs without a callout listed beside the picture (${ov.replace(/\n/g, ' ').slice(0, 120)})`);
+}
 let exported;
 {
   const [d] = await Promise.all([page.waitForEvent('download'), dv.getByTestId('template-export').click()]);
@@ -682,9 +683,32 @@ await page.waitForTimeout(500);
 await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS2 · /.test(o)) });
 await page.waitForTimeout(300);
 check(/Shared stick/.test(await dv.getByTestId('device-status').innerText()) && /name “Gladiator EVO L”/.test(await dv.getByTestId('device-status').innerText()), 'imported template auto-applies to the EVO L by name');
+{ // a pick of a removed classic template saved by an earlier version: pick the throttle for JS2, then rewrite it to the old classic id
+  await dv.getByTestId('template-select').selectOption('builtin-throttle');
+  await page.waitForTimeout(200);
+  await page.evaluate(() => {
+    const p = JSON.parse(localStorage.getItem('sc-mapper:template-picks') ?? '{}');
+    for (const k of Object.keys(p)) if (p[k] === 'builtin-throttle') p[k] = 'builtin-throttle-classic';
+    localStorage.setItem('sc-mapper:template-picks', JSON.stringify(p));
+  });
+}
 await page.reload({ waitUntil: 'networkidle' });
 await page.getByRole('button', { name: /🕹 Devices/ }).click();
 await page.waitForTimeout(500);
+{ // after the reload the old classic pick is moved to the default throttle and saved back (wake the pads first: the pick is keyed by the connected device)
+  await page.evaluate(() => window.__btn(0, 0, true));
+  await page.waitForTimeout(120);
+  await page.evaluate(() => window.__btn(0, 0, false));
+  await page.waitForTimeout(400);
+  await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS2 · /.test(o)) });
+  await page.waitForTimeout(300);
+  const saved = await page.evaluate(() => localStorage.getItem('sc-mapper:template-picks') ?? '');
+  const st = await dv.getByTestId('device-status').innerText();
+  check((await dv.getByTestId('template-select').inputValue()) === 'builtin-throttle' && /Generic throttle/.test(st) && /picked by you/.test(st) && (await dv.locator('[data-callout]').count()) === 21 && !saved.includes('classic') && saved.includes('builtin-throttle'),
+    `saved pick of the removed classic throttle migrated to the default throttle (${st.split('\n')[0]})`);
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(200);
+}
 await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS1 · /.test(o)) });
 await page.waitForTimeout(300);
 check(/linked to this device/.test(await dv.getByTestId('device-status').innerText()) && (await dv.locator('[data-callout]').count()) === 4, 'templates survive a reload (IndexedDB) and still match the profile device');
