@@ -4,20 +4,21 @@ import { useCallback, useEffect, useState } from 'react';
 import { GP_AXES, GP_BUTTONS, JS_AXES } from './capture';
 import { BUILTIN_TEMPLATES } from './builtinTemplates';
 
-export type CalloutKind = 'button' | 'hat' | 'axis' | 'encoder' | 'switch';
+export type CalloutKind = 'button' | 'hat' | 'axis' | 'encoder' | 'switch' | 'buttons';
 export const CALLOUT_KINDS: { kind: CalloutKind; label: string; hint: string }[] = [
   { kind: 'button', label: 'Button', hint: 'one button' },
   { kind: 'hat', label: 'Hat (5-way)', hint: 'up / right / down / left, optional push button' },
   { kind: 'axis', label: 'Axis', hint: 'one axis, or two for a mini-stick' },
-  { kind: 'encoder', label: 'Encoder pair', hint: 'two buttons: clockwise, counter-clockwise' },
+  { kind: 'encoder', label: 'Encoder pair', hint: 'two buttons: clockwise, counter-clockwise (+ optional push)' },
   { kind: 'switch', label: 'Multi-position switch', hint: 'one button per position' },
+  { kind: 'buttons', label: 'Button row', hint: 'several buttons side by side, numbered 1, 2, 3…' },
 ];
 export interface Pt { x: number; y: number }
 export interface Callout {
   id: string;
   kind: CalloutKind;
   /** game input names (no js1_ prefix): button: [button3]; hat: [hat1_up, hat1_right, hat1_down, hat1_left, (push)]; axis: [x] or [x, y];
-   * encoder: [cw, ccw]; switch: one per position */
+   * encoder: [cw, ccw] or [cw, ccw, push]; switch: one per position; buttons (row): one per button */
   inputs: string[];
   label?: string;
   group?: string;
@@ -25,6 +26,9 @@ export interface Callout {
   anchor: Pt;
   /** centre of the label box */
   box: Pt;
+  /** optional outline of the control on the picture (SVG path, canvas units with the canvas 1000 wide, relative to the anchor):
+   * lit up when the control is used */
+  region?: string;
 }
 export interface TemplateMatch {
   /** USB vendor / product id, 4 hex digits */
@@ -90,7 +94,7 @@ export function inputsForKind(kind: CalloutKind, prev: string[], slot: 'js' | 'g
     return hatInputs(h ? Number(h[1]) : nextFreeHat(used));
   }
   if (kind === 'axis') return [prev.find(isAxisInput) ?? (slot === 'gp' ? 'thumblx' : JS_AXES.find((a) => !used.has(a)) ?? 'x')];
-  if (kind === 'encoder') { const a = btns[0] ?? nextBtn(); const b = btns[1] ?? nextFreeButton(slot, used, [a]); return [a, b]; }
+  if (kind === 'encoder') { const a = btns[0] ?? nextBtn(); const b = btns[1] ?? nextFreeButton(slot, used, [a]); return btns[2] ? [a, b, btns[2]] : [a, b]; }
   const a = btns[0] ?? nextBtn(); const b = btns[1] ?? nextFreeButton(slot, used, [a]); const c = btns[2] ?? nextFreeButton(slot, used, [a, b]);
   return btns.length > 3 ? btns : [a, b, c];
 }
@@ -124,8 +128,9 @@ export function calloutTitle(c: Callout): string {
 /** role of each input of a callout, for display */
 export function inputRole(c: Callout, idx: number): string {
   if (c.kind === 'hat') return idx < 4 ? ARROW[HAT_DIRS[idx]] : '●';
-  if (c.kind === 'encoder') return idx === 0 ? '⟳' : '⟲';
+  if (c.kind === 'encoder') return idx === 0 ? '⟳' : idx === 1 ? '⟲' : '●';
   if (c.kind === 'switch') return `P${idx + 1}`;
+  if (c.kind === 'buttons') return `${idx + 1}`;
   return '';
 }
 
@@ -155,7 +160,7 @@ export function matchScore(t: Pick<DeviceTemplate, 'match' | 'slot'>, d: DeviceI
 }
 /** generic built-in fallback for a device */
 export function fallbackTemplate(d: DeviceIdentity, list: DeviceTemplate[] = BUILTIN_TEMPLATES): DeviceTemplate {
-  const id = d.slot === 'gp' ? 'builtin-gamepad' : /throttle|twcs|tqs|quadrant|bravo|cm3|\bthr\b/i.test(d.name ?? '') ? 'builtin-throttle' : 'builtin-stick';
+  const id = d.slot === 'gp' ? 'builtin-gamepad' : /throttle|twcs|tqs|quadrant|bravo|cm3|stecs|\bthr\b/i.test(d.name ?? '') ? 'builtin-throttle' : 'builtin-stick';
   return list.find((t) => t.id === id) ?? list[0];
 }
 /**
@@ -190,6 +195,8 @@ export function exportTemplates(list: DeviceTemplate[]): string {
 }
 const KINDS = new Set(CALLOUT_KINDS.map((k) => k.kind));
 const INPUT_RE = /^[a-z][a-z0-9_]{0,24}$/;
+/** an SVG path made of plain commands and numbers only (no references, no markup) */
+export const REGION_RE = /^[MLHVCSQTAZmlhvcsqtaz0-9.,\s-]{1,6000}$/;
 function cleanTemplate(o: unknown, i: number): DeviceTemplate {
   if (!o || typeof o !== 'object') throw new Error(`Template ${i + 1} is not an object`);
   const t = o as Record<string, unknown>;
@@ -213,6 +220,7 @@ function cleanTemplate(o: unknown, i: number): DeviceTemplate {
       ...(typeof q.label === 'string' && q.label.trim() ? { label: q.label.trim().slice(0, 60) } : {}),
       ...(typeof q.group === 'string' && q.group.trim() ? { group: q.group.trim().slice(0, 40) } : {}),
       anchor: pt(q.anchor), box: pt(q.box ?? q.anchor),
+      ...(typeof q.region === 'string' && REGION_RE.test(q.region) ? { region: q.region } : {}),
     };
   });
   const match: TemplateMatch[] = (Array.isArray(t.match) ? t.match : []).slice(0, 20).map((m) => {

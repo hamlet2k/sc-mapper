@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { isHatRest, snapshot } from '../lib/capture';
 import { getPads, type PadInfo } from '../lib/devices';
 import { calloutTitle, coveredInputs, inputRole, liveInputs, shortInput, type Callout, type DeviceTemplate, type Pt } from '../lib/templates';
@@ -68,6 +68,7 @@ interface Props {
 /** device image with callout anchors, leader lines and label boxes (positions are fractions of the canvas) */
 export function DeviceCanvas({ template: t, stateOf, renderLabel, selected, onSelect, editable, onMove, onDragStart, onCanvasClick, minWidth = 860 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const glowId = `dc-glow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const stop = useRef<(() => void) | null>(null);
   const VH = 1000 / t.aspect;
   const at = (e: { clientX: number; clientY: number }): Pt => {
@@ -100,6 +101,23 @@ export function DeviceCanvas({ template: t, stateOf, renderLabel, selected, onSe
       }}>
       {t.image && <img src={t.image} alt="" data-bg="1" draggable={false} className="absolute inset-0 h-full w-full object-fill" />}
       <svg viewBox={`0 0 1000 ${VH}`} preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
+        <defs>
+          <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+        </defs>
+        {t.callouts.map((c) => {
+          // the control itself on the picture: its outline glows when used, a faint tint marks customized / conflicting ones
+          const s = stateOf(c);
+          const at = `translate(${c.anchor.x * 1000} ${c.anchor.y * VH})`;
+          if (!c.region) return s.active ? <circle key={`r-${c.id}`} data-glow={c.id} cx={c.anchor.x * 1000} cy={c.anchor.y * VH} r={16} fill="rgba(79,216,255,.35)" filter={`url(#${glowId})`} /> : null;
+          const tint = s.tone === 'conflict' || s.tone === 'custom' ? TONE_STROKE[s.tone] : null;
+          if (!s.active && !tint && selected !== c.id) return null;
+          return (
+            <path key={`r-${c.id}`} data-region={c.id} data-active={s.active ? '1' : undefined} d={c.region} transform={at} fillRule="nonzero"
+              fill={s.active ? 'rgba(79,216,255,.32)' : tint ? tint : 'none'} fillOpacity={s.active ? 1 : 0.12}
+              stroke={s.active ? '#c9f7ff' : selected === c.id ? '#ffb547' : tint ?? 'none'} strokeOpacity={s.active || selected === c.id ? 1 : 0.55}
+              strokeWidth={s.active ? 2.2 : 1.2} filter={s.active ? `url(#${glowId})` : undefined} opacity={s.dim ? 0.3 : 1} />
+          );
+        })}
         {t.callouts.map((c) => {
           const s = stateOf(c);
           const col = s.active ? '#4fd8ff' : TONE_STROKE[s.tone];
@@ -200,12 +218,12 @@ export function CalloutBody({ c, s, entriesFor, live }: { c: Callout; s: Callout
       </div>
     );
   }
-  const multi = c.kind === 'encoder' || c.kind === 'switch';
+  const multi = c.kind === 'encoder' || c.kind === 'switch' || c.kind === 'buttons';
   const all = c.inputs.flatMap((i, k) => coveredInputs({ inputs: [i] }).flatMap(entriesFor).map((e) => ({ e, role: multi ? inputRole(c, k) : undefined, i })));
   return (
     <div className="min-w-[90px]">
       {head}
-      {multi && <div className="flex gap-0.5">{c.inputs.map((i, k) => <span key={i} data-dir={i} data-active={live.active.has(i) ? '1' : undefined} className={`rounded px-1 font-mono text-[9px] ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-slate-400'}`}>{inputRole(c, k)} {shortInput(i)}</span>)}</div>}
+      {multi && <div className="flex max-w-[150px] flex-wrap gap-0.5">{c.inputs.map((i, k) => <span key={i} data-dir={i} data-active={live.active.has(i) ? '1' : undefined} className={`rounded px-1 font-mono text-[9px] ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-slate-400'}`}>{inputRole(c, k)} {shortInput(i)}</span>)}</div>}
       {all.slice(0, 3).map(({ e, role }, k) => <ActionLine key={k} e={e} role={role} />)}
       {all.length > 3 && <div className="text-slate-500">+{all.length - 3} more</div>}
       {!all.length && none}
