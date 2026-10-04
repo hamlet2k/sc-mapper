@@ -84,7 +84,7 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
     const cov = coveredInputs(c);
     const es = entriesOf(cov);
     const tone: Tone = es.some((e) => e.conflict) ? 'conflict' : es.some((e) => e.b.custom) ? 'custom' : es.length ? 'bound' : 'unbound';
-    return { tone, active: cov.some((i) => live.active.has(i)), dim: !!group && c.group !== group };
+    return { tone, active: cov.some((i) => live.active.has(i)), dim: !!group && c.group !== group, ...(c.inputRegions ? { inputActive: c.inputs.map((i) => live.active.has(i)) } : {}) };
   };
   const selCallout: Callout | undefined = selected?.startsWith('input:')
     ? { id: selected, ...calloutFor(selected.slice(6)), inputs: [selected.slice(6)], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } }
