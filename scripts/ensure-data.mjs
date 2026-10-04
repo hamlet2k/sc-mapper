@@ -1,4 +1,4 @@
-// Makes sure src/data/defaults.json exists before dev/build.
+// Makes sure src/data/defaults.json exists before dev/build/test, and (re)generates the default device art (src/lib/defaultStickArt.ts).
 // If it is missing, downloads the raw game files (pinned) into data/raw/ and runs build-defaults.
 // Raw source: x3nnnonn/StarCitizenDiff (extracted P4K files), sc-alpha-4.10.0 LIVE build 4.10.193.11644.
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -29,3 +29,6 @@ if (existsSync(out) && !process.argv.includes('--force')) {
   }
   await import('./build-defaults.mjs');
 }
+
+// default stick art: an original drawing generated from a small 3D model; quick and deterministic, so always rebuilt
+await import('./gen-default-stick.mjs');

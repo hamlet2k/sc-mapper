@@ -12,7 +12,9 @@
     "lint": "oxlint",
     "data": "node scripts/ensure-data.mjs --force",
     "data:fetch": "bash scripts/fetch-game-data.sh && node scripts/build-defaults.mjs",
+    "pretest": "node scripts/ensure-data.mjs",
     "test": "tsx scripts/unit.ts && tsx scripts/selftest.ts public/samples/actionmaps.xml",
+    "pretest:unit": "node scripts/ensure-data.mjs",
     "test:unit": "tsx scripts/unit.ts",
     "test:e2e": "node scripts/e2e.mjs",
     "test:fixtures": "node scripts/fetch-fixtures.mjs && tsx scripts/unit.ts"
