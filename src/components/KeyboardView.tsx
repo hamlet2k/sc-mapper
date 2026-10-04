@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { isModifier, keyLabel, normalizeCombo, tokens } from '../lib/inputs';
 import type { Binding, Row } from '../lib/types';
 
@@ -38,13 +38,25 @@ interface Props {
   rows: Row[];
   conflictRows: Map<string, Set<string>>;
   onPick: (combo: string) => void;
+  /** a keyboard/mouse combo just pressed (live highlight) */
+  flash?: { combo: string; at: number } | null;
 }
 
 const U = 40; // px per key unit
 
-export function KeyboardView({ rows, conflictRows, onPick }: Props) {
+export function KeyboardView({ rows, conflictRows, onPick, flash }: Props) {
   const [mod, setMod] = useState('');
   const [focus, setFocus] = useState<string | null>(null);
+  // a pressed combo shows up in the inspector, with its modifier held
+  useEffect(() => {
+    if (!flash) return;
+    const t = tokens(normalizeCombo(flash.combo));
+    const mods = t.filter(isModifier);
+    const main = t.filter((x) => !isModifier(x));
+    setMod(main.length && mods.length === 1 ? mods[0] : '');
+    setFocus(main[main.length - 1] ?? mods[mods.length - 1] ?? null);
+  }, [flash]);
+  const flashKeys = new Set(flash ? tokens(flash.combo) : []);
 
   // combo -> hits (keyboard & mouse slot bindings)
   const index = useMemo(() => {
@@ -98,7 +110,9 @@ export function KeyboardView({ rows, conflictRows, onPick }: Props) {
           ${heat || 'border-edge/70 bg-panel2/70 text-slate-500'}
           ${conflict ? '!border-alert shadow-[0_0_14px_-4px_var(--color-alert)]' : ''}
           ${isActiveMod ? '!border-mod !bg-mod/20 !text-mod' : ''}
-          ${focus === k ? 'ring-1 ring-hud2' : ''}`}
+          ${focus === k ? 'ring-1 ring-hud2' : ''}
+          ${flashKeys.has(k) ? 'flash-key' : ''}`}
+        data-flash={flashKeys.has(k) ? '1' : undefined}
         style={{ width: w * U - 4, height: U - 4, ...style }}
       >
         <span className="font-mono text-[11px] font-semibold leading-none">{label ?? keyLabel(k, 'kb')}</span>

@@ -7,6 +7,7 @@ import { getPads, type PadInfo, type PadKind, type PadLike } from '../lib/device
 import { conflictsFor, type CaptureConflict } from '../lib/edit';
 import { formatInput, GROUP_LABEL, isModifier, keyLabel, normalizeCombo, prettyMode, tokens } from '../lib/inputs';
 import type { Group, ProfileDevice, Rebind, Row, Slot } from '../lib/types';
+import { ChromiumBanner } from './ChromiumBanner';
 import { DeviceList } from './ControllersPanel';
 import { InputTester } from './InputTester';
 
@@ -247,6 +248,7 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
 
           {listening && group !== 'km' && (
             <>
+              <div className="mt-3"><ChromiumBanner detected={pads.length} compact /></div>
               <DeviceList pads={pads} group={group} activity={activity} onAssign={onAssign} profileDevices={profileDevices} compact />
               <div className="mt-3">
                 <button type="button" onClick={() => setShowTester((v) => !v)} data-testid="toggle-tester"
