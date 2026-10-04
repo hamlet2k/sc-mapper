@@ -565,6 +565,25 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
   await dv.getByTestId('template-select').selectOption('');
   await page.waitForTimeout(250);
 }
+{ // the default holographic gamepad: 15 callouts; pressing D-pad up lights only that arm, A / LT / the left stick glow
+  await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^GP1/.test(o)) });
+  await page.waitForTimeout(300);
+  check(/Gamepad/.test(await dv.getByTestId('device-status').innerText()) && (await dv.locator('[data-callout]').count()) === 15 && (await dv.getByTestId('template-select').locator('option:checked').innerText()).startsWith('Automatic'),
+    'gamepad: default holographic gamepad template applies automatically (15 callouts)');
+  await page.evaluate(() => { window.__btn(0, 12, true); window.__btn(0, 0, true); window.__btn(0, 6, true); window.__axis(0, 0, 0.8); });
+  await page.waitForTimeout(300);
+  const lit = await dv.locator('[data-region][data-active="1"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-region') + (e.getAttribute('data-input') ? ':' + e.getAttribute('data-input') : '')).sort());
+  check(JSON.stringify(lit) === JSON.stringify(['a', 'dpad:dpad_up', 'ls', 'lt']) && (await dv.locator('[data-callout="dpad"] [data-dir="dpad_up"]').getAttribute('data-active')) === '1',
+    `gamepad: only the pressed D-pad arm glows; A, LT and the moved left stick light up (${lit.join(', ')})`);
+  check(/triggerl_btn/.test(await dv.locator('[data-callout="lt"]').innerText()) && /thumbl/.test(await dv.locator('[data-callout="l3"]').innerText()), 'gamepad: callouts show the gp1_ input names (triggerl_btn, thumbl)');
+  await page.setViewportSize({ width: 1680, height: 1400 }); // the whole canvas fits for the screenshot
+  await dv.getByTestId('device-canvas').screenshot({ path: shots + '31-device-view-default-gamepad.png' });
+  await page.setViewportSize({ width: 1680, height: 1000 });
+  await page.evaluate(() => { window.__btn(0, 12, false); window.__btn(0, 0, false); window.__btn(0, 6, false); window.__axis(0, 0, 0); });
+  await page.waitForTimeout(200);
+  await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS1 · /.test(o)) });
+  await page.waitForTimeout(300);
+}
 await b1.click();
 const ip = dv.getByTestId('input-panel');
 check(await ip.isVisible() && (await ip.innerText()).includes('js1_button1'), 'clicking a callout opens the binding panel for js1_button1');
