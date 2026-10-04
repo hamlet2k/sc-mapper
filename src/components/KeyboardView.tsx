@@ -8,7 +8,7 @@ const keys = (s: string) => s.split(' ').map((k) => ({ k }));
 
 const MAIN: K[][] = [
   [{ k: 'escape' }, g(1), ...keys('f1 f2 f3 f4'), g(0.5), ...keys('f5 f6 f7 f8'), g(0.5), ...keys('f9 f10 f11 f12')],
-  [{ k: 'grave' }, ...keys('1 2 3 4 5 6 7 8 9 0'), { k: 'minus' }, { k: 'equals' }, { k: 'backspace', w: 2 }],
+  [{ k: 'tilde' }, ...keys('1 2 3 4 5 6 7 8 9 0'), { k: 'minus' }, { k: 'equals' }, { k: 'backspace', w: 2 }],
   [{ k: 'tab', w: 1.5 }, ...keys('q w e r t y u i o p'), { k: 'lbracket' }, { k: 'rbracket' }, { k: 'backslash', w: 1.5 }],
   [{ k: 'capslock', w: 1.75 }, ...keys('a s d f g h j k l'), { k: 'semicolon' }, { k: 'apostrophe' }, { k: 'enter', w: 2.25 }],
   [{ k: 'lshift', w: 2.25 }, ...keys('z x c v b n m'), { k: 'comma' }, { k: 'period' }, { k: 'slash' }, { k: 'rshift', w: 2.75 }],
