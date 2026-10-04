@@ -100,7 +100,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
     setBusy(true);
     try {
       const img = await loadImageFile(f);
-      commit({ ...tRef.current, image: img.dataUrl, aspect: img.w / img.h, callouts: tRef.current.callouts.map(({ region: _r, ...c }) => c) });
+      commit({ ...tRef.current, image: img.dataUrl, aspect: img.w / img.h, callouts: tRef.current.callouts.map(({ region: _r, inputRegions: _ir, ...c }) => c) });
       notify('ok', `Image loaded (${img.w}×${img.h}, ${(img.dataUrl.length / 1024).toFixed(0)} KB stored)`);
     } catch (e) { notify('err', (e as Error).message); }
     setBusy(false);
@@ -109,7 +109,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   const groups = [...new Set(t.callouts.map((c) => c.group).filter(Boolean))] as string[];
   const stateOf = (c: Callout): CalloutState => {
     const es = coveredInputs(c).flatMap(entriesFor);
-    return { tone: es.some((e) => e.conflict) ? 'conflict' : es.some((e) => e.b.custom) ? 'custom' : es.length ? 'bound' : 'unbound', active: coveredInputs(c).some((i) => live.active.has(i)) };
+    return { tone: es.some((e) => e.conflict) ? 'conflict' : es.some((e) => e.b.custom) ? 'custom' : es.length ? 'bound' : 'unbound', active: coveredInputs(c).some((i) => live.active.has(i)), ...(c.inputRegions ? { inputActive: c.inputs.map((i) => live.active.has(i)) } : {}) };
   };
   const canSave = t.name.trim().length > 0;
   const linked = matchScore(t, device.ident) > 0;
@@ -126,7 +126,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
           <option value="js">Joystick / HOTAS</option><option value="gp">Gamepad</option>
         </select>
         <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="tpl-upload" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">🖼 {t.image ? 'Replace image' : 'Upload image'}</button>
-        {t.image && <button type="button" onClick={() => commit({ ...t, image: undefined, aspect: BLANK_ASPECT, callouts: t.callouts.map(({ region: _r, ...c }) => c) })} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Blank canvas</button>}
+        {t.image && <button type="button" onClick={() => commit({ ...t, image: undefined, aspect: BLANK_ASPECT, callouts: t.callouts.map(({ region: _r, inputRegions: _ir, ...c }) => c) })} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Blank canvas</button>}
         {!t.image && (
           <label className="flex items-center gap-1 text-[11px] text-slate-400">Canvas
             <select value={String(t.aspect)} onChange={(e) => commit({ ...t, aspect: Number(e.target.value) })} aria-label="Canvas shape" className={field}>
