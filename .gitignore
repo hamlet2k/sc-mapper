@@ -27,6 +27,7 @@ dist-ssr
 src/data/defaults.json
 src/lib/defaultStickArt.ts
 src/lib/defaultThrottleArt.ts
+src/lib/defaultGamepadArt.ts
 data/raw/
 screenshots/
 package-lock.json
