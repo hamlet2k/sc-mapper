@@ -14,7 +14,8 @@
     "data:fetch": "bash scripts/fetch-game-data.sh && node scripts/build-defaults.mjs",
     "test": "tsx scripts/unit.ts && tsx scripts/selftest.ts public/samples/actionmaps.xml",
     "test:unit": "tsx scripts/unit.ts",
-    "test:e2e": "node scripts/e2e.mjs"
+    "test:e2e": "node scripts/e2e.mjs",
+    "test:fixtures": "node scripts/fetch-fixtures.mjs && tsx scripts/unit.ts"
   },
   "dependencies": {
     "react": "19.3.0",

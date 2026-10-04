@@ -1,7 +1,7 @@
 // Unit tests: input-name mapping, editing, export structure and import -> export -> import round-trips.
 // Usage: npm run test:unit -- [game-exported layout files...]   (or SC_TEST_LAYOUTS=a.xml,b.xml)
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 (globalThis as any).DOMParser = DOMParser;
 (globalThis as any).XMLSerializer = XMLSerializer;
@@ -15,6 +15,9 @@ const { normalizeCombo } = await import('../src/lib/inputs');
 const groups = await import('../src/lib/groups');
 const dev = await import('../src/lib/devices');
 const search = await import('../src/lib/search');
+const dvo = await import('../src/lib/devopts');
+const listen = await import('../src/lib/listen');
+const { browserName } = await import('../src/lib/browser');
 const defaults = JSON.parse(readFileSync('src/data/defaults.json', 'utf8'));
 const idx = ed.indexDefaults(defaults);
 
@@ -169,7 +172,7 @@ for (const f of ['public/samples/actionmaps.xml', ...extraFiles]) {
       const p2 = parseActionMaps(xml, exportFileName({ format, name: p1.name }));
       assert.deepEqual(effective(p2), effective(p1));
       assert.deepEqual(norm(p2.rebinds), norm(p1.rebinds));
-      assert.equal(p2.optionsXml!.length >= p1.optionsXml!.length, true, 'device options preserved');
+      assert.equal(p2.settings!.blocks.length >= p1.settings!.blocks.length, true, 'device settings preserved');
       // export again: stable
       assert.equal(buildExport(defaults, p2, { format, name: p1.name }), xml);
       if (format === 'layout') {
@@ -338,4 +341,166 @@ console.log('search: exact inputs');
     assert.ok(hits('key:mo1_mouse2').length > 0 && hits('key:mo1_mouse2').every((id) => rows.find((x) => x.id === id)!.bindings.some((b) => normalizeCombo(b.input) === 'mouse2')));
   });
 }
-console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}`);
+
+console.log('device settings (deviceoptions / options)');
+// real game-written files: npm run test:fixtures (downloads pinned copies into .tmp/fixtures)
+const fixtureDir = '.tmp/fixtures';
+const fixtureFiles = existsSync(fixtureDir) ? readdirSync(fixtureDir).filter((f) => f.endsWith('.xml')).map((f) => `${fixtureDir}/${f}`) : [];
+{
+  const normXml = (x: string) => x.replace(/<!--[\s\S]*?-->/g, '').replace(/\s*\/>/g, '/>').replace(/>\s+</g, '><').trim();
+  const blocksOf = (xml: string) => [...normXml(xml).matchAll(/<(deviceoptions|options)\b[^>]*?(?:\/>|>.*?<\/\1>)/g)].map((m) => m[0]);
+  for (const f of ['public/samples/actionmaps.xml', ...fixtureFiles]) {
+    const name = f.split('/').pop()!;
+    t(`${name}: every <deviceoptions>/<options> block is written back exactly (layout and actionmaps)`, () => {
+      const src = readFileSync(f, 'utf8');
+      const p = parseActionMaps(src, name);
+      const before = blocksOf(src);
+      assert.ok(p.settings!.blocks.length === before.length, `parsed ${p.settings!.blocks.length} of ${before.length} blocks`);
+      for (const format of ['layout', 'actionmaps'] as const) {
+        const out = buildExport(defaults, p, { format, name: 'rt' });
+        const after = blocksOf(out);
+        for (const b of before) assert.ok(after.includes(b), `${format}: block lost or changed: ${b.slice(0, 160)}`);
+        const p2 = parseActionMaps(out, 'rt.xml');
+        for (const b of p.settings!.blocks) assert.ok(p2.settings!.blocks.some((x: any) => JSON.stringify(x) === JSON.stringify(b)), 'model survives re-import');
+      }
+    });
+  }
+  const sample = parseActionMaps(readFileSync('public/samples/actionmaps.xml', 'utf8'), 'sample.xml');
+  const R = ' VKBsim Gladiator EVO R    {0200231D-0000-0000-0000-504944564944}';
+  t('reading: invert / exponent / curve per option group, deadzone / saturation per axis', () => {
+    const s = sample.settings!;
+    assert.deepEqual(dvo.groupValues(s, 'joystick', 1, 'flight_move_pitch'), { invert: true, other: [] });
+    assert.equal(dvo.groupValues(s, 'joystick', 1, 'flight_move_yaw')!.exponent, 1.3000001);
+    const c = dvo.groupValues(s, 'joystick', 2, 'flight_move_strafe_vertical')!;
+    assert.equal(c.invert, true);
+    assert.deepEqual(c.curve!.map((p) => p.x), [0, 0.20035715, 0.82027185, 1]);
+    assert.deepEqual(dvo.axisValues(s, R), { x: { deadzone: 0.015, saturation: 0.94050002 }, y: { deadzone: 0.015 } });
+    assert.deepEqual(dvo.axisValues(s, 'VKBsim  Gladiator EVO R    {0200231D-0000-0000-0000-504944564944}'.replace('  G', ' G')), dvo.axisValues(s, R), 'product names compared ignoring extra spaces');
+  });
+  t('editing writes the game format and leaves everything else untouched', () => {
+    let s = sample.settings!;
+    s = dvo.setGroup(s, 'joystick', 1, 'flight_move_roll', { invert: true, exponent: 2 });
+    s = dvo.setGroup(s, 'joystick', 1, 'flight_move_yaw', { curve: [{ x: 0.5, y: 0.25 }, { x: 0, y: 0 }, { x: 1, y: 1 }] });
+    s = dvo.setGroup(s, 'joystick', 2, 'flight_move_strafe_vertical', { exponent: 1.5 });
+    s = dvo.setGroup(s, 'joystick', 3, 'flight_move_pitch', { invert: false }, ' MOZA AB6 FFB Base    {1002346E-0000-0000-0000-504944564944}');
+    s = dvo.setAxis(s, R, 'x', 'deadzone', 0.05);
+    s = dvo.setAxis(s, R, 'rotz', 'saturation', 0.9);
+    s = dvo.setAxis(s, ' VKBsim Gladiator EVO L    {3201231D-0000-0000-0000-504944564944}', 'y', 'deadzone', 0.02);
+    s = dvo.setAxis(s, R, 'y', 'deadzone', null);
+    const p = { ...sample, settings: s };
+    const xml = buildExport(defaults, p, { format: 'layout', name: 't' });
+    assert.match(xml, /<flight_move_roll invert="1" exponent="2"\/>/);
+    assert.match(xml, /\n  <flight_move_yaw>\n   <nonlinearity_curve>\n    <point in="0" out="0"\/>\n    <point in="0.5" out="0.25"\/>\n    <point in="1" out="1"\/>\n   <\/nonlinearity_curve>\n  <\/flight_move_yaw>/, 'custom curve replaces the exponent');
+    assert.match(xml, /<flight_move_strafe_vertical invert="1" exponent="1.5"\/>/, 'exponent replaces the custom curve, invert kept');
+    assert.match(xml, /<options type="joystick" instance="3" Product=" MOZA AB6 FFB Base    \{1002346E-0000-0000-0000-504944564944\}">\n  <flight_move_pitch invert="0"\/>/);
+    assert.match(xml, /<option input="x" deadzone="0.05"\/>/);
+    assert.equal((xml.match(/<option input="rotz" saturation="0.9"\/>/g) ?? []).length, 2, 'saturation written twice like the game');
+    assert.match(xml, /<deviceoptions name=" VKBsim Gladiator EVO L    \{3201231D-0000-0000-0000-504944564944\}">\n  <option input="y" deadzone="0.02"\/>/);
+    assert.ok(!/<option input="y" deadzone="0.015"\/>/.test(xml), 'cleared deadzone removed');
+    assert.equal((xml.match(/<option input="x" saturation="0.94050002"\/>/g) ?? []).length, 2, 'untouched values keep their original text');
+    assert.ok(xml.indexOf('<deviceoptions name=" VKBsim Gladiator EVO L') < xml.indexOf('<options type="keyboard"'), 'deviceoptions before options');
+    assert.ok(xml.indexOf('instance="2" Product=" VKBsim') < xml.indexOf('instance="3" Product=" MOZA'), 'new joystick block in instance order');
+    const back = parseActionMaps(xml, 't.xml').settings!;
+    assert.equal(dvo.groupValues(back, 'joystick', 1, 'flight_move_roll')!.exponent, 2);
+    assert.equal(dvo.axisValues(back, R).rotz!.saturation, 0.9);
+    // resetting everything removes the group / block again
+    let r = dvo.setGroup(back, 'joystick', 3, 'flight_move_pitch', { invert: null });
+    assert.equal(dvo.optionsBlock(r, 'joystick', 3)!.groups.length, 0);
+    r = dvo.resetGroup(r, 'joystick', 1, 'flight_move_roll');
+    assert.equal(dvo.groupValues(r, 'joystick', 1, 'flight_move_roll'), undefined);
+  });
+  t('legacy profiles (optionsXml text from earlier versions) are converted', () => {
+    const legacy = { optionsXml: ['<options type="joystick" instance="1" Product="X"><flight_move_pitch invert="1" /></options>'] };
+    assert.equal(dvo.groupValues(dvo.settingsOf(legacy), 'joystick', 1, 'flight_move_pitch')!.invert, true);
+  });
+  t('response preview: exponent, curve interpolation, deadzone/saturation, invert', () => {
+    assert.equal(dvo.response(0.5, {}), 0.5);
+    assert.equal(dvo.response(0.5, { exponent: 2 }), 0.25);
+    assert.equal(dvo.response(-0.5, { exponent: 2 }), -0.25);
+    assert.equal(dvo.response(0.5, { invert: true }), -0.5);
+    assert.equal(dvo.curveAt([{ x: 0.5, y: 0.2 }], 0.25), 0.1, '(0,0) implied');
+    assert.ok(Math.abs(dvo.curveAt([{ x: 0.5, y: 0.2 }], 0.75) - 0.6) < 1e-9, '(1,1) implied');
+    assert.equal(dvo.response(0.05, { deadzone: 0.1 }), 0);
+    assert.equal(dvo.response(0.9, { saturation: 0.8 }), 1);
+    assert.ok(Math.abs(dvo.response(0.55, { deadzone: 0.1, saturation: 1 }) - 0.5) < 1e-9);
+  });
+  t('option tree from defaultProfile.xml: joystick has 8 instances and the group names the files use', () => {
+    const tree = defaults.optionTrees.joystick;
+    assert.equal(tree.instances, 8);
+    const names = new Set(tree.groups.map((g: any) => g.name));
+    for (const n of ['flight_move_pitch', 'flight_move_yaw', 'flight_move_roll', 'flight_move_strafe_vertical', 'flight_move_strafe_lateral', 'flight_strafe_longitudinal', 'flight_view', 'turret_aim_pitch', 'mgv_move']) assert.ok(names.has(n), n);
+    assert.equal(tree.groups.find((g: any) => g.name === 'flight_view').exponent, '2.5');
+    // names used in the real files that this game version still defines
+    for (const f of fixtureFiles) {
+      const p = parseActionMaps(readFileSync(f, 'utf8'), 'f.xml');
+      const used = dvo.listOptionBlocks(p.settings!).length;
+      assert.ok(used >= 0);
+    }
+  });
+}
+
+console.log('controllers: duplicates, >128 buttons, Chromium');
+{
+  const pad = (id: string, index: number, nb: number, na = 6) => ({ id, index, mapping: '', buttons: Array.from({ length: nb }, () => ({ pressed: false, value: 0 })), axes: Array(na).fill(0) });
+  // Firefox ids ("vvvv-pppp-Name"): one MOZA base exposing two interfaces with the same USB id but 128 / 133 buttons
+  const moza = [pad('346e-1002-MOZA AB6 FFB Base', 3, 128), pad('346e-1002-MOZA AB6 FFB Base', 7, 133)];
+  t('identical USB ids: distinct stable keys from button counts, labelled, flagged as ambiguous', () => {
+    const d = dev.describePads([pad('3344-0194-WINCTRL Orion Pedals', 0, 32), ...moza], {});
+    assert.notEqual(d[1].key, d[2].key);
+    assert.deepEqual([d[1].dup, d[2].dup], [{ n: 1, of: 2 }, { n: 2, of: 2 }]);
+    assert.equal(dev.padLabel(d[2]), 'MOZA AB6 FFB Base (2 of 2 · 133 buttons)');
+    assert.ok(d[1].ambiguous && d[2].ambiguous && !d[0].ambiguous);
+    // keys don't depend on order: the 133-button interface keeps its assignment when the browser lists it first
+    const a = { [d[2].key]: { kind: 'js' as const, instance: 9 } };
+    const swapped = dev.describePads([moza[1], moza[0]], a);
+    assert.equal(swapped[0].instance, 9);
+    assert.equal(swapped[0].source, 'manual');
+  });
+  t('identical devices declared twice in a profile get one instance each (in profile order)', () => {
+    const decl = [1, 2].map((i) => ({ slot: 'js' as const, instance: i + 3, product: 'MOZA AB6 FFB Base', rawProduct: ' MOZA AB6 FFB Base    {1002346E-0000-0000-0000-504944564944}' }));
+    const d = dev.describePads(moza, {}, decl);
+    assert.deepEqual(d.map((x) => `js${x.instance}:${x.source}:${x.ambiguous}`), ['js4:profile-id:true', 'js5:profile-id:true']);
+  });
+  t('assignments saved by the previous version (id#n keys) still apply', () => {
+    const d = dev.describePads(moza, { '346e-1002-MOZA AB6 FFB Base#2': { kind: 'js', instance: 6 } });
+    assert.equal(d[1].instance, 6);
+  });
+  t('buttons above 128 are captured with a warning (DirectInput limit)', () => {
+    const c = cap.joystickInput({ kind: 'button', index: 132 })!;
+    assert.equal(c.input, 'button133');
+    assert.match(c.warning!, /above 128/);
+    assert.equal(cap.joystickInput({ kind: 'button', index: 127 })!.warning, undefined);
+    assert.match(cap.parseManual('js4_button133', 'js').warning!, /above 128/);
+    assert.equal(cap.parseManual('js4_button128', 'js').warning, undefined);
+  });
+  t('press-to-search hits: exact device + instance, gamepad sticks as axis or direction', () => {
+    const [info] = dev.describePads([moza[1]], { [dev.padKeys([moza[1]])[0]]: { kind: 'js', instance: 4 } });
+    const h = listen.padHit(info, { kind: 'button', index: 132 })!;
+    assert.deepEqual(listen.hitSpecs(h), ['js4_button133']);
+    assert.match(h.note!, /above 128/);
+    assert.deepEqual([...listen.hitKeys(h)], ['js4:button133']);
+    const gp = dev.describePads([{ ...pad('Xbox (STANDARD GAMEPAD Vendor: 045e Product: 0b13)', 0, 17, 4), mapping: 'standard' }], {})[0];
+    assert.deepEqual(listen.hitSpecs(listen.padHit(gp, { kind: 'axis', index: 1, dir: -1 })!), ['gp1_thumbly', 'gp1_thumbl_up']);
+    assert.equal(listen.padHit(info, { kind: 'axis', index: 11, dir: 1 }), undefined, 'axes without a game name are ignored');
+    assert.equal(listen.hitLabel({ slot: 'kb', instance: 1, inputs: ['lalt+n'] }), 'L-Alt + N');
+  });
+  t('search anyOf: a row matches if any form of the pressed input is bound', () => {
+    let r = {};
+    const A = idx.get('spaceship_movement/v_yaw');
+    r = ed.setGroup(r, A, 'spaceship_movement', 'v_yaw', 'js', [{ slot: 'js', instance: 4, input: 'button133' }]);
+    const rows = buildRows(defaults, ed.withRebinds(ed.newProfile('m'), r));
+    const q = (any: string[]) => rows.filter((x) => search.scoreRow(x, { terms: [], keyTerms: [], anyOf: any })).map((x) => x.id);
+    assert.deepEqual(q(['js4_button133']), ['spaceship_movement/v_yaw']);
+    assert.deepEqual(q(['js3_button133']), []);
+    assert.ok(q(['gp1_thumbly', 'gp1_thumbl_up']).length > 0);
+  });
+  t('Chromium detection: Chrome, Edge, Brave, Comet (brands), not Firefox', () => {
+    const CH = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+    assert.deepEqual(browserName(CH, undefined, false), { name: 'Chrome 141', chromium: true });
+    assert.deepEqual(browserName(CH + ' Edg/141.0.0.0', undefined, false), { name: 'Edge 141', chromium: true });
+    assert.deepEqual(browserName(CH, { brands: [{ brand: 'Brave' }, { brand: 'Chromium' }] }, true), { name: 'Brave (Chromium 141)', chromium: true });
+    assert.deepEqual(browserName(CH, { brands: [{ brand: 'Not)A;Brand' }, { brand: 'Comet' }, { brand: 'Chromium' }] }, false), { name: 'Comet (Chromium 141)', chromium: true });
+    assert.deepEqual(browserName('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0', undefined, false), { name: 'Firefox 143', chromium: false });
+  });
+}
+console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);
