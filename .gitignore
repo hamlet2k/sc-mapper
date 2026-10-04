@@ -26,6 +26,7 @@ dist-ssr
 # Generated / downloaded game data (rebuilt by scripts/ensure-data.mjs on dev/build)
 src/data/defaults.json
 src/lib/defaultStickArt.ts
+src/lib/defaultThrottleArt.ts
 data/raw/
 screenshots/
 package-lock.json
