@@ -46,7 +46,7 @@ log('title:', await page.title());
 log('header stats:', (await page.locator('header').first().innerText()).split('\n').slice(0, 12).join(' | '));
 await page.screenshot({ path: shots + '01-defaults-list.png' });
 
-const search = page.getByPlaceholder(/Search actions/);
+const search = page.getByPlaceholder(/Search actions|refine:/);
 const rows = page.locator('#main .row-cv');
 for (const q of ['quantum', 'mining', 'lalt+n', 'key:f', 'mouse2', 'qntm']) {
   await search.fill(q);
@@ -113,6 +113,10 @@ await page.waitForTimeout(120);
 await page.evaluate(() => window.__btn(1, 2, false));
 await page.waitForTimeout(500);
 check(await page.getByTestId('device-row').count() === 3, 'all three controllers appear after one button press (no gamepadconnected event)');
+check(await panel.getByTestId('chromium-banner').isVisible(), 'Chromium banner in the Controllers panel (headless Chrome)');
+check(/at most 4 controllers/i.test(await panel.getByTestId('chromium-banner').innerText()) && /32 buttons \/ 16 axes/.test(await panel.getByTestId('chromium-banner').innerText()), 'banner explains the 4-device / 32-button / 16-axis limits and recommends Firefox');
+await panel.evaluate((el) => el.scrollTo(0, 0));
+await page.screenshot({ path: shots + '19-chromium-banner.png' });
 const srcs = await page.getByTestId('device-source').allInnerTexts();
 log('   sources:', srcs.join(' | '));
 check(srcs.filter((x) => x.includes('USB id')).length === 2, 'both VKB sticks matched to the profile by USB id');
@@ -140,11 +144,170 @@ await page.waitForTimeout(400);
 check((await lRow.getByLabel('Game instance').inputValue()) === '2', 'reset to automatic restores the profile match (js2)');
 await panel.getByRole('button', { name: '✕' }).first().click();
 
+// ===================== device settings: invert / exponent / curve / deadzone =====================
+console.log('\ndevice settings & curve editor');
+await page.getByRole('button', { name: /🕹 Controllers/ }).first().click();
+await panel.getByTestId('tab-settings').click();
+const ds = page.getByTestId('device-settings');
+check(await ds.isVisible(), 'settings tab opens');
+check(await ds.getByTestId('settings-js9').count() === 0 && await ds.getByTestId('settings-js8').count() === 1, 'settings limited to js1–js8 like the game');
+const grp = (n) => ds.locator(`[data-testid=settings-groups] button[data-group="${n}"]`);
+check((await grp('flight_move_yaw').innerText()).includes('exp 1.3000001'), 'imported js1 flight_move_yaw exponent shown');
+await ds.getByTestId('settings-js2').click();
+check((await grp('flight_move_strafe_vertical').innerText()).includes('curve 4pt') && (await grp('flight_move_strafe_vertical').innerText()).includes('inverted'), 'imported js2 strafe vertical invert + 4-point curve shown');
+check((await ds.getByLabel('saturation x').count()) === 1, 'axis table shown for js2');
+await ds.getByTestId('settings-js1').click();
+await page.waitForTimeout(150);
+check((await ds.getByLabel('saturation x').inputValue()) === '0.94050002', 'imported EVO R x saturation shown');
+await grp('flight_move_pitch').click();
+const ge = ds.getByTestId('group-editor');
+await ge.getByLabel('Invert').selectOption('1');
+await ge.getByRole('radio', { name: 'exponent' }).click();
+await ge.getByLabel('Exponent', { exact: true }).fill('2.5');
+await ge.getByLabel('Exponent', { exact: true }).press('Enter');
+await page.waitForTimeout(150);
+check((await grp('flight_move_pitch').innerText()).includes('exp 2.5'), 'exponent 2.5 set on js1 pitch');
+await grp('flight_move_yaw').click();
+await ge.getByRole('radio', { name: 'custom curve' }).click();
+await page.waitForTimeout(150);
+check(await ge.getByTestId('curve-points').isVisible(), 'custom curve converts the exponent into editable points');
+// drag the 5th point down on the chart
+const chart = ge.getByTestId('curve-chart');
+const pts = chart.locator('circle[data-pt]');
+const npts = await pts.count();
+if (npts) {
+  const bb = await pts.nth(4).boundingBox();
+  await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2 + 40, { steps: 5 });
+  await page.mouse.up();
+}
+check(npts >= 3, `curve points are draggable handles (${npts})`);
+await ds.getByLabel('deadzone x').fill('0.05');
+await ds.getByLabel('deadzone x').press('Enter');
+await ge.getByLabel('Preview axis').selectOption('x');
+await page.evaluate(() => window.__axis(1, 0, 0.6));
+await page.waitForTimeout(300);
+check(await ge.getByTestId('curve-live').count() === 1, 'live axis position drawn on the curve');
+await ds.screenshot({ path: shots + '20-curve-editor.png' });
+await page.evaluate(() => window.__axis(1, 0, 0));
+await panel.getByRole('button', { name: '✕' }).first().click();
+await page.getByRole('button', { name: /⇩ Export/ }).click();
+{
+  const [d] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-download').click()]);
+  const f = '/tmp/settings-' + d.suggestedFilename();
+  await d.saveAs(f);
+  const x = readFileSync(f, 'utf8');
+  check(/<flight_move_pitch invert="1" exponent="2.5"\/>/.test(x), 'export: <flight_move_pitch invert="1" exponent="2.5"/>');
+  check(/<flight_move_yaw>\s*<nonlinearity_curve>\s*(<point in="[\d.]+" out="[\d.]+"\/>\s*){3,}<\/nonlinearity_curve>\s*<\/flight_move_yaw>/.test(x), 'export: flight_move_yaw custom <nonlinearity_curve> points');
+  check(/<flight_move_strafe_vertical invert="1">\s*<nonlinearity_curve>/.test(x), 'export: untouched js2 curve kept');
+  check((x.match(/<option input="x" saturation="0.94050002"\/>/g) ?? []).length === 2 && x.includes('<option input="x" deadzone="0.05"/>'), 'export: deadzone added, saturation still written twice');
+  await page.keyboard.press('Escape');
+  await page.getByTestId('export-dialog').click({ position: { x: 5, y: 5 } }).catch(() => {});
+  await page.waitForTimeout(150);
+}
+
+// ===================== find by pressing =====================
+console.log('\nfind by pressing');
+await search.fill('');
+await page.getByTestId('press-search').click();
+await page.waitForTimeout(400);
+check(await page.getByTestId('press-bar').isVisible(), 'press bar shown');
+check(await page.getByTestId('press-bar').getByTestId('chromium-banner').isVisible(), 'compact Chromium banner in the press bar');
+await page.evaluate(() => window.__btn(2, 3, true));
+await page.waitForTimeout(150);
+await page.evaluate(() => window.__btn(2, 3, false));
+await page.waitForTimeout(300);
+const chip = page.getByTestId('press-chip');
+check(await chip.isVisible() && (await chip.innerText()).includes('js2_button4'), `pressing EVO L button 4 -> chip js2_button4 (${await chip.innerText().catch(() => '')})`);
+check(!(await page.getByTestId('press-search').getAttribute('aria-pressed') === 'true'), 'listening stops after one input');
+texts = await rows.allInnerTexts();
+check(texts.length > 0 && texts.every((x) => /JS2\s*Btn 4(?!\d)/.test(x)), `every result is bound to js2_button4 (${texts.length} rows)`);
+await page.screenshot({ path: shots + '16-press-to-search.png' });
+await search.fill('fire');
+await page.waitForTimeout(250);
+const refined = await rows.count();
+check(refined <= texts.length, `typing refines within the chip (${refined} rows)`);
+await search.fill('');
+await chip.getByRole('button', { name: 'Remove input filter' }).click();
+check(!(await chip.isVisible()), 'chip removable');
+await page.getByTestId('press-search').click();
+await page.keyboard.press('Alt+N');
+await page.waitForTimeout(300);
+check((await chip.innerText()).includes('kb1_lalt+n'), `keyboard Alt+N -> kb1_lalt+n (${await chip.innerText().catch(() => '')})`);
+texts = await rows.allInnerTexts();
+check(texts.length > 0, `Alt+N finds ${texts.length} action(s)`);
+await search.press('Backspace');
+await search.focus();
+await page.keyboard.press('Backspace');
+check(!(await chip.isVisible()), 'Backspace in an empty search removes the chip');
+await page.getByTestId('press-search').click();
+await page.getByTestId('press-mouse-pad').click({ button: 'middle' });
+await page.waitForTimeout(250);
+check((await chip.innerText()).includes('mo1_mouse3'), 'mouse button via the pad -> mo1_mouse3');
+await chip.getByRole('button', { name: 'Remove input filter' }).click();
+await page.getByTestId('press-search').click();
+await page.waitForTimeout(400);
+await page.evaluate(() => window.__axis(1, 9, -1));
+await page.waitForTimeout(250);
+await page.evaluate(() => window.__axis(1, 9, 9 / 7));
+check((await chip.innerText()).includes('js1_hat1_up'), 'hat -> js1_hat1_up');
+await chip.getByRole('button', { name: 'Remove input filter' }).click();
+
+// ===================== passive highlight =====================
+console.log('\npassive highlight');
+await page.locator('body').click({ position: { x: 900, y: 990 } }).catch(() => {});
+await page.evaluate(() => document.activeElement?.blur());
+await page.evaluate(() => window.__btn(2, 3, true));
+await page.waitForTimeout(120);
+await page.evaluate(() => window.__btn(2, 3, false));
+await page.waitForTimeout(500);
+const badge = page.getByTestId('flash-badge');
+check(await badge.isVisible() && (await badge.innerText()).includes('js2_button4'), `pressing a button highlights its bindings (${await badge.innerText().catch(() => '')})`);
+const flashed = await page.locator('#main [data-flash="1"]').allInnerTexts();
+check(flashed.length > 0 && flashed.every((x) => /JS2\s*Btn 4(?!\d)/.test(x)), `only js2_button4 chips flash (${flashed.length})`);
+check(await page.locator('#main [data-flash-row="1"]').count() > 0, 'matching rows flash');
+await page.waitForTimeout(500);
+await page.screenshot({ path: shots + '17-highlight.png' });
+await page.waitForTimeout(2800);
+check(!(await badge.isVisible()), 'highlight fades after a moment');
+await page.getByRole('button', { name: /Keyboard$/ }).last().click();
+await page.waitForTimeout(300);
+await page.keyboard.press('KeyN');
+await page.waitForTimeout(300);
+check(await page.locator('#main [data-flash="1"]').count() > 0, 'keyboard view: pressing N lights the key');
+await page.screenshot({ path: shots + '18-highlight-keyboard.png' });
+await page.getByRole('button', { name: /☰ List/ }).click();
+await page.waitForTimeout(2800);
+await search.focus();
+await page.keyboard.press('ArrowDown');
+await page.waitForTimeout(250);
+check(!(await badge.isVisible()), 'no highlight while typing in the search box');
+await page.evaluate(() => document.activeElement?.blur());
+await search.fill('quantum');
+await page.evaluate(() => document.activeElement?.blur());
+await page.evaluate(() => window.__btn(2, 3, true));
+await page.waitForTimeout(120);
+await page.evaluate(() => window.__btn(2, 3, false));
+await page.waitForTimeout(300);
+check(!(await badge.isVisible()), 'no highlight while a search is active');
+await search.fill('');
+await page.getByRole('button', { name: /Highlight on press/ }).click();
+await page.evaluate(() => document.activeElement?.blur());
+await page.keyboard.press('KeyN');
+await page.waitForTimeout(300);
+check(!(await badge.isVisible()), 'toggle turns highlighting off');
+await page.getByRole('button', { name: /Highlight on press/ }).click();
+
 // ===================== editing (starting from the game defaults) =====================
 console.log('\nbinding editor');
 await page.locator('#profile').selectOption('');
 await page.getByRole('button', { name: /✎ Edit/ }).click();
 check(await page.getByTestId('edit-bar').isVisible(), 'edit mode bar visible');
+await page.evaluate(() => document.activeElement?.blur());
+await page.keyboard.press('KeyN');
+await page.waitForTimeout(300);
+check(!(await page.getByTestId('flash-badge').isVisible()), 'no highlight in edit mode');
 const dialog = page.getByTestId('capture-dialog');
 const review = page.getByTestId('capture-review');
 const rowFor = async (q, label) => {
@@ -246,6 +409,8 @@ await addIn(row, 'joystick');
 await page.waitForTimeout(500);
 const devs = await page.getByTestId('device-list').innerText();
 check(devs.includes('VKBsim Gladiator EVO R') && devs.includes('VKBsim Gladiator EVO L'), 'both sticks listed with names');
+check(await dialog.getByTestId('chromium-banner').isVisible(), 'capture dialog shows the compact Chromium banner');
+check(/32/.test(await dialog.innerText()), 'capture dialog mentions the 32-button cap');
 await page.screenshot({ path: shots + '09-joystick-capture.png' });
 await page.evaluate(() => window.__axis(2, 5, -0.9));
 await settle();
@@ -315,6 +480,66 @@ await page.waitForTimeout(500);
 const after = await page.locator('#profile option:checked').innerText();
 log('re-imported:', after, '| edited:', before);
 check(after.split('—')[1]?.trim() === before.split('—')[1]?.trim(), 're-imported export has the same number of rebinds');
+
+
+// ===================== Firefox: 15 controllers, identical MOZA bases, >128 buttons =====================
+// Firefox exposes every device and all buttons; ids look like "346e-1002-MOZA AB6 FFB Base". Device list from a real Firefox setup.
+console.log('\nFirefox with 15 controllers');
+const ff = await browser.newContext({ viewport: { width: 1680, height: 1100 }, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0' });
+const fp = await ff.newPage();
+fp.on('pageerror', (e) => errors.push('[firefox] ' + String(e)));
+await fp.addInitScript(() => {
+  Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => undefined, configurable: true });
+  const btns = (n) => Array.from({ length: n }, () => ({ pressed: false, touched: false, value: 0 }));
+  const devs = [
+    ['4098-bf02-WINCTRL CarrierAce MFD L', 28, 0], ['4098-bf03-WINCTRL CarrierAce MFD C', 28, 0], ['4098-bf04-WINCTRL CarrierAce MFD R', 28, 0],
+    ['4098-bf05-WINCTRL CarrierAce UFC+HUD', 60, 2], ['4098-be64-WINCTRL Orion Pedals', 4, 3], ['4098-bc2a-WINCTRL-32 TCAS', 20, 0],
+    ['4098-bf10-WINCTRL PTO 2', 40, 0], ['4098-bc27-WINCTRL URSA MINOR Throttle', 128, 8], ['4098-bf20-WINCTRL 3N PFP', 128, 0],
+    ['4098-bf30-WINCTRL ViperAce ICP', 128, 0], ['4098-bc2b-WINCTRL-32 RMP', 64, 0], ['4098-bc1e-WINCTRL-32 FCU+EFIS', 128, 0],
+    ['346e-1002-MOZA AB6 FFB Base', 128, 8], ['346e-1002-MOZA AB6 FFB Base', 133, 8], ['294b-1901-Bravo Throttle Quadrant', 48, 7],
+  ];
+  const pads = devs.map(([id, b, a], index) => ({ index, id, mapping: '', connected: true, buttons: btns(b), axes: Array(a).fill(0), timestamp: 0 }));
+  let revealed = false;
+  window.__btn = (i, b, on) => { pads[i].buttons[b] = { pressed: on, touched: on, value: on ? 1 : 0 }; pads[i].timestamp++; if (on) revealed = true; };
+  navigator.getGamepads = () => pads.map((p) => (revealed ? Object.freeze({ ...p, axes: Object.freeze([...p.axes]), buttons: Object.freeze(p.buttons.map((x) => Object.freeze({ ...x }))) }) : null));
+});
+await fp.goto(url, { waitUntil: 'networkidle' });
+await fp.evaluate(() => localStorage.clear());
+await fp.reload({ waitUntil: 'networkidle' });
+await fp.getByRole('button', { name: /🕹 Controllers/ }).first().click();
+const fpanel = fp.getByTestId('controllers-panel');
+await fp.evaluate(() => window.__btn(0, 0, true));
+await fp.waitForTimeout(120);
+await fp.evaluate(() => window.__btn(0, 0, false));
+await fp.waitForTimeout(600);
+check(await fpanel.getByTestId('chromium-banner').count() === 0, 'Firefox: no Chromium banner');
+check(await fpanel.getByTestId('device-row').count() === 15, `Firefox: all 15 controllers listed (${await fpanel.getByTestId('device-row').count()})`);
+check(await fpanel.getByTestId('no-profile-hint').isVisible(), 'no profile: hint that numbering is the browser order (guess)');
+check(await fpanel.getByTestId('dup-hint').isVisible() && await fpanel.getByTestId('device-ambiguous').count() === 2, 'identical MOZA bases flagged (same USB id 346E:1002)');
+const mozaRows = await fpanel.locator('[data-testid=device-row][data-device="MOZA AB6 FFB Base"]').allInnerTexts();
+check(mozaRows.length === 2 && mozaRows.some((x) => x.includes('1 of 2') && x.includes('128 buttons')) && mozaRows.some((x) => x.includes('2 of 2') && x.includes('133 buttons')), 'MOZA entries told apart: "1 of 2 · 128 buttons" / "2 of 2 · 133 buttons"');
+const mozaInst = await fpanel.locator('[data-testid=device-row][data-device="MOZA AB6 FFB Base"]').nth(1).getByLabel('Game instance').inputValue();
+await fp.evaluate(() => window.__btn(13, 132, true));
+await fp.waitForTimeout(300);
+check(await fpanel.getByTestId('tester-over-cap').first().isVisible(), 'input tester marks buttons above 128');
+await fpanel.evaluate((el) => el.scrollTo(0, 0));
+await fp.screenshot({ path: shots + '21-firefox-15-controllers.png', fullPage: false });
+await fpanel.locator('[data-testid=device-row][data-device="MOZA AB6 FFB Base"]').first().scrollIntoViewIfNeeded();
+await fpanel.getByTestId('tester-over-cap').first().scrollIntoViewIfNeeded();
+await fp.screenshot({ path: shots + '22-firefox-moza-over-128.png', fullPage: false });
+await fp.evaluate(() => window.__btn(13, 132, false));
+await fpanel.getByRole('button', { name: '✕' }).first().click();
+await fp.getByTestId('press-search').click();
+await fp.waitForTimeout(400);
+check(await fp.getByTestId('press-bar').getByTestId('chromium-banner').count() === 0, 'Firefox: no banner in the press bar');
+await fp.evaluate(() => window.__btn(13, 132, true));
+await fp.waitForTimeout(150);
+await fp.evaluate(() => window.__btn(13, 132, false));
+await fp.waitForTimeout(300);
+const fchip = await fp.getByTestId('press-chip').innerText().catch(() => '');
+check(fchip.includes(`js${mozaInst}_button133`), `press-to-search: second MOZA button 133 -> js${mozaInst}_button133 (${fchip})`);
+check(/128/.test(await fp.getByTestId('press-chip').getAttribute('title')), 'chip warns that the game may not see buttons above 128');
+await ff.close();
 
 // persistence
 await page.reload({ waitUntil: 'networkidle' });
