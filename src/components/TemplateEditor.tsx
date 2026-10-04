@@ -100,7 +100,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
     setBusy(true);
     try {
       const img = await loadImageFile(f);
-      commit({ ...tRef.current, image: img.dataUrl, aspect: img.w / img.h });
+      commit({ ...tRef.current, image: img.dataUrl, aspect: img.w / img.h, callouts: tRef.current.callouts.map(({ region: _r, ...c }) => c) });
       notify('ok', `Image loaded (${img.w}×${img.h}, ${(img.dataUrl.length / 1024).toFixed(0)} KB stored)`);
     } catch (e) { notify('err', (e as Error).message); }
     setBusy(false);
@@ -126,7 +126,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
           <option value="js">Joystick / HOTAS</option><option value="gp">Gamepad</option>
         </select>
         <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="tpl-upload" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">🖼 {t.image ? 'Replace image' : 'Upload image'}</button>
-        {t.image && <button type="button" onClick={() => commit({ ...t, image: undefined, aspect: BLANK_ASPECT })} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Blank canvas</button>}
+        {t.image && <button type="button" onClick={() => commit({ ...t, image: undefined, aspect: BLANK_ASPECT, callouts: t.callouts.map(({ region: _r, ...c }) => c) })} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Blank canvas</button>}
         {!t.image && (
           <label className="flex items-center gap-1 text-[11px] text-slate-400">Canvas
             <select value={String(t.aspect)} onChange={(e) => commit({ ...t, aspect: Number(e.target.value) })} aria-label="Canvas shape" className={field}>
@@ -286,7 +286,7 @@ function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange
       </div>
     );
   }
-  const labels = c.kind === 'encoder' ? ['Clockwise', 'Counter-clockwise'] : c.kind === 'switch' ? c.inputs.map((_, i) => `Position ${i + 1}`) : ['Input'];
+  const labels = c.kind === 'encoder' ? ['Clockwise', 'Counter-clockwise', 'Push'] : c.kind === 'switch' ? c.inputs.map((_, i) => `Position ${i + 1}`) : c.kind === 'buttons' ? c.inputs.map((_, i) => `Button ${i + 1}`) : ['Input'];
   return (
     <div className="space-y-1">
       {c.inputs.map((x, i) => (
@@ -295,10 +295,12 @@ function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange
             onBlur={(e) => { const v = e.target.value.trim().toLowerCase(); if (v !== x && INPUT_RE.test(v)) set(i, v); else e.target.value = x; }}
             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
           {pressBtn(i)}
-          {c.kind === 'switch' && c.inputs.length > 2 && <button type="button" onClick={() => onChange(c.inputs.filter((_, j) => j !== i))} className="text-slate-500 hover:text-alert" aria-label={`Remove position ${i + 1}`}>✕</button>}
+          {c.kind === 'encoder' && i === 2 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 2))} className="text-slate-500 hover:text-alert" aria-label="Remove push">✕</button>}
+          {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length > 2 && <button type="button" onClick={() => onChange(c.inputs.filter((_, j) => j !== i))} className="text-slate-500 hover:text-alert" aria-label={`Remove ${c.kind === 'buttons' ? 'button' : 'position'} ${i + 1}`}>✕</button>}
         </label>
       ))}
-      {c.kind === 'switch' && c.inputs.length < 8 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline">＋ position</button>}
+      {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length < 8 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline">＋ {c.kind === 'buttons' ? 'button' : 'position'}</button>}
+      {c.kind === 'encoder' && c.inputs.length === 2 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline">＋ push</button>}
       {slot === 'gp' && <datalist id="tpl-gp-buttons">{GP_BUTTONS.map((b) => <option key={b} value={b} />)}</datalist>}
     </div>
   );
