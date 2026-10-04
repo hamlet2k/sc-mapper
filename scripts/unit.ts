@@ -618,31 +618,46 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       for (const c of b.callouts) for (const p of [c.anchor, c.box]) assert.ok(p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1, `${b.id}/${c.id}`);
     }
   });
-  t('default holo stick: fallback, glow regions, button rows, encoder push, 32-button cap, boxes apart', () => {
+  t('default holo stick + throttle: fallbacks, glow regions, button rows, encoder push, 32-button cap, boxes apart', () => {
     const byId = (id: string) => BUILTIN_TEMPLATES.find((b) => b.id === id)!;
     assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'Unknown Stick', slot: 'js' }).template.id, 'builtin-stick');
     assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'VKBsim STECS Mini Plus', slot: 'js' }).template.id, 'builtin-throttle');
-    assert.ok(byId('builtin-stick-classic'), 'classic stick kept');
-    const b = byId('builtin-stick');
-    assert.equal(b.callouts.length, 24);
-    const btns = new Set(b.callouts.flatMap((c) => c.inputs).filter((i) => /^button\d+$/.test(i)));
-    assert.ok([...btns].every((i) => Number(i.slice(6)) <= 32), 'buttons within the 32-button browser cap');
-    for (const c of b.callouts) {
-      assert.ok(c.region && tp.REGION_RE.test(c.region), `${c.id}: glow region`);
-      for (const o of b.callouts) if (o !== c) {
-        const dx = Math.abs(o.box.x - c.box.x), dy = Math.abs(o.box.y - c.box.y);
-        assert.ok(dx > 0.12 || dy > 0.06, `boxes ${c.id} / ${o.id} too close`);
+    assert.ok(byId('builtin-stick-classic') && byId('builtin-throttle-classic'), 'classic templates kept');
+    for (const id of ['builtin-stick', 'builtin-throttle']) {
+      const b = byId(id);
+      assert.ok(b.callouts.length >= 20, `${id}: ${b.callouts.length} callouts`);
+      const btns = new Set(b.callouts.flatMap((c) => c.inputs).filter((i) => /^button\d+$/.test(i)));
+      assert.ok([...btns].every((i) => Number(i.slice(6)) <= 32), `${id}: buttons within the 32-button browser cap`);
+      for (const c of b.callouts) {
+        assert.ok(c.region && tp.REGION_RE.test(c.region), `${id}/${c.id}: glow region`);
+        for (const o of b.callouts) if (o !== c) {
+          const dx = Math.abs(o.box.x - c.box.x), dy = Math.abs(o.box.y - c.box.y);
+          assert.ok(dx > 0.12 || dy > 0.06, `${id}: boxes ${c.id} / ${o.id} too close`);
+        }
       }
+      const back = tp.parseTemplates(tp.exportTemplates([{ ...b, builtin: undefined, id: 'copy' } as any]))[0];
+      assert.deepEqual(back.callouts.map((c) => c.region), b.callouts.map((c) => c.region), `${id}: regions survive export/import`);
     }
-    const back = tp.parseTemplates(tp.exportTemplates([{ ...b, builtin: undefined, id: 'copy' } as any]))[0];
-    assert.deepEqual(back.callouts.map((c) => c.region), b.callouts.map((c) => c.region), 'regions survive export/import');
-    const row = b.callouts.find((c) => c.id === 'rowL')!;
+    const th = byId('builtin-throttle');
+    assert.equal(byId('builtin-stick').callouts.length, 24); assert.equal(th.callouts.length, 21);
+    const row = byId('builtin-stick').callouts.find((c) => c.id === 'rowL')!;
     assert.equal(row.kind, 'buttons'); assert.equal(tp.inputRole(row, 3), '4');
-    const enc = { id: 'e', kind: 'encoder' as const, inputs: ['button5', 'button6', 'button7'], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } };
-    assert.deepEqual(enc.inputs.map((_, k) => tp.inputRole(enc, k)), ['⟳', '⟲', '●']);
-    assert.deepEqual(tp.inputsForKind('encoder', enc.inputs, 'js', new Set()), enc.inputs, 'encoder keeps its push');
-    const bad = tp.parseTemplates(JSON.stringify({ ...b, builtin: undefined, id: 'x', callouts: [{ ...row, region: 'M0 0<script>' }] }))[0];
+    assert.deepEqual(th.callouts.find((c) => c.id === 'e1')!.inputs.map((_, k) => tp.inputRole(th.callouts.find((c) => c.id === 'e1')!, k)), ['⟳', '⟲', '●']);
+    const keys = th.callouts.find((c) => c.id === 'keys')!;
+    assert.equal(keys.kind, 'buttons'); assert.equal(tp.inputRole(keys, 5), '6');
+    assert.deepEqual(tp.inputsForKind('encoder', ['button5', 'button6', 'button7'], 'js', new Set()), ['button5', 'button6', 'button7'], 'encoder keeps its push');
+    const bad = tp.parseTemplates(JSON.stringify({ ...th, builtin: undefined, id: 'x', callouts: [{ ...keys, region: 'M0 0<script>' }] }))[0];
     assert.equal(bad.callouts[0].region, undefined, 'invalid region dropped');
+    // per-key outlines: one per keypad key, valid paths, kept on export/import, dropped when any entry is invalid or there are too many
+    assert.equal(keys.inputRegions?.length, keys.inputs.length);
+    assert.ok(keys.inputRegions!.every((r) => tp.REGION_RE.test(r)) && new Set(keys.inputRegions).size === 6, 'six distinct key outlines');
+    const kb = tp.parseTemplates(tp.exportTemplates([{ ...th, builtin: undefined, id: 'copy2' } as any]))[0];
+    assert.deepEqual(kb.callouts.find((c) => c.id === 'keys')!.inputRegions, keys.inputRegions, 'key outlines survive export/import');
+    const odd = (ir: unknown) => tp.parseTemplates(JSON.stringify({ ...th, builtin: undefined, id: 'y', callouts: [{ ...keys, inputRegions: ir }] }))[0].callouts[0].inputRegions;
+    assert.equal(odd([...keys.inputRegions!.slice(0, 5), 'M0 0<x>']), undefined);
+    assert.equal(odd([...keys.inputRegions!, 'M0 0Z']), undefined, 'more outlines than inputs');
+    assert.deepEqual(odd(['', 'M0 0L1 1Z']), ['', 'M0 0L1 1Z'], 'empty entries allowed');
+    assert.deepEqual(th.callouts.find((c) => c.id === 'trgL')!.inputs, ['button4'], 'left grip trigger');
   });
 }
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);
