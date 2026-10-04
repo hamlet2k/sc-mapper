@@ -13,6 +13,8 @@ const { buildExport, exportFileName } = await import('../src/lib/exporter');
 const ed = await import('../src/lib/edit');
 const { normalizeCombo } = await import('../src/lib/inputs');
 const groups = await import('../src/lib/groups');
+const dev = await import('../src/lib/devices');
+const search = await import('../src/lib/search');
 const defaults = JSON.parse(readFileSync('src/data/defaults.json', 'utf8'));
 const idx = ed.indexDefaults(defaults);
 
@@ -223,6 +225,117 @@ if (extraFiles.length) {
     assert.equal(out.split('\n')[0], src.split('\n')[0]);
     const ws = (s: string) => s.replace(/\r\n/g, '\n').replace(/(input="\w+_[^"]*?\S) +"/g, '$1"').trimEnd();
     assert.equal(ws(out), ws(src), 'whole file identical to the game-written layout (except trailing spaces inside input values)');
+  });
+}
+
+console.log('live capture (PadTracker)');
+{
+  const st = (b: number[], a: number[], n = 32) => cap.snapshot({ buttons: Array.from({ length: n }, (_, i) => ({ pressed: b.includes(i), value: b.includes(i) ? 1 : 0 })), axes: a });
+  const names = (m: Map<string, any[]>, k = 'p') => (m.get(k) ?? []).map((e) => cap.joystickInput(e)?.input);
+  const REST = [0, 0, -1, 0, 0, 0, 0, 0, 0, 9 / 7];
+  t('a device that appears mid-capture (woken by a press) reports that press on release', () => {
+    const tr = new cap.PadTracker(300);
+    assert.equal(tr.update([], 0).size, 0, 'nothing visible yet');
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([4], REST) }], 16)), [], 'just appeared, button 5 held');
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([4], REST) }], 100)), [], 'still held');
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([], REST) }], 180)), ['button5'], 'released -> the waking press counts');
+  });
+  t('toggle switches that stay on never fire; held-at-start buttons count after release', () => {
+    const tr = new cap.PadTracker(0);
+    tr.update([], 0);
+    tr.update([{ key: 'p', state: st([30], REST) }], 10);
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([30], REST) }], 500)), []);
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([30, 2], REST) }], 520)), ['button3'], 'another button works while the toggle is on');
+    const t2 = new cap.PadTracker(0);
+    t2.update([{ key: 'p', state: st([7], REST) }], 0); // visible from the start, button 8 held
+    assert.deepEqual(names(t2.update([{ key: 'p', state: st([7], REST) }], 20)), []);
+    assert.deepEqual(names(t2.update([{ key: 'p', state: st([], REST) }], 40)), [], 'release of a held-at-start button is not an input');
+    assert.deepEqual(names(t2.update([{ key: 'p', state: st([7], REST) }], 60)), ['button8'], 'its next press is');
+  });
+  t('first report all zeros: axes re-baselined while settling (no phantom throttle/hat input)', () => {
+    const tr = new cap.PadTracker(300);
+    tr.update([], 0);
+    tr.update([{ key: 'p', state: st([], new Array(10).fill(0)) }], 1);
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([], REST) }], 50)), [], 'real values arrive while settling');
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([], REST) }], 400)), [], 'throttle at -1 and centred hat are rest, not input');
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([], [0, 0, -1, 0, 0, 0, 0, 0, 0, -1]) }], 420)), ['hat1_up']);
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([], [0, 0, 0.1, 0, 0, 0, 0, 0, 0, 9 / 7]) }], 440)), ['z']);
+    const t2 = new cap.PadTracker(0); // no settling: hat first seen at 0, then centre (Firefox rests at 3.2857)
+    t2.update([{ key: 'p', state: st([], new Array(10).fill(0)) }], 0);
+    assert.deepEqual(names(t2.update([{ key: 'p', state: st([], [0, 0, 0, 0, 0, 0, 0, 0, 0, 23 / 7]) }], 10)), [], 'hat centre value fixes the baseline');
+    assert.deepEqual(names(t2.update([{ key: 'p', state: st([], [0, 0, 0, 0, 0, 0, 0, 0, 0, 5 / 7]) }], 20)), ['hat1_left']);
+  });
+  t('many buttons, second hat, unknown axis indices', () => {
+    const tr = new cap.PadTracker(0);
+    const axes = [...REST, 0, 0, 0, 9 / 7, 0, 0]; // 16 axes, second hat at index 13
+    tr.update([{ key: 'p', state: st([], axes, 128) }], 0);
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([99], axes, 128) }], 10)), ['button100']);
+    const a2 = [...axes]; a2[13] = 1 / 7;
+    assert.deepEqual(names(tr.update([{ key: 'p', state: st([], a2, 128) }], 20)), ['hat2_down']);
+    const c = cap.joystickInput({ kind: 'axis', index: 11, dir: 1 })!;
+    assert.ok(c.warning && c.alt!.length === 8, 'axis past the known names offers a choice instead of being ignored');
+    assert.deepEqual(cap.joystickInput({ kind: 'axis', index: 6, dir: 1 })!.alt!.map((x) => x.input), cap.JS_AXES);
+  });
+}
+
+console.log('controllers: browser devices <-> profile devices');
+{
+  const pad = (id: string, index: number, mapping = '', nb = 32) => ({ id, index, mapping, buttons: Array.from({ length: nb }, () => ({ pressed: false, value: 0 })), axes: [0, 0] });
+  const profileDevs = parseActionMaps(readFileSync('public/samples/actionmaps.xml', 'utf8'), 's.xml').devices;
+  t('matched to the profile by USB vendor/product id regardless of browser order (Chrome and Firefox ids)', () => {
+    const d = dev.describePads([pad('VKBsim Gladiator EVO L (Vendor: 231d Product: 3201)', 0), pad('231d-0200-VKBsim Gladiator EVO R', 1), pad('Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)', 2, 'standard')], {}, [
+      ...profileDevs.filter((x) => x.slot !== 'js'),
+      { slot: 'js', instance: 1, product: ' VKBsim Gladiator EVO R    {0200231D-0000-0000-0000-504944564944}' },
+      { slot: 'js', instance: 2, product: ' VKBsim Gladiator EVO L    {3201231D-0000-0000-0000-504944564944}' },
+    ]);
+    assert.deepEqual(d.map((x) => `${x.kind}${x.instance}:${x.source}`), ['js2:profile-id', 'js1:profile-id', 'gp1:auto']);
+    const fromFile = dev.describePads([pad('VKBsim Gladiator EVO L (Vendor: 231d Product: 3201)', 0), pad('VKBsim Gladiator EVO R (Vendor: 231d Product: 0200)', 1)], {}, profileDevs);
+    assert.deepEqual(fromFile.map((x) => `${x.kind}${x.instance}:${x.source}`), ['js2:profile-id', 'js1:profile-id'], 'devices parsed from the imported file keep their USB ids');
+  });
+  t('name match, manual override, and lowest free number for the rest', () => {
+    const pads = [pad('Thrustmaster T.16000M (Vendor: 044f Product: b10a)', 0), pad('VKBsim Gladiator EVO R (Vendor: 231d Product: 0200)', 1), pad('MFG Crosswind V2 (Vendor: 1551 Product: 0004)', 2)];
+    const decl = [{ slot: 'js' as const, instance: 2, product: 'VKBsim Gladiator EVO R' }];
+    let d = dev.describePads(pads, {}, decl);
+    assert.deepEqual(d.map((x) => `js${x.instance}:${x.source}`), ['js1:auto', 'js2:profile-name', 'js3:auto']);
+    d = dev.describePads(pads, { [d[2].key]: { kind: 'js', instance: 1 } }, decl);
+    assert.deepEqual(d.map((x) => `js${x.instance}:${x.source}`), ['js3:auto', 'js2:profile-name', 'js1:manual']);
+    assert.deepEqual(dev.parseProfileProduct(' VKBsim Gladiator EVO L    {3201231D-0000-0000-0000-504944564944}'), { name: 'VKBsim Gladiator EVO L', productId: '3201', vendor: '231D' });
+    const two = dev.describePads([pad('Same Stick', 0), pad('Same Stick', 1)], {});
+    assert.notEqual(two[0].key, two[1].key, 'identical devices get distinct keys');
+  });
+}
+
+console.log('search: exact inputs');
+{
+  let r = {};
+  const pick = (id: string) => { const [m, a] = id.split('/'); return { m, a, d: idx.get(id) }; };
+  const A = pick('spaceship_movement/v_yaw'), B = pick('spaceship_movement/v_pitch'), C = pick('spaceship_general/v_eject') .d ? pick('spaceship_general/v_eject') : pick('seat_general/v_eject');
+  r = ed.setGroup(r, A.d, A.m, A.a, 'js', [{ slot: 'js', instance: 1, input: 'button25' }]);
+  r = ed.setGroup(r, B.d, B.m, B.a, 'js', [{ slot: 'js', instance: 2, input: 'button25' }]);
+  r = ed.setGroup(r, C.d, C.m, C.a, 'km', [{ slot: 'kb', instance: 1, input: 'ralt+n' }]);
+  const rows = buildRows(defaults, ed.withRebinds(ed.newProfile('s'), r));
+  const hits = (q: string) => rows.filter((x) => search.scoreRow(x, search.parseQuery(q))).map((x) => x.id);
+  const yaw = `${A.m}/${A.a}`, pitch = `${B.m}/${B.a}`, eject = `${C.m}/${C.a}`;
+  t('clicking a joystick binding (key:js1_button25) matches only that device instance and button', () => {
+    assert.deepEqual(hits('key:js1_button25'), [yaw]);
+    assert.deepEqual(hits('key:js2_button25'), [pitch]);
+    assert.ok(!hits('key:js1_button25').includes(pitch));
+    assert.equal(hits('key:js1_button250').length, 0, 'button25 is not button250');
+  });
+  t('typed device-scoped searches: "js1_button25", "js2 btn25", "js2:b25", "js2"', () => {
+    assert.deepEqual(hits('js1_button25'), [yaw]);
+    assert.deepEqual(hits('js2 btn25'), [pitch]);
+    assert.deepEqual(hits('js2:b25'), [pitch]);
+    assert.ok(hits('js2').includes(pitch) && !hits('js2').includes(yaw));
+    assert.ok(hits('button25').includes(yaw) && hits('button25').includes(pitch), 'an unscoped search still finds both');
+  });
+  t('keyboard combos are exact including left/right modifiers', () => {
+    assert.ok(hits('key:kb1_ralt+n').includes(eject));
+    assert.ok(!hits('key:kb1_lalt+n').includes(eject), 'lalt+n is not ralt+n');
+    assert.ok(!hits('key:kb1_n').includes(eject), 'n alone is not ralt+n');
+    const n = hits('key:kb1_n');
+    assert.ok(n.length > 0 && n.every((id) => rows.find((x) => x.id === id)!.bindings.some((b) => (b.slot === 'kb' || b.slot === 'mo') && normalizeCombo(b.input) === 'n')));
+    assert.ok(hits('key:mo1_mouse2').length > 0 && hits('key:mo1_mouse2').every((id) => rows.find((x) => x.id === id)!.bindings.some((b) => normalizeCombo(b.input) === 'mouse2')));
   });
 }
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}`);
