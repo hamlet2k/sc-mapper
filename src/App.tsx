@@ -1,19 +1,28 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import defaultsJson from './data/defaults.json';
 import { ActionList, columnOf } from './components/ActionList';
+import { ActionEditor } from './components/ActionEditor';
+import { CaptureDialog, DeviceList, type CaptureRequest } from './components/CaptureDialog';
 import { ConflictsView } from './components/ConflictsView';
+import { ExportDialog } from './components/ExportDialog';
 import { KeyboardView } from './components/KeyboardView';
 import { Sidebar, type MapCount } from './components/Sidebar';
 import { findConflicts } from './lib/conflicts';
 import { GROUPS } from './lib/groups';
-import { comboLabel, normalizeCombo } from './lib/inputs';
+import { usePads } from './lib/devices';
+import { effectiveGroup, indexDefaults, newProfile, setAction, setGroup, withRebinds, type CaptureConflict } from './lib/edit';
+import { bindKey, comboLabel, groupOfDevice, groupOfSlot, normalizeCombo } from './lib/inputs';
 import { parseActionMaps, readXmlFile } from './lib/importer';
 import { buildRows } from './lib/merge';
 import { parseQuery, scoreRow } from './lib/search';
 import { load, save, type Persisted } from './lib/storage';
-import type { Binding, DefaultsData, Device, Row } from './lib/types';
+import type { Binding, DefaultsData, Device, Group, Rebind, RebindMap, Row } from './lib/types';
 
 const DEFAULTS = defaultsJson as DefaultsData;
+const IDX = indexDefaults(DEFAULTS);
+interface UndoEntry { profileId: string; label: string; before: { map: string; action: string; value?: Rebind[] }[] }
+const keyOf = (r: { slot: Rebind['slot']; instance: number; input: string }) => bindKey(r.slot, r.instance, r.input);
+const uniqueName = (names: string[], base: string) => { let n = base, i = 2; while (names.includes(n)) n = `${base} ${i++}`; return n; };
 const ALL_DEVICES: Device[] = ['keyboard', 'mouse', 'joystick', 'gamepad'];
 const DEVICE_META: Record<Device, { label: string; icon: string }> = {
   keyboard: { label: 'Keyboard', icon: '⌨' },
@@ -43,6 +52,18 @@ export default function App() {
   const [help, setHelp] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // ---- editing state
+  const [editMode, setEditMode] = useState(false);
+  const [capture, setCapture] = useState<CaptureRequest | null>(null);
+  const [editorId, setEditorId] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [devicesOpen, setDevicesOpen] = useState(false);
+  const [undo, setUndo] = useState<UndoEntry[]>([]);
+  const { pads, update: assignPad } = usePads(!!capture || exportOpen || devicesOpen);
+  const storeRef = useRef(store);
+  const undoRef = useRef(undo);
+  useLayoutEffect(() => { storeRef.current = store; undoRef.current = undo; }, [store, undo]);
 
   const rows = useMemo(() => buildRows(DEFAULTS, profile), [profile]);
   const [includeDefaultOverlaps, setIncludeDefaultOverlaps] = useState(false);
@@ -128,6 +149,112 @@ export default function App() {
     await importFiles([new File([blob], 'sample-hosas-actionmaps.xml')]);
   };
 
+  // ---- editing --------------------------------------------------------------
+  /** Apply a change to the active profile's rebinds (creating a profile from the defaults if needed) and record undo */
+  const applyEdit = useCallback((label: string, touched: { map: string; action: string }[], fn: (r: RebindMap) => RebindMap) => {
+    const s = storeRef.current;
+    let prof = s.profiles.find((p) => p.id === s.activeId) ?? null;
+    let profiles = s.profiles;
+    const created = !prof;
+    if (!prof) {
+      prof = newProfile(uniqueName(s.profiles.map((p) => p.name), 'My layout'));
+      profiles = [...profiles, prof];
+    }
+    const seen = new Set<string>();
+    const before = touched.filter((t) => !seen.has(`${t.map}/${t.action}`) && seen.add(`${t.map}/${t.action}`))
+      .map((t) => ({ ...t, value: prof!.rebinds[t.map]?.[t.action] }));
+    const next = withRebinds(prof, fn(prof.rebinds));
+    const ns = { profiles: profiles.map((p) => (p.id === next.id ? next : p)), activeId: next.id };
+    storeRef.current = ns;
+    setStore(ns);
+    setUndo((u) => [...u.slice(-199), { profileId: next.id, label, before }]);
+    if (created) setToast({ kind: 'ok', text: `Created profile “${next.name}” from the game defaults. Edits are saved there.` });
+  }, []);
+
+  const rebindsNow = (row: Row) => storeRef.current.profiles.find((p) => p.id === storeRef.current.activeId)?.rebinds[row.map]?.[row.action];
+  const setGroupFor = useCallback((row: Row, g: Group, list: Rebind[], label = `Edit ${row.label}`) =>
+    applyEdit(label, [row], (r) => setGroup(r, IDX.get(row.id), row.map, row.action, g, list)), [applyEdit]);
+  const rebindOf = (row: Row, b: Binding) =>
+    effectiveGroup(IDX.get(row.id), rebindsNow(row), groupOfSlot(b.slot)).find((r) => keyOf(r) === keyOf(b));
+
+  const undoLast = useCallback((rowId?: string) => {
+    const s = storeRef.current;
+    const u = undoRef.current;
+    let i = u.length - 1;
+    for (; i >= 0; i--) if (u[i].profileId === s.activeId && (!rowId || u[i].before.some((b) => `${b.map}/${b.action}` === rowId))) break;
+    if (i < 0) return;
+    const entry = u[i];
+    const items = rowId ? entry.before.filter((b) => `${b.map}/${b.action}` === rowId) : entry.before;
+    const prof = s.profiles.find((p) => p.id === entry.profileId);
+    if (!prof) return;
+    let r = prof.rebinds;
+    for (const b of items) r = setAction(r, b.map, b.action, b.value);
+    const next = withRebinds(prof, r);
+    const ns = { ...s, profiles: s.profiles.map((p) => (p.id === next.id ? next : p)) };
+    storeRef.current = ns;
+    setStore(ns);
+    const rest = rowId ? entry.before.filter((b) => `${b.map}/${b.action}` !== rowId) : [];
+    setUndo([...u.slice(0, i), ...(rest.length ? [{ ...entry, before: rest }] : []), ...u.slice(i + 1)]);
+    setToast({ kind: 'ok', text: `Undone: ${entry.label}` });
+  }, []);
+  const canUndoRow = (rowId: string) => undo.some((e) => e.profileId === store.activeId && e.before.some((b) => `${b.map}/${b.action}` === rowId));
+  const undoCount = undo.filter((e) => e.profileId === store.activeId).length;
+
+  const onCaptureCell = useCallback((row: Row, device: Device, b?: Binding) => {
+    setCapture({ row, group: groupOfDevice(device), replace: b ? rebindOf(row, b) : undefined, focus: device === 'mouse' ? 'mouse' : 'keyboard' });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const onRemoveCell = useCallback((row: Row, b: Binding) => {
+    const g = groupOfSlot(b.slot);
+    setGroupFor(row, g, effectiveGroup(IDX.get(row.id), rebindsNow(row), g).filter((r) => keyOf(r) !== keyOf(b)), `Unbind ${comboLabel(b.input, b.slot)} from ${row.label}`);
+  }, [setGroupFor]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onEditRow = useCallback((row: Row) => setEditorId(row.id), []);
+
+  const commitCapture = (r: Rebind, removeFrom: CaptureConflict[]) => {
+    if (!capture) return;
+    const { row, group, replace } = capture;
+    const eff = effectiveGroup(IDX.get(row.id), rebindsNow(row), group);
+    const list = replace && eff.some((x) => keyOf(x) === keyOf(replace)) ? eff.map((x) => (keyOf(x) === keyOf(replace) ? r : x)) : [...eff, r];
+    const byRow = new Map<string, CaptureConflict[]>();
+    for (const c of removeFrom) byRow.set(c.row.id, [...(byRow.get(c.row.id) ?? []), c]);
+    applyEdit(`Bind ${comboLabel(r.input, r.slot)} to ${row.label}`, [row, ...removeFrom.map((c) => c.row)], (rb) => {
+      let out = setGroup(rb, IDX.get(row.id), row.map, row.action, group, list);
+      for (const items of byRow.values()) {
+        const cr = items[0].row;
+        const cg = groupOfSlot(items[0].binding.slot);
+        const keep = effectiveGroup(IDX.get(cr.id), out[cr.map]?.[cr.action], cg).filter((x) => !items.some((c) => keyOf(c.binding) === keyOf(x)));
+        out = setGroup(out, IDX.get(cr.id), cr.map, cr.action, cg, keep);
+      }
+      return out;
+    });
+    if (removeFrom.length) setToast({ kind: 'ok', text: `Bound ${comboLabel(r.input, r.slot)} and removed it from ${removeFrom.length} other action${removeFrom.length === 1 ? '' : 's'}` });
+    setCapture(null);
+  };
+  const clearCapture = () => {
+    if (!capture?.replace) return;
+    const { row, group, replace } = capture;
+    setGroupFor(row, group, effectiveGroup(IDX.get(row.id), rebindsNow(row), group).filter((x) => keyOf(x) !== keyOf(replace)));
+    setCapture(null);
+  };
+  const resetRow = (row: Row) => applyEdit(`Reset ${row.label}`, [row], (r) => setAction(r, row.map, row.action, undefined));
+  const resetAll = () => {
+    if (!profile || !window.confirm(`Reset every binding in “${profile.name}” to the game defaults? (You can undo this.)`)) return;
+    const touched = Object.entries(profile.rebinds).flatMap(([map, acts]) => Object.keys(acts).map((action) => ({ map, action })));
+    applyEdit('Reset all', touched, () => ({}));
+  };
+  const revertImported = () => {
+    if (!profile?.original) return;
+    const keys = (r: RebindMap) => Object.entries(r).flatMap(([map, acts]) => Object.keys(acts).map((action) => ({ map, action })));
+    applyEdit('Revert to imported file', [...keys(profile.rebinds), ...keys(profile.original)], () => JSON.parse(JSON.stringify(profile.original)));
+  };
+  const createLayout = (copy: boolean) => {
+    const base = copy && profile ? `${profile.name} (copy)` : 'My layout';
+    const p = { ...newProfile(uniqueName(store.profiles.map((x) => x.name), base), copy && profile ? JSON.parse(JSON.stringify(profile.rebinds)) : {}), ...(copy && profile?.optionsXml ? { optionsXml: profile.optionsXml, devices: profile.devices } : {}) };
+    setStore((s) => ({ profiles: [...s.profiles, p], activeId: p.id }));
+    setToast({ kind: 'ok', text: `Created “${p.name}”${copy ? '' : ' from the game defaults'}` });
+  };
+  const hot = useRef({ capture: false, undo: undoLast });
+  useLayoutEffect(() => { hot.current = { capture: !!capture || !!editorId || exportOpen, undo: undoLast }; }, [capture, editorId, exportOpen, undoLast]);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 5000);
@@ -137,6 +264,8 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
+      if (hot.current.capture) return;
+      if (e.key.toLowerCase() === 'z' && (e.ctrlKey || e.metaKey) && tag !== 'INPUT') { e.preventDefault(); hot.current.undo(); return; }
       if ((e.key === '/' && tag !== 'INPUT') || (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey))) {
         e.preventDefault();
         searchRef.current?.focus();
@@ -182,6 +311,7 @@ export default function App() {
     return { profiles, activeId: s.activeId === id ? profiles[profiles.length - 1]?.id ?? null : s.activeId };
   });
 
+  const editorRow = editorId ? rows.find((r) => r.id === editorId) ?? null : null;
   const meta = DEFAULTS.meta;
   const versionLabel = `${meta.branch?.replace('sc-alpha-', 'Alpha ') ?? 'Star Citizen'} ${meta.channel ?? ''}`.trim();
 
@@ -230,6 +360,14 @@ export default function App() {
             <button type="button" onClick={loadSample} className="rounded border border-edge px-3 py-1.5 font-display text-sm font-semibold uppercase tracking-wider text-slate-300 hover:border-hud/60 hover:text-hud2">
               Sample
             </button>
+            <button type="button" onClick={() => setEditMode((v) => !v)} aria-pressed={editMode} title="Edit bindings: click any binding to rebind it"
+              className={`rounded border px-3 py-1.5 font-display text-sm font-semibold uppercase tracking-wider transition ${editMode ? 'border-mod bg-mod/20 text-mod shadow-[0_0_18px_-6px_var(--color-mod)]' : 'border-mod/50 text-mod/90 hover:bg-mod/10'}`}>
+              ✎ {editMode ? 'Editing' : 'Edit'}
+            </button>
+            <button type="button" onClick={() => setExportOpen(true)} disabled={!profile} title={profile ? 'Export a file Star Citizen can load' : 'Import or edit bindings first'}
+              className="rounded border border-ok/50 px-3 py-1.5 font-display text-sm font-semibold uppercase tracking-wider text-ok hover:bg-ok/10 disabled:opacity-40">
+              ⇩ Export
+            </button>
             <button type="button" onClick={() => setHelp(true)} className="rounded border border-edge px-2.5 py-1.5 font-display text-sm font-bold text-slate-300 hover:border-hud/60 hover:text-hud2" title="Where are my keybind files?">?</button>
             <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" multiple hidden
               onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
@@ -273,6 +411,23 @@ export default function App() {
             ))}
           </div>
         </div>
+        {editMode && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-mod/40 bg-mod/[0.06] px-5 py-2 text-xs" data-testid="edit-bar">
+            <span className="font-display text-sm font-bold uppercase tracking-[0.2em] text-mod">✎ Edit mode</span>
+            <span className="text-slate-400">
+              Click a binding to rebind it, <b className="text-slate-200">+</b> to add one, hover ✕ to unbind, or click an action name for the full editor.
+              Saved to <b className="text-mod">{profile ? profile.name : 'a new profile (created on first edit)'}</b>.
+            </span>
+            <span className="ml-auto flex flex-wrap items-center gap-1.5">
+              <button type="button" onClick={() => undoLast()} disabled={!undoCount} title="Undo (Ctrl+Z)" className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60 disabled:opacity-40">↶ Undo{undoCount ? ` (${undoCount})` : ''}</button>
+              <button type="button" onClick={() => setDevicesOpen(true)} className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60">🕹 Controllers</button>
+              <button type="button" onClick={() => createLayout(false)} className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60">New from defaults</button>
+              {profile && <button type="button" onClick={() => createLayout(true)} className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60">Duplicate</button>}
+              {profile?.original && <button type="button" onClick={revertImported} className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-mod hover:text-mod">Revert to imported</button>}
+              <button type="button" onClick={resetAll} disabled={!profile?.rebindCount} className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-alert hover:text-alert disabled:opacity-40">Reset all</button>
+            </span>
+          </div>
+        )}
       </header>
 
       {/* ---------------- body ---------------- */}
@@ -314,7 +469,8 @@ export default function App() {
             </div>
           )}
           {view === 'list' && (
-            <ActionList rows={visible} grouped={!filtered.hasQuery} devices={devices} conflictsOf={conflictsOf} onBindingClick={onBindingClick} />
+            <ActionList rows={visible} grouped={!filtered.hasQuery} devices={devices} conflictsOf={conflictsOf} onBindingClick={onBindingClick}
+              editMode={editMode} onCapture={onCaptureCell} onRemove={onRemoveCell} onEdit={onEditRow} />
           )}
           {view === 'keyboard' && <KeyboardView rows={visible} conflictRows={conflicts.byRow} onPick={pickInput} />}
           {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} setIncludeDefault={setIncludeDefaultOverlaps} hasProfile={!!profile} />}
@@ -335,6 +491,29 @@ export default function App() {
         </div>
       )}
       {help && <HelpModal onClose={() => setHelp(false)} />}
+      {editorRow && (
+        <ActionEditor row={editorRow} action={IDX.get(editorRow.id)} rebinds={profile?.rebinds[editorRow.map]?.[editorRow.action]}
+          canUndo={canUndoRow(editorRow.id)} onUndo={() => undoLast(editorRow.id)} onReset={() => resetRow(editorRow)}
+          onSetGroup={(g, list) => setGroupFor(editorRow, g, list)} onCapture={(g, replace) => setCapture({ row: editorRow, group: g, replace })}
+          onClose={() => setEditorId(null)} />
+      )}
+      {capture && (
+        <CaptureDialog key={`${capture.row.id}:${capture.group}:${capture.replace?.input ?? '+'}`} {...capture} rows={rows} pads={pads} onAssign={assignPad}
+          onCommit={commitCapture} onClear={capture.replace ? clearCapture : undefined} onCancel={() => setCapture(null)} />
+      )}
+      {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} pads={pads} onClose={() => setExportOpen(false)} />}
+      {devicesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 p-4 backdrop-blur-sm" onClick={() => setDevicesOpen(false)}>
+          <div className="hud-panel hud-corners w-full max-w-2xl rounded-xl p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">Controllers</h2>
+              <button type="button" onClick={() => setDevicesOpen(false)} className="text-slate-400 hover:text-hud2">✕</button>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">Choose whether each controller is a joystick (jsN_) or gamepad (gp1_), and which joystick number the game gives it. Press a button on a controller if it isn&apos;t listed.</p>
+            <DeviceList pads={pads} onAssign={assignPad} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -378,6 +557,12 @@ function HelpModal({ onClose }: { onClose: () => void }) {
           </li>
           <li>Drag the file onto this page (or use <b>Import XML</b>). It is parsed locally in your browser and saved in localStorage — nothing is uploaded.</li>
         </ol>
+        <h3 className="mt-5 font-display text-sm font-bold uppercase tracking-[0.2em] text-mod">Editing &amp; exporting</h3>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-400">
+          <li><b className="text-slate-200">✎ Edit</b>: click any binding to rebind it, <b>+</b> to add one, ✕ to unbind, or an action name for the full editor (activation mode, taps, reset). Ctrl+Z undoes.</li>
+          <li>Keyboard, mouse, gamepads and joysticks/HOTAS are captured live. Controllers use the browser&apos;s Gamepad API; press a button first so the browser reveals them, and set each stick&apos;s game number (js1, js2…).</li>
+          <li><b className="text-slate-200">⇩ Export</b> writes <code>layout_&lt;name&gt;_exported.xml</code> for <code>…\user\client\0\Controls\Mappings</code> (load via Options → Keybindings → Control Profiles, or <code>pp_RebindKeys</code>) or a full <code>actionmaps.xml</code>. Only changes from the defaults are written.</li>
+        </ul>
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-xs text-slate-400">
           <span><span className="text-hud2">quantum</span> fuzzy search names</span>
           <span><span className="text-hud2">lalt+n</span> exact combo</span>
