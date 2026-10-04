@@ -50,7 +50,8 @@ export function useLiveInputs(pad?: PadInfo): Live {
   return st;
 }
 
-export interface CalloutState { tone: Tone; active: boolean; dim?: boolean }
+/** inputActive: per input (same order as callout.inputs), for callouts with one outline per input */
+export interface CalloutState { tone: Tone; active: boolean; dim?: boolean; inputActive?: boolean[] }
 interface Props {
   template: DeviceTemplate;
   stateOf: (c: Callout) => CalloutState;
@@ -108,6 +109,22 @@ export function DeviceCanvas({ template: t, stateOf, renderLabel, selected, onSe
           // the control itself on the picture: its outline glows when used, a faint tint marks customized / conflicting ones
           const s = stateOf(c);
           const at = `translate(${c.anchor.x * 1000} ${c.anchor.y * VH})`;
+          if (c.inputRegions?.some(Boolean)) {
+            // one outline per input (e.g. each key of a keypad): only the pressed ones glow; the whole-control outline carries tint / selection
+            const tint = s.tone === 'conflict' || s.tone === 'custom' ? TONE_STROKE[s.tone] : null;
+            return (
+              <g key={`r-${c.id}`} opacity={s.dim ? 0.3 : 1}>
+                {c.region && !s.active && (tint || selected === c.id) && <path d={c.region} transform={at} fill={tint ?? 'none'} fillOpacity={0.12}
+                  stroke={selected === c.id ? '#ffb547' : tint!} strokeOpacity={selected === c.id ? 1 : 0.55} strokeWidth={1.2} />}
+                {c.inputRegions.map((d, k) => d && k < c.inputs.length && (s.inputActive?.[k] || (!c.region && (tint || selected === c.id))) ? (
+                  <path key={k} data-region={c.id} data-input={c.inputs[k]} data-active={s.inputActive?.[k] ? '1' : undefined} d={d} transform={at}
+                    fill={s.inputActive?.[k] ? 'rgba(79,216,255,.32)' : tint ?? 'none'} fillOpacity={s.inputActive?.[k] ? 1 : 0.12}
+                    stroke={s.inputActive?.[k] ? '#c9f7ff' : selected === c.id ? '#ffb547' : tint ?? 'none'} strokeWidth={s.inputActive?.[k] ? 2.2 : 1.2}
+                    filter={s.inputActive?.[k] ? `url(#${glowId})` : undefined} />
+                ) : null)}
+              </g>
+            );
+          }
           if (!c.region) return s.active ? <circle key={`r-${c.id}`} data-glow={c.id} cx={c.anchor.x * 1000} cy={c.anchor.y * VH} r={16} fill="rgba(79,216,255,.35)" filter={`url(#${glowId})`} /> : null;
           const tint = s.tone === 'conflict' || s.tone === 'custom' ? TONE_STROKE[s.tone] : null;
           if (!s.active && !tint && selected !== c.id) return null;
