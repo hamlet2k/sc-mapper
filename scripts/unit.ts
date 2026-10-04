@@ -618,5 +618,31 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       for (const c of b.callouts) for (const p of [c.anchor, c.box]) assert.ok(p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1, `${b.id}/${c.id}`);
     }
   });
+  t('default holo stick: fallback, glow regions, button rows, encoder push, 32-button cap, boxes apart', () => {
+    const byId = (id: string) => BUILTIN_TEMPLATES.find((b) => b.id === id)!;
+    assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'Unknown Stick', slot: 'js' }).template.id, 'builtin-stick');
+    assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'VKBsim STECS Mini Plus', slot: 'js' }).template.id, 'builtin-throttle');
+    assert.ok(byId('builtin-stick-classic'), 'classic stick kept');
+    const b = byId('builtin-stick');
+    assert.equal(b.callouts.length, 24);
+    const btns = new Set(b.callouts.flatMap((c) => c.inputs).filter((i) => /^button\d+$/.test(i)));
+    assert.ok([...btns].every((i) => Number(i.slice(6)) <= 32), 'buttons within the 32-button browser cap');
+    for (const c of b.callouts) {
+      assert.ok(c.region && tp.REGION_RE.test(c.region), `${c.id}: glow region`);
+      for (const o of b.callouts) if (o !== c) {
+        const dx = Math.abs(o.box.x - c.box.x), dy = Math.abs(o.box.y - c.box.y);
+        assert.ok(dx > 0.12 || dy > 0.06, `boxes ${c.id} / ${o.id} too close`);
+      }
+    }
+    const back = tp.parseTemplates(tp.exportTemplates([{ ...b, builtin: undefined, id: 'copy' } as any]))[0];
+    assert.deepEqual(back.callouts.map((c) => c.region), b.callouts.map((c) => c.region), 'regions survive export/import');
+    const row = b.callouts.find((c) => c.id === 'rowL')!;
+    assert.equal(row.kind, 'buttons'); assert.equal(tp.inputRole(row, 3), '4');
+    const enc = { id: 'e', kind: 'encoder' as const, inputs: ['button5', 'button6', 'button7'], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } };
+    assert.deepEqual(enc.inputs.map((_, k) => tp.inputRole(enc, k)), ['⟳', '⟲', '●']);
+    assert.deepEqual(tp.inputsForKind('encoder', enc.inputs, 'js', new Set()), enc.inputs, 'encoder keeps its push');
+    const bad = tp.parseTemplates(JSON.stringify({ ...b, builtin: undefined, id: 'x', callouts: [{ ...row, region: 'M0 0<script>' }] }))[0];
+    assert.equal(bad.callouts[0].region, undefined, 'invalid region dropped');
+  });
 }
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);
