@@ -622,7 +622,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const byId = (id: string) => BUILTIN_TEMPLATES.find((b) => b.id === id)!;
     assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'Unknown Stick', slot: 'js' }).template.id, 'builtin-stick');
     assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'VKBsim STECS Mini Plus', slot: 'js' }).template.id, 'builtin-throttle');
-    assert.ok(byId('builtin-stick-classic') && byId('builtin-throttle-classic'), 'classic templates kept');
+    assert.deepEqual(BUILTIN_TEMPLATES.map((b) => b.id), ['builtin-stick', 'builtin-throttle', 'builtin-gamepad'], 'classic stick/throttle removed, gamepad kept');
     for (const id of ['builtin-stick', 'builtin-throttle']) {
       const b = byId(id);
       assert.ok(b.callouts.length >= 20, `${id}: ${b.callouts.length} callouts`);
@@ -658,6 +658,28 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(odd([...keys.inputRegions!, 'M0 0Z']), undefined, 'more outlines than inputs');
     assert.deepEqual(odd(['', 'M0 0L1 1Z']), ['', 'M0 0L1 1Z'], 'empty entries allowed');
     assert.deepEqual(th.callouts.find((c) => c.id === 'trgL')!.inputs, ['button4'], 'left grip trigger');
+  });
+  t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
+    const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };
+    for (const [old, now] of [['builtin-stick-classic', 'builtin-stick'], ['builtin-throttle-classic', 'builtin-throttle']]) {
+      const r = tp.pickTemplate(BUILTIN_TEMPLATES, js, old);
+      assert.equal(r.template.id, now); assert.equal(r.how, 'chosen');
+    }
+    assert.deepEqual(tp.migratePicks({ a: 'builtin-stick-classic', b: 'builtin-throttle-classic', c: 'my-1', d: 'builtin-gamepad' }),
+      { picks: { a: 'builtin-stick', b: 'builtin-throttle', c: 'my-1', d: 'builtin-gamepad' }, changed: true });
+    assert.deepEqual(tp.migratePicks({ c: 'my-1' }), { picks: { c: 'my-1' }, changed: false });
+    assert.deepEqual(tp.migratePicks({ c: 5, d: '' }), { picks: {}, changed: true }, 'junk entries dropped');
+    assert.deepEqual(tp.migratePicks('nope'), { picks: {}, changed: true });
+    const store = new Map<string, string>();
+    const prev = (globalThis as any).localStorage;
+    (globalThis as any).localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+    try {
+      assert.deepEqual(tp.loadPicks(), {}, 'nothing saved yet');
+      assert.equal(store.size, 0, 'nothing written when there is nothing to migrate');
+      store.set('sc-mapper:template-picks', JSON.stringify({ k1: 'builtin-throttle-classic', k2: 'my-1' }));
+      assert.deepEqual(tp.loadPicks(), { k1: 'builtin-throttle', k2: 'my-1' });
+      assert.deepEqual(JSON.parse(store.get('sc-mapper:template-picks')!), { k1: 'builtin-throttle', k2: 'my-1' }, 'migrated picks saved');
+    } finally { (globalThis as any).localStorage = prev; }
   });
 }
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);
