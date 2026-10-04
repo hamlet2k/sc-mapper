@@ -2,8 +2,9 @@ import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, use
 import defaultsJson from './data/defaults.json';
 import { ActionList, columnOf } from './components/ActionList';
 import { ActionEditor } from './components/ActionEditor';
-import { CaptureDialog, DeviceList, type CaptureRequest } from './components/CaptureDialog';
+import { CaptureDialog, type CaptureRequest } from './components/CaptureDialog';
 import { ConflictsView } from './components/ConflictsView';
+import { ControllersPanel } from './components/ControllersPanel';
 import { ExportDialog } from './components/ExportDialog';
 import { KeyboardView } from './components/KeyboardView';
 import { Sidebar, type MapCount } from './components/Sidebar';
@@ -11,7 +12,7 @@ import { findConflicts } from './lib/conflicts';
 import { GROUPS } from './lib/groups';
 import { usePads } from './lib/devices';
 import { effectiveGroup, indexDefaults, newProfile, setAction, setGroup, withRebinds, type CaptureConflict } from './lib/edit';
-import { bindKey, comboLabel, groupOfDevice, groupOfSlot, normalizeCombo } from './lib/inputs';
+import { bindKey, comboLabel, groupOfDevice, groupOfSlot, searchSpec } from './lib/inputs';
 import { parseActionMaps, readXmlFile } from './lib/importer';
 import { buildRows } from './lib/merge';
 import { parseQuery, scoreRow } from './lib/search';
@@ -60,7 +61,7 @@ export default function App() {
   const [exportOpen, setExportOpen] = useState(false);
   const [devicesOpen, setDevicesOpen] = useState(false);
   const [undo, setUndo] = useState<UndoEntry[]>([]);
-  const { pads, update: assignPad } = usePads(!!capture || exportOpen || devicesOpen);
+  const { pads, update: assignPad, reset: resetPads, describe: describePads } = usePads(!!capture || exportOpen || devicesOpen, profile?.devices);
   const storeRef = useRef(store);
   const undoRef = useRef(undo);
   useLayoutEffect(() => { storeRef.current = store; undoRef.current = undo; }, [store, undo]);
@@ -253,7 +254,7 @@ export default function App() {
     setToast({ kind: 'ok', text: `Created “${p.name}”${copy ? '' : ' from the game defaults'}` });
   };
   const hot = useRef({ capture: false, undo: undoLast });
-  useLayoutEffect(() => { hot.current = { capture: !!capture || !!editorId || exportOpen, undo: undoLast }; }, [capture, editorId, exportOpen, undoLast]);
+  useLayoutEffect(() => { hot.current = { capture: !!capture || !!editorId || exportOpen || devicesOpen, undo: undoLast }; }, [capture, editorId, exportOpen, devicesOpen, undoLast]);
 
   useEffect(() => {
     if (!toast) return;
@@ -293,11 +294,13 @@ export default function App() {
     };
   }, [importFiles]);
 
-  const pickInput = useCallback((combo: string) => {
-    setQuery(`key:${normalizeCombo(combo).replace(/\s/g, '')}`);
+  /** filter the list by one exact input, e.g. "js1_button5" or "kb1_lalt+n" (device + instance + full combo) */
+  const pickInput = useCallback((spec: string) => {
+    setQuery(`key:${spec.replace(/\s/g, '')}`);
     setView('list');
   }, []);
-  const onBindingClick = useCallback((b: Binding) => pickInput(b.input), [pickInput]);
+  const onBindingClick = useCallback((b: Binding) => pickInput(searchSpec(b.slot, b.instance, b.input)), [pickInput]);
+  const pickKey = useCallback((combo: string) => pickInput(searchSpec('kb', 1, combo)), [pickInput]);
 
   const toggleDevice = (d: Device) => setDevices((s) => {
     const n = new Set(s);
@@ -368,6 +371,10 @@ export default function App() {
               className="rounded border border-ok/50 px-3 py-1.5 font-display text-sm font-semibold uppercase tracking-wider text-ok hover:bg-ok/10 disabled:opacity-40">
               ⇩ Export
             </button>
+            <button type="button" onClick={() => setDevicesOpen(true)} title="Controllers: map joysticks/gamepads to js1, js2, gp1 and test their inputs live"
+              className="rounded border border-edge px-3 py-1.5 font-display text-sm font-semibold uppercase tracking-wider text-slate-300 hover:border-hud/60 hover:text-hud2">
+              🕹 Controllers
+            </button>
             <button type="button" onClick={() => setHelp(true)} className="rounded border border-edge px-2.5 py-1.5 font-display text-sm font-bold text-slate-300 hover:border-hud/60 hover:text-hud2" title="Where are my keybind files?">?</button>
             <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" multiple hidden
               onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
@@ -379,7 +386,7 @@ export default function App() {
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-hud/70">⌕</span>
             <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-              placeholder="Search actions, categories or keys…  (try: quantum, lalt+n, mouse2, key:f)"
+              placeholder="Search actions, categories or inputs…  (try: quantum, lalt+n, mouse2, js1_button5, js2 btn5)"
               className="w-full rounded-md border border-edge2 bg-black/40 py-2 pl-9 pr-16 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-hud focus:shadow-[0_0_0_3px_rgba(79,216,255,.15)]" />
             {query ? (
               <button type="button" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 text-xs text-slate-400 hover:text-hud2">clear</button>
@@ -472,7 +479,7 @@ export default function App() {
             <ActionList rows={visible} grouped={!filtered.hasQuery} devices={devices} conflictsOf={conflictsOf} onBindingClick={onBindingClick}
               editMode={editMode} onCapture={onCaptureCell} onRemove={onRemoveCell} onEdit={onEditRow} />
           )}
-          {view === 'keyboard' && <KeyboardView rows={visible} conflictRows={conflicts.byRow} onPick={pickInput} />}
+          {view === 'keyboard' && <KeyboardView rows={visible} conflictRows={conflicts.byRow} onPick={pickKey} />}
           {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} setIncludeDefault={setIncludeDefaultOverlaps} hasProfile={!!profile} />}
         </main>
       </div>
@@ -499,20 +506,12 @@ export default function App() {
       )}
       {capture && (
         <CaptureDialog key={`${capture.row.id}:${capture.group}:${capture.replace?.input ?? '+'}`} {...capture} rows={rows} pads={pads} onAssign={assignPad}
+          describe={describePads} profileDevices={profile?.devices}
           onCommit={commitCapture} onClear={capture.replace ? clearCapture : undefined} onCancel={() => setCapture(null)} />
       )}
       {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} pads={pads} onClose={() => setExportOpen(false)} />}
       {devicesOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 p-4 backdrop-blur-sm" onClick={() => setDevicesOpen(false)}>
-          <div className="hud-panel hud-corners w-full max-w-2xl rounded-xl p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">Controllers</h2>
-              <button type="button" onClick={() => setDevicesOpen(false)} className="text-slate-400 hover:text-hud2">✕</button>
-            </div>
-            <p className="mt-1 text-xs text-slate-400">Choose whether each controller is a joystick (jsN_) or gamepad (gp1_), and which joystick number the game gives it. Press a button on a controller if it isn&apos;t listed.</p>
-            <DeviceList pads={pads} onAssign={assignPad} />
-          </div>
-        </div>
+        <ControllersPanel profile={profile} pads={pads} describe={describePads} onAssign={assignPad} onReset={resetPads} onClose={() => setDevicesOpen(false)} />
       )}
     </div>
   );
@@ -560,7 +559,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
         <h3 className="mt-5 font-display text-sm font-bold uppercase tracking-[0.2em] text-mod">Editing &amp; exporting</h3>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-400">
           <li><b className="text-slate-200">✎ Edit</b>: click any binding to rebind it, <b>+</b> to add one, ✕ to unbind, or an action name for the full editor (activation mode, taps, reset). Ctrl+Z undoes.</li>
-          <li>Keyboard, mouse, gamepads and joysticks/HOTAS are captured live. Controllers use the browser&apos;s Gamepad API; press a button first so the browser reveals them, and set each stick&apos;s game number (js1, js2…).</li>
+          <li>Keyboard, mouse, gamepads and joysticks/HOTAS are captured live. Controllers use the browser&apos;s Gamepad API; press a button first so the browser reveals them. <b className="text-slate-200">🕹 Controllers</b> maps each device to its game number (js1, js2…, gp1) and has a live input tester.</li>
           <li><b className="text-slate-200">⇩ Export</b> writes <code>layout_&lt;name&gt;_exported.xml</code> for <code>…\user\client\0\Controls\Mappings</code> (load via Options → Keybindings → Control Profiles, or <code>pp_RebindKeys</code>) or a full <code>actionmaps.xml</code>. Only changes from the defaults are written.</li>
         </ul>
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-xs text-slate-400">
@@ -569,7 +568,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
           <span><span className="text-hud2">key:f</span> only bindings on F</span>
           <span><span className="text-hud2">alt / ctrl / shift</span> either side</span>
           <span><span className="text-hud2">lmb · rmb · wheel</span> mouse</span>
-          <span><span className="text-hud2">btn3 · hat1</span> joystick</span>
+          <span><span className="text-hud2">js1_button5 · js2 btn5</span> exact joystick input</span>
         </div>
         <p className="mt-5 text-xs text-slate-500">
           Default bindings come from the game's own <code>defaultProfile.xml</code> ({DEFAULTS.meta.branch}, build {DEFAULTS.meta.version}, {DEFAULTS.meta.buildDate}) with English labels from <code>global.ini</code>.
