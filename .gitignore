@@ -28,3 +28,4 @@ src/data/defaults.json
 data/raw/
 screenshots/
 package-lock.json
+.tmp/

@@ -83,7 +83,8 @@ for (const am of profile.actionmap) {
       d: defaults,
     });
   }
-  maps.push({ name: am.name, label: mapLabel, category, ...(INTERNAL_MAPS.has(am.name) ? { hidden: true } : {}), actions });
+  const cat = am.UICategory && am.UICategory !== 'empty' ? am.UICategory : '';
+  maps.push({ name: am.name, label: mapLabel, category, cat, ...(INTERNAL_MAPS.has(am.name) ? { hidden: true } : {}), actions });
 }
 
 const manifest = existsSync(raw('build_manifest.json')) ? JSON.parse(readFileSync(raw('build_manifest.json'), 'utf8')).Data : {};

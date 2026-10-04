@@ -12,7 +12,8 @@
     "lint": "oxlint",
     "data": "node scripts/ensure-data.mjs --force",
     "data:fetch": "bash scripts/fetch-game-data.sh && node scripts/build-defaults.mjs",
-    "test": "tsx scripts/selftest.ts public/samples/actionmaps.xml",
+    "test": "tsx scripts/unit.ts && tsx scripts/selftest.ts public/samples/actionmaps.xml",
+    "test:unit": "tsx scripts/unit.ts",
     "test:e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {
