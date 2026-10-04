@@ -529,14 +529,15 @@ check(dopts.some((o) => /^JS1 · VKBsim Gladiator EVO R/.test(o)) && dopts.some(
 await dsel.selectOption({ label: dopts.find((o) => /^JS1 · /.test(o)) });
 await page.waitForTimeout(300);
 check(/Generic stick/.test(await dv.getByTestId('device-status').innerText()), 'no template linked yet: generic stick');
-const b1 = dv.locator('[data-callout="b1"]');
-check((await b1.innerText()).includes('Engage Quantum Drive'), 'trigger callout shows the js1_button1 action of the profile');
+const b1 = dv.locator('[data-callout="trig"]');
+check((await b1.innerText()).includes('Engage Quantum Drive'), 'trigger (2-stage) callout shows the js1_button1 action of the profile');
+check((await dv.locator('[data-callout]').count()) === 24 && /Deck buttons \(left\)/.test(await dv.locator('[data-callout="rowL"]').innerText()) && (await dv.locator('[data-callout="whl1"]').innerText()).includes('Lever wheel'), 'default stick: holographic grip + base with 24 callouts (grip, deck button rows, toggles, F keys, wheels)');
 check((await dv.locator('[data-callout="b5"]').getAttribute('data-tone')) === 'custom' && (await dv.locator('[data-callout="b5"]').innerText()).includes('Cycle Master Mode'), 'customized js1_button5 (pinky) coloured as customized');
 check((await dv.locator('[data-callout="b4"]').getAttribute('data-tone')) === 'conflict', 'conflicting js1_button4 coloured as conflict');
 check(/Auto Targeting/.test(await dv.locator('[data-callout="hat1"] [data-dir="hat1_up"]').getAttribute('title')), 'hat drawn as a 5-way cross with an action per direction');
 await page.evaluate(() => window.__btn(1, 0, true));
 await page.waitForTimeout(250);
-check((await b1.getAttribute('data-active')) === '1', 'pressing button 1 lights its callout');
+check((await b1.getAttribute('data-active')) === '1' && (await dv.locator('[data-region="trig"]').getAttribute('data-active')) === '1', 'pressing button 1 lights its callout and the trigger on the picture glows');
 await page.evaluate(() => { window.__btn(1, 0, false); window.__axis(1, 9, -1); window.__axis(1, 0, 0.8); });
 await page.waitForTimeout(250);
 check((await b1.getAttribute('data-active')) === null, 'released: callout back to normal');
@@ -544,7 +545,15 @@ check((await dv.locator('[data-callout="hat1"] [data-dir="hat1_up"]').getAttribu
 check((await dv.locator('[data-callout="xy"]').getAttribute('data-active')) === '1' && (await dv.locator('[data-axis-live="x"]').getAttribute('data-value')) === '0.80', 'moving X lights the stick callout and shows the live value');
 await page.screenshot({ path: shots + '24-device-view.png' });
 await page.evaluate(() => { window.__axis(1, 9, 9 / 7); window.__axis(1, 0, 0); });
-{ const ov = await dv.getByTestId('device-overflow').innerText(); check((await dv.locator('[data-overflow="button12"]').count()) === 1 && /Autoland/.test(ov), `bound inputs without a callout listed beside the picture (${ov.replace(/\n/g, ' ')})`); }
+check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button12"]').getAttribute('title')), 'js1_button12 (Autoland) shown as the push of hat 1');
+{ // the classic generic stick is still available; it has no callout for button 12, so that binding goes to the list beside the picture
+  await dv.getByTestId('template-select').selectOption('builtin-stick-classic');
+  await page.waitForTimeout(250);
+  const ov = await dv.getByTestId('device-overflow').innerText();
+  check((await dv.locator('[data-callout]').count()) === 12 && (await dv.locator('[data-overflow="button12"]').count()) === 1 && /Autoland/.test(ov), `classic stick template: bound inputs without a callout listed beside the picture (${ov.replace(/\n/g, ' ')})`);
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(250);
+}
 await b1.click();
 const ip = dv.getByTestId('input-panel');
 check(await ip.isVisible() && (await ip.innerText()).includes('js1_button1'), 'clicking a callout opens the binding panel for js1_button1');
