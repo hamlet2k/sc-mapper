@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { JS_AXES } from '../lib/capture';
+import { isHatRest, JS_AXES } from '../lib/capture';
+import { clampTo, gamePercent, inRange, RANGES, tidyCurve, WIKI_DEADZONE, type SettingRange } from '../lib/ranges';
 import { getPads, parseProfileProduct, type PadInfo } from '../lib/devices';
 import {
   axisBlockName, axisValues, blockInstance, blockProduct, blockType, curveAt, groupValues, JOYSTICK_SETTING_INSTANCES, JS_AXIS_INPUTS, optionsBlock,
@@ -22,6 +23,7 @@ export function DeviceSettingsEditor({ profile, settings, tree, pads, onChange }
   const [inst, setInst] = useState(1);
   const [sel, setSel] = useState<string>('flight_move_pitch');
   const [filter, setFilter] = useState('');
+  const [previewAxis, setPreviewAxis] = useState('');
   const maxInst = tree?.instances ?? JOYSTICK_SETTING_INSTANCES;
 
   const productOf = (n: number) => {
@@ -113,17 +115,19 @@ export function DeviceSettingsEditor({ profile, settings, tree, pads, onChange }
               ))}
             </ul>
           </div>
-          <AxisTable product={product} axes={axes} onSet={(input, key, v) => product && set(`${key} ${input}`, (s) => setAxis(s, product, input, key, v))} />
         </section>
 
         <section className="rounded-lg border border-edge/70 bg-black/25 p-3">
           {selTree ? (
-            <GroupEditor key={`${inst}:${sel}`} g={selTree} path={pathOf(selTree)} vals={vals} axes={axes} pad={pad}
-              onPatch={(label, patch) => set(label, (s) => setGroup(s, 'joystick', inst, sel, patch, product))}
+            <GroupEditor key={`${inst}:${sel}`} g={selTree} path={pathOf(selTree)} vals={vals} axes={axes} pad={pad} axis={previewAxis} setAxis={setPreviewAxis}
+              onPatch={(label, patch) => set(label, (s) => setGroup(s, 'joystick', inst, sel, patch.curve ? { ...patch, curve: tidyCurve(patch.curve) } : patch, product))}
               onReset={() => set(`Reset ${sel}`, (s) => resetGroup(s, 'joystick', inst, sel))} />
           ) : <p className="text-xs text-slate-500">Pick a control on the left.</p>}
         </section>
       </div>
+      <AxisTable product={product} axes={axes} pad={pad} selected={previewAxis} onSelect={setPreviewAxis}
+        onSet={(input, key, v) => product && set(`${key} ${input}`, (s) => setAxis(s, product, input, key, v))} />
+      <RangesInfo />
 
       {others.length > 0 && (
         <details className="rounded border border-edge/60 bg-black/20 p-3 text-xs text-slate-400">
@@ -145,33 +149,132 @@ function describeBlock(b: OptionsBlock | AxisBlock): string {
   return `${blockType(b)}${blockInstance(b)} ${shortName(blockProduct(b))}: ${b.groups.map((g) => `${g.name}${g.attrs.map(([k, v]) => ` ${k}=${v}`).join('')}${g.curve?.points.length ? ` curve(${g.curve.points.length})` : ''}`).join(', ') || 'no settings'}`;
 }
 
-function AxisTable({ product, axes, onSet }: { product?: string; axes: Record<string, { deadzone?: number; saturation?: number }>; onSet: (input: string, key: 'deadzone' | 'saturation', v: number | null) => void }) {
+function AxisTable({ product, axes, pad, selected, onSelect, onSet }: {
+  product?: string; axes: Record<string, { deadzone?: number; saturation?: number }>; pad?: PadInfo; selected: string; onSelect: (a: string) => void;
+  onSet: (input: string, key: 'deadzone' | 'saturation', v: number | null) => void;
+}) {
   const inputs = [...JS_AXIS_INPUTS, ...Object.keys(axes).filter((k) => !JS_AXIS_INPUTS.includes(k))];
+  const live = useLiveAxes(pad);
   return (
-    <div data-testid="axis-table">
-      <h4 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-mod">Axis deadzone &amp; saturation</h4>
+    <section className="rounded-lg border border-edge/70 bg-black/25 p-3" data-testid="axis-table">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h4 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-mod">Axis deadzone &amp; saturation</h4>
+        {product && <span className="text-[10px] text-slate-500">for every “{shortName(product)}” (the game stores these by product name) · empty = game default · click a row to preview it on the curve</span>}
+      </div>
       {!product ? <p className="mt-1 text-[11px] text-slate-500">Needs the device&apos;s product name: import a profile that lists this joystick, or connect it and assign it to this number.</p> : (
-        <>
-          <p className="mt-0.5 text-[10px] text-slate-500">For every “{shortName(product)}” (stored by product name). Empty = game default.</p>
-          <table className="mt-1 w-full text-[11px]">
-            <thead><tr className="text-left font-mono text-[9px] uppercase tracking-widest text-slate-500"><th className="py-0.5">Axis</th><th>Deadzone</th><th>Saturation</th></tr></thead>
-            <tbody>
-              {inputs.map((a) => (
-                <tr key={a} className="border-t border-edge/40">
-                  <td className="py-0.5 font-mono text-slate-300">{a}</td>
+        <table className="mt-2 w-full text-[11px]">
+          <thead>
+            <tr className="text-left font-mono text-[9px] uppercase tracking-widest text-slate-500">
+              <th className="py-0.5">Axis</th>
+              <th title={RANGES.deadzone.note}>Deadzone <span className="normal-case tracking-normal text-slate-600">{RANGES.deadzone.min}–{RANGES.deadzone.max}{RANGES.deadzone.confirmed ? '' : ' (conservative)'}</span></th>
+              <th title={RANGES.saturation.note}>Saturation <span className="normal-case tracking-normal text-slate-600">{RANGES.saturation.min}–{RANGES.saturation.max}{RANGES.saturation.confirmed ? '' : ' (conservative)'}, default {RANGES.saturation.def}</span></th>
+              <th>Live {pad ? '' : <span className="normal-case tracking-normal text-slate-600">(connect &amp; assign the device)</span>}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {inputs.map((a) => {
+              const idx = JS_AXES.indexOf(a);
+              const raw = idx >= 0 ? live?.[idx] : undefined;
+              const v = axes[a] ?? {};
+              return (
+                <tr key={a} data-axis={a} onClick={(e) => { if (!(e.target as HTMLElement).closest('input,button')) onSelect(a); }}
+                  className={`cursor-pointer border-t border-edge/40 ${selected === a ? 'bg-hud/10' : 'hover:bg-white/[0.03]'}`}>
+                  <td className="py-1 font-mono text-slate-300">{a}{selected === a && <span className="ml-1 text-[9px] text-hud">◉ preview</span>}</td>
                   {(['deadzone', 'saturation'] as const).map((k) => (
-                    <td key={k} className="pr-2">
-                      <NumField key={product} value={axes[a]?.[k]} min={0} max={1} step={0.005} label={`${k} ${a}`} onSet={(v) => onSet(a, k, v)} />
+                    <td key={k} className="pr-3">
+                      <SliderField key={product} range={RANGES[k]} value={v[k]} label={`${k} ${a}`} sliderLabel={`${a} ${k} slider`}
+                        hint={k === 'deadzone' && v.deadzone === undefined && WIKI_DEADZONE[a] !== undefined ? `default (2.x wiki: ${WIKI_DEADZONE[a]})` : undefined}
+                        onSet={(x) => onSet(a, k, x)} />
                     </td>
                   ))}
+                  <td><AxisBar raw={raw !== undefined && !isHatRest(raw) ? raw : undefined} dz={v.deadzone} sat={v.saturation} /></td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
+              );
+            })}
+          </tbody>
+        </table>
       )}
-    </div>
+    </section>
   );
+}
+
+/** slider (coarse) + number field (precise) for one setting, clamped to its range; an unset value shows the default greyed out */
+function SliderField({ range, value, label, sliderLabel, hint, onSet }: {
+  range: SettingRange; value?: number; label: string; sliderLabel: string; hint?: string; onSet: (v: number | null) => void;
+}) {
+  const shown = value ?? range.def ?? range.min;
+  const out = value !== undefined && !inRange(range, value);
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      <input type="range" min={range.min} max={range.max} step={range.step} value={clampTo(range, shown)} aria-label={sliderLabel}
+        data-unset={value === undefined ? '1' : undefined} onChange={(e) => onSet(Number(e.target.value))}
+        className={`w-28 accent-[var(--color-hud)] ${value === undefined ? 'opacity-40' : ''}`} />
+      <NumField value={value} min={range.min} max={range.max} step={range.step} label={label} onSet={onSet} />
+      {value !== undefined && (range.key === 'deadzone' || range.key === 'saturation') && <span className="font-mono text-[9px] text-slate-500" title="value ÷ 0.0099: the game writes these in 1 % slider steps scaled by 0.99 (inferred from real files)">≈{gamePercent(value)}%</span>}
+      {out && <span className="text-[9px] text-mod" title={range.note}>outside {range.min}–{range.max}: kept as imported</span>}
+      {hint && <span className="text-[9px] text-slate-600">{hint}</span>}
+    </span>
+  );
+}
+
+/** live raw axis position with the deadzone / saturation zones and the resulting output */
+function AxisBar({ raw, dz = 0, sat }: { raw?: number; dz?: number; sat?: number }) {
+  const W = 150, H = 16, X = (v: number) => ((v + 1) / 2) * W;
+  const s = sat && sat > dz ? sat : 1;
+  const outV = raw === undefined ? undefined : response(raw, { deadzone: dz, saturation: s });
+  return (
+    <svg width={W} height={H} className="rounded bg-black/40" data-testid="axis-bar" data-raw={raw === undefined ? undefined : raw.toFixed(3)} data-out={outV === undefined ? undefined : outV.toFixed(3)}>
+      <rect x={X(-dz)} y={0} width={X(dz) - X(-dz)} height={H} fill="rgba(148,163,184,.25)"><title>deadzone</title></rect>
+      <rect x={0} y={0} width={X(-s)} height={H} fill="rgba(255,176,32,.18)"><title>saturated (full output)</title></rect>
+      <rect x={X(s)} y={0} width={W - X(s)} height={H} fill="rgba(255,176,32,.18)" />
+      <line x1={W / 2} y1={0} x2={W / 2} y2={H} stroke="rgba(148,163,184,.5)" />
+      {outV !== undefined && <rect x={Math.min(X(0), X(outV))} y={H / 2 - 2} width={Math.abs(X(outV) - X(0))} height={4} fill="var(--color-hud)"><title>output</title></rect>}
+      {raw !== undefined && <line x1={X(raw)} y1={1} x2={X(raw)} y2={H - 1} stroke="var(--color-ok)" strokeWidth={2}><title>raw input</title></line>}
+    </svg>
+  );
+}
+
+function RangesInfo() {
+  return (
+    <details className="rounded border border-edge/60 bg-black/20 p-3 text-xs text-slate-400" data-testid="ranges-info">
+      <summary className="cursor-pointer font-display text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Value ranges &amp; where they come from</summary>
+      <ul className="mt-2 space-y-1.5">
+        {Object.values(RANGES).map((r) => (
+          <li key={r.key}>
+            <b className="text-slate-200">{r.label}</b>{' '}
+            <span className="font-mono text-hud2">{r.min}–{r.max}</span>{' '}
+            <span className={`rounded px-1 text-[9px] ${r.confirmed ? 'bg-ok/15 text-ok' : 'bg-mod/15 text-mod'}`}>{r.confirmed ? 'confirmed' : 'conservative (game limit not documented)'}</span>
+            {r.def !== undefined && <span className="ml-1 text-slate-500">default {r.def}</span>}
+            {r.observed && <span className="ml-1 text-slate-500">· seen in real files {r.observed[0]}–{r.observed[1]}</span>}
+            <div className="text-[10px] text-slate-500">{r.note}</div>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[10px] text-slate-500">Sources: the game&apos;s defaultProfile.xml (4.10 LIVE), its shipped layouts, real game-written exports (pinned in the app&apos;s tests), and the Star Citizen Wiki &quot;Game Options&quot; defaults table. Deadzones written by the game are multiples of 0.0099 (1 % slider steps × 0.99).</p>
+    </details>
+  );
+}
+
+/** live axes of a connected device (~30 fps) */
+function useLiveAxes(pad: PadInfo | undefined): number[] | undefined {
+  const [v, setV] = useState<number[] | undefined>(undefined);
+  useEffect(() => {
+    if (!pad) { setV(undefined); return; }
+    let raf = 0, last = 0, prev = '';
+    const loop = (now: number) => {
+      if (now - last > 33) {
+        last = now;
+        const p = getPads().find((g) => g.index === pad.index);
+        const a = p ? p.axes.map((x) => Math.round(x * 1000) / 1000) : undefined;
+        const k = a ? a.join(',') : '';
+        if (k !== prev) { prev = k; setV(a); }
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [pad]);
+  return v;
 }
 
 function NumField({ value, min, max, step, label, onSet }: { value?: number; min: number; max: number; step: number; label: string; onSet: (v: number | null) => void }) {
@@ -197,15 +300,15 @@ function NumField({ value, min, max, step, label, onSet }: { value?: number; min
 }
 
 type Patch = Parameters<typeof setGroup>[4];
-function GroupEditor({ g, path, vals, axes, pad, onPatch, onReset }: {
+function GroupEditor({ g, path, vals, axes, pad, axis, setAxis: setAxisSel, onPatch, onReset }: {
   g: OptionTreeGroup; path: string; vals: ReturnType<typeof groupValues>; axes: Record<string, { deadzone?: number; saturation?: number }>; pad?: PadInfo;
+  axis: string; setAxis: (a: string) => void;
   onPatch: (label: string, p: Patch) => void; onReset: () => void;
 }) {
   const mode: 'default' | 'exponent' | 'curve' = vals?.curve ? 'curve' : vals?.exponent !== undefined ? 'exponent' : 'default';
   const defExp = g.exponent !== undefined ? Number(g.exponent) : undefined;
   const defCurve = g.curve?.map(([x, y]) => ({ x, y }));
   const [draft, setDraft] = useState<Pt[] | null>(null);
-  const [axis, setAxisSel] = useState<string>('');
   const points = draft ?? vals?.curve ?? null;
   const live = useLiveAxis(pad, axis);
   const shape = {
@@ -262,10 +365,11 @@ function GroupEditor({ g, path, vals, axes, pad, onPatch, onReset }: {
       {canCurve && mode === 'exponent' && (
         <label className="flex items-center gap-3 text-xs">
           <span className="text-slate-400">Exponent</span>
-          <input type="range" min={0.2} max={5} step={0.05} value={vals?.exponent ?? 1} aria-label="Exponent slider"
+          <input type="range" min={RANGES.exponent.min} max={RANGES.exponent.max} step={RANGES.exponent.step} value={clampTo(RANGES.exponent, vals?.exponent ?? 1)} aria-label="Exponent slider"
             onChange={(e) => onPatch(`Exponent ${g.name}`, { exponent: Number(e.target.value) })} className="w-56 accent-[var(--color-hud)]" />
-          <NumField value={vals?.exponent} min={0.1} max={10} step={0.05} label="Exponent" onSet={(v) => onPatch(`Exponent ${g.name}`, { exponent: v })} />
-          <span className="text-[10px] text-slate-500">1 = linear, &gt;1 = finer near centre</span>
+          <NumField value={vals?.exponent} min={RANGES.exponent.min} max={RANGES.exponent.max} step={RANGES.exponent.step} label="Exponent" onSet={(v) => onPatch(`Exponent ${g.name}`, { exponent: v })} />
+          <span className="text-[10px] text-slate-500" title={RANGES.exponent.note}>1 = linear, &gt;1 = finer near centre · {RANGES.exponent.min}–{RANGES.exponent.max} (conservative)</span>
+          {vals?.exponent !== undefined && !inRange(RANGES.exponent, vals.exponent) && <span className="text-[10px] text-mod">imported {vals.exponent} is outside that range: kept until you change it</span>}
         </label>
       )}
       <div className="flex flex-wrap gap-4">
@@ -294,6 +398,8 @@ function GroupEditor({ g, path, vals, axes, pad, onPatch, onReset }: {
                     <PtField v={p.x} label={`point ${i + 1} in`} onSet={(x) => onPatch(`Curve ${g.name}`, { curve: points.map((q, j) => (j === i ? { ...q, x } : q)) })} />
                     <span className="text-slate-600">→</span>
                     <PtField v={p.y} label={`point ${i + 1} out`} onSet={(y) => onPatch(`Curve ${g.name}`, { curve: points.map((q, j) => (j === i ? { ...q, y } : q)) })} />
+                    <input type="range" min={0} max={1} step={RANGES.point.step} value={p.y} aria-label={`point ${i + 1} out slider`} className="w-24 accent-[var(--color-mod)]"
+                      onChange={(e) => onPatch(`Curve ${g.name}`, { curve: points.map((q, j) => (j === i ? { ...q, y: Number(e.target.value) } : q)) })} />
                     {points.length > 1 && <button type="button" title="Remove point" onClick={() => onPatch(`Curve ${g.name}`, { curve: points.filter((_, j) => j !== i) })} className="text-[10px] text-slate-500 hover:text-alert">✕</button>}
                   </li>
                 ))}
