@@ -161,6 +161,19 @@ export function matchScore(t: Pick<DeviceTemplate, 'match' | 'slot'>, d: DeviceI
   }
   return best;
 }
+/** built-in templates that were removed, and the built-in that replaces each one wherever a saved pick still names it */
+export const RETIRED_BUILTINS: Readonly<Record<string, string>> = { 'builtin-stick-classic': 'builtin-stick', 'builtin-throttle-classic': 'builtin-throttle' };
+/** saved per-device template picks with retired built-in ids replaced; `changed` tells whether anything was rewritten */
+export function migratePicks(p: unknown): { picks: Record<string, string>; changed: boolean } {
+  const picks: Record<string, string> = {};
+  let changed = !p || typeof p !== 'object' || Array.isArray(p);
+  if (!changed) for (const [k, v] of Object.entries(p as Record<string, unknown>)) {
+    if (typeof v !== 'string' || !v) { changed = true; continue; }
+    picks[k] = RETIRED_BUILTINS[v] ?? v;
+    if (picks[k] !== v) changed = true;
+  }
+  return { picks, changed };
+}
 /** generic built-in fallback for a device */
 export function fallbackTemplate(d: DeviceIdentity, list: DeviceTemplate[] = BUILTIN_TEMPLATES): DeviceTemplate {
   const id = d.slot === 'gp' ? 'builtin-gamepad' : /throttle|twcs|tqs|quadrant|bravo|cm3|stecs|\bthr\b/i.test(d.name ?? '') ? 'builtin-throttle' : 'builtin-stick';
@@ -171,7 +184,8 @@ export function fallbackTemplate(d: DeviceIdentity, list: DeviceTemplate[] = BUI
  * else a generic built-in.
  */
 export function pickTemplate(all: DeviceTemplate[], d: DeviceIdentity, chosenId?: string): { template: DeviceTemplate; how: 'chosen' | 'matched' | 'fallback'; score: number } {
-  const chosen = chosenId ? all.find((t) => t.id === chosenId) : undefined;
+  const id = chosenId ? RETIRED_BUILTINS[chosenId] ?? chosenId : undefined;
+  const chosen = id ? all.find((t) => t.id === id) : undefined;
   if (chosen) return { template: chosen, how: 'chosen', score: matchScore(chosen, d) };
   let best: DeviceTemplate | undefined, bs = 0;
   for (const t of all) {
@@ -314,7 +328,17 @@ async function dbWrite(fn: (s: IDBObjectStore) => void, fallback: (l: DeviceTemp
   }
   await new Promise<void>((res, rej) => { const tx = db.transaction(STORE, 'readwrite'); fn(tx.objectStore(STORE)); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error ?? new Error('Could not save the template')); });
 }
-export const loadPicks = (): Record<string, string> => { try { return JSON.parse(localStorage.getItem(PICKS) ?? '{}'); } catch { return {}; } };
+/** the user's template pick per device; picks of removed built-ins (the classic stick/throttle) are moved to their replacement and saved */
+export function loadPicks(): Record<string, string> {
+  let raw: string | null = null;
+  try { raw = localStorage.getItem(PICKS); } catch { return {}; }
+  if (raw == null) return {};
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { parsed = {}; }
+  const { picks, changed } = migratePicks(parsed);
+  if (changed) try { localStorage.setItem(PICKS, JSON.stringify(picks)); } catch { /* ignore */ }
+  return picks;
+}
 
 /** user templates (IndexedDB, localStorage fallback) plus the built-ins, and the user's template pick per device */
 export function useTemplates() {
