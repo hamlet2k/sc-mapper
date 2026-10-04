@@ -659,6 +659,32 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(odd(['', 'M0 0L1 1Z']), ['', 'M0 0L1 1Z'], 'empty entries allowed');
     assert.deepEqual(th.callouts.find((c) => c.id === 'trgL')!.inputs, ['button4'], 'left grip trigger');
   });
+  t('default holo gamepad: every standard gp1_ input on a callout, game names, glow regions, one outline per D-pad direction, boxes apart', () => {
+    const gp = BUILTIN_TEMPLATES.find((b) => b.id === 'builtin-gamepad')!;
+    assert.equal(gp.slot, 'gp'); assert.equal(gp.name, 'Gamepad'); assert.ok(gp.image!.startsWith('data:image/svg+xml'));
+    assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'Xbox Wireless Controller', slot: 'gp' }).template.id, 'builtin-gamepad');
+    const inputs = gp.callouts.flatMap((c) => c.inputs);
+    assert.deepEqual([...inputs].sort(), [...cap.GP_BUTTONS, ...cap.GP_AXES].sort(), 'all 16 standard buttons and 4 stick axes, each once');
+    for (const i of inputs) assert.ok(gameNames.gp.has(i), `${i} is a gp1_ name used by defaultProfile.xml`);
+    // analog trigger axes and stick directions show on the trigger / stick callouts
+    const cov = (id: string) => tp.coveredInputs(gp.callouts.find((c) => c.id === id)!);
+    assert.ok(cov('lt').includes('triggerl') && cov('rt').includes('triggerr') && cov('ls').includes('thumbl_up') && cov('rs').includes('thumbr_left'));
+    assert.equal(gp.callouts.length, 15);
+    for (const c of gp.callouts) {
+      assert.ok(c.region && tp.REGION_RE.test(c.region), `${c.id}: glow region`);
+      for (const o of gp.callouts) if (o !== c) assert.ok(Math.abs(o.box.x - c.box.x) > 0.12 || Math.abs(o.box.y - c.box.y) > 0.085, `boxes ${c.id} / ${o.id} too close`);
+    }
+    const dp = gp.callouts.find((c) => c.id === 'dpad')!;
+    assert.equal(dp.kind, 'hat'); assert.deepEqual(dp.inputs, ['dpad_up', 'dpad_right', 'dpad_down', 'dpad_left']);
+    assert.equal(dp.inputRegions?.length, 4); assert.ok(dp.inputRegions!.every((r) => tp.REGION_RE.test(r)) && new Set(dp.inputRegions).size === 4, 'four distinct arm outlines');
+    for (const [press, stick] of [['l3', 'ls'], ['r3', 'rs']]) {
+      const a = gp.callouts.find((c) => c.id === press)!, b = gp.callouts.find((c) => c.id === stick)!;
+      assert.deepEqual(a.anchor, b.anchor, `${press} points at its stick`); assert.equal(a.inputRegions, undefined);
+    }
+    const back = tp.parseTemplates(tp.exportTemplates([{ ...gp, builtin: undefined, id: 'copy' } as any]))[0];
+    assert.deepEqual(back.callouts.map((c) => c.region), gp.callouts.map((c) => c.region), 'regions survive export/import');
+    assert.deepEqual(back.callouts.find((c) => c.id === 'dpad')!.inputRegions, dp.inputRegions, 'D-pad outlines survive export/import');
+  });
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };
     for (const [old, now] of [['builtin-stick-classic', 'builtin-stick'], ['builtin-throttle-classic', 'builtin-throttle']]) {
