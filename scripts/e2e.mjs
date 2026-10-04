@@ -554,6 +554,20 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
   await dv.getByTestId('template-select').selectOption('');
   await page.waitForTimeout(250);
 }
+{ // the default holographic throttle: 21 callouts; the keypad, E1 push and the left lever glow on input
+  await dv.getByTestId('template-select').selectOption('builtin-throttle');
+  await page.waitForTimeout(250);
+  await page.evaluate(() => { window.__btn(1, 11, true); window.__btn(1, 19, true); window.__axis(1, 2, 0.6); });
+  await page.waitForTimeout(250);
+  const on = async (r) => (await dv.locator(`[data-region="${r}"]`).getAttribute('data-active')) === '1';
+  check((await dv.locator('[data-callout]').count()) === 21 && await on('e1') && await on('lz') && (await dv.locator('[data-callout="e1"] [data-dir="button20"]').getAttribute('data-active')) === '1',
+    'default throttle template: 21 callouts; encoder push and the left lever glow on the picture');
+  const lit = await dv.locator('[data-region="keys"][data-active="1"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-input')));
+  check(lit.length === 1 && lit[0] === 'button12' && (await dv.locator('[data-callout="trgL"]').innerText()).includes('Left trigger'), `keypad: only the pressed key glows (${lit.join(', ')}); left grip trigger has a callout`);
+  await page.evaluate(() => { window.__btn(1, 11, false); window.__btn(1, 19, false); window.__axis(1, 2, 0); });
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(250);
+}
 await b1.click();
 const ip = dv.getByTestId('input-panel');
 check(await ip.isVisible() && (await ip.innerText()).includes('js1_button1'), 'clicking a callout opens the binding panel for js1_button1');
