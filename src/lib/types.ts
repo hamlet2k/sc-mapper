@@ -18,7 +18,16 @@ export interface DefaultsMeta {
   game: string; branch?: string; version?: string; buildDate?: string; channel?: string;
   source: string; sourceUrl: string; generated: string;
 }
-export interface DefaultsData { meta: DefaultsMeta; maps: DefaultMap[] }
+/** One <optiongroup> of a device <optiontree> in defaultProfile.xml (flattened, in tree order) */
+export interface OptionTreeGroup {
+  name: string; label: string; depth: number; parent?: string;
+  /** UIShowCurve / UIShowInvert: 1 = editable control, -1 = group heading whose setting applies to its children, 0 = hidden */
+  showCurve: number; showInvert: number;
+  /** game defaults for this group (strings as written in defaultProfile.xml) */
+  invert?: string; exponent?: string; curve?: [number, number][]; curveReset?: boolean;
+}
+export interface OptionTree { instances?: number; sensMin?: number; sensMax?: number; groups: OptionTreeGroup[] }
+export interface DefaultsData { meta: DefaultsMeta; maps: DefaultMap[]; optionTrees?: Record<string, OptionTree> }
 
 export interface Rebind {
   slot: Slot; instance: number; input: string; mode?: string; multiTap?: number;
@@ -40,8 +49,10 @@ export interface Profile {
   /** map name -> action name -> rebinds */
   rebinds: RebindMap;
   rebindCount: number;
-  /** <deviceoptions>/<options> elements from the imported file, re-emitted verbatim on export (curves, inverts, deadzones) */
+  /** legacy (profiles saved before device settings were editable): <deviceoptions>/<options> elements as XML text */
   optionsXml?: string[];
+  /** per-device settings: <deviceoptions> (deadzone/saturation per axis) and <options> (invert/exponent/curve per option group) */
+  settings?: import('./devopts').DeviceSettings;
   /** rebinds as originally imported, for "revert to imported" */
   original?: RebindMap;
   /** true when created in the app rather than imported */

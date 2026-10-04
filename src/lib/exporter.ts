@@ -3,6 +3,7 @@
 //  - actionmaps.xml              (USER/Client/0/Profiles/default, the live bindings file)
 import { formatInput, groupOfSlot } from './inputs';
 import { KEYBOARD_PRODUCT } from './capture';
+import { blockInstance, blockType, serializeBlock, settingsOf, type OptionsBlock } from './devopts';
 import type { DefaultsData, Group, Profile, Rebind } from './types';
 
 export type ExportFormat = 'layout' | 'actionmaps';
@@ -91,12 +92,13 @@ export function buildExport(defaults: DefaultsData, profile: Profile, o: ExportO
     L.push(` <ActionProfiles version="1" optionsVersion="2" rebindVersion="2" profileName="default">`);
   }
 
-  // ---- device options: keep the imported blocks verbatim (curves, inverts, deadzones), add any missing devices
-  const opts = profile.optionsXml ?? [];
-  const has = (type: string, inst: number) => opts.some((x) => new RegExp(`^<options[^>]*type="${type}"[^>]*instance="${inst}"`).test(x) || new RegExp(`^<options[^>]*instance="${inst}"[^>]*type="${type}"`).test(x));
-  for (const x of opts.filter((x) => x.startsWith('<deviceoptions'))) L.push(...indentBlock(x, base));
+  // ---- device settings: imported blocks are kept as they were (edited values updated), missing devices are added
+  const settings = settingsOf(profile);
+  const optBlocks = settings.blocks.filter((b): b is OptionsBlock => b.tag === 'options');
+  const has = (type: string, inst: number) => optBlocks.some((b) => blockType(b) === type && blockInstance(b) === inst);
+  for (const b of settings.blocks) if (b.tag === 'deviceoptions') L.push(...serializeBlock(b, base));
   if (!has('keyboard', 1)) L.push(`${base}<options type="keyboard" instance="1" Product="${esc(KEYBOARD_PRODUCT)}"/>`);
-  for (const x of opts.filter((x) => x.startsWith('<options'))) L.push(...indentBlock(x, base));
+  for (const b of optBlocks) L.push(...serializeBlock(b, base));
   if (hasGp && !has('gamepad', 1)) {
     const p = extra.find((d) => d.type === 'gamepad')?.product;
     L.push(`${base}<options type="gamepad" instance="1"${p ? ` Product="${esc(p)}"` : ''}/>`);
@@ -111,13 +113,4 @@ export function buildExport(defaults: DefaultsData, profile: Profile, o: ExportO
   if (!layout) L.push(' </ActionProfiles>');
   L.push('</ActionMaps>');
   return L.join('\n') + '\n';
-}
-
-/** Re-indent a serialized element so its first line sits at `base` and inner lines keep their relative indent */
-function indentBlock(xml: string, base: string): string[] {
-  const lines = xml.split(/\r?\n/).filter((l, i) => i === 0 || l.trim());
-  if (lines.length === 1) return [base + lines[0].trim()];
-  const last = lines[lines.length - 1];
-  const orig = /^\s*/.exec(last)![0].length; // indent of the closing tag = original indent of the element
-  return lines.map((l, i) => (i === 0 ? base + l.trim() : base + l.slice(Math.min(orig, /^\s*/.exec(l)![0].length))));
 }

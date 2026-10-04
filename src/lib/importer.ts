@@ -1,3 +1,4 @@
+import { parseSettings } from './devopts';
 import { parseRebindInput } from './inputs';
 import type { Profile, ProfileDevice, Rebind, Slot } from './types';
 
@@ -30,10 +31,7 @@ export function parseActionMaps(text: string, fileName: string): Profile {
   const profileName = container.getAttribute('profileName') || header?.getAttribute('label') || '';
 
   const devices: ProfileDevice[] = [];
-  const ser = new XMLSerializer();
-  const optionsXml = Array.from(container.children)
-    .filter((c) => c.tagName === 'options' || c.tagName === 'deviceoptions')
-    .map((c) => ser.serializeToString(c).replace(/ xmlns="[^"]*"/, '').replace(/<([A-Za-z_][\w.-]*)\/>/g, '<$1 />'));
+  const settings = parseSettings(Array.from(container.children).filter((c) => c.tagName === 'options' || c.tagName === 'deviceoptions'));
   for (const o of Array.from(container.children).filter((c) => c.tagName === 'options')) {
     const slot = TYPE_SLOT[(o.getAttribute('type') ?? '').toLowerCase()];
     const product = (o.getAttribute('Product') ?? '').replace(/\{[0-9A-F-]+\}/i, '').replace(/\s+/g, ' ').trim();
@@ -75,7 +73,7 @@ export function parseActionMaps(text: string, fileName: string): Profile {
     devices,
     rebinds,
     rebindCount: count,
-    optionsXml,
+    settings,
     original: JSON.parse(JSON.stringify(rebinds)),
   };
 }

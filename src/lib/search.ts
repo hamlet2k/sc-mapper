@@ -82,7 +82,11 @@ function keyScore(ix: Indexed, term: string): number {
   return best;
 }
 
-export interface ParsedQuery { terms: string[]; keyTerms: string[] }
+export interface ParsedQuery {
+  terms: string[]; keyTerms: string[];
+  /** exact device-scoped inputs of which a row must match at least one (press-to-search: a stick as axis or direction) */
+  anyOf?: string[];
+}
 const DEVICE_WORD = /^(kb|mo|js|gp)(\d*)$/;
 /**
  * key:x / k:x are key terms. Device-scoped terms ("js1_button5") are exact key terms, and a device word followed by an input
@@ -110,6 +114,11 @@ export function parseQuery(q: string): ParsedQuery {
 export function scoreRow(row: Row, q: ParsedQuery): number {
   const ix = index(row);
   let total = 0;
+  if (q.anyOf?.length) {
+    const best = Math.max(...q.anyOf.map((k) => keyScore(ix, k)));
+    if (!best) return 0;
+    total += best;
+  }
   for (const k of q.keyTerms) {
     const s = keyScore(ix, k);
     if (!s) return 0;
