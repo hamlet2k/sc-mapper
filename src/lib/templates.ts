@@ -29,6 +29,9 @@ export interface Callout {
   /** optional outline of the control on the picture (SVG path, canvas units with the canvas 1000 wide, relative to the anchor):
    * lit up when the control is used */
   region?: string;
+  /** optional outline per input (same order as `inputs`, '' = none), e.g. each key of a button row: only the pressed one lights up.
+   * `region` (if any) is still used for the customized / conflict tint and the selection outline */
+  inputRegions?: string[];
 }
 export interface TemplateMatch {
   /** USB vendor / product id, 4 hex digits */
@@ -197,6 +200,12 @@ const KINDS = new Set(CALLOUT_KINDS.map((k) => k.kind));
 const INPUT_RE = /^[a-z][a-z0-9_]{0,24}$/;
 /** an SVG path made of plain commands and numbers only (no references, no markup) */
 export const REGION_RE = /^[MLHVCSQTAZmlhvcsqtaz0-9.,\s-]{1,6000}$/;
+/** per-input outlines: kept only when every entry is '' or a valid path and there is one per input at most */
+function cleanInputRegions(v: unknown, n: number): { inputRegions?: string[] } {
+  if (!Array.isArray(v) || !v.length || v.length > n) return {};
+  if (!v.every((x) => x === '' || (typeof x === 'string' && REGION_RE.test(x)))) return {};
+  return v.some((x) => x) ? { inputRegions: v as string[] } : {};
+}
 function cleanTemplate(o: unknown, i: number): DeviceTemplate {
   if (!o || typeof o !== 'object') throw new Error(`Template ${i + 1} is not an object`);
   const t = o as Record<string, unknown>;
@@ -221,6 +230,7 @@ function cleanTemplate(o: unknown, i: number): DeviceTemplate {
       ...(typeof q.group === 'string' && q.group.trim() ? { group: q.group.trim().slice(0, 40) } : {}),
       anchor: pt(q.anchor), box: pt(q.box ?? q.anchor),
       ...(typeof q.region === 'string' && REGION_RE.test(q.region) ? { region: q.region } : {}),
+      ...cleanInputRegions(q.inputRegions, inputs.length),
     };
   });
   const match: TemplateMatch[] = (Array.isArray(t.match) ? t.match : []).slice(0, 20).map((m) => {
