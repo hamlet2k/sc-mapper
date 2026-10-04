@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  comboFrom, detect, gamepadInput, GP_BUTTONS, jsButton, joystickInput, MOUSE_AXES, parseManual, RESERVED_KEYS,
-  scKeyFromCode, scMouseButton, scWheel, snapshot, type Candidate, type PadState,
+  comboFrom, gamepadInput, GP_BUTTONS, joystickInput, MOUSE_AXES, PadTracker, parseManual, RESERVED_KEYS,
+  scKeyFromCode, scMouseButton, scWheel, snapshot, type Candidate,
 } from '../lib/capture';
-import { getPads, padKeys, type PadInfo, type PadKind } from '../lib/devices';
+import { getPads, type PadInfo, type PadKind, type PadLike } from '../lib/devices';
 import { conflictsFor, type CaptureConflict } from '../lib/edit';
 import { formatInput, GROUP_LABEL, isModifier, keyLabel, normalizeCombo, prettyMode, tokens } from '../lib/inputs';
-import type { Group, Rebind, Row, Slot } from '../lib/types';
+import type { Group, ProfileDevice, Rebind, Row, Slot } from '../lib/types';
+import { DeviceList } from './ControllersPanel';
+import { InputTester } from './InputTester';
 
 export const ACTIVATION_MODES = [
   'press', 'tap', 'hold', 'double_tap', 'double_tap_nonblocking', 'delayed_press', 'delayed_press_medium', 'delayed_press_long',
@@ -17,6 +19,9 @@ export interface CaptureRequest { row: Row; group: Group; replace?: Rebind; focu
 interface Props extends CaptureRequest {
   rows: Row[];
   pads: PadInfo[];
+  /** describes raw Gamepad API devices (kind + instance) using the current assignments; called every frame */
+  describe: (list: readonly PadLike[]) => PadInfo[];
+  profileDevices?: readonly ProfileDevice[];
   onAssign: (key: string, v: { kind?: PadKind; instance?: number }) => void;
   onCommit: (r: Rebind, removeFrom: CaptureConflict[]) => void;
   onClear?: () => void;
@@ -25,7 +30,7 @@ interface Props extends CaptureRequest {
 
 interface Pending { rebind: Rebind; alt?: Candidate['alt']; warning?: string }
 
-export function CaptureDialog({ row, group, replace, focus, rows, pads, onAssign, onCommit, onClear, onCancel }: Props) {
+export function CaptureDialog({ row, group, replace, focus, rows, pads, describe, profileDevices, onAssign, onCommit, onClear, onCancel }: Props) {
   const [mode, setMode] = useState<string>(replace?.mode ?? '');
   const [multiTap, setMultiTap] = useState<number>(replace?.multiTap ?? 1);
   const [held, setHeld] = useState<string[]>([]);
@@ -33,6 +38,7 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, onAssign
   const [manual, setManual] = useState('');
   const [note, setNote] = useState<string | null>(null);
   const [activity, setActivity] = useState<Record<string, number>>({});
+  const [showTester, setShowTester] = useState(false);
   const heldRef = useRef<string[]>([]);
   const usedMain = useRef(false);
   const padRef = useRef<HTMLDivElement>(null);
@@ -110,58 +116,68 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, onAssign
   };
 
   // ---------------- gamepad / joystick polling
+  // The loop reads the latest props through refs so device-list refreshes and parent re-renders never restart it (restarting
+  // would reset the resting baseline and lose a press in progress).
   const relevant = useMemo(() => pads.filter((p) => p.kind === group), [pads, group]);
+  const finishRef = useRef(finish);
+  const describeRef = useRef(describe);
+  const cancelRef = useRef(onCancel);
+  useEffect(() => { finishRef.current = finish; describeRef.current = describe; cancelRef.current = onCancel; }, [finish, describe, onCancel]);
   useEffect(() => {
     if (group === 'km' || !listening) return;
-    const rest = new Map<string, PadState>();
+    const tracker = new PadTracker();
     const gesture: { key?: string; order: number[] } = { order: [] };
     let raf = 0;
     let done = false;
-    const loop = () => {
+    const loop = (now: number) => {
       if (done) return;
       const list = getPads();
-      const keys = padKeys(list);
-      list.forEach((p, i) => {
-        const info = pads.find((x) => x.key === keys[i]);
-        const key = keys[i];
-        const s = snapshot(p);
-        if (!rest.has(key)) { rest.set(key, s); return; }
-        const evs = detect(rest.get(key)!, s);
-        if (evs.length) setActivity((a) => (a[key] && Date.now() - a[key] < 150 ? a : { ...a, [key]: Date.now() }));
-        if (!info || info.kind !== group || done) return;
+      const infos = describeRef.current(list);
+      const states = list.map((p) => snapshot(p));
+      const events = tracker.update(infos.map((d, i) => ({ key: d.key, state: states[i] })), now);
+      for (let i = 0; i < infos.length && !done; i++) {
+        const info = infos[i];
+        const s = states[i];
+        const evs = events.get(info.key) ?? [];
+        if (evs.length) setActivity((a) => (a[info.key] && Date.now() - a[info.key] < 150 ? a : { ...a, [info.key]: Date.now() }));
+        if (info.kind !== group) continue;
         const slot: Slot = group;
+        const commit = (input: string, c?: Candidate) => {
+          done = true;
+          finishRef.current({ slot, instance: info.instance, input }, c?.alt || c?.warning ? { alt: c.alt, warning: c.warning } : undefined);
+        };
         if (group === 'gp') {
           // buttons commit on release so chords like shoulderl+a work
-          for (const e of evs) if (e.kind === 'button' && (!gesture.key || gesture.key === key) && !gesture.order.includes(e.index)) { gesture.key = key; gesture.order.push(e.index); }
-          if (gesture.key === key && gesture.order.length) {
+          for (const e of evs) if (e.kind === 'button' && (!gesture.key || gesture.key === info.key) && !gesture.order.includes(e.index)) { gesture.key = info.key; gesture.order.push(e.index); }
+          if (gesture.key === info.key && gesture.order.length) {
             if (gesture.order.some((b) => !s.buttons[b])) {
-              done = true;
               if (gesture.order.length === 1) {
                 const c = gamepadInput({ kind: 'button', index: gesture.order[0] });
-                if (c) finish({ slot, instance: info.instance, input: c.input }, c.alt ? { alt: c.alt } : undefined);
-              } else finish({ slot, instance: info.instance, input: gesture.order.map((b) => GP_BUTTONS[b] ?? `button${b}`).join('+') });
+                if (c) commit(c.input, c);
+                else setNote(`Button ${gesture.order[0] + 1} isn't part of the standard gamepad layout. If this is a joystick, switch it to "Joystick / HOTAS" below.`);
+              if (!done) { gesture.key = undefined; gesture.order = []; }
+              } else commit(gesture.order.map((b) => GP_BUTTONS[b] ?? `button${b + 1}`).join('+'));
             }
-            return;
+            continue;
           }
           const ax = evs.find((e) => e.kind === 'axis');
           const c = ax && gamepadInput(ax);
-          if (c) { done = true; finish({ slot, instance: info.instance, input: c.input }, c.alt ? { alt: c.alt } : undefined); }
-          return;
+          if (c) commit(c.input, c);
+          continue;
         }
         const e = evs.find((x) => x.kind === 'button') ?? evs.find((x) => x.kind === 'hat') ?? evs.find((x) => x.kind === 'axis');
         const c = e && joystickInput(e);
-        if (c) { done = true; finish({ slot, instance: info.instance, input: c.input }); }
-        else if (e?.kind === 'button') { done = true; finish({ slot, instance: info.instance, input: jsButton(e.index) }); }
-      });
-      raf = requestAnimationFrame(loop);
+        if (c) commit(c.input, c);
+      }
+      if (!done) raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !['INPUT', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) { e.preventDefault(); onCancel(); }
+      if (e.key === 'Escape' && !['INPUT', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) { e.preventDefault(); cancelRef.current(); }
     };
     window.addEventListener('keydown', esc, true);
     return () => { done = true; cancelAnimationFrame(raf); window.removeEventListener('keydown', esc, true); };
-  }, [group, listening, pads, finish, onCancel]);
+  }, [group, listening]);
 
   const submitManual = () => {
     const inst = group === 'km' ? 1 : relevant[0]?.instance ?? 1;
@@ -230,7 +246,16 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, onAssign
           )}
 
           {listening && group !== 'km' && (
-            <DeviceList pads={pads} group={group} activity={activity} onAssign={onAssign} />
+            <>
+              <DeviceList pads={pads} group={group} activity={activity} onAssign={onAssign} profileDevices={profileDevices} compact />
+              <div className="mt-3">
+                <button type="button" onClick={() => setShowTester((v) => !v)} data-testid="toggle-tester"
+                  className="rounded border border-edge px-2 py-1 font-mono text-[11px] text-slate-300 hover:border-hud/60 hover:text-hud2">
+                  {showTester ? '▾ Hide' : '▸ Show'} live input tester
+                </button>
+                {showTester && <div className="mt-2"><InputTester describe={describe} compact /></div>}
+              </div>
+            </>
           )}
 
           {pending && current && (
@@ -315,41 +340,6 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, onAssign
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-export function DeviceList({ pads, group, activity, onAssign }: { pads: PadInfo[]; group?: Group; activity?: Record<string, number>; onAssign: Props['onAssign'] }) {
-  if (!pads.length) return (
-    <p className="mt-3 rounded border border-edge/70 bg-black/20 px-3 py-2 text-xs text-slate-500">No controllers visible to the browser yet. Plug one in and press any button on it.</p>
-  );
-  return (
-    <div className="mt-3 space-y-1" data-testid="device-list">
-      <div className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-hud/70">Detected controllers</div>
-      {pads.map((p) => {
-        const live = activity?.[p.key] && Date.now() - activity[p.key] < 600;
-        return (
-          <div key={p.key} className={`flex flex-wrap items-center gap-2 rounded border px-3 py-2 text-xs ${group && p.kind === group ? 'border-hud/50 bg-hud/5' : 'border-edge/70 bg-black/20'}`}>
-            <span className={`h-2 w-2 rounded-full ${live ? 'bg-ok shadow-[0_0_8px_var(--color-ok)]' : 'bg-slate-600'}`} />
-            <span className="min-w-0 flex-1 truncate text-slate-100" title={p.id}>{p.name}</span>
-            <span className="font-mono text-[10px] text-slate-500">{p.buttons} btn · {p.axes} axes · {p.mapping || 'raw'}</span>
-            <select value={p.kind} onChange={(e) => onAssign(p.key, { kind: e.target.value as PadKind })} aria-label="Use as"
-              className="rounded border border-edge bg-panel2 px-1.5 py-0.5 font-mono text-[11px] text-slate-200">
-              <option value="js">Joystick / HOTAS</option><option value="gp">Gamepad</option>
-            </select>
-            {p.kind === 'js' && (
-              <select value={p.instance} onChange={(e) => onAssign(p.key, { instance: Number(e.target.value) })} aria-label="Game instance"
-                className="rounded border border-mod/50 bg-panel2 px-1.5 py-0.5 font-mono text-[11px] text-mod">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>js{n}</option>)}
-              </select>
-            )}
-          </div>
-        );
-      })}
-      <p className="text-[10px] leading-relaxed text-slate-500">
-        The game numbers joysticks in Windows device order (js1, js2…), which may differ from the browser&apos;s. Pick the number the game uses for each stick
-        (in game: <code>i_DumpDeviceInformation</code> in the console lists them; <code>pp_resortdevices joystick 1 2</code> swaps them).
-      </p>
     </div>
   );
 }
