@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { columnOfInput } from '../lib/inputs';
+import { bindKey, columnOfInput } from '../lib/inputs';
 import { comboLabel, prettyMode } from '../lib/inputs';
 import { groupLabel } from '../lib/groups';
 import type { Binding, Device, Row } from '../lib/types';
@@ -15,6 +15,8 @@ export interface ListProps {
   onCapture: (row: Row, device: Device, replace?: Binding) => void;
   onRemove: (row: Row, b: Binding) => void;
   onEdit: (row: Row) => void;
+  /** inputs just pressed (bindKey form): matching chips flash */
+  flash?: Set<string> | null;
 }
 
 const COLS: { device: Device; label: string }[] = [
@@ -29,7 +31,7 @@ export function columnOf(b: Binding): Device {
   return columnOfInput(b.slot, b.input);
 }
 
-export function ActionList({ rows, grouped, devices, conflictsOf, onBindingClick, editMode, onCapture, onRemove, onEdit }: ListProps) {
+export function ActionList({ rows, grouped, devices, conflictsOf, onBindingClick, editMode, onCapture, onRemove, onEdit, flash }: ListProps) {
   const cols = COLS.filter((c) => devices.has(c.device));
   const template = `minmax(240px, 1.35fr) ${cols.map(() => 'minmax(120px, 1fr)').join(' ')}`;
 
@@ -67,7 +69,8 @@ export function ActionList({ rows, grouped, devices, conflictsOf, onBindingClick
           </div>
           {s.rows.map((r) => (
             <ActionRow key={r.id} row={r} cols={cols.map((c) => c.device)} template={template} showMap={!grouped} conflictsOf={conflictsOf} onBindingClick={onBindingClick}
-              editMode={editMode} onCapture={onCapture} onRemove={onRemove} onEdit={onEdit} />
+              editMode={editMode} onCapture={onCapture} onRemove={onRemove} onEdit={onEdit}
+              flash={flash && r.bindings.some((b) => flash.has(bindKey(b.slot, b.instance, b.input))) ? flash : undefined} />
           ))}
         </section>
       ))}
@@ -79,13 +82,14 @@ interface RowProps {
   row: Row; cols: Device[]; template: string; showMap: boolean;
   conflictsOf: ListProps['conflictsOf']; onBindingClick: ListProps['onBindingClick'];
   editMode: boolean; onCapture: ListProps['onCapture']; onRemove: ListProps['onRemove']; onEdit: ListProps['onEdit'];
+  flash?: Set<string>;
 }
 
-const ActionRow = memo(function ActionRow({ row, cols, template, showMap, conflictsOf, onBindingClick, editMode, onCapture, onRemove, onEdit }: RowProps) {
+const ActionRow = memo(function ActionRow({ row, cols, template, showMap, conflictsOf, onBindingClick, editMode, onCapture, onRemove, onEdit, flash }: RowProps) {
   const [open, setOpen] = useState(false);
   const mode = prettyMode(row.mode);
   return (
-    <div className="row-cv border-b border-edge/30 hover:bg-hud/[0.03]">
+    <div className={`row-cv border-b border-edge/30 hover:bg-hud/[0.03] ${flash ? 'flash-row' : ''}`} data-flash-row={flash ? '1' : undefined}>
       <div className="grid items-start gap-3 px-4 py-2" style={{ gridTemplateColumns: template }}>
         <button type="button" onClick={() => (editMode ? onEdit(row) : setOpen((o) => !o))} className="min-w-0 text-left" title={editMode ? 'Open the action editor' : 'Show details'}>
           <div className="flex items-center gap-2">
@@ -104,7 +108,7 @@ const ActionRow = memo(function ActionRow({ row, cols, template, showMap, confli
           return (
             <div key={c} className="flex min-w-0 flex-wrap items-center gap-1">
               {bs.map((b, i) => (
-                <BindingChip key={i} b={b} conflict={conflictsOf(row, b)}
+                <BindingChip key={i} b={b} conflict={conflictsOf(row, b)} flash={!!flash?.has(bindKey(b.slot, b.instance, b.input))}
                   onClick={editMode ? (x) => onCapture(row, c, x) : onBindingClick} onRemove={editMode ? (x) => onRemove(row, x) : undefined} />
               ))}
               {!bs.length && cleared && <span className="rounded border border-dashed border-mod/40 px-1.5 font-mono text-[10px] text-mod/70 line-through" title="Default binding removed in your profile">cleared</span>}

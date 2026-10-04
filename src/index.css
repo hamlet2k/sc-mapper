@@ -59,3 +59,10 @@ body {
   background: linear-gradient(180deg, transparent, rgba(79, 216, 255, 0.035), transparent);
   animation: scan 9s linear infinite;
 }
+/* live highlight: an input was just pressed */
+@keyframes flash-chip { 0%, 60% { box-shadow: 0 0 0 2px var(--color-mod), 0 0 18px 2px var(--color-mod); background: rgba(255, 179, 71, 0.28); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@keyframes flash-row { 0%, 60% { background: rgba(255, 179, 71, 0.10); } 100% { background: transparent; } }
+.flash-chip { animation: flash-chip 1.8s ease-out; }
+.flash-key { animation: flash-chip 1.8s ease-out; }
+.flash-row { animation: flash-row 1.8s ease-out; }
+@media (prefers-reduced-motion: reduce) { .flash-chip, .flash-key, .flash-row { animation-duration: 0.01s; outline: 2px solid var(--color-mod); } }

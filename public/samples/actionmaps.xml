@@ -1,16 +1,28 @@
 <ActionMaps>
  <ActionProfiles version="1" optionsVersion="2" rebindVersion="2" profileName="default">
-  <!-- Sample for testing: a HOSAS setup (2x VKB Gladiator) layered over the 4.10 defaults. Same format as user/client/0/Profiles/default/actionmaps.xml -->
+  <!-- Sample for testing: a HOSAS setup (2x VKB Gladiator) layered over the 4.10 defaults. Same format as user/client/0/Profiles/default/actionmaps.xml; device settings use the values/format seen in game-written files -->
   <deviceoptions name=" VKBsim Gladiator EVO R    {0200231D-0000-0000-0000-504944564944}">
    <option input="x" deadzone="0.015"/>
    <option input="y" deadzone="0.015"/>
+   <option input="x" saturation="0.94050002"/>
+   <option input="x" saturation="0.94050002"/>
   </deviceoptions>
   <options type="keyboard" instance="1" Product="Keyboard  {6F1D2B61-D5A0-11CF-BFC7-444553540000}"/>
   <options type="gamepad" instance="1" Product="Controller (Xbox One For Windows)"/>
   <options type="joystick" instance="1" Product=" VKBsim Gladiator EVO R    {0200231D-0000-0000-0000-504944564944}">
    <flight_move_pitch invert="1"/>
+   <flight_move_yaw exponent="1.3000001"/>
   </options>
-  <options type="joystick" instance="2" Product=" VKBsim Gladiator EVO L    {3201231D-0000-0000-0000-504944564944}"/>
+  <options type="joystick" instance="2" Product=" VKBsim Gladiator EVO L    {3201231D-0000-0000-0000-504944564944}">
+   <flight_move_strafe_vertical invert="1">
+    <nonlinearity_curve>
+     <point in="0" out="0"/>
+     <point in="0.20035715" out="0.30950743"/>
+     <point in="0.82027185" out="0.68468004"/>
+     <point in="1" out="1"/>
+    </nonlinearity_curve>
+   </flight_move_strafe_vertical>
+  </options>
   <modifiers />
   <actionmap name="seat_general">
    <action name="v_eject">

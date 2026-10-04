@@ -7,9 +7,11 @@ interface Props {
   onClick?: (b: Binding) => void;
   onRemove?: (b: Binding) => void;
   showTag?: boolean;
+  /** briefly highlighted because its input was just pressed */
+  flash?: boolean;
 }
 
-export function BindingChip({ b, conflict, onClick, onRemove, showTag }: Props) {
+export function BindingChip({ b, conflict, onClick, onRemove, showTag, flash }: Props) {
   const tag = b.slot === 'js' ? `JS${b.instance}` : b.slot === 'gp' && b.instance > 1 ? `GP${b.instance}` : showTag ? SLOT_TAG[b.slot] : null;
   const mode = prettyMode(b.mode);
   const showMode = mode && !['Press', 'Press/Hold'].includes(mode);
@@ -30,7 +32,8 @@ export function BindingChip({ b, conflict, onClick, onRemove, showTag }: Props) 
       type="button"
       title={title}
       onClick={() => onClick?.(b)}
-      className={`group inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-left transition ${cls}`}
+      data-flash={flash ? '1' : undefined}
+      className={`group inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-left transition ${cls} ${flash ? 'flash-chip' : ''}`}
     >
       {conflict?.length ? <span className="text-[10px] text-alert">⚠</span> : b.custom ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-mod" /> : null}
       {tag && <span className="font-mono text-[9px] font-bold tracking-wider text-hud/70">{tag}</span>}
