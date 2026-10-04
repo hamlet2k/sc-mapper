@@ -57,7 +57,22 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
   `<optiontree type="joystick">` (Flight pitch/yaw/roll, strafe, throttle, turrets, FPS, EVA, vehicles…) with **invert**, **exponent**
   or a **custom curve** (draggable points, double-click to add, a points table), plus per-axis **deadzone** and **saturation** for the device
   model. A live chart shows the curve against the game default and, for a connected device, the axis position. Settings are read from the
-  imported file and written back on export; everything the app doesn't edit is kept as it was.
+  imported file and written back on export; everything the app doesn't edit is kept as it was. Deadzone, saturation, exponent and curve
+  outputs each have a **slider plus a precise number field**, clamped to the ranges below (imported values outside them are kept and flagged).
+  Each axis row has a live bar (deadzone band, saturation band, raw position, resulting output), and clicking a row previews that axis on the chart.
+- **🕹 Devices view** (tab next to List / Keyboard): pick a device (connected ones with their game number, the profile's, or any jsN/gp1 that has
+  bindings) and see a picture of it with a callout per control: button number, hat as a 5-way cross, axes with their live value, and the
+  actions bound to it in the current profile (amber = customized, red = conflict). Callouts light up blue while you press or move the control.
+  Clicking a callout opens a panel with the bound actions (Edit, Unbind, show in list) and "bind an action to this input". Bound inputs with
+  no callout are listed beside the picture. **PNG** export and **Print** (print CSS shows only the device sheet).
+- **Device templates**: three built-in generic templates drawn as simple SVG (stick, throttle, gamepad; no vendor artwork). ✎ *Customize a copy*
+  or ＋ *New template* opens the editor: upload a photo/render of your device (PNG/JPEG/WebP/SVG; scaled to at most 1600 px and re-encoded
+  client-side, max 2.5 MB, stored in IndexedDB with a localStorage fallback) or use a blank canvas; add callouts by clicking the picture or with
+  **🎯 Press to place** (press each control and a callout for that input appears: a hat push adds the whole hat); drag the anchor and the label
+  separately; set the type (button, hat, axis or mini-stick, encoder pair, multi-position switch), inputs (typed or pressed), name and group;
+  duplicate, delete, undo (Ctrl+Z). A template applies automatically to devices matching its rules: USB vendor/product id, name, and optionally
+  the exact button count, which tells apart devices sharing a USB id (e.g. the two MOZA AB6 bases with 128 and 133 buttons). You can also pick a
+  template by hand per device. Templates export/import as JSON with the image embedded, for sharing.
 - **🕹 Controllers & input tester** (header button): the devices declared in the active profile (`<options type="joystick"
   instance=… Product=…>`), the devices the browser detects (index, id, mapping, button/axis counts, USB ids), and which game instance
   (js1…jsN / gp1) each browser device is. Devices are prefilled by matching the profile's USB vendor/product ids, then names, then
@@ -140,7 +155,23 @@ and real game-written exports (see `scripts/fetch-fixtures.mjs` for the pinned f
   layouts), gamepad/mouse/keyboard options. Not documented anywhere: the game's exact response maths (the chart is an approximation),
   whether a group heading's setting overrides the controls under it, and what saturation does exactly.
 
+### Value ranges for the sliders
+No minimum/maximum for these settings is defined in the game files (`defaultProfile.xml` option groups only carry defaults), so the
+app uses what can be confirmed and labels the rest as conservative:
+
+| Setting | Format | Slider range | Default | Evidence |
+|---|---|---|---|---|
+| Deadzone | fraction of axis travel, 0..1 | 0–0.5 (conservative) | not in game files; Star Citizen Wiki (2.x): 0.03 X/Y, 0 Z/slider, 0.10 rotations | real files: 0.0099–0.2475 (TWCS shipped layout 0.0792; Osiris/Subs exports), all multiples of **0.0099** = 1 % slider steps × 0.99 |
+| Saturation | fraction of axis travel, 0..1 | 0.5–1 (conservative) | 1.00 (wiki) | real files 0.8405–0.9405; players report 0 hides the setting in game |
+| Exponent | output = input^exponent | 1–3 (conservative) | 1.00 (wiki); `defaultProfile.xml` uses 2.5 on two groups | real files 1.0–2.5; the game converts an exponent into curve points out = in^exp (philchuang 3.17.4: 0.1 → 0.0631 = 0.1^1.2) |
+| Curve point in/out | 0..1 for one half of the axis | 0–1 (confirmed) | default curves in `defaultProfile.xml` use 0.1–0.9 | game-written curves include 0,0 and 1,1; points ordered by input |
+
+`UISensitivityMin/Max` in the option trees (0.01–2.0 for joystick/gamepad) is the legacy *sensitivity* setting, not the exponent.
+
 ## Known limitations
+- Device templates: positions are fractions of the picture, so a template looks the same at any size. Live highlight needs the device visible
+  to the browser (Chromium: first 4 devices, 32 buttons). Hat callouts follow the browser's hat numbering (first hat-like axis = hat 1),
+  which may differ from the game's on some devices.
 - Controllers are read through the browser's Gamepad API. Button and axis numbering (especially axes and hats on HOTAS gear) can
   differ from the game's DirectInput order: Chrome on Windows usually matches (X, Y, Z, Rx, Ry, Rz, Slider, Dial; hat on axis 9),
   but Firefox, macOS and Linux may not. Check in game and use manual entry to correct. Hats are recognized when the browser exposes
