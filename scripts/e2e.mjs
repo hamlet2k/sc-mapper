@@ -14,7 +14,12 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 const log = (...a) => console.log('•', ...a);
 const check = (ok, msg) => { console.log(ok ? '  ✓' : '  ✗', msg); if (!ok) failures.push(msg); };
 
-// ---- Gamepad API mock: one XInput pad (standard mapping) and two HOTAS sticks (raw mapping)
+// ---- Gamepad API mock, modelled on Chrome's real behaviour:
+//  * navigator.getGamepads() returns [null, null, null, null] until a button is pressed on some controller (user gesture);
+//    gamepadconnected is NOT dispatched, so the app must poll;
+//  * every call returns fresh snapshot objects (a kept reference never updates);
+//  * right after a device is revealed its axes read 0 for a moment before the first real report;
+//  * HOTAS sticks have no standard mapping, 32 buttons (Chromium's cap) and the hat as axis 9 resting at 9/7.
 await page.addInitScript(() => {
   const btns = (n) => Array.from({ length: n }, () => ({ pressed: false, touched: false, value: 0 }));
   const pads = [
@@ -22,10 +27,16 @@ await page.addInitScript(() => {
     { index: 1, id: 'VKBsim Gladiator EVO R (Vendor: 231d Product: 0200)', mapping: '', connected: true, buttons: btns(32), axes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 9 / 7], timestamp: 0 },
     { index: 2, id: 'VKBsim Gladiator EVO L (Vendor: 231d Product: 3201)', mapping: '', connected: true, buttons: btns(32), axes: [0, 0, -1, 0, 0, 0, 0, 0, 0, 9 / 7], timestamp: 0 },
   ];
+  let revealedAt = 0;
+  const copy = (p) => {
+    const fresh = performance.now() - revealedAt < 80;
+    return Object.freeze({ ...p, axes: Object.freeze(p.axes.map((v) => (fresh ? 0 : v))), buttons: Object.freeze(p.buttons.map((b) => Object.freeze({ ...b }))) });
+  };
   window.__pads = pads;
-  window.__btn = (i, b, on) => { pads[i].buttons[b] = { pressed: on, touched: on, value: on ? 1 : 0 }; pads[i].timestamp++; };
+  window.__btn = (i, b, on) => { pads[i].buttons[b] = { pressed: on, touched: on, value: on ? 1 : 0 }; pads[i].timestamp++; if (on && !revealedAt) revealedAt = performance.now(); };
   window.__axis = (i, a, v) => { pads[i].axes[a] = v; pads[i].timestamp++; };
-  navigator.getGamepads = () => [...pads];
+  window.__hide = () => { revealedAt = 0; };
+  navigator.getGamepads = () => [0, 1, 2, 3].map((i) => (revealedAt && pads[i] ? copy(pads[i]) : null));
 });
 
 await page.goto(url, { waitUntil: 'networkidle' });
@@ -72,6 +83,62 @@ await page.waitForTimeout(300);
 log('conflict cards:', await page.locator('#main .hud-panel.border-l-2').count());
 await page.screenshot({ path: shots + '06-conflicts.png' });
 await page.getByRole('button', { name: /☰ List/ }).click();
+
+// ===================== exact-input search from a binding chip =====================
+console.log('\nexact input search');
+await search.fill('');
+await page.waitForTimeout(250);
+await page.locator('#main button[title*="find everything"]', { hasText: 'JS2' }).filter({ hasText: /Btn 4(?!\d)/ }).first().click();
+await page.waitForTimeout(300);
+check((await search.inputValue()) === 'key:js2_button4', `clicking a JS2 Btn 4 chip searches the exact input (${await search.inputValue()})`);
+let texts = await rows.allInnerTexts();
+check(texts.length > 0 && texts.every((x) => /JS2\s*Btn 4(?!\d)/.test(x)), `every result has js2_button4 (${texts.length} rows)`);
+check(!texts.some((x) => /JS1\s*Btn 4(?!\d)/.test(x) && !/JS2\s*Btn 4(?!\d)/.test(x)), 'js1_button4 actions are not included');
+await search.fill('js1 btn4');
+await page.waitForTimeout(300);
+texts = await rows.allInnerTexts();
+check(texts.length > 0 && texts.every((x) => /JS1\s*Btn 4(?!\d)/.test(x)), `typed "js1 btn4" is exact (${texts.length} rows)`);
+await search.fill('');
+
+// ===================== controllers panel + live input tester =====================
+console.log('\ncontrollers & input tester');
+await page.getByRole('button', { name: /🕹 Controllers/ }).first().click();
+const panel = page.getByTestId('controllers-panel');
+check(await panel.isVisible(), 'controllers panel opens from the header');
+check(await page.getByTestId('tester-empty').isVisible(), 'no devices yet: "Press any button on your controller to wake it up"');
+check((await page.getByTestId('profile-devices').innerText()).includes('VKBsim Gladiator EVO L'), 'devices declared in the imported profile are listed');
+await page.screenshot({ path: shots + '13-controllers-wake-prompt.png' });
+await page.evaluate(() => window.__btn(1, 2, true)); // the waking press
+await page.waitForTimeout(120);
+await page.evaluate(() => window.__btn(1, 2, false));
+await page.waitForTimeout(500);
+check(await page.getByTestId('device-row').count() === 3, 'all three controllers appear after one button press (no gamepadconnected event)');
+const srcs = await page.getByTestId('device-source').allInnerTexts();
+log('   sources:', srcs.join(' | '));
+check(srcs.filter((x) => x.includes('USB id')).length === 2, 'both VKB sticks matched to the profile by USB id');
+check((await page.getByTestId('profile-devices').innerText()).includes('↔ VKBsim Gladiator EVO R'), 'profile js1 shows the browser device mapped to it');
+const rCard = page.getByTestId('tester-device').filter({ hasText: 'EVO R' });
+await page.evaluate(() => window.__btn(1, 11, true));
+await page.waitForTimeout(250);
+check((await rCard.getByTestId('tester-last').innerText()).includes('js1_button12'), 'tester shows the SC input for a press (js1_button12)');
+await page.evaluate(() => { window.__axis(1, 9, -1); window.__axis(2, 2, 0.4); window.__axis(1, 0, 0.6); });
+await page.waitForTimeout(250);
+await rCard.scrollIntoViewIfNeeded();
+await page.screenshot({ path: shots + '14-input-tester.png' });
+await page.evaluate(() => { window.__btn(1, 11, false); window.__axis(1, 0, 0); });
+await page.waitForTimeout(150);
+check((await rCard.getByTestId('tester-last').innerText()).includes('js1_hat1_up'), 'tester shows hat input (js1_hat1_up)');
+await page.evaluate(() => { window.__axis(1, 9, 9 / 7); window.__axis(2, 2, -1); });
+const lRow = page.locator('[data-testid=device-row][data-device$="EVO L"]');
+await lRow.getByLabel('Game instance').selectOption('3');
+await page.waitForTimeout(400);
+check((await lRow.getByTestId('device-source').innerText()).includes('set by you'), 'instance can be overridden (js3, "set by you")');
+await panel.evaluate((el) => el.scrollTo(0, 0));
+await page.screenshot({ path: shots + '15-controllers-panel.png' });
+await lRow.getByRole('button', { name: /automatic/ }).click();
+await page.waitForTimeout(400);
+check((await lRow.getByLabel('Game instance').inputValue()) === '2', 'reset to automatic restores the profile match (js2)');
+await panel.getByRole('button', { name: '✕' }).first().click();
 
 // ===================== editing (starting from the game defaults) =====================
 console.log('\nbinding editor');
@@ -158,6 +225,20 @@ await search.fill('quantum');
 await page.waitForTimeout(300);
 await rows.first().hover();
 await page.screenshot({ path: shots + '12-edit-mode-list.png' });
+
+// 5a. joystick woken by the press itself: controllers hidden again (like a fresh page), the first press must count
+await page.evaluate(() => window.__hide());
+row = await rowFor('yaw', 'Yaw');
+await addIn(row, 'joystick');
+await page.waitForTimeout(400);
+check((await dialog.innerText()).includes('No joystick detected yet'), 'capture dialog prompts to wake the controller');
+await page.getByTestId('toggle-tester').click();
+await page.evaluate(() => window.__btn(2, 7, true));
+await page.waitForTimeout(150);
+await page.evaluate(() => window.__btn(2, 7, false));
+await settle();
+row = await rowFor('yaw', 'Yaw');
+check(/JS2\s*Btn 8/.test(await row.innerText()), 'the press that woke the stick was captured (js2_button8)');
 
 // 5. joystick: axis on the second stick, hat on the first
 row = await rowFor('yaw', 'Yaw');

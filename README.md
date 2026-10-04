@@ -14,7 +14,9 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
 - **Organized by category:** flight, combat/targeting, mining/salvage/scanning, turrets, on-foot, EVA, ground vehicles,
   social/UI, camera. Under each category you get the game's own action-map groups.
 - **Instant search** across labels, internal names, categories and inputs. Examples: `quantum`, `qntm` (fuzzy), `lalt+n`, `alt+1`,
-  `key:f`, `mouse2`/`rmb`, `btn12`, `hat1`, `wheel`.
+  `key:f`, `mouse2`/`rmb`, `btn12`, `hat1`, `wheel`. Device-scoped inputs are exact: `js1_button5` (not js2, not button50),
+  `js2 btn5`, `js2:b5`, `kb1_lalt+n` (not ralt+n or plain n), `mo1_mouse2`, `gp1_a`; `js2` alone lists everything on js2.
+  Clicking any binding filters by that exact input (device + instance + full combo).
 - **Filters:** device (keyboard / mouse / joystick / gamepad; double-click for solo), show unbound, customized only,
   conflicts only, internal actions.
 - **Conflict finder** flags the same physical input on different actions that are live in overlapping contexts with clashing
@@ -28,8 +30,10 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
   - **Gamepad** (standard-mapping pads): `a b x y shoulderl/r triggerl/r_btn back start thumbl/r dpad_*`, sticks as axes (`thumblx`) or
     directions (`thumbl_up`), triggers as button or axis, chords (`shoulderl+a`).
   - **Joystick / HOTAS** (non-standard pads): `jsN_buttonM` (1-based), axes `x y z rotx roty rotz slider1 slider2`, hats `hat1_up…`.
-    Axes count only when they move well away from their resting value, so parked throttles work. Each controller can be
-    assigned its game instance (js1, js2…) and type. A manual entry field lets you type or correct any input name.
+    Axes count only when they move well away from their resting value, so parked throttles work. A manual entry field lets
+    you type or correct any input name. Capture copes with real browser behaviour: controllers hidden until a button is pressed
+    (the press that wakes the device is counted on release), fresh `getGamepads()` snapshots polled every frame, no
+    `gamepadconnected` event, all-zero first reports, toggle switches that stay on, and hats resting outside [-1, 1].
   - Activation mode and multi-tap per binding; existing modes are kept.
   - A conflict check runs on capture (same context and activation-mode rules as the Conflicts view), with **Replace** (unbind it elsewhere),
     **Keep both** or **Listen again**.
@@ -42,6 +46,11 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
   Only bindings that differ from the defaults are written. Cleared defaults become an empty input (`kb1_ `). Device `<options>` blocks
   from imported files (curves, inverts, deadzones) are kept, and joystick names and product GUIDs are added for controllers seen in the browser.
   Re-exporting a real game-written layout reproduces it byte for byte (see tests).
+- **🕹 Controllers & input tester** (header button): the devices declared in the active profile (`<options type="joystick"
+  instance=… Product=…>`), the devices the browser detects (index, id, mapping, button/axis counts, USB ids), and which game instance
+  (js1…jsN / gp1) each browser device is. Devices are prefilled by matching the profile's USB vendor/product ids, then names, then
+  browser order; you can override and reset. A live tester shows every button and axis and the SC input each press would be captured as,
+  plus environment checks (Gamepad API, secure context, permissions policy, focus) and a "press any button to wake it up" prompt.
 - **Persistence:** profiles and edits are stored in `localStorage`. You can keep several profiles and switch between them. Nothing is uploaded.
 
 ## Develop
@@ -87,9 +96,11 @@ with actions sorted by name.
 ## Known limitations
 - Controllers are read through the browser's Gamepad API. Button and axis numbering (especially axes and hats on HOTAS gear) can
   differ from the game's DirectInput order: Chrome on Windows usually matches (X, Y, Z, Rx, Ry, Rz, Slider, Dial; hat on axis 9),
-  but Firefox, macOS and Linux may not. Check in game and use manual entry to correct. Only one hat per device is recognized
-  (when the browser exposes it as an axis), and diagonals are ignored.
-- The joystick instance (js1/js2) is whatever you assign. The game numbers devices in Windows order
+  but Firefox, macOS and Linux may not. Check in game and use manual entry to correct. Hats are recognized when the browser exposes
+  them as an axis resting outside [-1, 1] (Chrome and current Firefox on Windows); diagonals are ignored.
+- Chromium browsers (Chrome, Edge, Opera) expose at most **32 buttons and 16 axes** per device. Buttons above 32 (common on VKB/Virpil
+  configurations) are invisible to the page: type them in manual entry (`js1_button40`).
+- The joystick instance (js1/js2) comes from the profile match or your choice in 🕹 Controllers. The game numbers devices in Windows order
   (`i_DumpDeviceInformation` lists them; `pp_resortdevices joystick 1 2` swaps them).
 - Browser-reserved shortcuts (Ctrl+W/T/N, some OS keys) can't be captured. Type them in manual entry instead.
 - Exported files are tested against the format of real game-written files, not loaded into a running game client.
