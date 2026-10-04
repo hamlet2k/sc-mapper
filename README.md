@@ -65,11 +65,12 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
   actions bound to it in the current profile (amber = customized, red = conflict). Callouts light up blue while you press or move the control.
   Clicking a callout opens a panel with the bound actions (Edit, Unbind, show in list) and "bind an action to this input". Bound inputs with
   no callout are listed beside the picture. **PNG** export and **Print** (print CSS shows only the device sheet).
-- **Device templates**: the default stick (grip + base) and default throttle (twin split levers + control panel) are original holographic
-  wireframe drawings generated from small 3D models (`scripts/gen-default-stick.mjs`, `scripts/gen-default-throttle.mjs`; no vendor artwork),
-  with callouts for every control and glow regions that light the control on the picture when it is pressed or moved. A simple SVG
-  gamepad template is also built in (the earlier *classic* stick/throttle templates were removed; a device that had one picked now uses the
-  default stick/throttle). ✎ *Customize a copy*
+- **Device templates**: the default stick (grip + base), default throttle (twin split levers + control panel) and default gamepad (modern
+  dual-stick layout: sticks with press, D-pad, A/B/X/Y, bumpers, triggers, View/Menu) are original holographic wireframe drawings generated
+  from small 3D models (`scripts/gen-default-stick.mjs`, `scripts/gen-default-throttle.mjs`, `scripts/gen-default-gamepad.mjs`; no vendor
+  artwork or logos), with callouts for every control and glow regions that light the control on the picture when it is pressed or moved
+  (per key on the throttle keypad, per direction on the D-pad). The earlier *classic* stick/throttle templates were removed; a device that had
+  one picked now uses the default stick/throttle. ✎ *Customize a copy*
   or ＋ *New template* opens the editor: upload a photo/render of your device (PNG/JPEG/WebP/SVG; scaled to at most 1600 px and re-encoded
   client-side, max 2.5 MB, stored in IndexedDB with a localStorage fallback) or use a blank canvas; add callouts by clicking the picture or with
   **🎯 Press to place** (press each control and a callout for that input appears: a hat push adds the whole hat); drag the anchor and the label
