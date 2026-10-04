@@ -7,6 +7,7 @@ import { ConflictsView } from './components/ConflictsView';
 import { ControllersPanel } from './components/ControllersPanel';
 import { ExportDialog } from './components/ExportDialog';
 import { KeyboardView } from './components/KeyboardView';
+import { DeviceView } from './components/DeviceView';
 import { Sidebar, type MapCount } from './components/Sidebar';
 import { findConflicts } from './lib/conflicts';
 import { GROUPS } from './lib/groups';
@@ -35,7 +36,7 @@ const DEVICE_META: Record<Device, { label: string; icon: string }> = {
   joystick: { label: 'Joystick / HOTAS', icon: '🕹' },
   gamepad: { label: 'Gamepad', icon: '🎮' },
 };
-type View = 'list' | 'keyboard' | 'conflicts';
+type View = 'list' | 'keyboard' | 'conflicts' | 'devices';
 
 export default function App() {
   const [store, setStore] = useState<Persisted>(() => load());
@@ -72,7 +73,7 @@ export default function App() {
   const [highlightOn, setHighlightOn] = useState(() => localStorage.getItem('sc-mapper:highlight') !== '0');
   const [scrollOn, setScrollOn] = useState(() => localStorage.getItem('sc-mapper:highlight-scroll') !== '0');
   useEffect(() => { localStorage.setItem('sc-mapper:highlight', highlightOn ? '1' : '0'); localStorage.setItem('sc-mapper:highlight-scroll', scrollOn ? '1' : '0'); }, [highlightOn, scrollOn]);
-  const { pads, update: assignPad, reset: resetPads, describe: describePads } = usePads(!!capture || exportOpen || !!devicesOpen || pressMode, profile?.devices);
+  const { pads, update: assignPad, reset: resetPads, describe: describePads } = usePads(!!capture || exportOpen || !!devicesOpen || pressMode || view === 'devices', profile?.devices);
   const storeRef = useRef(store);
   const undoRef = useRef(undo);
   useLayoutEffect(() => { storeRef.current = store; undoRef.current = undo; }, [store, undo]);
@@ -240,6 +241,13 @@ export default function App() {
     setGroupFor(row, g, effectiveGroup(IDX.get(row.id), rebindsNow(row), g).filter((r) => keyOf(r) !== keyOf(b)), `Unbind ${comboLabel(b.input, b.slot)} from ${row.label}`);
   }, [setGroupFor]); // eslint-disable-line react-hooks/exhaustive-deps
   const onEditRow = useCallback((row: Row) => setEditorId(row.id), []);
+  const onBindInput = useCallback((row: Row, slot: Rebind['slot'], instance: number, input: string) => {
+    const g = groupOfSlot(slot);
+    const eff = effectiveGroup(IDX.get(row.id), rebindsNow(row), g);
+    if (eff.some((r) => r.slot === slot && r.instance === instance && r.input === input)) return;
+    setGroupFor(row, g, [...eff, { slot, instance, input }], `Bind ${comboLabel(input, slot)} to ${row.label}`);
+    setToast({ kind: 'ok', text: `Bound ${slot}${instance}_${input} to ${row.label}` });
+  }, [setGroupFor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const commitCapture = (r: Rebind, removeFrom: CaptureConflict[]) => {
     if (!capture) return;
@@ -297,7 +305,7 @@ export default function App() {
   usePadHits(pressMode, describePads, onPressHit);
   useKeyHits(pressMode, 'capture', onPressHit, stopPress);
   // ---- live highlight: when nothing else is listening, pressing an input flashes its bindings
-  const passiveOn = highlightOn && !query && !chip && !pressMode && !editMode && !capture && !editorId && !exportOpen && !devicesOpen && !help;
+  const passiveOn = view !== 'devices' && highlightOn && !query && !chip && !pressMode && !editMode && !capture && !editorId && !exportOpen && !devicesOpen && !help;
   const onFlash = useCallback((h: PressHit) => {
     setFlash(null);
     requestAnimationFrame(() => setFlash({ hit: h, keys: hitKeys(h), at: Date.now() }));
@@ -485,10 +493,10 @@ export default function App() {
             {highlightOn && <Toggle on={scrollOn} set={setScrollOn} label="scroll to it" />}
           </div>
           <div className="ml-auto flex rounded-md border border-edge p-0.5">
-            {(['list', 'keyboard', 'conflicts'] as View[]).map((v) => (
+            {(['list', 'keyboard', 'devices', 'conflicts'] as View[]).map((v) => (
               <button key={v} type="button" onClick={() => setView(v)}
                 className={`rounded px-3 py-1 font-display text-sm font-semibold uppercase tracking-wider transition ${view === v ? 'bg-hud/20 text-hud2' : 'text-slate-400 hover:text-slate-200'}`}>
-                {v === 'list' ? '☰ List' : v === 'keyboard' ? '⌨ Keyboard' : `⚠ Conflicts${visibleConflicts.length ? ` ${visibleConflicts.length}` : ''}`}
+                {v === 'list' ? '☰ List' : v === 'keyboard' ? '⌨ Keyboard' : v === 'devices' ? '🕹 Devices' : `⚠ Conflicts${visibleConflicts.length ? ` ${visibleConflicts.length}` : ''}`}
               </button>
             ))}
           </div>
@@ -574,6 +582,8 @@ export default function App() {
           )}
           {view === 'keyboard' && <KeyboardView rows={visible} conflictRows={conflicts.byRow} onPick={pickKey}
             flash={flash && (flash.hit.slot === 'kb' || flash.hit.slot === 'mo') ? { combo: flash.hit.inputs[0], at: flash.at } : null} />}
+          {view === 'devices' && <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads} profileDevices={profile?.devices ?? []}
+            onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })} />}
           {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} setIncludeDefault={setIncludeDefaultOverlaps} hasProfile={!!profile} />}
         </main>
       </div>
