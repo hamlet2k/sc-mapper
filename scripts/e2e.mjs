@@ -1,7 +1,7 @@
 // End-to-end test + screenshots. Usage: node scripts/e2e.mjs [url]
 // Controllers are simulated by replacing navigator.getGamepads() (a headless browser has no real HID devices).
 import { chromium } from 'playwright';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 const url = process.argv[2] ?? 'http://localhost:4173/';
 const shots = new URL('../screenshots/', import.meta.url).pathname;
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
@@ -190,6 +190,34 @@ await page.evaluate(() => window.__axis(1, 0, 0.6));
 await page.waitForTimeout(300);
 check(await ge.getByTestId('curve-live').count() === 1, 'live axis position drawn on the curve');
 await ds.screenshot({ path: shots + '20-curve-editor.png' });
+// sliders + precise fields, clamped to the documented ranges, with a live axis bar per axis
+console.log('\naxis sliders');
+check((await ds.getByLabel('x deadzone slider', { exact: true }).inputValue()) === '0.05', 'deadzone slider follows the typed value (0.05)');
+check((await ds.getByLabel('x deadzone slider', { exact: true }).getAttribute('max')) === '0.5' && (await ds.getByLabel('x saturation slider', { exact: true }).getAttribute('min')) === '0.5', 'slider limits: deadzone 0–0.5, saturation 0.5–1');
+check((await ds.getByLabel('slider2 deadzone slider', { exact: true }).getAttribute('data-unset')) === '1', 'unset value shows as greyed-out default');
+await ds.getByLabel('y deadzone slider', { exact: true }).fill('0.1');
+await page.waitForTimeout(150);
+check((await ds.getByLabel('deadzone y').inputValue()) === '0.1', 'moving the y deadzone slider fills the number field (0.1)');
+check((await ds.locator('tr[data-axis="y"]').innerText()).includes('≈10.1%'), 'in-game percentage shown (0.1 / 0.0099 ≈ 10.1 %)');
+await ds.getByLabel('deadzone y').fill('0.9');
+await ds.getByLabel('deadzone y').press('Enter');
+await page.waitForTimeout(150);
+check((await ds.getByLabel('deadzone y').inputValue()) === '0.5', 'typed 0.9 clamped to the 0.5 maximum');
+const bar = ds.locator('tr[data-axis="x"] [data-testid=axis-bar]');
+check((await bar.getAttribute('data-raw')) === '0.600' && Number(await bar.getAttribute('data-out')) > 0.6, `live axis bar: raw 0.6 -> output ${await bar.getAttribute('data-out')} after deadzone/saturation`);
+await ds.locator('tr[data-axis="y"] td').first().click();
+check((await ge.getByLabel('Preview axis').inputValue()) === 'y', 'clicking an axis row previews it on the curve');
+check((await ge.getByTestId('curve-points').locator('input[type=range]').count()) >= 3, 'curve points have output sliders');
+const ptSlider = ge.getByLabel('point 2 out slider');
+await ptSlider.fill('0.05');
+await page.waitForTimeout(150);
+check((await ge.getByLabel('point 2 out', { exact: true }).inputValue()) === '0.05', 'curve point slider updates the point (and the chart)');
+await ds.getByTestId('ranges-info').locator('summary').click();
+check(/conservative/.test(await ds.getByTestId('ranges-info').innerText()) && /0\.0099/.test(await ds.getByTestId('ranges-info').innerText()), 'value ranges panel lists confirmed vs conservative limits and the 0.0099 grid');
+await ge.getByLabel('Preview axis').selectOption('x');
+await page.waitForTimeout(150);
+await ds.locator('tr[data-axis="x"]').scrollIntoViewIfNeeded();
+await ds.screenshot({ path: shots + '23-axis-sliders.png' });
 await page.evaluate(() => window.__axis(1, 0, 0));
 await panel.getByRole('button', { name: '✕' }).first().click();
 await page.getByRole('button', { name: /⇩ Export/ }).click();
@@ -202,6 +230,7 @@ await page.getByRole('button', { name: /⇩ Export/ }).click();
   check(/<flight_move_yaw>\s*<nonlinearity_curve>\s*(<point in="[\d.]+" out="[\d.]+"\/>\s*){3,}<\/nonlinearity_curve>\s*<\/flight_move_yaw>/.test(x), 'export: flight_move_yaw custom <nonlinearity_curve> points');
   check(/<flight_move_strafe_vertical invert="1">\s*<nonlinearity_curve>/.test(x), 'export: untouched js2 curve kept');
   check((x.match(/<option input="x" saturation="0.94050002"\/>/g) ?? []).length === 2 && x.includes('<option input="x" deadzone="0.05"/>'), 'export: deadzone added, saturation still written twice');
+  check(x.includes('<option input="y" deadzone="0.5"/>'), 'export: slider-set y deadzone (clamped 0.5) written');
   await page.keyboard.press('Escape');
   await page.getByTestId('export-dialog').click({ position: { x: 5, y: 5 } }).catch(() => {});
   await page.waitForTimeout(150);
@@ -482,6 +511,162 @@ log('re-imported:', after, '| edited:', before);
 check(after.split('—')[1]?.trim() === before.split('—')[1]?.trim(), 're-imported export has the same number of rebinds');
 
 
+// ===================== devices view =====================
+console.log('\ndevices view');
+await search.fill('');
+{ // back to the sample profile (28 rebinds, with customized and conflicting joystick bindings)
+  const o = (await page.locator('#profile option').allInnerTexts()).find((x) => x.startsWith('My bindings'));
+  await page.locator('#profile').selectOption({ label: o });
+  await page.waitForTimeout(300);
+}
+await page.getByRole('button', { name: /🕹 Devices/ }).click();
+const dv = page.getByTestId('device-view');
+await page.waitForTimeout(600);
+check(await dv.isVisible(), 'devices view opens');
+const dsel = dv.getByTestId('device-select');
+const dopts = await dsel.locator('option').allInnerTexts();
+check(dopts.some((o) => /^JS1 · VKBsim Gladiator EVO R/.test(o)) && dopts.some((o) => /^JS2 · VKBsim Gladiator EVO L/.test(o)) && dopts.some((o) => /^GP1/.test(o)), `device picker lists the connected devices with their game numbers (${dopts.join(' | ')})`);
+await dsel.selectOption({ label: dopts.find((o) => /^JS1 · /.test(o)) });
+await page.waitForTimeout(300);
+check(/Generic stick/.test(await dv.getByTestId('device-status').innerText()), 'no template linked yet: generic stick');
+const b1 = dv.locator('[data-callout="b1"]');
+check((await b1.innerText()).includes('Engage Quantum Drive'), 'trigger callout shows the js1_button1 action of the profile');
+check((await dv.locator('[data-callout="b5"]').getAttribute('data-tone')) === 'custom' && (await dv.locator('[data-callout="b5"]').innerText()).includes('Cycle Master Mode'), 'customized js1_button5 (pinky) coloured as customized');
+check((await dv.locator('[data-callout="b4"]').getAttribute('data-tone')) === 'conflict', 'conflicting js1_button4 coloured as conflict');
+check(/Auto Targeting/.test(await dv.locator('[data-callout="hat1"] [data-dir="hat1_up"]').getAttribute('title')), 'hat drawn as a 5-way cross with an action per direction');
+await page.evaluate(() => window.__btn(1, 0, true));
+await page.waitForTimeout(250);
+check((await b1.getAttribute('data-active')) === '1', 'pressing button 1 lights its callout');
+await page.evaluate(() => { window.__btn(1, 0, false); window.__axis(1, 9, -1); window.__axis(1, 0, 0.8); });
+await page.waitForTimeout(250);
+check((await b1.getAttribute('data-active')) === null, 'released: callout back to normal');
+check((await dv.locator('[data-callout="hat1"] [data-dir="hat1_up"]').getAttribute('data-active')) === '1', 'hat up lights the up cell of the hat cross');
+check((await dv.locator('[data-callout="xy"]').getAttribute('data-active')) === '1' && (await dv.locator('[data-axis-live="x"]').getAttribute('data-value')) === '0.80', 'moving X lights the stick callout and shows the live value');
+await page.screenshot({ path: shots + '24-device-view.png' });
+await page.evaluate(() => { window.__axis(1, 9, 9 / 7); window.__axis(1, 0, 0); });
+{ const ov = await dv.getByTestId('device-overflow').innerText(); check((await dv.locator('[data-overflow="button12"]').count()) === 1 && /Autoland/.test(ov), `bound inputs without a callout listed beside the picture (${ov.replace(/\n/g, ' ')})`); }
+await b1.click();
+const ip = dv.getByTestId('input-panel');
+check(await ip.isVisible() && (await ip.innerText()).includes('js1_button1'), 'clicking a callout opens the binding panel for js1_button1');
+await ip.getByRole('button', { name: 'Edit' }).first().click();
+check(await page.getByTestId('action-editor').isVisible(), 'Edit opens the action editor');
+await page.getByTestId('action-editor').getByRole('button', { name: '✕' }).first().click();
+await page.waitForTimeout(150);
+await dv.locator('[data-callout="b6"]').click();
+await ip.getByLabel('Search actions to bind').fill('landing system');
+await ip.getByTestId('bind-results').locator('button').first().click();
+await page.waitForTimeout(300);
+check((await dv.locator('[data-callout="b6"]').innerText()).includes('Landing System') && (await dv.locator('[data-callout="b6"]').getAttribute('data-tone')) === 'custom', 'binding an action from the panel puts it on js1_button6');
+{
+  const [d] = await Promise.all([page.waitForEvent('download'), dv.getByTestId('device-png').click()]);
+  const f = '/tmp/' + d.suggestedFilename();
+  await d.saveAs(f);
+  const buf = readFileSync(f);
+  check(d.suggestedFilename().endsWith('.png') && buf.subarray(1, 4).toString() === 'PNG' && buf.length > 20000, `PNG export of the device with its mappings (${d.suggestedFilename()}, ${(buf.length / 1024) | 0} KB)`);
+}
+
+// ===================== template editor =====================
+console.log('\ntemplate editor');
+await dv.getByTestId('template-new').click();
+const te = page.getByTestId('template-editor');
+const tplCount = () => te.getByTestId('tpl-callouts').locator('li').count();
+check(await te.isVisible() && (await tplCount()) === 0, 'template editor opens with a blank canvas');
+check(/matches VKBsim Gladiator EVO R/.test(await te.getByTestId('tpl-link').innerText()), 'new template pre-linked to the selected device (USB 231D:0200)');
+await te.getByTestId('tpl-press').click();
+await page.waitForTimeout(300);
+const tap = async (fn, off) => { await page.evaluate(fn); await page.waitForTimeout(200); await page.evaluate(off); await page.waitForTimeout(200); };
+await tap(() => window.__btn(1, 2, true), () => window.__btn(1, 2, false));
+await tap(() => window.__axis(1, 9, -3 / 7), () => window.__axis(1, 9, 9 / 7));
+await tap(() => window.__axis(1, 2, 0.9), () => window.__axis(1, 2, 0));
+check((await tplCount()) === 3, `press to place: button 3, hat 1 and the Z axis added (${await tplCount()})`);
+check(/Hat 1/.test(await te.getByTestId('tpl-callouts').innerText()) && /hat · H1↑ H1→ H1↓ H1←/.test(await te.getByTestId('tpl-callouts').innerText()), 'pushing the hat right adds a whole 5-way hat cluster');
+await tap(() => window.__btn(1, 2, true), () => window.__btn(1, 2, false));
+check((await tplCount()) === 3, 'pressing a placed control selects it instead of adding a duplicate');
+await te.getByTestId('tpl-press').click();
+await te.getByTestId('device-canvas').click({ position: { x: 300, y: 200 } });
+await page.waitForTimeout(150);
+check((await tplCount()) === 4 && (await te.getByTestId('callout-props').isVisible()), 'clicking the picture adds a callout (next free button)');
+await te.getByLabel('Callout name').fill('Fire');
+await page.waitForTimeout(100);
+const lastBox = te.locator('[data-callout]').last();
+check((await lastBox.innerText()).includes('Fire'), 'callout renamed');
+{
+  const anchor = te.locator('[data-anchor]').last();
+  const s0 = await anchor.getAttribute('style');
+  const ab = await anchor.boundingBox();
+  await page.mouse.move(ab.x + ab.width / 2, ab.y + ab.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(ab.x + 120, ab.y + 60, { steps: 6 });
+  await page.mouse.up();
+  const s1 = await anchor.getAttribute('style');
+  const lb = await lastBox.boundingBox();
+  const l0 = await lastBox.getAttribute('style');
+  await page.mouse.move(lb.x + lb.width / 2, lb.y + lb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(lb.x + lb.width / 2 + 40, lb.y + 140, { steps: 6 });
+  await page.mouse.up();
+  const s2 = await anchor.getAttribute('style'), l1 = await lastBox.getAttribute('style');
+  check(s0 !== s1 && s2 === s1 && l1 !== l0, `anchor and label dragged separately (${s0} -> ${s1} -> ${s2}; label ${l0} -> ${l1})`);
+}
+await te.getByLabel('Callout type', { exact: true }).selectOption('encoder');
+check((await te.getByTestId('callout-props').innerText()).includes('Counter-clockwise'), 'callout type changed to encoder pair (two inputs)');
+await te.getByTestId('tpl-undo').click();
+check(!(await te.getByTestId('callout-props').innerText()).includes('Counter-clockwise'), 'undo restores the button type');
+await te.getByTestId('callout-delete').click();
+check((await tplCount()) === 3, 'callout deleted');
+await page.keyboard.press('Control+z');
+await page.waitForTimeout(100);
+check((await tplCount()) === 4, 'Ctrl+Z brings it back');
+{
+  const b64 = await page.evaluate(() => {
+    // a plain drawing of a stick (2400 x 1500, scaled down to 1600 px on upload)
+    const c = document.createElement('canvas'); c.width = 2400; c.height = 1500;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(1200, 700, 100, 1200, 750, 1300); gr.addColorStop(0, '#1d2f44'); gr.addColorStop(1, '#070d16');
+    g.fillStyle = gr; g.fillRect(0, 0, 2400, 1500);
+    g.fillStyle = '#5d6b78'; g.strokeStyle = '#9fb2c4'; g.lineWidth = 8;
+    g.beginPath(); g.roundRect(820, 1180, 760, 220, 50); g.fill(); g.stroke();
+    g.beginPath(); g.roundRect(1150, 900, 100, 300, 20); g.fill(); g.stroke();
+    g.beginPath(); g.ellipse(1200, 560, 240, 380, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillStyle = '#26323e';
+    for (const [x, y, r] of [[1110, 330, 46], [1290, 360, 34], [1200, 470, 30], [1080, 600, 28], [1320, 600, 28], [960, 1290, 34], [1440, 1290, 34]]) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke(); }
+    return c.toDataURL('image/png').split(',')[1];
+  });
+  await te.getByTestId('tpl-upload-file').setInputFiles({ name: 'my-stick.png', mimeType: 'image/png', buffer: Buffer.from(b64, 'base64') });
+  await page.waitForTimeout(800);
+  const toastTxt = await page.locator('.fixed.bottom-5.right-5').innerText().catch(() => '');
+  const src = await te.locator('[data-testid=device-canvas] img').getAttribute('src').catch(() => '');
+  check(/Image loaded \(1600×1000/.test(toastTxt) && /^data:image\/(webp|jpeg|png)/.test(src ?? ''), `uploaded 2400×1500 PNG resized and stored (${toastTxt.split('\n')[0]})`);
+}
+await page.screenshot({ path: shots + '25-template-editor.png' });
+await te.getByTestId('tpl-save').click();
+await page.waitForTimeout(500);
+check(await te.count() === 0, 'template saved, editor closed');
+check(/linked to this device \(USB 231D:0200\)/.test(await dv.getByTestId('device-status').innerText()), 'saved template auto-applies to the EVO R by USB id');
+check((await dv.locator('[data-callout]').count()) === 4 && (await dv.innerText()).includes('Decoy'), 'device view uses the new template (B3 shows its Decoy binding)');
+let exported;
+{
+  const [d] = await Promise.all([page.waitForEvent('download'), dv.getByTestId('template-export').click()]);
+  const f = '/tmp/' + d.suggestedFilename();
+  await d.saveAs(f);
+  exported = JSON.parse(readFileSync(f, 'utf8'));
+  const t0 = exported.templates?.[0];
+  check(exported.format === 'sc-mapper-device-templates' && /^data:image\//.test(t0?.image) && t0.callouts.length === 4 && t0.match[0].vendor === '231D', `template exported as JSON with the image embedded (${d.suggestedFilename()}, ${(readFileSync(f).length / 1024) | 0} KB)`);
+}
+writeFileSync('/tmp/shared-template.json', JSON.stringify({ ...exported, templates: [{ ...exported.templates[0], id: 'shared-1', name: 'Shared stick', match: [{ name: 'Gladiator EVO L' }] }] }));
+await dv.getByTestId('template-import-file').setInputFiles('/tmp/shared-template.json');
+await page.waitForTimeout(500);
+await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS2 · /.test(o)) });
+await page.waitForTimeout(300);
+check(/Shared stick/.test(await dv.getByTestId('device-status').innerText()) && /name “Gladiator EVO L”/.test(await dv.getByTestId('device-status').innerText()), 'imported template auto-applies to the EVO L by name');
+await page.reload({ waitUntil: 'networkidle' });
+await page.getByRole('button', { name: /🕹 Devices/ }).click();
+await page.waitForTimeout(500);
+await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS1 · /.test(o)) });
+await page.waitForTimeout(300);
+check(/linked to this device/.test(await dv.getByTestId('device-status').innerText()) && (await dv.locator('[data-callout]').count()) === 4, 'templates survive a reload (IndexedDB) and still match the profile device');
+await page.getByRole('button', { name: /☰ List/ }).click();
+
 // ===================== Firefox: 15 controllers, identical MOZA bases, >128 buttons =====================
 // Firefox exposes every device and all buttons; ids look like "346e-1002-MOZA AB6 FFB Base". Device list from a real Firefox setup.
 console.log('\nFirefox with 15 controllers');
@@ -539,6 +724,20 @@ await fp.waitForTimeout(300);
 const fchip = await fp.getByTestId('press-chip').innerText().catch(() => '');
 check(fchip.includes(`js${mozaInst}_button133`), `press-to-search: second MOZA button 133 -> js${mozaInst}_button133 (${fchip})`);
 check(/128/.test(await fp.getByTestId('press-chip').getAttribute('title')), 'chip warns that the game may not see buttons above 128');
+// devices view: a template linked to the 133-button MOZA base only
+await fp.getByRole('button', { name: /🕹 Devices/ }).click();
+await fp.waitForTimeout(400);
+writeFileSync('/tmp/moza133.json', JSON.stringify({ format: 'sc-mapper-device-templates', version: 1, templates: [{ id: 'moza-133', name: 'MOZA base (133)', slot: 'js', aspect: 1.6, match: [{ vendor: '346E', product: '1002', buttons: 133 }], callouts: [{ id: 'c', kind: 'button', inputs: ['button133'], anchor: { x: 0.5, y: 0.5 }, box: { x: 0.8, y: 0.2 } }] }] }));
+await fp.getByTestId('template-import-file').setInputFiles('/tmp/moza133.json');
+await fp.waitForTimeout(400);
+{
+  const fsel = fp.getByTestId('device-select');
+  const fopts = await fsel.locator('option').allInnerTexts();
+  const st = async (label) => { await fsel.selectOption({ label }); await fp.waitForTimeout(250); return fp.getByTestId('device-status').innerText(); };
+  const s133 = await st(fopts.find((o) => o.includes('MOZA') && o.includes('133 buttons')));
+  const s128 = await st(fopts.find((o) => o.includes('MOZA') && o.includes('128 buttons')));
+  check(/MOZA base \(133\)/.test(s133) && /133 buttons/.test(s133) && !/MOZA base \(133\)/.test(s128), 'Firefox: template linked by USB id + 133 buttons applies to the second MOZA base only');
+}
 await ff.close();
 
 // persistence
