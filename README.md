@@ -17,6 +17,12 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
   `key:f`, `mouse2`/`rmb`, `btn12`, `hat1`, `wheel`. Device-scoped inputs are exact: `js1_button5` (not js2, not button50),
   `js2 btn5`, `js2:b5`, `kb1_lalt+n` (not ralt+n or plain n), `mo1_mouse2`, `gp1_a`; `js2` alone lists everything on js2.
   Clicking any binding filters by that exact input (device + instance + full combo).
+- **🎯 Find by pressing** (next to the search box): press a controller button, push a hat, move an axis, press a key (with modifiers)
+  or click/scroll the mouse pad, and the list shows every action bound to that exact input, using your current controller numbering
+  (🕹 Controllers). The input appears as a removable chip in the search box; typing refines within it. Backspace in an empty box or Esc removes it.
+- **Highlight on press**: when you're not searching, editing or in a dialog, pressing any input briefly highlights its bindings
+  (list rows and chips, and the key in the keyboard view) and shows a badge with the action count. "scroll to it" jumps to the first match;
+  both can be switched off. Keys typed into text fields are ignored.
 - **Filters:** device (keyboard / mouse / joystick / gamepad; double-click for solo), show unbound, customized only,
   conflicts only, internal actions.
 - **Conflict finder** flags the same physical input on different actions that are live in overlapping contexts with clashing
@@ -46,11 +52,20 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
   Only bindings that differ from the defaults are written. Cleared defaults become an empty input (`kb1_ `). Device `<options>` blocks
   from imported files (curves, inverts, deadzones) are kept, and joystick names and product GUIDs are added for controllers seen in the browser.
   Re-exporting a real game-written layout reproduces it byte for byte (see tests).
+- **📈 Axis settings & curves** (🕹 Controllers → *Axis settings & curves*, or the edit bar): per joystick number **js1–js8** (the game's
+  option tree declares 8 joystick instances; higher numbers can be bound but have no settings), every control group from the game's
+  `<optiontree type="joystick">` (Flight pitch/yaw/roll, strafe, throttle, turrets, FPS, EVA, vehicles…) with **invert**, **exponent**
+  or a **custom curve** (draggable points, double-click to add, a points table), plus per-axis **deadzone** and **saturation** for the device
+  model. A live chart shows the curve against the game default and, for a connected device, the axis position. Settings are read from the
+  imported file and written back on export; everything the app doesn't edit is kept as it was.
 - **🕹 Controllers & input tester** (header button): the devices declared in the active profile (`<options type="joystick"
   instance=… Product=…>`), the devices the browser detects (index, id, mapping, button/axis counts, USB ids), and which game instance
   (js1…jsN / gp1) each browser device is. Devices are prefilled by matching the profile's USB vendor/product ids, then names, then
   browser order; you can override and reset. A live tester shows every button and axis and the SC input each press would be captured as,
   plus environment checks (Gamepad API, secure context, permissions policy, focus) and a "press any button to wake it up" prompt.
+  Identical devices (same USB vendor/product id, e.g. two "MOZA AB6 FFB Base" interfaces) are told apart by their button/axis counts
+  ("1 of 2 · 128 buttons") and flagged, since the browser can't know which one Windows numbers first. Buttons above 128 are shown
+  (outlined red) with a warning.
 - **Persistence:** profiles and edits are stored in `localStorage`. You can keep several profiles and switch between them. Nothing is uploaded.
 
 ## Develop
@@ -61,6 +76,7 @@ npm run build        # type-check + production build to dist/
 npm run preview      # serve dist/ on http://localhost:4173
 npm test             # unit tests (input mapping, editing, export round-trips) + parse/merge/search/conflict self-test
 npm run test:unit -- path/to/layout_X_exported.xml   # also round-trip your own game-exported layouts
+npm run test:fixtures   # download pinned real game/community files and round-trip their device settings
 npm run test:e2e     # Playwright end-to-end test (simulated controllers) + screenshots/ (needs preview running + Chrome)
 ```
 
@@ -93,13 +109,47 @@ keyboard + mouse as one group, joystick as another and gamepad as a third. The e
 `UICategory` of every exported action map, then `deviceoptions`/`options`, `<modifiers />`, and action maps in defaultProfile order
 with actions sorted by name.
 
+### Device settings (curves, inversion, deadzone)
+Confirmed from the game's `defaultProfile.xml` (`<optiontree>` definitions), the layouts shipped in `Data/Libs/Config/Mappings/`
+and real game-written exports (see `scripts/fetch-fixtures.mjs` for the pinned files used in the round-trip tests):
+
+```xml
+<deviceoptions name=" VKBsim Gladiator EVO R    {0200231D-0000-0000-0000-504944564944}">
+ <option input="x" deadzone="0.015"/>
+ <option input="x" saturation="0.94"/>
+ <option input="x" saturation="0.94"/>        <!-- the game writes saturation lines twice -->
+</deviceoptions>
+<options type="joystick" instance="1" Product=" VKBsim Gladiator EVO R    {0200231D-0000-0000-0000-504944564944}">
+ <flight_move_pitch invert="1"/>
+ <flight_move_yaw exponent="1.5"/>
+ <flight_move_roll>
+  <nonlinearity_curve>
+   <point in="0.25" out="0.1"/>
+   <point in="0.75" out="0.6"/>
+  </nonlinearity_curve>
+ </flight_move_roll>
+</options>
+```
+
+- `<deviceoptions name=PRODUCT>` holds per-axis `deadzone` / `saturation` (`input` = `x y z rotx roty rotz slider1 slider2`) and is keyed by the
+  product string, so identical devices share it.
+- `<options type instance Product>` children are named after the option groups in `defaultProfile.xml`
+  (`<optiongroup name UILabel UIShowCurve UIShowInvert [invert] [exponent]>` with an optional default `<nonlinearity_curve>`), with
+  `invert="0|1"`, `exponent="…"` and/or `<nonlinearity_curve><point in out/>…</nonlinearity_curve>`.
+- Not edited (kept as imported): `sensitivity` (only in a 2.5-era file), unknown/older group names (e.g. `flight_move_strafe_forward` in shipped
+  layouts), gamepad/mouse/keyboard options. Not documented anywhere: the game's exact response maths (the chart is an approximation),
+  whether a group heading's setting overrides the controls under it, and what saturation does exactly.
+
 ## Known limitations
 - Controllers are read through the browser's Gamepad API. Button and axis numbering (especially axes and hats on HOTAS gear) can
   differ from the game's DirectInput order: Chrome on Windows usually matches (X, Y, Z, Rx, Ry, Rz, Slider, Dial; hat on axis 9),
   but Firefox, macOS and Linux may not. Check in game and use manual entry to correct. Hats are recognized when the browser exposes
   them as an axis resting outside [-1, 1] (Chrome and current Firefox on Windows); diagonals are ignored.
-- Chromium browsers (Chrome, Edge, Opera) expose at most **32 buttons and 16 axes** per device. Buttons above 32 (common on VKB/Virpil
-  configurations) are invisible to the page: type them in manual entry (`js1_button40`).
+- Chromium browsers (Chrome, Edge, Brave, Opera, Comet…) expose only the **first 4 controllers**, and at most **32 buttons and 16 axes**
+  per device. The app shows a banner in Chromium; use **Firefox** for more devices or buttons above 32 (or type them in manual entry,
+  `js1_button40`).
+- Star Citizen reads joysticks through DirectInput, which has 128 buttons per device; buttons above 128 can be captured but most
+  likely can't be used in game.
 - The joystick instance (js1/js2) comes from the profile match or your choice in 🕹 Controllers. The game numbers devices in Windows order
   (`i_DumpDeviceInformation` lists them; `pp_resortdevices joystick 1 2` swaps them).
 - Browser-reserved shortcuts (Ctrl+W/T/N, some OS keys) can't be captured. Type them in manual entry instead.
