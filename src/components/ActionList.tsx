@@ -1,7 +1,8 @@
 import { memo, useState } from 'react';
+import { columnOfInput } from '../lib/inputs';
 import { comboLabel, prettyMode } from '../lib/inputs';
 import { groupLabel } from '../lib/groups';
-import type { Binding, Device, Row, Slot } from '../lib/types';
+import type { Binding, Device, Row } from '../lib/types';
 import { BindingChip } from './BindingChip';
 
 export interface ListProps {
@@ -10,6 +11,10 @@ export interface ListProps {
   devices: Set<Device>;
   conflictsOf: (row: Row, b: Binding) => string[] | undefined;
   onBindingClick: (b: Binding) => void;
+  editMode: boolean;
+  onCapture: (row: Row, device: Device, replace?: Binding) => void;
+  onRemove: (row: Row, b: Binding) => void;
+  onEdit: (row: Row) => void;
 }
 
 const COLS: { device: Device; label: string }[] = [
@@ -21,13 +26,10 @@ const COLS: { device: Device; label: string }[] = [
 
 /** Which column a binding belongs in */
 export function columnOf(b: Binding): Device {
-  if (b.slot === 'js') return 'joystick';
-  if (b.slot === 'gp') return 'gamepad';
-  return b.devices.includes('mouse') ? 'mouse' : 'keyboard';
+  return columnOfInput(b.slot, b.input);
 }
-const SLOT_COL: Record<Slot, Device> = { kb: 'keyboard', mo: 'mouse', js: 'joystick', gp: 'gamepad' };
 
-export function ActionList({ rows, grouped, devices, conflictsOf, onBindingClick }: ListProps) {
+export function ActionList({ rows, grouped, devices, conflictsOf, onBindingClick, editMode, onCapture, onRemove, onEdit }: ListProps) {
   const cols = COLS.filter((c) => devices.has(c.device));
   const template = `minmax(240px, 1.35fr) ${cols.map(() => 'minmax(120px, 1fr)').join(' ')}`;
 
@@ -64,7 +66,8 @@ export function ActionList({ rows, grouped, devices, conflictsOf, onBindingClick
             <span className="ml-auto font-mono text-[10px] text-slate-500">{s.rows.length}</span>
           </div>
           {s.rows.map((r) => (
-            <ActionRow key={r.id} row={r} cols={cols.map((c) => c.device)} template={template} showMap={!grouped} conflictsOf={conflictsOf} onBindingClick={onBindingClick} />
+            <ActionRow key={r.id} row={r} cols={cols.map((c) => c.device)} template={template} showMap={!grouped} conflictsOf={conflictsOf} onBindingClick={onBindingClick}
+              editMode={editMode} onCapture={onCapture} onRemove={onRemove} onEdit={onEdit} />
           ))}
         </section>
       ))}
@@ -75,15 +78,16 @@ export function ActionList({ rows, grouped, devices, conflictsOf, onBindingClick
 interface RowProps {
   row: Row; cols: Device[]; template: string; showMap: boolean;
   conflictsOf: ListProps['conflictsOf']; onBindingClick: ListProps['onBindingClick'];
+  editMode: boolean; onCapture: ListProps['onCapture']; onRemove: ListProps['onRemove']; onEdit: ListProps['onEdit'];
 }
 
-const ActionRow = memo(function ActionRow({ row, cols, template, showMap, conflictsOf, onBindingClick }: RowProps) {
+const ActionRow = memo(function ActionRow({ row, cols, template, showMap, conflictsOf, onBindingClick, editMode, onCapture, onRemove, onEdit }: RowProps) {
   const [open, setOpen] = useState(false);
   const mode = prettyMode(row.mode);
   return (
     <div className="row-cv border-b border-edge/30 hover:bg-hud/[0.03]">
       <div className="grid items-start gap-3 px-4 py-2" style={{ gridTemplateColumns: template }}>
-        <button type="button" onClick={() => setOpen((o) => !o)} className="min-w-0 text-left">
+        <button type="button" onClick={() => (editMode ? onEdit(row) : setOpen((o) => !o))} className="min-w-0 text-left" title={editMode ? 'Open the action editor' : 'Show details'}>
           <div className="flex items-center gap-2">
             {row.customized && <span className="h-2 w-2 shrink-0 rotate-45 bg-mod" title="Customized" />}
             <span className="truncate text-sm font-medium text-slate-100">{row.label}</span>
@@ -96,14 +100,19 @@ const ActionRow = memo(function ActionRow({ row, cols, template, showMap, confli
         </button>
         {cols.map((c) => {
           const bs = row.bindings.filter((b) => columnOf(b) === c);
-          const cleared = row.cleared.some((s) => SLOT_COL[s] === c);
+          const cleared = row.cleared.includes(c);
           return (
             <div key={c} className="flex min-w-0 flex-wrap items-center gap-1">
               {bs.map((b, i) => (
-                <BindingChip key={i} b={b} conflict={conflictsOf(row, b)} onClick={onBindingClick} />
+                <BindingChip key={i} b={b} conflict={conflictsOf(row, b)}
+                  onClick={editMode ? (x) => onCapture(row, c, x) : onBindingClick} onRemove={editMode ? (x) => onRemove(row, x) : undefined} />
               ))}
               {!bs.length && cleared && <span className="rounded border border-dashed border-mod/40 px-1.5 font-mono text-[10px] text-mod/70 line-through" title="Default binding removed in your profile">cleared</span>}
-              {!bs.length && !cleared && <span className="font-mono text-[11px] text-slate-700">—</span>}
+              {!bs.length && !cleared && !editMode && <span className="font-mono text-[11px] text-slate-700">—</span>}
+              {editMode && (
+                <button type="button" onClick={() => onCapture(row, c)} title={`Add a ${c} binding (listen for input)`} aria-label={`Add ${c} binding`}
+                  className="rounded-md border border-dashed border-edge2 px-1.5 py-0.5 font-mono text-[11px] text-slate-500 transition hover:border-mod hover:bg-mod/10 hover:text-mod">+</button>
+              )}
             </div>
           );
         })}
@@ -123,6 +132,7 @@ const ActionRow = memo(function ActionRow({ row, cols, template, showMap, confli
             </span>
             {row.unlisted && <span className="text-mod">Not present in the bundled defaults (renamed or new action?)</span>}
           </div>
+          <button type="button" onClick={() => onEdit(row)} className="mt-2 rounded border border-hud/50 bg-hud/10 px-2 py-0.5 text-[11px] text-hud2 hover:bg-hud/20">✎ Edit bindings</button>
         </div>
       )}
     </div>

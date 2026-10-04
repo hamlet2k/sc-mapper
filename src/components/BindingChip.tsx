@@ -5,10 +5,11 @@ interface Props {
   b: Binding;
   conflict?: string[];
   onClick?: (b: Binding) => void;
+  onRemove?: (b: Binding) => void;
   showTag?: boolean;
 }
 
-export function BindingChip({ b, conflict, onClick, showTag }: Props) {
+export function BindingChip({ b, conflict, onClick, onRemove, showTag }: Props) {
   const tag = b.slot === 'js' ? `JS${b.instance}` : b.slot === 'gp' && b.instance > 1 ? `GP${b.instance}` : showTag ? SLOT_TAG[b.slot] : null;
   const mode = prettyMode(b.mode);
   const showMode = mode && !['Press', 'Press/Hold'].includes(mode);
@@ -22,9 +23,9 @@ export function BindingChip({ b, conflict, onClick, showTag }: Props) {
     b.mode ? `Activation: ${b.mode}` : '',
     b.multiTap ? `Multi-tap: ${b.multiTap}` : '',
     conflict?.length ? `⚠ Possible conflict with: ${conflict.join(', ')}` : '',
-    'Click to find everything on this input',
+    onRemove ? 'Click to rebind' : 'Click to find everything on this input',
   ].filter(Boolean).join('\n');
-  return (
+  const chip = (
     <button
       type="button"
       title={title}
@@ -47,5 +48,13 @@ export function BindingChip({ b, conflict, onClick, showTag }: Props) {
         </span>
       )}
     </button>
+  );
+  if (!onRemove) return chip;
+  return (
+    <span className="group/chip relative inline-flex max-w-full">
+      {chip}
+      <button type="button" title="Unbind" aria-label="Unbind" onClick={() => onRemove(b)}
+        className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full border border-alert/70 bg-panel text-[9px] leading-none text-alert group-hover/chip:flex">✕</button>
+    </span>
   );
 }

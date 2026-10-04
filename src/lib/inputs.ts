@@ -1,4 +1,4 @@
-import type { Device, Slot } from './types';
+import type { Device, Group, Slot } from './types';
 
 const MOUSE_RE = /^(mouse\d+(_\d+)?|mwheel_(up|down|left|right)|maxis_[xyz]{1,2})$/;
 const MODIFIERS = ['lalt', 'ralt', 'lctrl', 'rctrl', 'lshift', 'rshift'];
@@ -37,6 +37,28 @@ export function devicesOf(slot: Slot, input: string): Device[] {
   return out.length ? out : [slot === 'mo' ? 'mouse' : 'keyboard'];
 }
 
+/** Which list column (device) a binding is shown in */
+export function columnOfInput(slot: Slot, input: string): Device {
+  if (slot === 'js') return 'joystick';
+  if (slot === 'gp') return 'gamepad';
+  return devicesOf(slot, input).includes('mouse') ? 'mouse' : 'keyboard';
+}
+
+export const groupOfSlot = (s: Slot): Group => (s === 'js' ? 'js' : s === 'gp' ? 'gp' : 'km');
+export const GROUP_LABEL: Record<Group, string> = { km: 'Keyboard & Mouse', js: 'Joystick / HOTAS', gp: 'Gamepad' };
+export const groupOfDevice = (d: Device): Group => (d === 'joystick' ? 'js' : d === 'gamepad' ? 'gp' : 'km');
+
+/** Identity of an input within its rebind group (kb1_x and mo1_x are the same KeyboardMouse input) */
+export function bindKey(slot: Slot, instance: number, input: string): string {
+  const g = groupOfSlot(slot);
+  return `${g}${g === 'km' ? 1 : instance}:${normalizeCombo(input)}`;
+}
+
+/** Format a rebind input attribute value, e.g. kb1_lalt+n, js2_button3, gp1_ (cleared) */
+export function formatInput(slot: Slot, instance: number, input: string): string {
+  return `${slot}${slot === 'kb' || slot === 'mo' ? 1 : instance}_${input || ' '}`;
+}
+
 export function physOf(slot: Slot, instance: number, input: string): string {
   const n = normalizeCombo(input);
   if (slot === 'kb' || slot === 'mo') return `km:${n}`;
@@ -48,16 +70,16 @@ const KB: Record<string, string> = {
   lalt: 'L-Alt', ralt: 'R-Alt', lctrl: 'L-Ctrl', rctrl: 'R-Ctrl', lshift: 'L-Shift', rshift: 'R-Shift',
   space: 'Space', enter: 'Enter', escape: 'Esc', tab: 'Tab', backspace: 'Backspace', capslock: 'Caps',
   minus: '-', equals: '=', lbracket: '[', rbracket: ']', backslash: '\\', semicolon: ';', apostrophe: "'",
-  comma: ',', period: '.', slash: '/', grave: '`', underline: '_', colon: ':', oem_102: '<>',
+  comma: ',', period: '.', slash: '/', grave: '`', tilde: '`', lwin: 'Win', rwin: 'R-Win', apps: 'Menu', underline: '_', colon: ':', oem_102: '<>',
   insert: 'Ins', delete: 'Del', home: 'Home', end: 'End', pgup: 'PgUp', pgdn: 'PgDn',
   up: '↑', down: '↓', left: '←', right: '→', print: 'PrtSc', scrolllock: 'ScrLk', pause: 'Pause', numlock: 'NumLk',
   np_add: 'Num +', np_subtract: 'Num -', np_multiply: 'Num *', np_divide: 'Num /', np_period: 'Num .', np_enter: 'Num Enter',
-  mouse1: 'LMB', mouse2: 'RMB', mouse3: 'MMB', mouse1_2: 'LMB+RMB', mwheel_up: 'Wheel ↑', mwheel_down: 'Wheel ↓',
+  mouse1: 'LMB', mouse2: 'RMB', mouse3: 'MMB', mouse4: 'Mouse 4', mouse5: 'Mouse 5', mouse1_2: 'LMB+RMB', mwheel_up: 'Wheel ↑', mwheel_down: 'Wheel ↓',
   mwheel_left: 'Wheel ←', mwheel_right: 'Wheel →', maxis_x: 'Mouse X', maxis_y: 'Mouse Y', maxis_z: 'Mouse Z', maxis_xy: 'Mouse XY',
 };
 const GP: Record<string, string> = {
   a: 'A', b: 'B', x: 'X', y: 'Y', shoulderl: 'LB', shoulderr: 'RB', triggerl_btn: 'LT', triggerr_btn: 'RT',
-  triggerl: 'LT axis', triggerr: 'RT axis', triggerl_r_btn: 'LT+RT', thumbl: 'LS click', thumbr: 'RS click', back: 'View', start: 'Menu',
+  triggerl: 'LT axis', triggerr: 'RT axis', triggerl_r_btn: 'LT+RT', triggerr_l_btn: 'RT+LT', thumbl: 'LS click', thumbr: 'RS click', back: 'View', start: 'Menu',
   thumblx: 'LS X', thumbly: 'LS Y', thumblxy: 'LS XY', thumbrx: 'RS X', thumbry: 'RS Y', thumbrxy: 'RS XY',
   thumbl_up: 'LS ↑', thumbl_down: 'LS ↓', thumbl_left: 'LS ←', thumbl_right: 'LS →',
   thumbr_up: 'RS ↑', thumbr_down: 'RS ↓', thumbr_left: 'RS ←', thumbr_right: 'RS →',
