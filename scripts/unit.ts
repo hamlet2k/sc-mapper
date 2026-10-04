@@ -503,4 +503,120 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(browserName('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0', undefined, false), { name: 'Firefox 143', chromium: false });
   });
 }
+
+// ---------------------------------------------------------------- axis setting ranges, device templates
+{
+  const rg = await import('../src/lib/ranges');
+  const tp = await import('../src/lib/templates');
+  const { BUILTIN_TEMPLATES } = await import('../src/lib/builtinTemplates');
+  t('setting ranges: clamping, game 1 % grid, defaults and observed values inside the ranges', () => {
+    const { RANGES } = rg;
+    assert.equal(rg.clampTo(RANGES.deadzone, 0.9), 0.5);
+    assert.equal(rg.clampTo(RANGES.saturation, 0), 0.5);
+    assert.equal(rg.clampTo(RANGES.exponent, 10), 3);
+    assert.equal(rg.gamePercent(0.0792), 8);
+    assert.equal(rg.gamePercent(0.2475), 25);
+    assert.equal(rg.snapToGame(0.05), 0.0495);
+    for (const r of Object.values(RANGES)) {
+      assert.ok(r.min < r.max && r.step > 0 && r.step <= (r.max - r.min) / 20, r.key);
+      if (r.def !== undefined) assert.ok(rg.inRange(r, r.def), `${r.key} default in range`);
+      if (r.observed) assert.ok(rg.inRange(r, r.observed[0]) && rg.inRange(r, r.observed[1]), `${r.key} observed values in range`);
+    }
+    // every deadzone the game wrote in the real files is on the 0.0099 grid
+    for (const v of [0.0098999999, 0.0198, 0.0297, 0.049499996, 0.0792, 0.2475]) assert.ok(Math.abs(v / rg.GAME_STEP - Math.round(v / rg.GAME_STEP)) < 1e-3, String(v));
+    assert.ok(RANGES.point.confirmed && !RANGES.deadzone.confirmed);
+    assert.deepEqual(rg.tidyCurve([{ x: 0.8, y: 1.2 }, { x: -0.1, y: 0.3 }]), [{ x: 0, y: 0.3 }, { x: 0.8, y: 1 }]);
+  });
+  const moza = (buttons: number) => ({ name: 'MOZA AB6 FFB Base', vendor: '346E', productId: '1002', buttons, slot: 'js' as const });
+  const tpl = (id: string, match: any[], extra: any = {}) => ({ version: 1 as const, id, name: id, slot: 'js' as const, aspect: 1.6, match, callouts: [], ...extra });
+  t('template matching: USB id, name, button count tells the two MOZA bases apart; user beats built-in; fallbacks', () => {
+    const a = tpl('moza-128', [{ vendor: '346e', product: '1002', buttons: 128 }]);
+    const b = tpl('moza-133', [{ vendor: '346E', product: '1002', buttons: 133 }]);
+    const any = tpl('moza-any', [{ vendor: '346E', product: '1002' }]);
+    assert.equal(tp.matchScore(a, moza(128)), 13);
+    assert.equal(tp.matchScore(a, moza(133)), 0);
+    assert.equal(tp.pickTemplate([a, b, ...BUILTIN_TEMPLATES], moza(128)).template.id, 'moza-128');
+    assert.equal(tp.pickTemplate([a, b, ...BUILTIN_TEMPLATES], moza(133)).template.id, 'moza-133');
+    assert.equal(tp.pickTemplate([any, b], moza(133)).template.id, 'moza-133', 'the more specific rule wins');
+    assert.equal(tp.pickTemplate([any, b], moza(128)).template.id, 'moza-any');
+    assert.equal(tp.matchScore(tpl('n', [{ name: 'gladiator evo' }]), { name: 'VKBsim Gladiator EVO R', slot: 'js' }), 5);
+    assert.equal(tp.matchScore({ ...any, slot: 'gp' }, moza(128)), 0, 'a gamepad template never applies to a joystick');
+    assert.equal(tp.matchScore(tpl('empty', [{}]), moza(128)), 0, 'an empty rule matches nothing');
+    const r = tp.pickTemplate([a, ...BUILTIN_TEMPLATES], moza(133), 'builtin-throttle');
+    assert.equal(r.template.id, 'builtin-throttle'); assert.equal(r.how, 'chosen');
+    assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { slot: 'gp' }).template.id, 'builtin-gamepad');
+    assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'Bravo Throttle Quadrant', slot: 'js' }).template.id, 'builtin-throttle');
+    assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'VKBsim Gladiator EVO R', slot: 'js' }).how, 'fallback');
+    assert.notEqual(tp.identityKey(moza(128)), tp.identityKey(moza(133)));
+    assert.deepEqual(tp.matchFor(moza(133), true), { vendor: '346E', product: '1002', buttons: 133 });
+    assert.deepEqual(tp.matchFor({ name: 'Some Stick' }, false), { name: 'Some Stick' });
+  });
+  t('template JSON: export -> import keeps image, callouts and links; bad files rejected; values cleaned', () => {
+    const img = 'data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=';
+    const src = tpl('my-1', [{ vendor: '231D', product: '0200', buttons: 32 }], {
+      image: img, aspect: 1.5,
+      callouts: [{ id: 'c1', kind: 'hat', inputs: tp.hatInputs(2), label: 'Trim', group: 'Grip', anchor: { x: 0.4, y: 0.3 }, box: { x: 0.1, y: 0.2 } }],
+    });
+    const back = tp.parseTemplates(tp.exportTemplates([src]));
+    assert.equal(back.length, 1);
+    assert.equal(back[0].id, 'my-1'); assert.equal(back[0].image, img); assert.equal(back[0].aspect, 1.5);
+    assert.deepEqual(back[0].callouts, src.callouts); assert.deepEqual(back[0].match, src.match);
+    assert.throws(() => tp.parseTemplates('nope'), /JSON/);
+    assert.throws(() => tp.parseTemplates(JSON.stringify({ ...src, image: 'https://example.com/a.png' })), /embedded data:image/);
+    assert.throws(() => tp.parseTemplates(JSON.stringify({ ...src, callouts: [{ kind: 'button', inputs: ['Bad Name!'] }] })), /no valid input/);
+    const odd = tp.parseTemplates(JSON.stringify([{ name: ' x ', id: 'builtin-stick', callouts: [{ kind: 'weird', inputs: ['button2'], anchor: { x: 7, y: -1 } }], match: [{ vendor: 'zz' }, { product: '0x200', buttons: 2.5 }] }]))[0];
+    assert.notEqual(odd.id, 'builtin-stick', 'imported files cannot replace a built-in');
+    assert.equal(odd.name, 'x'); assert.equal(odd.callouts[0].kind, 'button');
+    assert.deepEqual(odd.callouts[0].anchor, { x: 1, y: 0 }); assert.deepEqual(odd.callouts[0].box, { x: 1, y: 0 });
+    assert.deepEqual(odd.match, [{ product: '0200' }]);
+    assert.equal(tp.parseTemplates(JSON.stringify({ format: tp.TEMPLATE_FILE_FORMAT, templates: [src, { ...src, id: 'my-2' }] })).length, 2);
+  });
+  t('image sizing: longest side 1600 px, data URL size', () => {
+    assert.deepEqual(tp.fitWithin(3200, 2000), { w: 1600, h: 1000 });
+    assert.deepEqual(tp.fitWithin(1000, 3000), { w: 533, h: 1600 });
+    assert.deepEqual(tp.fitWithin(800, 500), { w: 800, h: 500 });
+    assert.equal(tp.dataUrlBytes('data:image/png;base64,AAAA'), 3);
+  });
+  t('callouts from pressed inputs, kind changes, covered inputs, combos', () => {
+    assert.deepEqual(tp.calloutFor('hat1_down'), { kind: 'hat', inputs: ['hat1_up', 'hat1_right', 'hat1_down', 'hat1_left'] });
+    assert.deepEqual(tp.calloutFor('dpad_left'), { kind: 'hat', inputs: ['dpad_up', 'dpad_right', 'dpad_down', 'dpad_left'] });
+    assert.deepEqual(tp.calloutFor('thumbly'), { kind: 'axis', inputs: ['thumblx', 'thumbly'] });
+    assert.deepEqual(tp.calloutFor('rotz'), { kind: 'axis', inputs: ['rotz'] });
+    assert.deepEqual(tp.calloutFor('button7'), { kind: 'button', inputs: ['button7'] });
+    const used = new Set(['button1', 'button2', 'hat1_up']);
+    assert.deepEqual(tp.inputsForKind('switch', ['button3'], 'js', used), ['button3', 'button4', 'button5']);
+    assert.deepEqual(tp.inputsForKind('encoder', [], 'js', used), ['button3', 'button4']);
+    assert.deepEqual(tp.inputsForKind('hat', ['button3'], 'js', used), tp.hatInputs(2));
+    assert.deepEqual(tp.inputsForKind('button', ['button9', 'button10'], 'js', used), ['button9']);
+    assert.ok(tp.coveredInputs({ inputs: ['thumblx'] }).includes('thumbl_left'));
+    assert.deepEqual(tp.splitCombo('u+lshift'), { main: 'u', prefix: 'lshift' });
+    assert.deepEqual(tp.splitCombo('shoulderl+a'), { main: 'a', prefix: 'shoulderl' });
+    assert.deepEqual(tp.splitCombo('button3'), { main: 'button3', prefix: '' });
+    assert.equal(tp.calloutTitle({ id: 'x', kind: 'hat', inputs: tp.hatInputs(3), anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } }), 'Hat 3');
+    assert.equal(tp.shortInput('hat1_up'), 'H1↑');
+  });
+  t('live inputs: held buttons, hats (diagonals light both), axes moved from rest, throttle parked at -1', () => {
+    const axes = [0.7, 0, -1, 0, 0, 0, 0, 0, 0, -1];
+    const rest = [0, 0, -1, 0, 0, 0, 0, 0, 0, 9 / 7];
+    const r = tp.liveInputs('js', { buttons: [false, true], axes }, rest);
+    assert.deepEqual([...r.active].sort(), ['button2', 'hat1_up', 'x']);
+    assert.equal(r.values.x, 0.7);
+    const diag = tp.liveInputs('js', { buttons: [], axes: [0, 0, -1, 0, 0, 0, 0, 0, 0, -1 + 2 / 7] }, rest);
+    assert.deepEqual([...diag.active].sort(), ['hat1_right', 'hat1_up']);
+    const gp = tp.liveInputs('gp', { buttons: Array.from({ length: 17 }, (_, i) => i === 12), axes: [0.5, 0, 0, 0] }, [0, 0, 0, 0]);
+    assert.deepEqual([...gp.active].sort(), ['dpad_up', 'thumblx']);
+  });
+  t('built-in templates: generic SVG art, valid game input names, unique ids, coordinates inside the canvas', () => {
+    const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
+    for (const b of BUILTIN_TEMPLATES) {
+      assert.ok(b.builtin && b.image!.startsWith('data:image/svg+xml'), b.id);
+      const ids = new Set(b.callouts.map((c) => c.id));
+      assert.equal(ids.size, b.callouts.length);
+      const inputs = b.callouts.flatMap((c) => c.inputs);
+      assert.equal(new Set(inputs).size, inputs.length, `${b.id}: every input on one callout`);
+      for (const i of inputs) assert.ok(b.slot === 'js' ? jsName.test(i) : [...cap.GP_BUTTONS, ...cap.GP_AXES].includes(i), `${b.id}: ${i}`);
+      for (const c of b.callouts) for (const p of [c.anchor, c.box]) assert.ok(p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1, `${b.id}/${c.id}`);
+    }
+  });
+}
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);
