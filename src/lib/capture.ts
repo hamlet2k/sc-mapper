@@ -124,7 +124,10 @@ export function gamepadInput(e: PadEvent): Candidate | undefined {
 
 /** Map a detected event to a game input name for a joystick / HOTAS (non-standard mapping) */
 export function joystickInput(e: PadEvent, axisNames: string[] = JS_AXES): Candidate | undefined {
-  if (e.kind === 'button') return { input: jsButton(e.index), label: jsButton(e.index) };
+  if (e.kind === 'button') {
+    const n = jsButton(e.index);
+    return { input: n, label: n, ...(e.index >= GAME_BUTTON_CAP ? { warning: beyondCap(e.index + 1) } : {}) };
+  }
   if (e.kind === 'hat') { const n = `hat${e.hat ?? 1}_${e.dir}`; return { input: n, label: n }; }
   // Browser axis order follows HID usages (X, Y, Z, Rx, Ry, Rz, Slider, Dial...), which usually but not always matches the game:
   // offer every axis name, preselecting the likely one. Axes past the known names still get a choice instead of being ignored.
@@ -135,6 +138,14 @@ export function joystickInput(e: PadEvent, axisNames: string[] = JS_AXES): Candi
     ...(n ? {} : { warning: `Browser axis #${e.index + 1} has no standard Star Citizen name. Pick the axis the game shows for it.` }),
   };
 }
+
+/**
+ * Star Citizen reads joysticks through DirectInput, whose joystick state has 128 buttons: buttons above 128 (some bases and
+ * button boxes report 133+) can be seen by the browser but most likely not by the game.
+ */
+export const GAME_BUTTON_CAP = 128;
+export const beyondCap = (n: number) =>
+  `Button ${n} is above ${GAME_BUTTON_CAP}. Star Citizen reads joysticks through DirectInput, which has ${GAME_BUTTON_CAP} buttons per device, so the game most likely can't see this button. Remap it in the device's software if you can.`;
 
 /* ------------------------------------------------------------ live capture */
 /** Chromium (Chrome, Edge, Opera) exposes at most this many buttons / axes per device; buttons above 32 are invisible to the page */
@@ -233,6 +244,8 @@ export function parseManual(text: string, group: Group, instance = 1): { rebind?
   const re = group === 'km' ? KM_TOKEN : group === 'js' ? JS_TOKEN : GP_TOKEN;
   const unknown = t.filter((x) => !re.test(x) && !(group === 'km' && isModifier(x)));
   const known = group !== 'km' || t.every((x) => isModifier(x) || ALL_SC_KEYS.includes(x) || /^(mouse\d|mwheel_|maxis_)/.test(x));
+  const big = group === 'js' ? t.map((x) => /^button(\d+)$/.exec(x)).find((m) => m && Number(m[1]) > GAME_BUTTON_CAP) : undefined;
+  if (big) return { rebind: { slot, instance: Math.max(1, inst), input: t.join('+') }, warning: beyondCap(Number(big[1])) };
   return {
     rebind: { slot, instance: slot === 'kb' || slot === 'mo' ? 1 : Math.max(1, inst), input: group === 'km' ? normalizeKm(t) : t.join('+') },
     warning: unknown.length || !known ? `"${unknown.join(', ') || t.join('+')}" isn't a name the game normally uses; double-check it` : undefined,

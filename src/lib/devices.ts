@@ -12,6 +12,10 @@ export interface PadInfo {
   source: AssignSource;
   /** product name of the profile device this one was matched to */
   matched?: string;
+  /** set when other connected devices share this one's USB vendor/product id (e.g. two "MOZA AB6 FFB Base" entries) */
+  dup?: { n: number; of: number };
+  /** the match to a profile device (or the numbering) among identical devices is a guess: which is which can't be told from the id */
+  ambiguous?: boolean;
 }
 type Assign = Record<string, { kind?: PadKind; instance?: number }>;
 /** the parts of a Gamepad this module reads (real Gamepad objects or test doubles) */
@@ -33,11 +37,29 @@ export const getPads = (): Gamepad[] =>
   (typeof navigator !== 'undefined' && navigator.getGamepads ? Array.from(navigator.getGamepads() ?? []) : [])
     .filter((p): p is Gamepad => !!p && p.connected !== false);
 
-/** Identical devices share an id, so the key includes the occurrence number */
+/**
+ * Stable key per device for saved assignments. Identical ids are told apart by their button/axis counts first (a device can
+ * expose several HID interfaces with the same USB id but different layouts, e.g. 128 vs 133 buttons) and only then by order.
+ */
 export function padKeys(pads: readonly PadLike[]): string[] {
+  const seen = new Map<string, number>();
+  return pads.map((p) => {
+    const base = `${p.id}|${p.buttons.length}b${p.axes.length}a`;
+    const n = (seen.get(base) ?? 0) + 1; seen.set(base, n);
+    return `${base}#${n}`;
+  });
+}
+/** keys used before button/axis counts were part of the key (kept so saved assignments survive the update) */
+function legacyKeys(pads: readonly PadLike[]): string[] {
   const seen = new Map<string, number>();
   return pads.map((p) => { const n = (seen.get(p.id) ?? 0) + 1; seen.set(p.id, n); return `${p.id}#${n}`; });
 }
+/** forget pre-update entries ("<id>#n") of the device a new-style key ("<id>|..b..a#n") belongs to */
+function dropLegacy(a: Assign, key: string) {
+  const id = key.slice(0, key.lastIndexOf('|'));
+  if (id) for (const k of Object.keys(a)) if (k.startsWith(`${id}#`)) delete a[k];
+}
+const usbOf = (d: { vendor?: string; productId?: string; id: string }) => (d.vendor ? `${d.vendor}:${d.productId}` : d.id);
 
 /** Name and USB ids from a profile <options Product="..."> value: " VKBsim Gladiator EVO R    {0200231D-0000-0000-0000-504944564944}" */
 export function parseProfileProduct(product: string): { name: string; vendor?: string; productId?: string } {
@@ -58,6 +80,7 @@ const sameName = (a: string, b: string) => {
  */
 export function describePads(pads: readonly PadLike[], assign: Assign, profileDevices: readonly ProfileDevice[] = []): PadInfo[] {
   const keys = padKeys(pads);
+  const legacy = legacyKeys(pads);
   const out: PadInfo[] = pads.map((p, i) => {
     const id = parsePadId(p.id);
     return {
@@ -66,10 +89,14 @@ export function describePads(pads: readonly PadLike[], assign: Assign, profileDe
       product: productString(p.id), source: 'auto',
     };
   });
+  // identical devices (same USB vendor/product id)
+  const byUsb = new Map<string, number[]>();
+  out.forEach((d, i) => byUsb.set(usbOf(d), [...(byUsb.get(usbOf(d)) ?? []), i]));
+  for (const idx of byUsb.values()) if (idx.length > 1) idx.forEach((i, n) => { out[i].dup = { n: n + 1, of: idx.length }; });
   const done = new Set<number>();
   const usedProfile = new Set<ProfileDevice>();
   out.forEach((d, i) => {
-    const a = assign[d.key];
+    const a = assign[d.key] ?? assign[legacy[i]];
     if (!a) return;
     if (a.kind) d.kind = a.kind;
     if (a.instance) { d.instance = a.instance; d.source = 'manual'; done.add(i); }
@@ -84,6 +111,7 @@ export function describePads(pads: readonly PadLike[], assign: Assign, profileDe
       const i = out.findIndex((d, j) => !done.has(j) && (assign[d.key]?.kind ?? pd.slot) === pd.slot && test(d, pp));
       if (i < 0) continue;
       Object.assign(out[i], { kind: pd.slot as PadKind, instance: pd.instance, source: out[i].source === 'manual' ? 'manual' : source, matched: pp.name });
+      if (out[i].dup && out[i].source !== 'manual') out[i].ambiguous = true;
       done.add(i); usedProfile.add(pd);
     }
   };
@@ -96,6 +124,7 @@ export function describePads(pads: readonly PadLike[], assign: Assign, profileDe
     if (d.kind === 'gp') { d.instance = 1; return; }
     while (taken.has(next)) next++;
     d.instance = next; taken.add(next);
+    if (d.dup && d.source !== 'manual') d.ambiguous = true;
   });
   return out;
 }
@@ -124,14 +153,18 @@ export function usePads(active: boolean, profileDevices: readonly ProfileDevice[
   const update = useCallback((key: string, v: { kind?: PadKind; instance?: number }) => setAssign((prev) => {
     const n = { ...prev, [key]: { ...prev[key], ...v } };
     if (v.kind && !v.instance) delete n[key].instance;
+    dropLegacy(n, key);
     saveAssign(n);
     return n;
   }), []);
   const reset = useCallback((key?: string) => setAssign((prev) => {
     const n = { ...prev };
-    if (key) delete n[key]; else for (const k of Object.keys(n)) delete n[k];
+    if (key) { delete n[key]; dropLegacy(n, key); } else for (const k of Object.keys(n)) delete n[k];
     saveAssign(n);
     return n;
   }), []);
   return useMemo(() => ({ pads, update, reset, describe }), [pads, update, reset, describe]);
 }
+
+/** Display name that tells identical devices apart: "MOZA AB6 FFB Base (2 of 2 · 133 buttons)" */
+export const padLabel = (p: Pick<PadInfo, 'name' | 'dup' | 'buttons'>) => (p.dup ? `${p.name} (${p.dup.n} of ${p.dup.of} · ${p.buttons} buttons)` : p.name);

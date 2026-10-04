@@ -39,7 +39,7 @@ function humanize(name) {
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '',
-  isArray: (name) => ['actionmap', 'action', 'inputdata', 'state'].includes(name),
+  isArray: (name) => ['actionmap', 'action', 'inputdata', 'state', 'optiontree', 'optiongroup', 'point'].includes(name),
 });
 const doc = parser.parse(xml);
 const profile = doc.profile;
@@ -87,6 +87,32 @@ for (const am of profile.actionmap) {
   maps.push({ name: am.name, label: mapLabel, category, cat, ...(INTERNAL_MAPS.has(am.name) ? { hidden: true } : {}), actions });
 }
 
+// ---- option trees: the per-device settings the game exposes (invert / exponent / curve per option group).
+// These names are what actionmaps.xml / layout exports write as children of <options type=".." instance="..">.
+const optionTrees = {};
+for (const tree of profile.optiontree ?? []) {
+  const groups = [];
+  const walk = (g, depth, parent) => {
+    const curve = g.nonlinearity_curve;
+    const pts = curve && typeof curve === 'object' ? (curve.point ?? []).map((p) => [Number(p.in), Number(p.out)]) : [];
+    groups.push({
+      name: g.name, label: L(g.UILabel) ?? humanize(g.name), depth, ...(parent ? { parent } : {}),
+      showCurve: Number(g.UIShowCurve ?? 0), showInvert: Number(g.UIShowInvert ?? 0),
+      ...(g.invert !== undefined ? { invert: String(g.invert) } : {}),
+      ...(g.exponent !== undefined ? { exponent: String(g.exponent) } : {}),
+      ...(pts.length ? { curve: pts } : {}),
+      ...(curve && typeof curve === 'object' && curve.reset ? { curveReset: true } : {}),
+    });
+    for (const c of g.optiongroup ?? []) walk(c, depth + 1, g.name);
+  };
+  for (const g of tree.optiongroup ?? []) walk(g, 0, undefined);
+  optionTrees[tree.type] = {
+    ...(tree.instances ? { instances: Number(tree.instances) } : {}),
+    ...(tree.UISensitivityMin ? { sensMin: Number(tree.UISensitivityMin), sensMax: Number(tree.UISensitivityMax) } : {}),
+    groups,
+  };
+}
+
 const manifest = existsSync(raw('build_manifest.json')) ? JSON.parse(readFileSync(raw('build_manifest.json'), 'utf8')).Data : {};
 const out = {
   meta: {
@@ -100,7 +126,9 @@ const out = {
     generated: new Date().toISOString(),
   },
   maps,
+  optionTrees,
 };
 writeFileSync(new URL('../src/data/defaults.json', import.meta.url), JSON.stringify(out));
 console.log(`maps=${maps.length} actions=${actionCount} labeled=${labeled} locHit=${usedLoc.hit} locMiss=${usedLoc.miss}`);
+console.log('option trees:', Object.entries(optionTrees).map(([k, v]) => `${k}=${v.groups.length}`).join(' '));
 console.log('bound defaults:', maps.flatMap((m) => m.actions).filter((a) => a.d.length).length);
