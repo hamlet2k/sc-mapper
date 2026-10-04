@@ -26,7 +26,11 @@ export interface Rebind {
   defaultInput?: string;
 }
 export type RebindMap = Record<string, Record<string, Rebind[]>>;
-export interface ProfileDevice { slot: Slot; instance: number; product: string }
+export interface ProfileDevice {
+  slot: Slot; instance: number; product: string;
+  /** Product attribute as written by the game, including the DirectInput GUID with the USB vendor/product ids */
+  rawProduct?: string;
+}
 export interface Profile {
   id: string;
   name: string;

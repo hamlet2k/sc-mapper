@@ -1,4 +1,4 @@
-import { comboLabel, prettyMode } from '../lib/inputs';
+import { comboLabel, searchSpec, prettyMode } from '../lib/inputs';
 import type { ConflictGroup } from '../lib/conflicts';
 
 interface Props {
@@ -42,7 +42,7 @@ export function ConflictsView({ groups, onPick, includeDefault, setIncludeDefaul
           const dev = first.slot === 'js' ? `JS${first.instance}` : first.slot === 'gp' ? 'Gamepad' : first.devices.includes('mouse') ? 'Mouse' : 'Keyboard';
           return (
             <div key={g.phys} className={`hud-panel rounded-lg border-l-2 p-3 ${custom ? 'border-l-mod' : 'border-l-alert'}`}>
-              <button type="button" onClick={() => onPick(first.input)} className="flex w-full items-center gap-2 text-left" title="Show these actions in the list">
+              <button type="button" onClick={() => onPick(searchSpec(first.slot, first.instance, first.input))} className="flex w-full items-center gap-2 text-left" title="Show these actions in the list">
                 <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">{dev}</span>
                 <span className="keycap !text-sm">{comboLabel(first.input, first.slot)}</span>
                 {custom && <span className="rounded bg-mod/15 px-1.5 font-mono text-[10px] uppercase text-mod">customized</span>}

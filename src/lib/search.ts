@@ -1,5 +1,5 @@
-import { comboLabel, normalizeCombo, tokenAliases, tokens } from './inputs';
-import type { Row } from './types';
+import { comboLabel, groupOfSlot, normalizeCombo, tokenAliases, tokens } from './inputs';
+import type { Group, Row, Slot } from './types';
 
 interface Indexed {
   label: string;
@@ -8,7 +8,7 @@ interface Indexed {
   map: string;
   desc: string;
   /** per binding: token alias sets */
-  binds: { tokens: Set<string>[]; combo: string; label: string }[];
+  binds: { tokens: Set<string>[]; combo: string; label: string; group: Group; inst: number }[];
 }
 
 const cache = new WeakMap<Row, Indexed>();
@@ -26,6 +26,8 @@ function index(row: Row): Indexed {
       tokens: tokens(b.input).map((t) => new Set(tokenAliases(t))),
       combo: normalizeCombo(b.input),
       label: comboLabel(b.input, b.slot).toLowerCase(),
+      group: groupOfSlot(b.slot),
+      inst: b.instance,
     })),
   };
   cache.set(row, ix);
@@ -38,8 +40,28 @@ function fuzzy(hay: string, needle: string): boolean {
   return false;
 }
 
+/** A device-scoped term: "js1_button5", "js2:btn5", "kb1_lalt+n", "mo1_mouse2", "gp1_a", or "js2_*" (anything on js2) */
+const SCOPED = /^(kb|mo|js|gp)(\d*)[_:](.*)$/;
+export const isScopedTerm = (t: string) => SCOPED.test(t);
+/** Exact match on device group + instance + the full input (every token, nothing extra). null when the term isn't scoped. */
+function scopedScore(ix: Indexed, term: string): number | null {
+  const m = SCOPED.exec(term);
+  if (!m) return null;
+  const g = groupOfSlot(m[1] as Slot);
+  const inst = g === 'km' || !m[2] ? undefined : Number(m[2]);
+  const parts = m[3].split('+').map((p) => p.trim()).filter(Boolean);
+  for (const b of ix.binds) {
+    if (b.group !== g || (inst !== undefined && b.inst !== inst) || !b.tokens.length) continue;
+    if (!parts.length || (parts.length === 1 && parts[0] === '*')) return 150;
+    if (parts.length === b.tokens.length && parts.every((p) => b.tokens.some((s) => s.has(p)))) return 150;
+  }
+  return 0;
+}
+
 /** Score how well a binding matches a key-ish term. Returns 0 if no match. */
 function keyScore(ix: Indexed, term: string): number {
+  const scoped = scopedScore(ix, term);
+  if (scoped !== null) return scoped;
   let best = 0;
   if (term.includes('+')) {
     const parts = term.split('+').filter(Boolean);
@@ -61,14 +83,25 @@ function keyScore(ix: Indexed, term: string): number {
 }
 
 export interface ParsedQuery { terms: string[]; keyTerms: string[] }
+const DEVICE_WORD = /^(kb|mo|js|gp)(\d*)$/;
+/**
+ * key:x / k:x are key terms. Device-scoped terms ("js1_button5") are exact key terms, and a device word followed by an input
+ * ("js2 btn5", "kb lalt+n") is merged into one; a device word on its own ("js2") matches anything bound on that device.
+ */
 export function parseQuery(q: string): ParsedQuery {
   const terms: string[] = [];
   const keyTerms: string[] = [];
-  for (const raw of q.toLowerCase().trim().split(/\s+/).filter(Boolean)) {
-    if (raw.startsWith('key:') || raw.startsWith('k:')) {
-      const v = raw.slice(raw.indexOf(':') + 1);
+  const raw = q.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  for (let i = 0; i < raw.length; i++) {
+    const w = raw[i];
+    if (w.startsWith('key:') || w.startsWith('k:')) {
+      const v = w.slice(w.indexOf(':') + 1);
       if (v) keyTerms.push(v);
-    } else terms.push(raw);
+    } else if (SCOPED.test(w)) keyTerms.push(w);
+    else if (DEVICE_WORD.test(w)) {
+      const next = raw[i + 1];
+      if (next && !next.includes(':') && !DEVICE_WORD.test(next)) { keyTerms.push(`${w}_${next}`); i++; } else keyTerms.push(`${w}_*`);
+    } else terms.push(w);
   }
   return { terms, keyTerms };
 }

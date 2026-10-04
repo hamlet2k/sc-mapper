@@ -37,7 +37,8 @@ export function parseActionMaps(text: string, fileName: string): Profile {
   for (const o of Array.from(container.children).filter((c) => c.tagName === 'options')) {
     const slot = TYPE_SLOT[(o.getAttribute('type') ?? '').toLowerCase()];
     const product = (o.getAttribute('Product') ?? '').replace(/\{[0-9A-F-]+\}/i, '').replace(/\s+/g, ' ').trim();
-    if (slot && product) devices.push({ slot, instance: Number(o.getAttribute('instance')) || 1, product });
+    const raw = o.getAttribute('Product') ?? '';
+    if (slot && product) devices.push({ slot, instance: Number(o.getAttribute('instance')) || 1, product, ...(raw.trim() !== product ? { rawProduct: raw } : {}) });
   }
 
   const rebinds: Profile['rebinds'] = {};

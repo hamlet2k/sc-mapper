@@ -80,7 +80,7 @@ export function snapshot(p: { buttons: readonly { pressed: boolean; value: numbe
 export type PadEvent =
   | { kind: 'button'; index: number }
   | { kind: 'axis'; index: number; dir: -1 | 1 }
-  | { kind: 'hat'; index: number; dir: string };
+  | { kind: 'hat'; index: number; dir: string; hat?: number };
 
 export const AXIS_THRESHOLD = 0.5;
 
@@ -100,7 +100,7 @@ export function detect(rest: PadState, cur: PadState, threshold = AXIS_THRESHOLD
   return out;
 }
 
-export interface Candidate { input: string; label: string; alt?: { input: string; label: string }[] }
+export interface Candidate { input: string; label: string; alt?: { input: string; label: string }[]; warning?: string }
 
 /** Map a detected event to a game input name for a standard-mapping gamepad */
 export function gamepadInput(e: PadEvent): Candidate | undefined {
@@ -125,9 +125,85 @@ export function gamepadInput(e: PadEvent): Candidate | undefined {
 /** Map a detected event to a game input name for a joystick / HOTAS (non-standard mapping) */
 export function joystickInput(e: PadEvent, axisNames: string[] = JS_AXES): Candidate | undefined {
   if (e.kind === 'button') return { input: jsButton(e.index), label: jsButton(e.index) };
-  if (e.kind === 'hat') { const n = `hat1_${e.dir}`; return { input: n, label: n }; }
+  if (e.kind === 'hat') { const n = `hat${e.hat ?? 1}_${e.dir}`; return { input: n, label: n }; }
+  // Browser axis order follows HID usages (X, Y, Z, Rx, Ry, Rz, Slider, Dial...), which usually but not always matches the game:
+  // offer every axis name, preselecting the likely one. Axes past the known names still get a choice instead of being ignored.
   const n = axisNames[e.index];
-  return n ? { input: n, label: n } : undefined;
+  return {
+    input: n ?? axisNames[axisNames.length - 1], label: n ?? `axis ${e.index + 1}`,
+    alt: axisNames.map((a) => ({ input: a, label: a === n ? `${a} (detected)` : a })),
+    ...(n ? {} : { warning: `Browser axis #${e.index + 1} has no standard Star Citizen name. Pick the axis the game shows for it.` }),
+  };
+}
+
+/* ------------------------------------------------------------ live capture */
+/** Chromium (Chrome, Edge, Opera) exposes at most this many buttons / axes per device; buttons above 32 are invisible to the page */
+export const CHROMIUM_BUTTON_CAP = 32;
+export const CHROMIUM_AXIS_CAP = 16;
+/** after a device first shows up, its axes are re-baselined for this long (the first report can be all zeros) */
+export const SETTLE_MS = 300;
+
+interface Tracked { rest: PadState; settleUntil: number; wake: Set<number> }
+
+/**
+ * Turns successive Gamepad API polls into input events, robust to how real browsers behave:
+ * - controllers are hidden until a button is pressed, so a device that appears mid-capture is reporting the very press that woke
+ *   it: those held buttons are counted when released (toggle switches that stay on never fire);
+ * - buttons already held when listening starts (or toggles) are ignored until released, then their next press counts;
+ * - axes are compared with where they rest (throttles parked at -1); a device that appears mid-capture is re-baselined during
+ *   its first few hundred ms (its first report can be all zeros);
+ * - a hat axis rests outside [-1, 1] (Chrome 1.2857, Firefox 3.2857); one first seen at 0 is fixed up when it reports centre.
+ * Feed it fresh snapshots every frame (Chrome returns copies from getGamepads(), so old references never change).
+ */
+export class PadTracker {
+  private pads = new Map<string, Tracked>();
+  private polls = 0;
+  private settleMs: number;
+  private threshold: number;
+  constructor(settleMs = SETTLE_MS, threshold = AXIS_THRESHOLD) { this.settleMs = settleMs; this.threshold = threshold; }
+
+  /** One poll of every connected device. Returns the events per device key (empty when nothing new happened). */
+  update(list: { key: string; state: PadState }[], now: number): Map<string, PadEvent[]> {
+    const firstPoll = this.polls++ === 0;
+    const out = new Map<string, PadEvent[]>();
+    for (const { key, state } of list) {
+      let t = this.pads.get(key);
+      if (!t) {
+        const wake = new Set<number>();
+        if (!firstPoll) state.buttons.forEach((p, i) => { if (p) wake.add(i); });
+        t = { rest: { buttons: [...state.buttons], values: [...state.values], axes: [...state.axes] }, settleUntil: firstPoll ? now : now + this.settleMs, wake };
+        this.pads.set(key, t);
+        out.set(key, []);
+        continue;
+      }
+      const ev: PadEvent[] = [];
+      const r = t.rest;
+      state.buttons.forEach((p, i) => {
+        if (t!.wake.has(i)) {
+          if (!p) { t!.wake.delete(i); r.buttons[i] = false; ev.push({ kind: 'button', index: i }); }
+          return;
+        }
+        if (p && !r.buttons[i]) ev.push({ kind: 'button', index: i });
+        else if (!p && r.buttons[i]) r.buttons[i] = false;
+      });
+      const settling = now < t.settleUntil;
+      state.axes.forEach((v, i) => {
+        const rv = r.axes[i];
+        if (settling || rv === undefined) { r.axes[i] = v; return; }
+        if (!isHatRest(rv) && isHatRest(v)) { r.axes[i] = v; return; }
+        if (isHatRest(rv)) {
+          const d = hatDirection(v);
+          if (d) ev.push({ kind: 'hat', index: i, dir: d, hat: 1 + r.axes.slice(0, i).filter(isHatRest).length });
+          return;
+        }
+        if (Math.abs(v - rv) >= this.threshold) ev.push({ kind: 'axis', index: i, dir: v > rv ? 1 : -1 });
+      });
+      out.set(key, ev);
+    }
+    return out;
+  }
+  /** resting snapshot for a device (for diagnostics) */
+  restOf(key: string): PadState | undefined { return this.pads.get(key)?.rest; }
 }
 
 /* -------------------------------------------------------------- manual entry */

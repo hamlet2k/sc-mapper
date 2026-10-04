@@ -59,6 +59,11 @@ export function formatInput(slot: Slot, instance: number, input: string): string
   return `${slot}${slot === 'kb' || slot === 'mo' ? 1 : instance}_${input || ' '}`;
 }
 
+/** Exact search term for a binding: device prefix + instance + input ("js1_button5", "kb1_lalt+n", "mo1_mouse2") */
+export function searchSpec(slot: Slot, instance: number, input: string): string {
+  return `${slot}${slot === 'kb' || slot === 'mo' ? 1 : instance}_${normalizeCombo(input)}`;
+}
+
 export function physOf(slot: Slot, instance: number, input: string): string {
   const n = normalizeCombo(input);
   if (slot === 'kb' || slot === 'mo') return `km:${n}`;
