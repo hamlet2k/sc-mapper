@@ -1,7 +1,8 @@
 // Quick headless self-test of parsing, merging, search and conflicts.
 import { readFileSync } from 'node:fs';
-import { DOMParser } from '@xmldom/xmldom';
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 (globalThis as any).DOMParser = DOMParser;
+(globalThis as any).XMLSerializer = XMLSerializer;
 const { buildRows } = await import('../src/lib/merge');
 const { findConflicts } = await import('../src/lib/conflicts');
 const { parseActionMaps } = await import('../src/lib/importer');

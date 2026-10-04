@@ -1,16 +1,31 @@
 export type Slot = 'kb' | 'mo' | 'js' | 'gp';
 export type Device = 'keyboard' | 'mouse' | 'joystick' | 'gamepad';
+/**
+ * Rebind device groups as the game treats them: keyboard and mouse are one device ("KeyboardMouse"),
+ * so a kb1_/mo1_ rebind replaces both the keyboard= and mouse= defaults of an action.
+ */
+export type Group = 'km' | 'js' | 'gp';
 
 export interface DefaultBinding { slot: Slot; input: string; mode?: string }
 export interface DefaultAction { name: string; label: string; desc?: string; mode?: string; hidden?: boolean; d: DefaultBinding[] }
-export interface DefaultMap { name: string; label: string; category: string; hidden?: boolean; actions: DefaultAction[] }
+export interface DefaultMap {
+  name: string; label: string; category: string;
+  /** raw UICategory key from defaultProfile.xml (e.g. "@ui_CCSpaceFlight"), used for layout export headers */
+  cat?: string;
+  hidden?: boolean; actions: DefaultAction[];
+}
 export interface DefaultsMeta {
   game: string; branch?: string; version?: string; buildDate?: string; channel?: string;
   source: string; sourceUrl: string; generated: string;
 }
 export interface DefaultsData { meta: DefaultsMeta; maps: DefaultMap[] }
 
-export interface Rebind { slot: Slot; instance: number; input: string; mode?: string; multiTap?: number }
+export interface Rebind {
+  slot: Slot; instance: number; input: string; mode?: string; multiTap?: number;
+  /** informational: the default input this rebind replaced (the game writes it; kept for faithful re-export) */
+  defaultInput?: string;
+}
+export type RebindMap = Record<string, Record<string, Rebind[]>>;
 export interface ProfileDevice { slot: Slot; instance: number; product: string }
 export interface Profile {
   id: string;
@@ -19,8 +34,15 @@ export interface Profile {
   importedAt: string;
   devices: ProfileDevice[];
   /** map name -> action name -> rebinds */
-  rebinds: Record<string, Record<string, Rebind[]>>;
+  rebinds: RebindMap;
   rebindCount: number;
+  /** <deviceoptions>/<options> elements from the imported file, re-emitted verbatim on export (curves, inverts, deadzones) */
+  optionsXml?: string[];
+  /** rebinds as originally imported, for "revert to imported" */
+  original?: RebindMap;
+  /** true when created in the app rather than imported */
+  local?: boolean;
+  editedAt?: string;
 }
 
 export interface Binding {
@@ -47,7 +69,8 @@ export interface Row {
   hidden: boolean;
   unlisted: boolean;
   bindings: Binding[];
-  cleared: Slot[];
+  /** device columns whose default binding was removed by the profile */
+  cleared: Device[];
   customized: boolean;
   order: number;
   defaults: DefaultBinding[];

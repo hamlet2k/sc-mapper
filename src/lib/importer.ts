@@ -30,6 +30,10 @@ export function parseActionMaps(text: string, fileName: string): Profile {
   const profileName = container.getAttribute('profileName') || header?.getAttribute('label') || '';
 
   const devices: ProfileDevice[] = [];
+  const ser = new XMLSerializer();
+  const optionsXml = Array.from(container.children)
+    .filter((c) => c.tagName === 'options' || c.tagName === 'deviceoptions')
+    .map((c) => ser.serializeToString(c).replace(/ xmlns="[^"]*"/, '').replace(/<([A-Za-z_][\w.-]*)\/>/g, '<$1 />'));
   for (const o of Array.from(container.children).filter((c) => c.tagName === 'options')) {
     const slot = TYPE_SLOT[(o.getAttribute('type') ?? '').toLowerCase()];
     const product = (o.getAttribute('Product') ?? '').replace(/\{[0-9A-F-]+\}/i, '').replace(/\s+/g, ' ').trim();
@@ -50,7 +54,8 @@ export function parseActionMaps(text: string, fileName: string): Profile {
         if (!p) continue;
         const mode = rb.getAttribute('activationMode') || undefined;
         const mt = Number(rb.getAttribute('multiTap')) || undefined;
-        list.push({ ...p, ...(mode ? { mode } : {}), ...(mt && mt > 1 ? { multiTap: mt } : {}) });
+        const di = rb.getAttribute('defaultInput');
+        list.push({ ...p, ...(mode ? { mode } : {}), ...(mt && mt > 1 ? { multiTap: mt } : {}), ...(di != null && di !== '' ? { defaultInput: di } : {}) });
       }
       if (!list.length) continue;
       (rebinds[mapName] ??= {})[actionName] = [...(rebinds[mapName][actionName] ?? []), ...list];
@@ -69,5 +74,7 @@ export function parseActionMaps(text: string, fileName: string): Profile {
     devices,
     rebinds,
     rebindCount: count,
+    optionsXml,
+    original: JSON.parse(JSON.stringify(rebinds)),
   };
 }
