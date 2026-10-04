@@ -65,9 +65,10 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
   actions bound to it in the current profile (amber = customized, red = conflict). Callouts light up blue while you press or move the control.
   Clicking a callout opens a panel with the bound actions (Edit, Unbind, show in list) and "bind an action to this input". Bound inputs with
   no callout are listed beside the picture. **PNG** export and **Print** (print CSS shows only the device sheet).
-- **Device templates**: the default stick (grip + base) is an original holographic wireframe drawing generated from a small 3D model
-  (`scripts/gen-default-stick.mjs`; no vendor artwork), with callouts for every control and glow regions that light the control on the
-  picture when it is pressed or moved. A simple SVG throttle, gamepad and *classic* stick are also built in. ✎ *Customize a copy*
+- **Device templates**: the default stick (grip + base) and default throttle (twin split levers + control panel) are original holographic
+  wireframe drawings generated from small 3D models (`scripts/gen-default-stick.mjs`, `scripts/gen-default-throttle.mjs`; no vendor artwork),
+  with callouts for every control and glow regions that light the control on the picture when it is pressed or moved. Simple SVG
+  *classic* stick/throttle and a gamepad template are also built in. ✎ *Customize a copy*
   or ＋ *New template* opens the editor: upload a photo/render of your device (PNG/JPEG/WebP/SVG; scaled to at most 1600 px and re-encoded
   client-side, max 2.5 MB, stored in IndexedDB with a localStorage fallback) or use a blank canvas; add callouts by clicking the picture or with
   **🎯 Press to place** (press each control and a callout for that input appears: a hat push adds the whole hat); drag the anchor and the label
