@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-display: 'Rajdhani', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --color-void: #04070c;
+  --color-panel: #08111d;
+  --color-panel2: #0c1828;
+  --color-edge: #17324b;
+  --color-edge2: #23506f;
+  --color-hud: #4fd8ff;
+  --color-hud2: #8be9ff;
+  --color-mod: #ffb547;
+  --color-alert: #ff4d6d;
+  --color-ok: #4dffb5;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background-color: var(--color-void);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(79, 216, 255, 0.12), transparent 60%),
+    linear-gradient(rgba(79, 216, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79, 216, 255, 0.035) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+  color: #cfe6f5;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hud-panel {
+  background: linear-gradient(180deg, rgba(12, 24, 40, 0.92), rgba(8, 17, 29, 0.92));
+  border: 1px solid var(--color-edge);
+  box-shadow: inset 0 1px 0 rgba(139, 233, 255, 0.06), 0 10px 30px -15px rgba(0, 0, 0, 0.8);
+}
+.hud-corners { position: relative; }
+.hud-corners::before, .hud-corners::after {
+  content: ''; position: absolute; width: 10px; height: 10px; border-color: var(--color-hud); opacity: .7; pointer-events: none;
+}
+.hud-corners::before { top: -1px; left: -1px; border-top: 2px solid; border-left: 2px solid; }
+.hud-corners::after { bottom: -1px; right: -1px; border-bottom: 2px solid; border-right: 2px solid; }
+
+.keycap {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.6rem; padding: 0.05rem 0.4rem; border-radius: 4px;
+  font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500; line-height: 1.25rem;
+  background: linear-gradient(180deg, #13263a, #0b1726);
+  border: 1px solid #234a66; border-bottom-width: 2px; color: #d7f3ff; white-space: nowrap;
+}
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: #23506f transparent; }
+.row-cv { content-visibility: auto; contain-intrinsic-size: auto 52px; }
+.glow-text { text-shadow: 0 0 12px rgba(79, 216, 255, 0.55); }
+@keyframes scan { from { transform: translateY(-100%); } to { transform: translateY(100vh); } }
+.scanline { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+.scanline::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 120px;
+  background: linear-gradient(180deg, transparent, rgba(79, 216, 255, 0.035), transparent);
+  animation: scan 9s linear infinite;
+}
