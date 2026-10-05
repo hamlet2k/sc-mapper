@@ -22,6 +22,8 @@ export interface PhotoLayoutView {
   label: string;
   /** photo file name without extension: public/device-photos/<photo>.webp (a key of DEVICE_PHOTO_SIZES) */
   photo: string;
+  /** alternatives (e.g. interchangeable grips): views with the same key show one at a time (TemplateView.swap) */
+  swap?: string;
 }
 export interface PhotoAnchor {
   view: string;
@@ -355,8 +357,16 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
     },
   },
   // Batch 4 (densest): measured with grid overlays; hidden controls placed at their best estimated spot (see the notes).
+  // The third photo swaps with the grip in use (swap 'Grip'): combat grip (default), Airbus or Boeing modules (MOZA product shots,
+  // seen from the front: the right module is on the left of the photo). Airbus 67 and Boeing 72 (left module end caps) face away
+  // from the camera: estimated at the bar ends.
   'builtin-moza-mtq': {
-    views: [{ id: 'levers', label: 'Levers and grip', photo: 'moza-mtq-front' }, { id: 'panel', label: 'Panel', photo: 'moza-mtq-front' }, { id: 'side', label: 'Grip rear', photo: 'moza-mtq-side' }],
+    views: [
+      { id: 'levers', label: 'Levers and grip', photo: 'moza-mtq-front' }, { id: 'panel', label: 'Panel', photo: 'moza-mtq-front' },
+      { id: 'combat', label: 'Combat grip (rear)', photo: 'moza-mtq-side', swap: 'Grip' },
+      { id: 'airbus', label: 'Airbus grips (front)', photo: 'moza-mtq-airbus', swap: 'Grip' },
+      { id: 'boeing', label: 'Boeing grips (front)', photo: 'moza-mtq-boeing', swap: 'Grip' },
+    ],
     anchors: {
       spbrk: { view: 'levers', x: 0.44, y: 0.34 },
       spbrkb: { view: 'levers', x: 0.41, y: 0.48 },
@@ -378,9 +388,20 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       t25: { view: 'panel', x: 0.36, y: 0.707 },
       t27: { view: 'panel', x: 0.424, y: 0.72 },
       t29: { view: 'panel', x: 0.487, y: 0.718 },
-      mini: { view: 'side', x: 0.535, y: 0.207 },
-      minib: { view: 'side', x: 0.545, y: 0.22 },
-      b63: { view: 'side', x: 0.683, y: 0.224 },
+      mini: { view: 'combat', x: 0.535, y: 0.207 },
+      minib: { view: 'combat', x: 0.545, y: 0.22 },
+      b65: { view: 'combat', x: 0.683, y: 0.224 },
+      wheel: { view: 'combat', x: 0.81, y: 0.19 },
+      ab66: { view: 'airbus', x: 0.32, y: 0.205 },
+      ab67: { view: 'airbus', x: 0.785, y: 0.17 },
+      ap68: { view: 'boeing', x: 0.175, y: 0.17 },
+      toga69: { view: 'boeing', x: 0.415, y: 0.505 },
+      rev70: { view: 'boeing', x: 0.37, y: 0.615 },
+      rev71: { view: 'boeing', x: 0.385, y: 0.705 },
+      ap72: { view: 'boeing', x: 0.725, y: 0.13 },
+      toga73: { view: 'boeing', x: 0.565, y: 0.495 },
+      rev74: { view: 'boeing', x: 0.69, y: 0.6 },
+      rev75: { view: 'boeing', x: 0.685, y: 0.69 },
     },
   },
   'builtin-virpil-vmax-prime': {

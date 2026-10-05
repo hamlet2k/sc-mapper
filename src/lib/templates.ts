@@ -49,6 +49,10 @@ export interface TemplateView {
   /** canvas size (any unit, only the ratio matters for the layout) */
   width: number;
   height: number;
+  /** views with the same `swap` key are alternatives (e.g. interchangeable grips): only one of them shows at a time, the first
+   * one by default; pressing a control that sits on another one switches to it (see viewSwap.ts). The key is also the caption
+   * of the switcher (e.g. 'Grip') */
+  swap?: string;
 }
 export interface TemplateMatch {
   /** USB vendor / product id, 4 hex digits */
@@ -81,7 +85,11 @@ export interface DeviceTemplate {
   loadImage?: () => Promise<string>;
   updatedAt?: number;
 }
-export interface DeviceIdentity { name?: string; vendor?: string; productId?: string; buttons?: number; slot?: 'js' | 'gp' }
+export interface DeviceIdentity {
+  name?: string; vendor?: string; productId?: string; buttons?: number; slot?: 'js' | 'gp';
+  /** connected device sharing its USB id with others: its place among them (1-based, browser order) and how many there are */
+  dup?: { n: number; of: number };
+}
 
 export const MAX_IMAGE_BYTES = 2_500_000;
 export const MAX_IMAGE_SIDE = 1600;
@@ -204,16 +212,33 @@ export function migratePicks(p: unknown): { picks: Record<string, string>; chang
   }
   return { picks, changed };
 }
+/**
+ * Identical devices told apart by their order: a MOZA flight base reports the throttle plugged into it as a second device with the
+ * base's own USB id, so with two (or more) of them the 1st is the stick and the others the throttle: AB6 -> MTQ, AB9 -> MTP (a
+ * guess; the user's pick for the device overrides it). `first` = template for the 1st one (none: the usual matching).
+ */
+export const DUP_ORDER_GUESSES: readonly { vendor: string; product: string; label: string; first?: string; rest: string }[] = [
+  { vendor: '346E', product: '1002', label: 'MOZA AB6 bases', first: 'builtin-moza-ab6', rest: 'builtin-moza-mtq' },
+  { vendor: '346E', product: '1000', label: 'MOZA AB9 bases', rest: 'builtin-moza-mtp' },
+];
+/** the template guessed from a device's place among identical devices (DUP_ORDER_GUESSES), if any applies and is in `all` */
+export function dupOrderGuess(all: DeviceTemplate[], d: DeviceIdentity): DeviceTemplate | undefined {
+  if (!d.dup || d.dup.of < 2 || d.dup.n < 1) return undefined;
+  const g = DUP_ORDER_GUESSES.find((x) => x.vendor === hex4(d.vendor) && x.product === hex4(d.productId));
+  const id = g && (d.dup.n === 1 ? g.first : g.rest);
+  return id ? all.find((t) => t.id === id && (!d.slot || t.slot === d.slot)) : undefined;
+}
 /** generic built-in fallback for a device */
 export function fallbackTemplate(d: DeviceIdentity, list: DeviceTemplate[] = BUILTIN_TEMPLATES): DeviceTemplate {
   const id = d.slot === 'gp' ? 'builtin-gamepad' : /throttle|twcs|tqs|quadrant|bravo|cm3|stecs|\bthr\b/i.test(d.name ?? '') ? 'builtin-throttle' : 'builtin-stick';
   return list.find((t) => t.id === id) ?? list[0];
 }
 /**
- * Template for a device: the user's pick for it, else the best-matching template (user templates win ties over built-ins),
- * else a generic built-in.
+ * Template for a device: the user's pick for it, else the best-matching template (user templates win ties over built-ins), else
+ * a generic built-in. Identical devices (DUP_ORDER_GUESSES): the guess from their place beats matching, except a user template
+ * linked by the exact button count (the one match rule that tells them apart).
  */
-export function pickTemplate(all: DeviceTemplate[], d: DeviceIdentity, chosenId?: string): { template: DeviceTemplate; how: 'chosen' | 'matched' | 'fallback'; score: number } {
+export function pickTemplate(all: DeviceTemplate[], d: DeviceIdentity, chosenId?: string): { template: DeviceTemplate; how: 'chosen' | 'guessed' | 'matched' | 'fallback'; score: number } {
   const id = chosenId ? RETIRED_BUILTINS[chosenId] ?? chosenId : undefined;
   const chosen = id ? all.find((t) => t.id === id) : undefined;
   if (chosen) return { template: chosen, how: 'chosen', score: matchScore(chosen, d) };
@@ -222,12 +247,16 @@ export function pickTemplate(all: DeviceTemplate[], d: DeviceIdentity, chosenId?
     const s = matchScore(t, d) + (t.builtin ? 0 : 0.5);
     if (matchScore(t, d) > 0 && s > bs) { best = t; bs = s; }
   }
+  const guess = dupOrderGuess(all, d);
+  const byButtons = !!best && !best.builtin && best.match.some((m) => m.buttons && matchScore({ ...best!, match: [m] }, d) > 0);
+  if (guess && !byButtons) return { template: guess, how: 'guessed', score: matchScore(guess, d) };
   if (best) return { template: best, how: 'matched', score: Math.floor(bs) };
   return { template: fallbackTemplate(d, all.filter((t) => t.builtin).length ? all.filter((t) => t.builtin) : BUILTIN_TEMPLATES), how: 'fallback', score: 0 };
 }
-/** key under which the user's template pick for a device is remembered: USB id + button count (or name) + game slot */
+/** key under which the user's template pick for a device is remembered: USB id + button count (or name) + game slot, and the
+ * place among identical devices (so the stick and the throttle reported by one MOZA base keep their own picks) */
 export const identityKey = (d: DeviceIdentity) =>
-  `${d.slot ?? 'js'}|${d.vendor && d.productId ? `${hex4(d.vendor)}:${hex4(d.productId)}` : norm(d.name ?? '')}|${d.buttons ?? ''}`;
+  `${d.slot ?? 'js'}|${d.vendor && d.productId ? `${hex4(d.vendor)}:${hex4(d.productId)}` : norm(d.name ?? '')}|${d.buttons ?? ''}${d.dup && d.dup.of > 1 ? `#${d.dup.n}` : ''}`;
 
 /** match rule for "link this template to that device" (button count only when it matters or is known) */
 export const matchFor = (d: DeviceIdentity, withButtons: boolean): TemplateMatch => ({
@@ -265,6 +294,7 @@ export function imageSrc(s: string): string {
   return `${base}${s}`;
 }
 const VIEW_ID_RE = /^[A-Za-z0-9_-]{1,24}$/;
+const SWAP_RE = /^[A-Za-z0-9 _-]{1,24}$/;
 
 /* ------------------------------------------------------------- JSON */
 export const TEMPLATE_FILE_FORMAT = 'sc-mapper-device-templates';
@@ -305,7 +335,8 @@ function cleanTemplate(o: unknown, i: number): DeviceTemplate {
       const okW = Number.isFinite(w) && w > 0 && w < 100000, okH = Number.isFinite(h) && h > 0 && h < 100000;
       const [vw, vh] = okW && okH && w / h > 0.2 && w / h < 5 ? [w, h] : [1000 * BLANK_ASPECT, 1000];
       const image = cleanImage(q.image, `the image of view ${k + 1}`);
-      return { id, label: typeof q.label === 'string' ? q.label.trim().slice(0, 40) : '', ...(image ? { image } : {}), width: vw, height: vh };
+      const swap = typeof q.swap === 'string' && SWAP_RE.test(q.swap.trim()) ? q.swap.trim() : undefined;
+      return { id, label: typeof q.label === 'string' ? q.label.trim().slice(0, 40) : '', ...(image ? { image } : {}), width: vw, height: vh, ...(swap ? { swap } : {}) };
     });
   }
   const image = views ? undefined : cleanImage(t.image, 'the image');

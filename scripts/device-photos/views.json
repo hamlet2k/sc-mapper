@@ -25,6 +25,8 @@
     { "device": "moza-mtp", "view": "main", "label": "Front", "src": "throttles/moza/mtp/MOZA-MTP-Throttle-img-4.webp" },
     { "device": "moza-mtq", "view": "front", "label": "Front", "src": "throttles/moza/mtq/MOZAMTQ-1_507a29a2-917a-4b1e-955d-07f9fd0386ff.webp" },
     { "device": "moza-mtq", "view": "side", "label": "Grip side", "src": "throttles/moza/mtq/MOZAMTQ-4_25f546a8-eae5-4905-9cf1-5dd55deb440c.webp" },
+    { "device": "moza-mtq", "view": "airbus", "label": "Airbus grips", "src": "throttles/moza/mtq/grips/MOZATQAThrottleModule-1.webp" },
+    { "device": "moza-mtq", "view": "boeing", "label": "Boeing grips", "src": "throttles/moza/mtq/grips/MOZATQBThrottleModule-1.webp" },
     { "device": "vkb-gladiator-scg", "view": "front", "label": "Front", "src": "stick/vkb/gladiator/GNE_SCG-R_05.webp" },
     { "device": "vkb-gladiator-scg", "view": "thumb", "label": "Thumb side", "src": "stick/vkb/gladiator/GNE_SCG-R_P_03.webp" },
     { "device": "vkb-gunfighter-mcg", "view": "front", "label": "Front", "src": "stick/vkb/gunfighter/GF_MKIV_MCG_Ultimate_EN_1200_02.webp" },

@@ -549,6 +549,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'Bravo Throttle Quadrant', slot: 'js' }).template.id, 'builtin-throttle');
     assert.equal(tp.pickTemplate(BUILTIN_TEMPLATES, { name: 'VKBsim Gladiator EVO R', slot: 'js' }).how, 'fallback');
     assert.notEqual(tp.identityKey(moza(128)), tp.identityKey(moza(133)));
+    assert.equal(tp.identityKey({ ...moza(128), dup: { n: 2, of: 2 } }), `${tp.identityKey(moza(128))}#2`, 'identical devices: own pick key each');
+    assert.equal(tp.identityKey({ ...moza(128), dup: { n: 1, of: 1 } }), tp.identityKey(moza(128)));
     assert.deepEqual(tp.matchFor(moza(133), true), { vendor: '346E', product: '1002', buttons: 133 });
     assert.deepEqual(tp.matchFor({ name: 'Some Stick' }, false), { name: 'Some Stick' });
   });
@@ -853,7 +855,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(btn(by('winctrl-ursa-combat')), seq(1, 81, [26]), 'URSA MINOR Combat: 1-81 (26 unused)');
     assert.deepEqual(btn(by('moza-ab6')), seq(1, 29), 'AB6 + MGH: grip 1-29');
     assert.deepEqual(btn(by('moza-mtp')), seq(1, 71), 'MTP: 1-71');
-    assert.deepEqual(btn(by('moza-mtq')), seq(1, 65, [44, 45, 46, 47, 48]), 'MTQ: 1-65');
+    assert.deepEqual(btn(by('moza-mtq')), seq(1, 75, [44, 45, 46, 47, 48]), 'MTQ: 1-65 (combat grip) + 66-75 (Airbus / Boeing grips)');
     const ins = (x: DeviceTemplate, id: string) => x.callouts.find((c) => c.id === id)!.inputs;
     const st = by('tm-warthog-stick'), th = by('tm-warthog-throttle');
     assert.deepEqual(ins(st, 'trig'), ['button1', 'button6']); assert.deepEqual(ins(st, 'cms'), ['button15', 'button16', 'button17', 'button18', 'button19']);
@@ -867,6 +869,19 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(ins(by('virpil-alpha-prime'), 'h8'), ['button9', 'button12', 'button11', 'button10', 'button8'], 'Alpha hat: up 9 / right 12 / down 11 / left 10 / push 8');
     assert.deepEqual(ins(by('winctrl-ursa-combat'), 'det'), Array.from({ length: 10 }, (_, i) => `button${16 + i}`), 'URSA: all lever detents in one callout'); assert.deepEqual([ins(by('winctrl-ursa-combat'), 'b28'), ins(by('winctrl-ursa-combat'), 'b29')], [['button28'], ['button29']]);
     assert.deepEqual(ins(by('moza-mtq'), 'flapsb'), ['button40', 'button39', 'button38', 'button37', 'button36']);
+    {
+      // MTQ: ministick 62, button 65 and the side wheel 63 / 64 apart; Airbus / Boeing grip buttons on their own (swappable) photos
+      const q = by('moza-mtq'), on = (v: string) => q.callouts.filter((c) => c.view === v).map((c) => c.id);
+      assert.deepEqual([ins(q, 'minib'), ins(q, 'b65'), ins(q, 'wheel'), q.callouts.find((c) => c.id === 'wheel')!.kind], [['button62'], ['button65'], ['button63', 'button64'], 'encoder']);
+      assert.ok(!q.callouts.some((c) => c.id === 'b63'), 'no combined 63-65 callout');
+      assert.deepEqual(q.views!.map((v) => [v.id, v.swap ?? '']), [['levers', ''], ['panel', ''], ['combat', 'Grip'], ['airbus', 'Grip'], ['boeing', 'Grip']]);
+      assert.deepEqual(on('combat'), ['mini', 'minib', 'b65', 'wheel']);
+      assert.deepEqual(on('airbus'), ['ab66', 'ab67']); assert.deepEqual([ins(q, 'ab66'), ins(q, 'ab67')], [['button66'], ['button67']]);
+      assert.deepEqual(on('boeing').map((id) => ins(q, id)[0]).sort(), seq(68, 75).map((n) => `button${n}`).sort());
+      assert.deepEqual([ins(q, 'ap72'), ins(q, 'toga73'), ins(q, 'rev74'), ins(q, 'rev75')], [['button72'], ['button73'], ['button74'], ['button75']], 'Boeing left: AP disc / TOGA / reverser up / normal');
+      assert.deepEqual([ins(q, 'ap68'), ins(q, 'toga69'), ins(q, 'rev70'), ins(q, 'rev71')], [['button68'], ['button69'], ['button70'], ['button71']], 'Boeing right');
+      assert.equal(tp.maxButton(q), 75); assert.match(q.notes!, /up to 75/);
+    }
     assert.match(by('winctrl-ursa-combat').notes!, /grip maps/); assert.doesNotMatch(by('winctrl-ursa-combat').notes!, /PROVISIONAL/);
     assert.equal(tp.maxButton(by('winctrl-orion')), 111); assert.equal(tp.maxButton(by('tm-warthog-throttle')), 32);
     // auto-link: USB id (Chromium id string), name only (Firefox), generic fallback for other devices
@@ -880,6 +895,18 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(pick('TWCS Throttle (Vendor: 044f Product: b687)', 14), 'builtin-tm-twcs');
     assert.equal(pick('MOZA AB6 Flight Base (Vendor: 346e Product: 1002)', 128), 'builtin-moza-ab6', 'AB6 with 128 buttons');
     assert.equal(pick('346e-1002-MOZA AB6 Flight Base', 133), 'builtin-moza-ab6', 'AB6 with 133 buttons');
+    // two identical MOZA bases: the 2nd is the throttle plugged into the base (AB6 -> MTQ, AB9 -> MTP); a pick wins; user templates don't
+    const ab6 = (n: number, of = 2) => ({ ...ident('MOZA AB6 FFB Base (Vendor: 346e Product: 1002)', 128), dup: { n, of } });
+    const ab9 = (n: number, of = 2) => ({ ...ident('MOZA AB9 FFB Base (Vendor: 346e Product: 1000)', 128), dup: { n, of } });
+    assert.deepEqual([tp.pickTemplate(all, ab6(1)).template.id, tp.pickTemplate(all, ab6(2)).template.id, tp.pickTemplate(all, ab6(3, 3)).template.id], ['builtin-moza-ab6', 'builtin-moza-mtq', 'builtin-moza-mtq']);
+    assert.equal(tp.pickTemplate(all, ab6(2)).how, 'guessed');
+    assert.equal(tp.pickTemplate(all, ab6(2), 'builtin-moza-mtp').template.id, 'builtin-moza-mtp', 'the user pick wins over the guess');
+    assert.equal(tp.pickTemplate(all, ab9(2)).template.id, 'builtin-moza-mtp', 'AB9: the 2nd is the MTP');
+    assert.notEqual(tp.pickTemplate(all, ab9(1)).how, 'guessed', 'AB9: no stick guess for the 1st (no AB9 template)');
+    assert.equal(tp.pickTemplate(all, { ...ab6(1), dup: undefined }).template.id, 'builtin-moza-ab6', 'one AB6: the stick');
+    assert.equal(tp.pickTemplate([tpl('mine', [{ vendor: '346E', product: '1002' }]), ...all], ab6(2)).template.id, 'builtin-moza-mtq', 'identical devices: the order guess beats a match rule (a copy is picked explicitly)');
+    assert.equal(tp.pickTemplate([tpl('mine-128', [{ vendor: '346E', product: '1002', buttons: 128 }]), ...all], ab6(2)).template.id, 'mine-128', 'a user template linked by the exact button count beats the guess');
+    assert.equal(tp.pickTemplate(all, { ...ab6(2), slot: 'gp' }).how, 'fallback', 'slot respected');
     assert.equal(pick('WINCTRL URSA MINOR Combat Joystick (Vendor: 4098 Product: b970)', 81), 'builtin-winctrl-ursa-combat');
     assert.equal(pick('4098-bc27-WINCTRL URSA MINOR Throttle', 81), 'builtin-winctrl-ursa-combat');
     assert.equal(tp.pickTemplate(all, { name: 'URSA MINOR Throttle L', slot: 'js' }).template.id, 'builtin-winctrl-ursa-combat', 'URSA by name');
@@ -984,6 +1011,49 @@ console.log('\nphoto views: focus on press');
     assert.equal(vf.scrollDelta({ top: -900, bottom: -300 }, port), -1100, 'above: centred');
     assert.equal(vf.scrollDelta({ top: 1000, bottom: 2200 }, port, { top: 1990, bottom: 2010 }), 1300, 'taller than the area: marker centred, clamped to the view bottom');
     assert.equal(vf.scrollDelta({ top: 1000, bottom: 2200 }, port, { top: 1590, bottom: 1610 }), 1100, 'taller than the area: marker centred');
+  });
+}
+console.log('\nphoto views: swappable views (interchangeable grips)');
+{
+  const vs = await import('../src/lib/viewSwap');
+  const tp = await import('../src/lib/templates');
+  const V = (id: string, swap?: string) => ({ id, label: id.toUpperCase(), width: 200, height: 100, ...(swap ? { swap } : {}) });
+  const C = (id: string, view: string, inputs: string[]) => ({ id, kind: 'button', view, inputs, anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } });
+  const g = {
+    id: 'g', name: 'g', version: 1, slot: 'js', match: [], aspect: 2,
+    views: [V('levers'), V('combat', 'Grip'), { ...V('airbus', 'Grip'), width: 300 }, V('boeing', 'Grip'), V('lonely', 'Solo')],
+    callouts: [C('thr', 'levers', ['rotx']), C('mini', 'combat', ['x', 'button62']), C('ab66', 'airbus', ['button66']), C('ap68', 'boeing', ['button68']), C('h', 'boeing', ['hat1_up']), C('s', 'lonely', ['button9'])],
+  } as any;
+  t('swapGroups / visibleViews: one view per swap group (the first by default), its callouts only; single-view groups ignored', () => {
+    assert.deepEqual([...vs.swapGroups(g)], [['Grip', ['combat', 'airbus', 'boeing']]]);
+    const d = vs.visibleViews(g, {});
+    assert.deepEqual(d.views!.map((v: any) => v.id), ['levers', 'combat', 'lonely']);
+    assert.deepEqual(d.callouts.map((c: any) => c.id), ['thr', 'mini', 's']);
+    const a = vs.visibleViews(g, { Grip: 'airbus' });
+    assert.deepEqual(a.views!.map((v: any) => v.id), ['levers', 'airbus', 'lonely']); assert.deepEqual(a.callouts.map((c: any) => c.id), ['thr', 'ab66', 's']);
+    assert.deepEqual(vs.visibleViews(g, { Grip: 'nope' }).views!.map((v: any) => v.id), ['levers', 'combat', 'lonely'], 'unknown choice: the first');
+    assert.equal(vs.visibleViews(vs.visibleViews(g, {}), {}).views!.length, 3);
+    const first = vs.visibleViews({ ...g, views: [V('combat', 'Grip'), { ...V('airbus', 'Grip'), width: 300 }] }, { Grip: 'airbus' });
+    assert.equal(first.aspect, 3, 'aspect follows the first shown view');
+    const plain = { ...g, views: [V('a'), V('b')] };
+    assert.equal(vs.visibleViews(plain, {}), plain, 'no swap groups: unchanged');
+  });
+  t('swapInputs / swapPresses: a fresh button / hat press on another view of the group switches to it (axes and held inputs do not)', () => {
+    const m = vs.swapInputs(g);
+    assert.deepEqual(Object.fromEntries(m), { button62: ['Grip', 'combat'], button66: ['Grip', 'airbus'], button68: ['Grip', 'boeing'], hat1_up: ['Grip', 'boeing'] });
+    const S = (...a: string[]) => new Set(a);
+    assert.deepEqual(vs.swapPresses(S(), S('button66'), m), { Grip: 'airbus' });
+    assert.equal(vs.swapPresses(S('button66'), S('button66'), m), null, 'held: no new choice');
+    assert.equal(vs.swapPresses(S(), S('x', 'rotx', 'button9'), m), null, 'axes / non-swap views: nothing');
+    assert.deepEqual(vs.swapPresses(S(), S('button66', 'hat1_up'), m), { Grip: 'boeing' }, 'the newest wins');
+    assert.deepEqual(vs.swapShown(g, { Grip: 'boeing' }), { Grip: 'boeing' }); assert.deepEqual(vs.swapShown(g, {}), { Grip: 'combat' });
+  });
+  t('swap groups survive export / import (user copies keep the grip switch)', () => {
+    const src = { ...g, id: 'copy', views: g.views.map((v: any) => ({ ...v, image: '/device-photos/moza-mtq-airbus.webp' })) };
+    const back = tp.parseTemplates(tp.exportTemplates([src]))[0];
+    assert.deepEqual(back.views!.map((v) => v.swap ?? ''), ['', 'Grip', 'Grip', 'Grip', 'Solo']);
+    const bad = tp.parseTemplates(JSON.stringify({ ...src, views: [{ ...src.views[0], swap: '<b>x</b>' }] }))[0];
+    assert.equal(bad.views![0].swap, undefined, 'odd swap keys dropped');
   });
 }
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);

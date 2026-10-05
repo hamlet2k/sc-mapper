@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { padLabel, parseProfileProduct, type PadInfo, type PadLike } from '../lib/devices';
 import { formatInput, searchSpec } from '../lib/inputs';
 import {
-  calloutFor, calloutTitle, cloneTemplate, coveredInputs, exportTemplates, identityKey, inputRole, matchFor, matchScore, maxButton, newTemplate,
+  DUP_ORDER_GUESSES, calloutFor, calloutTitle, cloneTemplate, coveredInputs, exportTemplates, identityKey, inputRole, matchFor, matchScore, maxButton, newTemplate,
   calloutView, imageSrc, parseTemplates, pickTemplate, resolveTemplateImage, templateViews, shortInput, splitCombo, templateGroups, unassignedCount, useTemplateImage, useTemplates,
   type Callout, type DeviceIdentity, type DeviceTemplate,
 } from '../lib/templates';
@@ -12,6 +12,7 @@ import type { Binding, ProfileDevice, Row, Slot } from '../lib/types';
 import { CalloutBody, DeviceCanvas, TONE_STROKE, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
 import { TemplateEditor } from './TemplateEditor';
 import { useFocusPressedView } from './useFocusPressedView';
+import { useSwapViews } from './useSwapViews';
 
 interface DevOption { key: string; slot: 'js' | 'gp'; instance: number; label: string; pad?: PadInfo; ident: DeviceIdentity }
 interface Props {
@@ -43,7 +44,7 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
   // devices: connected ones (with their game numbers), the profile's, and any js/gp number that has bindings
   const options = useMemo(() => {
     const out: DevOption[] = [];
-    for (const p of pads) out.push({ key: `pad:${p.key}`, slot: p.kind, instance: p.instance, label: `${p.kind.toUpperCase()}${p.instance} · ${padLabel(p)}`, pad: p, ident: { name: p.name, vendor: p.vendor, productId: p.productId, buttons: p.buttons, slot: p.kind } });
+    for (const p of pads) out.push({ key: `pad:${p.key}`, slot: p.kind, instance: p.instance, label: `${p.kind.toUpperCase()}${p.instance} · ${padLabel(p)}`, pad: p, ident: { name: p.name, vendor: p.vendor, productId: p.productId, buttons: p.buttons, slot: p.kind, ...(p.dup ? { dup: p.dup } : {}) } });
     for (const d of profileDevices) {
       if ((d.slot !== 'js' && d.slot !== 'gp') || out.some((o) => o.slot === d.slot && o.instance === d.instance)) continue;
       const pp = parseProfileProduct(d.rawProduct ?? d.product);
@@ -68,6 +69,9 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
   // multi-view photo templates: a pressed control brings the photo with its marker into sight (not while the editor is open)
   const canvasRef = useRef<HTMLDivElement>(null);
   const pulse = useFocusPressedView(tpl, live.active, canvasRef, !editing);
+  // swappable views (e.g. the MTQ's grips): only the one in use shows; a press on another one's control switches to it
+  const swap = useSwapViews(tpl, live.active, idKey);
+  const shownTpl = swap.shown;
 
   // bindings of this device by physical input
   const index = useMemo(() => {
@@ -85,7 +89,7 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
   }, [rows, slot, instance, conflictRows]);
   const covered = useMemo(() => new Set(tpl.callouts.flatMap(coveredInputs)), [tpl]);
   const overflow = [...index.keys()].filter((k) => !covered.has(k)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  const groups = [...new Set(tpl.callouts.map((c) => c.group).filter((g): g is string => !!g))];
+  const groups = [...new Set(shownTpl.callouts.map((c) => c.group).filter((g): g is string => !!g))];
 
   const entriesOf = (inputs: string[]) => inputs.flatMap((i) => index.get(i) ?? []);
   const stateOf = (c: Callout): CalloutState => {
@@ -103,7 +107,8 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
   const saveTemplate = async (t: DeviceTemplate) => {
     try {
       const v = await T.save(t);
-      if (!matchScore(v, ident) || (T.picks[idKey] && T.picks[idKey] !== v.id)) T.pick(idKey, v.id);
+      // (identical devices can't be told apart by a match rule: the copy is picked for this one explicitly)
+      if (!matchScore(v, ident) || ident.dup || (T.picks[idKey] && T.picks[idKey] !== v.id)) T.pick(idKey, v.id);
       setEditing(null);
       notify('ok', `Saved template “${v.name}”`);
     } catch (e) { notify('err', `Could not save the template: ${(e as Error).message}`); }
@@ -124,7 +129,7 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
     return { title: `${calloutTitle(c)}${c.label ? ` (${c.inputs.map(shortInput).join(' ')})` : ''}`, lines: lines.length ? lines : ['—'], tone: stateOf(c).tone };
   };
   const exportPng = async () => {
-    try { download(`${slug(opt.label)}-${slot}${instance}.png`, await renderPng(await resolveTemplateImage(tpl), labelInfo, `${slot.toUpperCase()}${instance} · ${ident.name ?? tpl.name}`)); }
+    try { download(`${slug(opt.label)}-${slot}${instance}.png`, await renderPng(await resolveTemplateImage(shownTpl), labelInfo, `${slot.toUpperCase()}${instance} · ${ident.name ?? tpl.name}`)); }
     catch (e) { notify('err', `PNG export failed: ${(e as Error).message}`); }
   };
   const customize = async () => {
@@ -181,7 +186,7 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
         </div>
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 print:hidden" data-testid="device-status">
-        <span>Template <b className="text-slate-300">{tpl.name}</b>: {chosen.how === 'chosen' ? 'picked by you for this device' : chosen.how === 'matched' ? `linked to this device (${describeMatch(tpl, ident)})` : 'generic (no template linked to this device yet: customize a copy to place the callouts on your own device)'}</span>
+        <span>Template <b className="text-slate-300">{tpl.name}</b>: {chosen.how === 'chosen' ? 'picked by you for this device' : chosen.how === 'guessed' ? `guessed: device ${ident.dup!.n} of ${ident.dup!.of} identical ${guessLabel(ident)} (the 1st is taken as the stick, the others as the throttle plugged into the base; pick another template if it is not)` : chosen.how === 'matched' ? `linked to this device (${describeMatch(tpl, ident)})` : 'generic (no template linked to this device yet: customize a copy to place the callouts on your own device)'}</span>
         {tpl.notes && <span className="text-slate-400" data-testid="template-notes">ⓘ {tpl.notes}</span>}
         <span>{opt.pad ? <span className="text-ok">● live: press or move a control and it lights up</span> : 'Connect the device (and press a button) for live highlight.'}</span>
         <Legend />
@@ -194,10 +199,21 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
           ))}
         </div>
       )}
+      {[...swap.groups].map(([g, ids]) => (
+        <div key={g} className="flex flex-wrap items-center gap-1 text-[11px] print:hidden" data-testid="swap-views" data-swap={g}>
+          <span className="text-slate-500">{g}:</span>
+          {ids.map((id) => {
+            const v = tpl.views!.find((x) => x.id === id)!;
+            return <button key={id} type="button" data-swap-view={id} aria-pressed={swap.current[g] === id} onClick={() => swap.choose({ [g]: id })}
+              className={`rounded border px-2 py-0.5 ${swap.current[g] === id ? 'border-hud/60 bg-hud/10 text-hud2' : 'border-edge text-slate-400'}`}>{v.label}</button>;
+          })}
+          <span className="text-slate-600">switches by itself when you press a control that only the other one has</span>
+        </div>
+      ))}
       <div className="flex min-h-0 flex-1 gap-3">
         <div ref={canvasRef} className="min-w-0 flex-1 overflow-auto scrollbar-thin" data-print-area>
           <div className="mb-1 hidden font-display text-lg font-bold text-black print:block">{slot.toUpperCase()}{instance} · {ident.name ?? tpl.name}</div>
-          <DeviceCanvas template={tpl} stateOf={stateOf} selected={selected} onSelect={(id) => setSelected(id)} pulse={pulse}
+          <DeviceCanvas template={shownTpl} stateOf={stateOf} selected={selected} onSelect={(id) => setSelected(id)} pulse={pulse}
             renderLabel={(c, s) => <CalloutBody c={c} s={s} entriesFor={(i) => index.get(i) ?? []} live={live} />} />
         </div>
         <aside className="w-80 shrink-0 space-y-3 overflow-y-auto scrollbar-thin print:hidden">
@@ -237,6 +253,7 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
   );
 }
 
+const guessLabel = (d: DeviceIdentity) => DUP_ORDER_GUESSES.find((g) => g.vendor === (d.vendor ?? '').toUpperCase().padStart(4, '0') && g.product === (d.productId ?? '').toUpperCase().padStart(4, '0'))?.label ?? 'devices';
 function describeMatch(t: DeviceTemplate, d: DeviceIdentity) {
   const best = t.match.map((m) => ({ m, s: matchScore({ ...t, match: [m] }, d) })).sort((a, b) => b.s - a.s)[0]?.m;
   if (!best) return 'linked';

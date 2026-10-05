@@ -146,7 +146,7 @@ export function photoViews(layout: DevicePhotoLayout): { views: TemplateView[]; 
     if (!size || !/^[a-z0-9][a-z0-9-]{0,80}$/.test(v.photo)) { problems.push(`unknown photo “${v.photo}”`); continue; }
     ids.add(v.id);
     const [pw, ph] = size;
-    views.push({ id: v.id, label: v.label, image: `/device-photos/${v.photo}.webp`, width: Math.round(pw + 2 * PHOTO_GUTTER * ph), height: ph });
+    views.push({ id: v.id, label: v.label, image: `/device-photos/${v.photo}.webp`, width: Math.round(pw + 2 * PHOTO_GUTTER * ph), height: ph, ...(v.swap ? { swap: v.swap } : {}) });
   }
   return { views, problems };
 }
@@ -474,7 +474,7 @@ tpl('moza-mtp', {
 ]);
 tpl('moza-mtq', {
   id: 'builtin-moza-mtq', name: 'MOZA MTQ throttle quadrant', brand: 'MOZA',
-  notes: MOZA_NOTE + ' Uses buttons up to 65: Chrome / Edge only report the first 32, use Firefox.',
+  notes: MOZA_NOTE + ' Grip photo follows the grip in use (combat, Airbus 66 / 67, Boeing 68-75): press one of its buttons or pick it above the picture. Uses buttons up to 75: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ name: 'MOZA MTQ' }, { name: 'MTQ Throttle' }],
 }, [
   c('spbrk', 'axis', ['slider2'], 'Speedbrake lever', 'Levers'), c('spbrkb', 'switch', b(43, 31), 'Speedbrake (detents)', 'Levers', { art: 'spbrk' }),
@@ -488,7 +488,13 @@ tpl('moza-mtq', {
   c('h56', 'hat', b(56, 53, 55, 54, 52), 'Hat (4-way + push)', 'Right grip'), c('h61', 'hat', b(61, 58, 60, 59, 57), 'Hat (4-way + push)', 'Right grip'),
   c('slide', 'switch', b(51, 49, 50), 'Slide (3 pos)', 'Right grip'),
   c('mini', 'axis', ['x', 'y'], 'Ministick', 'Left grip'), c('minib', 'button', b(62), 'Ministick press', 'Left grip', { art: 'mini' }),
-  c('b63', 'buttons', b(63, 64, 65), 'Buttons 63-65', 'Left grip'),
+  c('b65', 'button', b(65), 'Button 65', 'Left grip', { art: 'b63' }), c('wheel', 'encoder', b(63, 64), 'Side wheel', 'Left grip', { art: 'b63' }),
+  // alternative grips (on their own photos, shown instead of the combat grip once one of their buttons is pressed)
+  c('ab66', 'button', b(66), 'Right grip button', 'Airbus grips', { art: 'b63' }), c('ab67', 'button', b(67), 'Left grip button', 'Airbus grips', { art: 'b63' }),
+  c('ap68', 'button', b(68), 'Right AP disconnect', 'Boeing grips', { art: 'b63' }), c('toga69', 'button', b(69), 'Right TOGA', 'Boeing grips', { art: 'b63' }),
+  c('rev70', 'button', b(70), 'Right reverser (finger up)', 'Boeing grips', { art: 'b63' }), c('rev71', 'button', b(71), 'Right reverser (finger normal)', 'Boeing grips', { art: 'b63' }),
+  c('ap72', 'button', b(72), 'Left AP disconnect', 'Boeing grips', { art: 'b63' }), c('toga73', 'button', b(73), 'Left TOGA', 'Boeing grips', { art: 'b63' }),
+  c('rev74', 'button', b(74), 'Left reverser (finger up)', 'Boeing grips', { art: 'b63' }), c('rev75', 'button', b(75), 'Left reverser (finger normal)', 'Boeing grips', { art: 'b63' }),
 ]);
 
 /* ------------------------------------------------------------------ devices without published numbers: art + callout spots only */
