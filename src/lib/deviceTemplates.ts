@@ -431,7 +431,7 @@ tpl('winctrl-ursa-combat', {
 const MOZA_NOTE = 'Default numbering from the MOZA diagrams (1-based: button N = jsX_buttonN). MOZA Cockpit can change it: if yours differs, use “Customize a copy”.';
 tpl('moza-ab6', {
   id: 'builtin-moza-ab6', name: 'MOZA AB6 base + MGH grip', brand: 'MOZA',
-  notes: MOZA_NOTE + ' The base keys and wheels have no published numbers yet (shown as “?”): assign them with “Customize a copy”. The base reports 128+ buttons: Chrome / Edge only report the first 32, use Firefox.',
+  notes: MOZA_NOTE + ' Base keys 49-56 and the wheels (slider 57-59, dial 60-62, plus their axes) per the MOZA Cockpit diagram. The base reports 128+ buttons: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ vendor: '346E', product: '1002' }, { name: 'AB6' }],
 }, [
   c('hat7', 'hat', b(7, 8, 9, 10, 11), 'Hat (4-way + push)', 'Grip head', { side: 'L' }),
@@ -446,9 +446,12 @@ tpl('moza-ab6', {
   c('b3', 'button', b(3), 'Rear button', 'Grip', { side: 'R' }),
   c('twist', 'axis', ['rotz'], 'Twist', 'Axes', { side: 'R' }),
   c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
-  c('bkeys', 'buttons', u(8), 'Base keys', 'Base', { side: 'R' }),
-  c('wl', 'encoder', u(2), 'Base wheel (left)', 'Base', { side: 'L' }),
-  c('wr', 'encoder', u(2), 'Base wheel (right)', 'Base', { side: 'R' }),
+  c('bkeys', 'buttons', b(49, 50, 51, 52), 'Base keys (left) 49-52', 'Base', { side: 'L' }),
+  c('bkeysr', 'buttons', b(53, 54, 55, 56), 'Base keys (right) 53-56', 'Base', { side: 'R', art: 'bkeys' }),
+  c('wl', 'axis', ['slider1'], 'Slider wheel (left)', 'Base', { side: 'L' }),
+  c('wlb', 'switch', b(57, 58, 59), 'Slider wheel (zones)', 'Base', { side: 'L', art: 'wl' }),
+  c('wr', 'axis', ['slider2'], 'Dial wheel (right)', 'Base', { side: 'R' }),
+  c('wrb', 'switch', b(60, 61, 62), 'Dial wheel (zones)', 'Base', { side: 'R', art: 'wr' }),
 ]);
 tpl('moza-mtp', {
   id: 'builtin-moza-mtp', name: 'MOZA MTP throttle', brand: 'MOZA',
