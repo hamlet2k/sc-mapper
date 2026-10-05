@@ -39,7 +39,7 @@ export interface DevicePhotoLayout {
 }
 
 // Photo layouts (measured on the photos with grid overlays; controls hidden on every photo are placed at their best estimated spot).
-// Done: Thrustmaster HOTAS Warthog stick + throttle, T.16000M, TWCS, MOZA AB6 + MGH, VKB Gladiator SCG, VKB Gunfighter MCG, VIRPIL Alpha Prime, WinCtrl CarrierAce / ViperAce, Logitech X56 stick + throttle, VKB STECS, MOZA MTP, MOZA MTQ, VIRPIL VMAX Prime, WinCtrl Orion (F-15EX), WinCtrl URSA MINOR Combat (measured with grid overlays, grips per the WinCtrl grip maps). All device templates now have a photo layout.
+// Done: Thrustmaster HOTAS Warthog stick + throttle, T.16000M, TWCS, MOZA AB6 + MHG, VKB Gladiator SCG, VKB Gunfighter MCG, VIRPIL Alpha Prime, WinCtrl CarrierAce / ViperAce, Logitech X56 stick + throttle, VKB STECS, MOZA MTP, MOZA MTQ, VIRPIL VMAX Prime, WinCtrl Orion (F-15EX), WinCtrl URSA MINOR Combat (measured with grid overlays, grips per the WinCtrl grip maps). All device templates now have a photo layout.
 // Thrustmaster HOTAS Warthog: measured on the photos with grid overlays (see the Thrustmaster manual for the control names).
 export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
   'builtin-tm-warthog-stick': {
@@ -120,16 +120,21 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       paddle: { view: 'front', x: 0.48, y: 0.32 },
     },
   },
-  // MOZA AB6 + MGH: head controls assigned by position (uncertain which hat is which); b2 (pinky) estimated.
+  // MOZA AB6 + MHG: numbering per the MOZA Cockpit MHG diagram; b4 and the rocker (head's left side) and b3 (rear) placed by estimate.
   'builtin-moza-ab6': {
     views: [{ id: 'front', label: 'Front', photo: 'moza-ab6-front' }, { id: 'back', label: 'Back', photo: 'moza-ab6-back' }],
     anchors: {
-      hat17: { view: 'front', x: 0.328, y: 0.114 },
-      hat7: { view: 'front', x: 0.425, y: 0.114 },
-      b4: { view: 'front', x: 0.504, y: 0.088 },
-      b5: { view: 'front', x: 0.498, y: 0.136 },
-      hat12: { view: 'front', x: 0.346, y: 0.162 },
-      rock: { view: 'front', x: 0.34, y: 0.262 },
+      b2: { view: 'front', x: 0.314, y: 0.116 },
+      mini: { view: 'front', x: 0.405, y: 0.111 },
+      minib: { view: 'front', x: 0.412, y: 0.104 },
+      hat12: { view: 'front', x: 0.498, y: 0.089 },
+      b5: { view: 'front', x: 0.485, y: 0.136 },
+      hat7: { view: 'front', x: 0.352, y: 0.157 },
+      hat17: { view: 'front', x: 0.342, y: 0.268 },
+      trig: { view: 'back', x: 0.353, y: 0.217 },
+      b3: { view: 'back', x: 0.467, y: 0.333 },
+      b4: { view: 'back', x: 0.512, y: 0.079 },
+      rock: { view: 'back', x: 0.528, y: 0.101 },
       twist: { view: 'front', x: 0.56, y: 0.4 },
       xy: { view: 'front', x: 0.5, y: 0.56 },
       bkeys: { view: 'front', x: 0.32, y: 0.622 },
@@ -138,10 +143,6 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       wlb: { view: 'front', x: 0.59, y: 0.685 },
       wr: { view: 'front', x: 0.765, y: 0.64 },
       wrb: { view: 'front', x: 0.78, y: 0.652 },
-      trig: { view: 'back', x: 0.335, y: 0.215 },
-      hat25: { view: 'back', x: 0.582, y: 0.238 },
-      b3: { view: 'back', x: 0.455, y: 0.335 },
-      b2: { view: 'back', x: 0.375, y: 0.32 },
     },
   },
   // VKB Gladiator NXT EVO SCG: head hats by position (uncertain); d1 (pinky) and en1 (right-side encoder) estimated.

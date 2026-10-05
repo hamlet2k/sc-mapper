@@ -1,6 +1,6 @@
-// MOZA AB6 force-feedback flight base with the MOZA MGH grip: original holographic wireframe (procedural model inspired by the
+// MOZA AB6 force-feedback flight base with the MOZA MHG grip: original holographic wireframe (procedural model inspired by the
 // product's shape: tall cube-shaped base with a bevelled top carrying four function keys on the front and back bevels and two
-// roller wheels on the side bevel, square top recess, long quick-release shaft with knurled collars, MGH grip with an angular head
+// roller wheels on the side bevel, square top recess, long quick-release shaft with knurled collars, MHG grip with an angular head
 // leaning forward, four hats, a rocker and a two-stage trigger). No vendor artwork. Axes: x forward, y up, z thumb side (left).
 import { buildStick, stickAxes, add, mul, nrm, grow, hull, slab, fillet2 } from './kit.mjs';
 
