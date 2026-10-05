@@ -179,7 +179,7 @@ export function withPhotoLayout(t: DeviceTemplate, layout: DevicePhotoLayout): D
     const nLeft = on.filter((c) => anchors[c.id].x < 0.5).length, byMiddle = Math.min(nLeft, on.length - nLeft) >= on.length / 4;
     // a small view with a lopsided split (e.g. 7 / 3) is also split at the median so neither label column overflows
     const lopsided = on.length <= 10 && Math.abs(on.length - 2 * nLeft) > 2;
-    const side = (c: Callout): 'L' | 'R' | undefined => byMiddle && !lopsided ? undefined : anchors[c.id].x < mid || (anchors[c.id].x === mid && rank.get(c.id)! < on.length / 2) ? 'L' : 'R';
+    const side = (c: Callout): 'L' | 'R' | undefined => anchors[c.id].side === 'L' || anchors[c.id].side === 'R' ? anchors[c.id].side : byMiddle && !lopsided ? undefined : anchors[c.id].x < mid || (anchors[c.id].x === mid && rank.get(c.id)! < on.length / 2) ? 'L' : 'R';
     const laid = layoutCallouts(art, on.map((c) => ({ id: c.id, kind: c.kind, inputs: c.inputs, label: c.label, group: c.group, side: side(c) })), { top: 0.05, bottom: 0.9 });
     for (const c of laid) callouts.set(c.id, { ...c, view: v.id });
   }

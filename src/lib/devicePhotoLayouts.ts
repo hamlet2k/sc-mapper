@@ -31,6 +31,8 @@ export interface PhotoAnchor {
   x: number;
   /** 0..1 of the photo height, from the top */
   y: number;
+  /** label column to put this control's box in (default: by position) */
+  side?: 'L' | 'R';
 }
 export interface DevicePhotoLayout {
   views: PhotoLayoutView[];
@@ -120,7 +122,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       paddle: { view: 'front', x: 0.48, y: 0.32 },
     },
   },
-  // MOZA AB6 + MHG: numbering per the MOZA Cockpit MHG diagram; b4 and the rocker (head's left side) and b3 (rear) placed by estimate.
+  // MOZA AB6 + MHG: numbering per the MOZA Cockpit MHG diagram; b4 and the rocker (head's right side), b3 (rear) and the base wheels on the back photo placed by estimate.
   'builtin-moza-ab6': {
     views: [{ id: 'front', label: 'Front', photo: 'moza-ab6-front' }, { id: 'back', label: 'Back', photo: 'moza-ab6-back' }],
     anchors: {
@@ -130,19 +132,19 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       hat12: { view: 'front', x: 0.498, y: 0.089 },
       b5: { view: 'front', x: 0.485, y: 0.136 },
       hat7: { view: 'front', x: 0.352, y: 0.157 },
-      hat17: { view: 'front', x: 0.342, y: 0.268 },
+      hat17: { view: 'back', x: 0.588, y: 0.243, side: 'R' },
       trig: { view: 'back', x: 0.353, y: 0.217 },
       b3: { view: 'back', x: 0.467, y: 0.333 },
-      b4: { view: 'back', x: 0.512, y: 0.079 },
-      rock: { view: 'back', x: 0.528, y: 0.101 },
+      b4: { view: 'back', x: 0.185, y: 0.14, side: 'L' },
+      rock: { view: 'back', x: 0.205, y: 0.1, side: 'L' },
       twist: { view: 'front', x: 0.56, y: 0.4 },
       xy: { view: 'front', x: 0.5, y: 0.56 },
-      bkeys: { view: 'front', x: 0.32, y: 0.622 },
-      bkeysr: { view: 'front', x: 0.675, y: 0.575 },
-      wl: { view: 'front', x: 0.575, y: 0.672 },
-      wlb: { view: 'front', x: 0.59, y: 0.685 },
-      wr: { view: 'front', x: 0.765, y: 0.64 },
-      wrb: { view: 'front', x: 0.78, y: 0.652 },
+      bkeys: { view: 'back', x: 0.3, y: 0.578 },
+      bkeysr: { view: 'back', x: 0.69, y: 0.61 },
+      wl: { view: 'front', x: 0.575, y: 0.672, side: 'L' },
+      wlb: { view: 'front', x: 0.59, y: 0.685, side: 'L' },
+      wr: { view: 'front', x: 0.765, y: 0.64, side: 'R' },
+      wrb: { view: 'front', x: 0.78, y: 0.652, side: 'R' },
     },
   },
   // VKB Gladiator NXT EVO SCG: head hats by position (uncertain); d1 (pinky) and en1 (right-side encoder) estimated.
