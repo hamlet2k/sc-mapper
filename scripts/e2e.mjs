@@ -521,6 +521,7 @@ await search.fill('');
 }
 await page.getByRole('button', { name: /🕹 Devices/ }).click();
 const dv = page.getByTestId('device-view');
+let gladIds = []; // callout ids of the VKB Gladiator template (for the test-only photo layout below)
 await page.waitForTimeout(600);
 check(await dv.isVisible(), 'devices view opens');
 const dsel = dv.getByTestId('device-select');
@@ -528,7 +529,18 @@ const dopts = await dsel.locator('option').allInnerTexts();
 check(dopts.some((o) => /^JS1 · VKBsim Gladiator EVO R/.test(o)) && dopts.some((o) => /^JS2 · VKBsim Gladiator EVO L/.test(o)) && dopts.some((o) => /^GP1/.test(o)), `device picker lists the connected devices with their game numbers (${dopts.join(' | ')})`);
 await dsel.selectOption({ label: dopts.find((o) => /^JS1 · /.test(o)) });
 await page.waitForTimeout(300);
-check(/Generic stick/.test(await dv.getByTestId('device-status').innerText()), 'no template linked yet: generic stick');
+{ // the EVO R is a VKB Gladiator: its own drawing loads on demand; VKB numbering is configurable, so the callouts start unassigned
+  await page.waitForTimeout(500);
+  const st = await dv.getByTestId('device-status').innerText();
+  const src = await dv.locator('[data-testid=device-canvas] img').first().getAttribute('src').catch(() => '');
+  check(/VKB Gladiator/.test(st) && /name “Gladiator”/.test(st) && /^data:image\/svg\+xml|\/device-photos\/vkb-gladiator-scg-[a-z]+\.webp$/.test(src ?? ''), `Gladiator EVO R auto-links to the VKB Gladiator template, drawing / photos lazy-loaded (${st.split('\n')[0]})`);
+  check(await dv.getByTestId('template-unassigned').isVisible() && /^A2 red button\s+no number yet/.test(await dv.locator('[data-callout="a2"]').innerText()), 'unassigned callouts flagged (“no number yet”) with an Assign numbers prompt');
+  check(await dv.getByTestId('chromium-button-notice').isVisible() && /Firefox/.test(await dv.getByTestId('chromium-button-notice').innerText()), 'a 32-button device in Chrome shows the prominent Chromium button-limit notice with the Firefox advice');
+  gladIds = await dv.locator('[data-callout]').evaluateAll((els) => els.map((e) => e.getAttribute('data-callout')));
+  await dv.getByTestId('template-select').selectOption('builtin-stick');
+  await page.waitForTimeout(300);
+}
+check(/Generic stick/.test(await dv.getByTestId('device-status').innerText()), 'generic stick picked for the profile tests');
 const b1 = dv.locator('[data-callout="trig"]');
 check((await b1.innerText()).includes('Engage Quantum Drive'), 'trigger (2-stage) callout shows the js1_button1 action of the profile');
 check((await dv.locator('[data-callout]').count()) === 24 && /Deck buttons \(left\)/.test(await dv.locator('[data-callout="rowL"]').innerText()) && (await dv.locator('[data-callout="whl1"]').innerText()).includes('Lever wheel'), 'default stick: holographic grip + base with 24 callouts (grip, deck button rows, toggles, F keys, wheels)');
@@ -562,7 +574,7 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
   const lit = await dv.locator('[data-region="keys"][data-active="1"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-input')));
   check(lit.length === 1 && lit[0] === 'button12' && (await dv.locator('[data-callout="trgL"]').innerText()).includes('Left trigger'), `keypad: only the pressed key glows (${lit.join(', ')}); left grip trigger has a callout`);
   await page.evaluate(() => { window.__btn(1, 11, false); window.__btn(1, 19, false); window.__axis(1, 2, 0); });
-  await dv.getByTestId('template-select').selectOption('');
+  await dv.getByTestId('template-select').selectOption('builtin-stick');
   await page.waitForTimeout(250);
 }
 { // the default holographic gamepad: 15 callouts; pressing D-pad up lights only that arm, A / LT / the left stick glow
@@ -603,6 +615,9 @@ check((await dv.locator('[data-callout="b6"]').innerText()).includes('Landing Sy
   const buf = readFileSync(f);
   check(d.suggestedFilename().endsWith('.png') && buf.subarray(1, 4).toString() === 'PNG' && buf.length > 20000, `PNG export of the device with its mappings (${d.suggestedFilename()}, ${(buf.length / 1024) | 0} KB)`);
 }
+
+await dv.getByTestId('template-select').selectOption(''); // back to automatic (the Gladiator template) before creating one
+await page.waitForTimeout(300);
 
 // ===================== template editor =====================
 console.log('\ntemplate editor');
@@ -731,6 +746,34 @@ await page.waitForTimeout(500);
 await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS1 · /.test(o)) });
 await page.waitForTimeout(300);
 check(/linked to this device/.test(await dv.getByTestId('device-status').innerText()) && (await dv.locator('[data-callout]').count()) === 4, 'templates survive a reload (IndexedDB) and still match the profile device');
+{ // device templates: a >32-button device warns in Chrome; numbers can be assigned on a copy of an unassigned built-in
+  await dv.getByTestId('template-select').selectOption('builtin-winctrl-orion');
+  await page.waitForTimeout(600);
+  const n = await dv.getByTestId('chromium-button-notice').innerText().catch(() => '');
+  check(/buttons up to\s*\d{2,}/.test(n) && /Open this page in Firefox/.test(n), `>32-button template (WinCtrl Orion) shows the Chromium limit notice (${n.split('\n')[0]})`);
+  const opt = await dv.getByTestId('template-select').locator('option:checked').innerText();
+  check(/· \d+ buttons$/.test(opt), `template picker shows the button count of big devices (${opt})`);
+  await dv.getByTestId('template-select').selectOption('builtin-vkb-gladiator-scg');
+  await page.waitForTimeout(600);
+  await dv.getByTestId('template-unassigned').getByRole('button', { name: /Assign numbers/ }).click();
+  await page.waitForTimeout(500);
+  const te2 = page.getByTestId('template-editor');
+  check(await te2.isVisible() && (await te2.getByLabel('Template name').inputValue()) !== 'VKB Gladiator NXT EVO (Space Combat Grip)', `Assign numbers opens the editor on a copy (${await te2.getByLabel('Template name').inputValue()})`);
+  await te2.getByTestId('tpl-callouts').getByRole('button', { name: /A2 red button/ }).click();
+  await te2.getByLabel('Input input').fill('7');
+  await te2.getByLabel('Input input').press('Enter');
+  await page.waitForTimeout(150);
+  check(/A2 red button[^\n]*\n?[^\n]*· 7(\s|$)/.test(await te2.getByTestId('tpl-callouts').innerText()), 'typing 7 assigns button 7 to the A2 callout');
+  await te2.getByTestId('tpl-save').click();
+  await page.waitForTimeout(500);
+  const st = await dv.getByTestId('device-status').innerText();
+  const a2 = await dv.locator('[data-callout="a2"]').innerText();
+  const sel = await dv.getByTestId('template-select').locator('option:checked').innerText();
+  check(/^A2 red button\s+7\b/.test(a2) && !/^VKB Gladiator NXT EVO \(Space Combat Grip\)$/.test(sel), `saved copy is used and the A2 callout now shows button 7 (${a2.replace(/\n/g, ' ')}; ${st.split('\n')[0]})`);
+  const src = await dv.locator('[data-testid=device-canvas] img').first().getAttribute('src').catch(() => '');
+  check(/^data:image\/svg\+xml|\/device-photos\/vkb-gladiator-scg-[a-z]+\.webp$/.test(src ?? ''), `the copy keeps the device drawing / photos (${(src ?? '').slice(0, 60)})`);
+  await dv.getByTestId('device-canvas').screenshot({ path: shots + '32-device-view-gladiator-copy.png' });
+}
 await page.getByRole('button', { name: /☰ List/ }).click();
 
 // ===================== Firefox: 15 controllers, identical MOZA bases, >128 buttons =====================
@@ -805,6 +848,112 @@ await fp.waitForTimeout(400);
   check(/MOZA base \(133\)/.test(s133) && /133 buttons/.test(s133) && !/MOZA base \(133\)/.test(s128), 'Firefox: template linked by USB id + 133 buttons applies to the second MOZA base only');
 }
 await ff.close();
+
+// ---- photo templates: a TEST-ONLY layout (made-up anchors, not real coordinates) injected through the test hook makes the
+// Gladiator template a two-view photo template; checks views side by side / stacked, markers on the right view, live marker,
+// label overlap avoidance, PNG export and the editor's view tabs.
+log('photo template (test-only layout via __SC_TEST_PHOTO_LAYOUTS)');
+{
+  const pctx = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1, acceptDownloads: true });
+  const pp = await pctx.newPage();
+  pp.on('pageerror', (e) => errors.push(String(e)));
+  pp.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  const viewOf = (k) => (k % 2 ? 'thumb' : 'front');
+  await pp.addInitScript((ids) => {
+    window.__SC_TEST_PHOTO_LAYOUTS = { 'builtin-vkb-gladiator-scg': {
+      views: [{ id: 'front', label: 'Front', photo: 'vkb-gladiator-scg-front' }, { id: 'thumb', label: 'Thumb side', photo: 'vkb-gladiator-scg-thumb' }],
+      anchors: Object.fromEntries(ids.map((id, k) => [id, { view: k % 2 ? 'thumb' : 'front', x: 0.3 + (0.4 * ((k * 37) % 100)) / 100, y: 0.1 + (0.8 * ((k * 53) % 100)) / 100 }])),
+    } };
+    const pads = [{ index: 0, id: 'VKBsim Gladiator EVO R (Vendor: 231d Product: 0200)', mapping: '', connected: true, buttons: Array.from({ length: 32 }, () => ({ pressed: false, touched: false, value: 0 })), axes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 9 / 7], timestamp: 0 }];
+    let revealed = false;
+    window.__btn = (i, b, on) => { pads[i].buttons[b] = { pressed: on, touched: on, value: on ? 1 : 0 }; pads[i].timestamp++; if (on) revealed = true; };
+    window.__axis = (i, a, v) => { pads[i].axes[a] = v; pads[i].timestamp++; };
+    navigator.getGamepads = () => pads.map((p) => (revealed ? Object.freeze({ ...p, axes: Object.freeze([...p.axes]), buttons: Object.freeze(p.buttons.map((x) => Object.freeze({ ...x }))) }) : null));
+  }, gladIds);
+  await pp.goto(url, { waitUntil: 'networkidle' });
+  await pp.evaluate(() => window.__btn(0, 2, true));
+  await pp.waitForTimeout(120);
+  await pp.evaluate(() => window.__btn(0, 2, false));
+  await pp.getByRole('button', { name: /🕹 Devices/ }).click();
+  await pp.waitForTimeout(800);
+  const pv = pp.getByTestId('device-view');
+  const psel = pv.getByTestId('device-select');
+  const popts = await psel.locator('option').allInnerTexts();
+  await psel.selectOption({ label: popts.find((o) => /^JS1 · /.test(o)) });
+  await pp.waitForTimeout(800);
+  const canvas = pv.getByTestId('device-canvas');
+  const views = canvas.getByTestId('device-canvas-view');
+  check(gladIds.length > 10 && /VKB Gladiator/.test(await pv.getByTestId('device-status').innerText()) && (await canvas.getAttribute('data-views')) === '2' && (await views.count()) === 2, `test layout: Gladiator shown as a 2-view photo template (${gladIds.length} controls)`);
+  const imgs = await views.evaluateAll((els) => els.map((e) => { const i = e.querySelector('img'); return { view: e.getAttribute('data-view'), photo: e.getAttribute('data-photo'), src: i?.getAttribute('src'), ok: !!i && i.complete && i.naturalWidth > 0 }; }));
+  check(JSON.stringify(imgs.map((x) => [x.view, x.photo, x.src])) === JSON.stringify([['front', '1', '/device-photos/vkb-gladiator-scg-front.webp'], ['thumb', '1', '/device-photos/vkb-gladiator-scg-thumb.webp']]) && imgs.every((x) => x.ok), `each view shows its product photo, loaded (${imgs.map((x) => `${x.view}:${x.ok}`).join(' ')})`);
+  const where = await canvas.locator('[data-callout]').evaluateAll((els) => els.map((e) => [e.getAttribute('data-callout'), e.closest('[data-view]')?.getAttribute('data-view')]));
+  const markers = await canvas.locator('[data-marker]').evaluateAll((els) => els.map((e) => [e.getAttribute('data-marker'), e.closest('[data-view]')?.getAttribute('data-view')]));
+  const want = gladIds.map((id, k) => [id, viewOf(k)]).sort().join('|');
+  check(where.length === gladIds.length && where.sort().join('|') === want, 'every callout label on the view its anchor is on');
+  check(markers.length === gladIds.length && markers.sort().join('|') === want, 'a circular marker per control, on the right view');
+  const rect = () => views.evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((b) => ({ x: b.x, y: b.y, w: b.width, h: b.height })));
+  const fmt = (rs) => rs.map((b) => `${Math.round(b.w)}×${Math.round(b.h)}@${Math.round(b.x)},${Math.round(b.y)}`).join(' ');
+  const r = await rect();
+  check(r[1].y >= r[0].y + r[0].h - 1 && r.every((b) => b.h > 450), `usual window: photo views stacked, each large (${fmt(r)})`);
+  await pp.setViewportSize({ width: 2560, height: 1000 });
+  await pp.waitForTimeout(400);
+  const rw = await rect();
+  check(Math.abs(rw[0].y - rw[1].y) < 2 && rw[1].x >= rw[0].x + rw[0].w - 1 && rw[0].h >= 440, `very wide window: views side by side (${fmt(rw)})`);
+  await pp.setViewportSize({ width: 1680, height: 1000 });
+  await pp.waitForTimeout(400);
+  const overlaps = await views.evaluateAll((els) => els.map((v) => {
+    const bs = [...v.querySelectorAll('[data-callout] > div')].map((d) => d.getBoundingClientRect());
+    let n = 0;
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const a = bs[i], b = bs[j]; if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) n++; }
+    return n;
+  }));
+  check(overlaps.every((n) => n === 0), `label boxes do not overlap (${overlaps.join(', ')})`);
+  await pp.screenshot({ path: shots + '23-photo-template-test-layout.png', fullPage: false });
+  // live: moving the stick lights the X / Y marker (Gladiator's only numbered control) on its view
+  await pp.evaluate(() => window.__axis(0, 0, 0.8));
+  await pp.waitForTimeout(300);
+  const lit = await canvas.locator('[data-marker][data-active="1"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-marker')));
+  const litLabel = await canvas.locator('[data-callout][data-active="1"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-callout')));
+  check(lit.length === 1 && litLabel.join() === lit.join(), `moving the stick lights its marker and label (${lit.join()})`);
+  await pp.evaluate(() => window.__axis(0, 0, 0));
+  await pp.waitForTimeout(250);
+  check((await canvas.locator('[data-marker][data-active="1"]').count()) === 0, 'marker goes dark again at rest');
+  {
+    const [d] = await Promise.all([pp.waitForEvent('download'), pv.getByTestId('device-png').click()]);
+    const f = '/tmp/photo-' + d.suggestedFilename();
+    await d.saveAs(f);
+    const buf = readFileSync(f);
+    check(buf.subarray(1, 4).toString() === 'PNG' && buf.length > 50000, `PNG export of a photo template (${(buf.length / 1024).toFixed(0)} KB)`);
+  }
+  // narrow window: the views stack
+  await pp.setViewportSize({ width: 820, height: 1000 });
+  await pp.waitForTimeout(400);
+  const r2 = await views.evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((b) => ({ x: b.x, y: b.y, w: b.width, h: b.height })));
+  check(r2[1].y >= r2[0].y + r2[0].h - 1, `narrow window: views stacked (${r2.map((b) => `${Math.round(b.w)}×${Math.round(b.h)}@${Math.round(b.x)},${Math.round(b.y)}`).join(' ')})`);
+  await pp.setViewportSize({ width: 1680, height: 1000 });
+  await pp.waitForTimeout(300);
+  // editor: view tabs; a click adds the callout to the shown view
+  await pv.getByTestId('template-customize').click();
+  await pp.waitForTimeout(400);
+  const ed = pp.getByTestId('template-editor');
+  const tabs = ed.getByTestId('tpl-views').locator('[data-view-tab]');
+  check((await tabs.count()) === 2 && (await ed.getByTestId('device-canvas-view').count()) === 1 && (await ed.getByTestId('device-canvas-view').getAttribute('data-view')) === 'front', 'editor: one view at a time with view tabs');
+  const nFront = gladIds.filter((_, k) => viewOf(k) === 'front').length, nThumb = gladIds.length - nFront;
+  check((await ed.locator('[data-anchor]').count()) === nFront, `editor: front tab shows its ${nFront} anchors`);
+  await tabs.nth(1).click();
+  await pp.waitForTimeout(200);
+  check((await ed.getByTestId('device-canvas-view').getAttribute('data-view')) === 'thumb' && (await ed.locator('[data-anchor]').count()) === nThumb, `editor: thumb tab shows its ${nThumb} anchors`);
+  const ev = ed.getByTestId('device-canvas-view');
+  const eb = await ev.boundingBox();
+  await pp.mouse.click(eb.x + eb.width * 0.5, eb.y + eb.height * 0.5);
+  await pp.waitForTimeout(200);
+  check((await ed.locator('[data-anchor]').count()) === nThumb + 1 && /\(\d+\)/.test(await tabs.nth(1).innerText()) && (await tabs.nth(1).innerText()).includes(`(${nThumb + 1})`), 'editor: clicking the photo adds a callout on the shown view');
+  await ed.getByLabel('Callout view').selectOption('front');
+  await pp.waitForTimeout(200);
+  check((await ed.getByTestId('device-canvas-view').getAttribute('data-view')) === 'front' && (await ed.locator('[data-anchor]').count()) === nFront + 1, 'editor: moving a callout to another view follows it there');
+  await ed.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await pctx.close();
+}
 
 // persistence
 await page.reload({ waitUntil: 'networkidle' });

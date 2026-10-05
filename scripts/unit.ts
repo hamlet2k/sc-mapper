@@ -509,6 +509,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
   const rg = await import('../src/lib/ranges');
   const tp = await import('../src/lib/templates');
   const { BUILTIN_TEMPLATES } = await import('../src/lib/builtinTemplates');
+  type DeviceTemplate = import('../src/lib/templates').DeviceTemplate;
   t('setting ranges: clamping, game 1 % grid, defaults and observed values inside the ranges', () => {
     const { RANGES } = rg;
     assert.equal(rg.clampTo(RANGES.deadzone, 0.9), 0.5);
@@ -685,6 +686,240 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(back.callouts.map((c) => c.region), gp.callouts.map((c) => c.region), 'regions survive export/import');
     assert.deepEqual(back.callouts.find((c) => c.id === 'dpad')!.inputRegions, dp.inputRegions, 'D-pad outlines survive export/import');
   });
+  const { DEVICE_TEMPLATES } = await import('../src/lib/deviceTemplates');
+  const dt = await import('../src/lib/deviceTemplates');
+  const { DEVICE_PHOTO_LAYOUTS } = await import('../src/lib/devicePhotoLayouts');
+  const { DEVICE_PHOTO_SIZES } = await import('../src/lib/devicePhotoSizes');
+  const WEBP = 'data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=';
+  const twoViews = () => tpl('mv-1', [{ name: 'Some Grip' }], {
+    aspect: 9,
+    views: [
+      { id: 'front', label: 'Front', image: '/device-photos/vkb-gladiator-scg-front.webp', width: 1587, height: 990 },
+      { id: 'thumb', label: 'Thumb side', image: WEBP, width: 1200, height: 990 },
+    ],
+    callouts: [
+      { id: 'a', kind: 'button', inputs: ['button1'], anchor: { x: 0.4, y: 0.3 }, box: { x: 0.1, y: 0.2 }, view: 'thumb' },
+      { id: 'b', kind: 'button', inputs: ['button2'], anchor: { x: 0.5, y: 0.6 }, box: { x: 0.9, y: 0.6 } },
+    ],
+  });
+  t('multi-view templates: JSON round trip keeps views, view pictures and the view of each callout', () => {
+    const src = twoViews();
+    const back = tp.parseTemplates(tp.exportTemplates([src]))[0];
+    assert.deepEqual(back.views, src.views);
+    assert.equal(back.image, undefined);
+    assert.equal(back.aspect, 1587 / 990, 'aspect = first view');
+    assert.deepEqual(back.callouts.map((c) => c.view), ['thumb', undefined]);
+    assert.deepEqual(back.callouts.map((c) => tp.calloutView(back, c)), ['thumb', 'front'], 'callout without a view sits on the first view');
+    const th = tp.viewTemplate(back, 'thumb');
+    assert.equal(th.image, WEBP); assert.equal(th.aspect, 1200 / 990); assert.deepEqual(th.callouts.map((c) => c.id), ['a']);
+    assert.deepEqual(tp.viewTemplate(back, 'nope').callouts.map((c) => c.id), ['b'], 'unknown view id -> first view');
+    const again = tp.parseTemplates(tp.exportTemplates([back]))[0];
+    assert.deepEqual({ ...again, updatedAt: 0, id: '' }, { ...back, updatedAt: 0, id: '' }, 'stable on a second round trip');
+    const copy = tp.cloneTemplate(back);
+    assert.deepEqual(copy.views, back.views, 'a copy keeps its views');
+  });
+  t('multi-view templates: old single-image files still load as one implicit view', () => {
+    const old = JSON.stringify({ format: 'sc-mapper-device-template', version: 1, id: 'old-1', name: 'Old', slot: 'js', image: WEBP, aspect: 1.25, match: [],
+      callouts: [{ id: 'c1', kind: 'button', inputs: ['button3'], anchor: { x: 0.2, y: 0.3 }, box: { x: 0.1, y: 0.3 }, view: 'front' }] });
+    const o = tp.parseTemplates(old)[0];
+    assert.equal(o.views, undefined); assert.equal(o.image, WEBP); assert.equal(o.aspect, 1.25);
+    assert.equal(o.callouts[0].view, undefined, 'a view on a single-view template is dropped');
+    const vs = tp.templateViews(o);
+    assert.equal(vs.length, 1); assert.equal(vs[0].id, tp.MAIN_VIEW); assert.equal(vs[0].image, WEBP); assert.equal(vs[0].width / vs[0].height, 1.25);
+    assert.equal(tp.calloutView(o, o.callouts[0]), tp.MAIN_VIEW);
+    assert.equal(tp.viewTemplate(o, 'whatever'), o, 'single-view templates render unchanged');
+    assert.ok(!tp.exportTemplates([o]).includes('"views"'), 'no views written for single-view templates');
+  });
+  t('multi-view templates: view ids, pictures and sizes validated', () => {
+    const src = twoViews();
+    const bad = tp.parseTemplates(JSON.stringify({ ...src, views: [
+      { id: 'bad id!', label: '  Front  ', width: 'x', height: 990 },
+      { id: 'dup', label: 'A', width: 100, height: 100 },
+      { id: 'dup', label: 'B', width: 100, height: 100 },
+      ...Array.from({ length: 6 }, (_, k) => ({ id: `x${k}`, label: '', width: 10, height: 10 })),
+    ], callouts: [{ ...src.callouts[0], view: 'bad id!' }, { ...src.callouts[1], view: 'dup' }] }))[0];
+    assert.equal(bad.views!.length, 6, 'at most 6 views');
+    assert.equal(bad.views![0].id, 'v1', 'invalid id replaced'); assert.equal(bad.views![0].label, 'Front');
+    assert.deepEqual([bad.views![0].width, bad.views![0].height], [1000 * tp.BLANK_ASPECT, 1000], 'bad size -> default canvas');
+    assert.equal(new Set(bad.views!.map((v) => v.id)).size, 6, 'duplicate ids made unique');
+    assert.deepEqual(bad.callouts.map((c) => c.view), [undefined, 'dup'], 'callout on an unknown view: view dropped');
+    assert.throws(() => tp.parseTemplates(JSON.stringify({ ...src, views: [{ ...src.views[0], image: 'https://example.com/x.webp' }] })), /data:image/);
+    assert.throws(() => tp.parseTemplates(JSON.stringify({ ...src, views: [{ ...src.views[0], image: '/device-photos/../../etc.webp' }] })), /data:image/);
+    assert.throws(() => tp.parseTemplates(JSON.stringify({ ...src, views: [{ ...src.views[0], image: '//evil.example/device-photos/x.webp' }] })), /data:image/);
+    assert.ok(tp.isSafeImage('/device-photos/moza-ab6-front.webp') && !tp.isSafeImage('/device-photos/a.svg') && !tp.isSafeImage('/elsewhere/a.webp'));
+  });
+  t('device photo layouts: a complete entry turns a device template into a multi-view photo template; incomplete ones are ignored', () => {
+    assert.deepEqual(dt.PHOTO_LAYOUT_PROBLEMS, [], 'no incomplete entries in DEVICE_PHOTO_LAYOUTS');
+    // every built-in photo listed in views.json exists, with its size
+    const listed = JSON.parse(readFileSync(new URL('./device-photos/views.json', import.meta.url), 'utf8')).views as { device: string; view: string }[];
+    for (const v of listed) {
+      const key = `${v.device}-${v.view}`;
+      assert.ok(DEVICE_PHOTO_SIZES[key] && existsSync(new URL(`../public/device-photos/${key}.webp`, import.meta.url)), `photo ${key}`);
+    }
+    for (const [id, l] of Object.entries(DEVICE_PHOTO_LAYOUTS)) {
+      const d = DEVICE_TEMPLATES.find((x) => x.id === id);
+      assert.ok(d?.views?.length === l.views.length, `${id}: built as a photo template`);
+      const stale = Object.keys(l.anchors).filter((k) => !d!.callouts.some((c) => c.id === k));
+      assert.deepEqual(stale, [], `${id}: anchors for controls the template does not have`);
+    }
+    // a sample (test-only, made-up) layout on the Gladiator template: controls spread over both of its photos
+    const base = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-gladiator-scg')!;
+    const layout = {
+      views: [{ id: 'front', label: 'Front', photo: 'vkb-gladiator-scg-front' }, { id: 'thumb', label: 'Thumb side', photo: 'vkb-gladiator-scg-thumb' }],
+      anchors: Object.fromEntries(base.callouts.map((c, k) => [c.id, { view: k % 2 ? 'thumb' : 'front', x: 0.2 + 0.6 * ((k * 37) % 100) / 100, y: 0.1 + 0.8 * ((k * 53) % 100) / 100 }])),
+    };
+    const p = dt.withPhotoLayout(base, layout);
+    assert.ok(!Array.isArray(p), `complete layout accepted (${Array.isArray(p) ? p.join('; ') : ''})`);
+    const pt = p as DeviceTemplate;
+    assert.equal(pt.id, base.id); assert.equal(pt.name, base.name); assert.equal(pt.loadImage, undefined); assert.equal(pt.image, undefined);
+    assert.deepEqual(pt.views!.map((v) => [v.id, v.label, v.image]), [['front', 'Front', '/device-photos/vkb-gladiator-scg-front.webp'], ['thumb', 'Thumb side', '/device-photos/vkb-gladiator-scg-thumb.webp']]);
+    for (const v of pt.views!) {
+      const [pw, ph] = DEVICE_PHOTO_SIZES[layout.views.find((x) => x.id === v.id)!.photo];
+      assert.equal(v.height, ph); assert.ok(v.width > pw * 1.3, `${v.id}: label gutters`);
+    }
+    assert.equal(pt.aspect, pt.views![0].width / pt.views![0].height);
+    assert.deepEqual(pt.callouts.map((c) => [c.id, c.kind, c.inputs, c.label]), base.callouts.map((c) => [c.id, c.kind, c.inputs, c.label]), 'same controls');
+    for (const c of pt.callouts) {
+      const a = layout.anchors[c.id], v = pt.views!.find((x) => x.id === c.view)!;
+      assert.equal(c.view, a.view, `${c.id}: on its view`);
+      const pw = DEVICE_PHOTO_SIZES[layout.views.find((x) => x.id === v.id)!.photo][0], g = (v.width - pw) / 2;
+      assert.ok(Math.abs(c.anchor.x - (g + a.x * pw) / v.width) < 1e-9 && Math.abs(c.anchor.y - a.y) < 1e-9, `${c.id}: anchor mapped from the photo onto the view`);
+      assert.ok(!c.region && !c.inputRegions, `${c.id}: no art outlines on a photo`);
+      assert.ok(c.box.x >= 0 && c.box.x <= 1 && c.box.y >= 0 && c.box.y <= 1);
+      assert.ok(c.box.x < g / v.width || c.box.x > 1 - g / v.width || c.box.y > 0.9 || c.box.y < 0.06, `${c.id}: label in a gutter or a row`);
+      for (const o of pt.callouts) if (o !== c && o.view === c.view) assert.ok(Math.abs(o.box.x - c.box.x) > 0.12 || Math.abs(o.box.y - c.box.y) > 0.03, `boxes ${c.id} / ${o.id} too close`);
+    }
+    const back = tp.parseTemplates(tp.exportTemplates([{ ...pt, builtin: undefined, id: 'copy' } as any]))[0];
+    assert.deepEqual(back.views, pt.views, 'photo views survive export/import (built-in photo paths allowed)');
+    assert.deepEqual(back.callouts.map((c) => c.view), pt.callouts.map((c) => c.view));
+    // incomplete / broken layouts: problems reported, never a half-placed template
+    const { [base.callouts[0].id]: _gone, ...fewer } = layout.anchors;
+    const miss = dt.withPhotoLayout(base, { ...layout, anchors: fewer });
+    assert.ok(Array.isArray(miss) && miss.some((m) => m.includes(base.callouts[0].id)), 'missing anchor reported');
+    const wrongView = dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[1].id]: { view: 'side', x: 0.5, y: 0.5 } } });
+    assert.ok(Array.isArray(wrongView) && wrongView.some((m) => /unknown view/.test(m)));
+    assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, views: [{ id: 'front', label: 'F', photo: 'no-such-photo' }, layout.views[1]] })), 'unknown photo rejected');
+    assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[2].id]: { view: 'front', x: 1.5, y: 0.5 } } })), 'coordinates outside 0..1 rejected');
+    assert.ok(Array.isArray(dt.withPhotoLayout(base, { views: [], anchors: {} })), 'empty layout rejected');
+  });
+  t('device templates (18 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
+    const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
+    const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+    assert.equal(DEVICE_TEMPLATES.length, 18, 'all 18 device templates');
+    assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
+    // devices without published numbers: callout spots only (stick X / Y where obvious)
+    const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-vkb-gunfighter-mcg', 'builtin-vkb-stecs', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
+    const USB = new Set(['builtin-tm-warthog-stick', 'builtin-tm-warthog-throttle', 'builtin-tm-t16000m', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-winctrl-ursa-combat']);
+    const ASPECTS = new Set<number>();
+    for (const d of DEVICE_TEMPLATES) {
+      assert.ok(d.builtin && d.brand && d.id.startsWith('builtin-') && !d.image && (d.views?.length ? !d.loadImage && d.views.every((v) => tp.BUILTIN_PHOTO_RE.test(v.image ?? '')) : typeof d.loadImage === 'function') && d.notes, `${d.id}: picture loaded on demand (art) or built-in photos (photo template)`);
+      ASPECTS.add(d.aspect);
+      assert.ok(d.match.some((m) => m.name), `${d.id}: name pattern`);
+      assert.equal(d.match.some((m) => m.vendor && m.product), USB.has(d.id), `${d.id}: USB id only where confident`);
+      const inputs = d.callouts.flatMap((c) => c.inputs).filter(Boolean);
+      assert.equal(new Set(inputs).size, inputs.length, `${d.id}: every input on one callout`);
+      for (const i of inputs) assert.ok(jsName.test(i), `${d.id}: ${i}`);
+      const open = d.callouts.reduce((n, c) => n + tp.unassignedCount(c), 0);
+      if (OPEN.has(d.id)) {
+        assert.ok(open > 5 && d.callouts.flatMap((c) => c.inputs).filter((i) => /^button|^hat/.test(i)).length === 0, `${d.id}: buttons left unassigned`);
+        assert.match(d.notes!, /Customize a copy/);
+      } else if (d.id === 'builtin-moza-ab6') assert.equal(open, 12, 'AB6: only the base keys (8) and wheels (2 x 2) unassigned');
+      else assert.equal(open, 0, `${d.id}: fully numbered`);
+      for (const c of d.callouts) {
+        if (!d.views) assert.ok(c.region && tp.REGION_RE.test(c.region), `${d.id}/${c.id}: glow region`);
+        for (const pt of [c.anchor, c.box]) assert.ok(pt.x >= 0 && pt.x <= 1 && pt.y >= 0 && pt.y <= 1, `${d.id}/${c.id}`);
+        for (const o of d.callouts) if (o !== c && tp.calloutView(d, o) === tp.calloutView(d, c)) assert.ok(Math.abs(o.box.x - c.box.x) > 0.12 || Math.abs(o.box.y - c.box.y) > 0.03, `${d.id}: boxes ${c.id} / ${o.id} too close`);
+        if (c.inputRegions) assert.equal(c.inputRegions.length, c.inputs.length, `${d.id}/${c.id}: one outline per input`);
+        if (c.kind === 'hat') assert.ok(c.inputs.length >= 4 && c.inputs.length <= 5, `${d.id}/${c.id}: hat = 4 directions (+ push)`);
+      }
+      if (tp.maxButton(d) > 32) assert.match(d.notes!, /Firefox/, `${d.id}: >32 buttons mentions Firefox`);
+      const back = tp.parseTemplates(tp.exportTemplates([{ ...d, builtin: undefined, id: 'copy' } as any]))[0];
+      assert.deepEqual(back.callouts.map((c) => c.region), d.callouts.map((c) => c.region), `${d.id}: regions survive export/import`);
+      assert.deepEqual(back.callouts.map((c) => c.inputs), d.callouts.map((c) => c.inputs), `${d.id}: unassigned inputs survive export/import`);
+      assert.equal(back.brand, d.brand); assert.equal(back.notes, d.notes); assert.equal((back as any).loadImage, undefined, 'no function in the export');
+    }
+    const by = (id: string) => DEVICE_TEMPLATES.find((x) => x.id === `builtin-${id}`)!;
+    const btn = (x: DeviceTemplate) => x.callouts.flatMap((c) => c.inputs).filter((i) => /^button/.test(i)).map((i) => Number(i.slice(6))).sort((p, q) => p - q);
+    const seq = (a: number, z: number, skip: number[] = []) => Array.from({ length: z - a + 1 }, (_, i) => a + i).filter((n) => !skip.includes(n));
+    assert.deepEqual(btn(by('tm-warthog-stick')), seq(1, 19), 'Warthog stick: buttons 1-19, each once');
+    assert.deepEqual(btn(by('tm-warthog-throttle')), seq(1, 32), 'Warthog throttle: buttons 1-32, each once (= the 32-button browser cap)');
+    assert.deepEqual(btn(by('tm-t16000m')), seq(1, 16), 'T.16000M: 1-16');
+    assert.deepEqual(btn(by('tm-twcs')), seq(1, 14), 'TWCS: 1-14');
+    assert.deepEqual(btn(by('virpil-alpha-prime')), seq(1, 32), 'Alpha Prime: 1-32');
+    assert.deepEqual(btn(by('virpil-vmax-prime')), seq(1, 51), 'VMAX Prime: 1-51 (no shift)');
+    assert.deepEqual(btn(by('winctrl-carrierace')), seq(1, 27, [19]), 'CarrierAce: 1-27 (19 = POV trim)');
+    assert.deepEqual(btn(by('winctrl-viperace')), seq(1, 42, [19]), 'ViperAce: 1-42 (19 = POV trim)');
+    assert.deepEqual(btn(by('winctrl-orion')), [...seq(1, 62, [45, 46, 47, 48, 49]), ...seq(65, 111)], 'Orion: grips 1-62, panel 65-111');
+    assert.deepEqual(btn(by('winctrl-ursa-combat')), seq(1, 81, [26]), 'URSA MINOR Combat: 1-81 (26 = mode-1 finger lift)');
+    assert.deepEqual(btn(by('moza-ab6')), seq(1, 29), 'AB6 + MGH: grip 1-29');
+    assert.deepEqual(btn(by('moza-mtp')), seq(1, 71), 'MTP: 1-71');
+    assert.deepEqual(btn(by('moza-mtq')), seq(1, 65, [44, 45, 46, 47, 48]), 'MTQ: 1-65');
+    const ins = (x: DeviceTemplate, id: string) => x.callouts.find((c) => c.id === id)!.inputs;
+    const st = by('tm-warthog-stick'), th = by('tm-warthog-throttle');
+    assert.deepEqual(ins(st, 'trig'), ['button1', 'button6']); assert.deepEqual(ins(st, 'cms'), ['button15', 'button16', 'button17', 'button18', 'button19']);
+    assert.deepEqual(ins(st, 'trim'), ['hat1_up', 'hat1_right', 'hat1_down', 'hat1_left']); assert.deepEqual(ins(st, 'xy'), ['x', 'y']);
+    assert.deepEqual(ins(th, 'mic'), ['button3', 'button4', 'button5', 'button6', 'button2'], 'MIC: up/right/down/left + push');
+    assert.deepEqual(ins(th, 'eol'), ['button31', 'button18'], 'engine operate L: IGN (up) = 31, MOTOR (down) = 18');
+    assert.deepEqual([ins(th, 'rthr'), ins(th, 'lthr'), ins(th, 'frict'), ins(th, 'slew')], [['z'], ['rotz'], ['slider1'], ['x', 'y']]);
+    if (!th.views) assert.equal(th.callouts.find((c) => c.id === 'ff')!.inputRegions?.length, 2, 'fuel flow: one outline per switch'); // (art only: photos have markers)
+    assert.deepEqual([st.views?.map((v) => v.id), th.views?.map((v) => v.id)], [['thumb', 'side'], ['top', 'front']], 'Warthog: photo templates (measured layouts)');
+    assert.deepEqual(ins(by('tm-t16000m'), 'lpanel'), ['button5', 'button6', 'button7', 'button8', 'button9', 'button10']);
+    assert.deepEqual(ins(by('virpil-alpha-prime'), 'h8'), ['button9', 'button12', 'button11', 'button10', 'button8'], 'Alpha hat: up 9 / right 12 / down 11 / left 10 / push 8');
+    assert.deepEqual(ins(by('winctrl-ursa-combat'), 'detl'), ['button16', 'button17', 'button18', 'button19']);
+    assert.deepEqual(ins(by('moza-mtq'), 'flapsb'), ['button40', 'button39', 'button38', 'button37', 'button36']);
+    assert.match(by('winctrl-ursa-combat').notes!, /PROVISIONAL/);
+    assert.equal(tp.maxButton(by('winctrl-orion')), 111); assert.equal(tp.maxButton(by('tm-warthog-throttle')), 32);
+    // auto-link: USB id (Chromium id string), name only (Firefox), generic fallback for other devices
+    const ident = (id: string, buttons: number) => { const q = cap.parsePadId(id); return { name: q.name, vendor: q.vendor, productId: q.product, buttons, slot: 'js' as const }; };
+    const pick = (id: string, n: number) => tp.pickTemplate(all, ident(id, n)).template.id;
+    assert.equal(pick('Joystick - HOTAS Warthog (Vendor: 044f Product: 0402)', 19), st.id);
+    assert.equal(pick('Throttle - HOTAS Warthog (Vendor: 044f Product: 0404)', 32), th.id);
+    assert.equal(pick('044f-0404-Throttle - HOTAS Warthog', 32), th.id, 'Firefox-style id');
+    assert.equal(tp.pickTemplate(all, { name: 'Throttle - HOTAS Warthog', slot: 'js' }).how, 'matched', 'name alone links');
+    assert.equal(pick('T.16000M (Vendor: 044f Product: b10a)', 16), 'builtin-tm-t16000m');
+    assert.equal(pick('TWCS Throttle (Vendor: 044f Product: b687)', 14), 'builtin-tm-twcs');
+    assert.equal(pick('MOZA AB6 Flight Base (Vendor: 346e Product: 1002)', 128), 'builtin-moza-ab6', 'AB6 with 128 buttons');
+    assert.equal(pick('346e-1002-MOZA AB6 Flight Base', 133), 'builtin-moza-ab6', 'AB6 with 133 buttons');
+    assert.equal(pick('WINCTRL URSA MINOR Combat Joystick (Vendor: 4098 Product: b970)', 81), 'builtin-winctrl-ursa-combat');
+    assert.equal(pick('4098-bc27-WINCTRL URSA MINOR Throttle', 81), 'builtin-winctrl-ursa-combat');
+    assert.equal(tp.pickTemplate(all, { name: 'URSA MINOR Throttle L', slot: 'js' }).template.id, 'builtin-winctrl-ursa-combat', 'URSA by name');
+    for (const [name, id] of [['VPC Constellation Alpha Prime R', 'virpil-alpha-prime'], ['VPC VMAX Prime Throttle', 'virpil-vmax-prime'], ['WINCTRL Orion Joystick Base Metal 2 + JGRIP-F18', 'winctrl-carrierace'],
+      ['WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16', 'winctrl-viperace'], ['WINCTRL Orion Throttle Base II + F15EX HANDLE L + F15EX HANDLE R', 'winctrl-orion'], ['MOZA MTP Throttle', 'moza-mtp'], ['MOZA MTQ Throttle', 'moza-mtq'],
+      [' VKB-Sim Gladiator EVO R ', 'vkb-gladiator-scg'], ['VKBsim Gunfighter Modern Combat Pro', 'vkb-gunfighter-mcg'], ['VKBsim STECS Mk.II Standard', 'vkb-stecs'],
+      ['Saitek Pro Flight X-56 Rhino Stick', 'logitech-x56-stick'], ['Logitech X56 H.O.T.A.S. Throttle', 'logitech-x56-throttle']] as const)
+      assert.equal(tp.pickTemplate(all, { name, slot: 'js' }).template.id, `builtin-${id}`, name);
+    for (const name of ['WINCTRL CarrierAce MFD L', 'WINCTRL CarrierAce UFC+HUD', 'WINCTRL ViperAce ICP', 'WINCTRL Orion Pedals', 'WINCTRL Orion Throttle Base II + F18 HANDLE', 'VKBsim T-Rudder'])
+      assert.ok(!tp.pickTemplate(all, { name, slot: 'js' }).template.id.startsWith('builtin-winctrl') && !tp.pickTemplate(all, { name, slot: 'js' }).template.id.startsWith('builtin-vkb'), `${name} is not a stick/throttle template`);
+    assert.equal(pick('Thrustmaster T.Flight Hotas One (Vendor: 044f Product: b68d)', 14), 'builtin-stick', 'other devices keep the generic stick');
+    assert.equal(tp.pickTemplate(all, { name: 'Throttle - HOTAS Warthog', slot: 'gp' }).template.id, 'builtin-gamepad', 'slot respected');
+    // picker groups: user templates, generic built-ins, then brands A-Z
+    const mine = { ...tp.newTemplate('js', 'Mine'), brand: 'Thrustmaster' };
+    const gr = tp.templateGroups([mine, ...all]);
+    assert.deepEqual(gr.map((g) => g.label), ['Your templates', 'Generic (built-in)', 'Logitech', 'MOZA', 'Thrustmaster', 'VIRPIL', 'VKB', 'WinCtrl']);
+    assert.deepEqual(gr[0].templates.map((x) => x.name), ['Mine'], 'a user copy of a brand template stays under “Your templates”');
+    assert.equal(gr[4].templates.length, 4, 'Thrustmaster: Warthog stick + throttle, T.16000M, TWCS');
+    // a copy of an unassigned template takes numbers per callout (the editor's “Customize a copy” path)
+    const copy = tp.cloneTemplate(by('vkb-gladiator-scg'), 'My Gladiator');
+    assert.ok(!copy.builtin && !(copy as any).loadImage);
+    copy.callouts = copy.callouts.map((c) => (c.id === 'a2' ? { ...c, inputs: ['button7'] } : c));
+    const saved = tp.parseTemplates(tp.exportTemplates([copy]))[0];
+    assert.deepEqual(saved.callouts.find((c) => c.id === 'a2')!.inputs, ['button7']);
+    assert.equal(tp.shortInput(''), '?');
+  });
+  {
+    // lazy pictures: a template with loadImage gets its picture on demand (cached afterwards); every device template now uses photos
+    const d = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion')!;
+    assert.ok(!d.loadImage && d.views!.length === 3 && d.views!.every((v) => v.image!.startsWith('/device-photos/')), 'Orion uses its photo views');
+    assert.deepEqual(DEVICE_TEMPLATES.filter((x) => !x.views?.length).map((x) => x.id), [], 'every device template has a photo layout');
+    let calls = 0;
+    const lazy = { ...d, id: 'test-lazy-picture', views: undefined, loadImage: async () => { calls++; return 'data:image/svg+xml,<svg/>'; } };
+    const r = await tp.resolveTemplateImage(lazy);
+    assert.ok(r.image === 'data:image/svg+xml,<svg/>' && !(lazy as { image?: string }).image, 'picture resolves, template untouched');
+    assert.equal((await tp.resolveTemplateImage(lazy)).image, r.image, 'cached'); assert.equal(calls, 1);
+    const imgs = await Promise.all(DEVICE_TEMPLATES.map((x) => tp.resolveTemplateImage(x).then((y) => y.image ?? y.views!.map((v) => v.image).join()))); // (photo templates: their views' photos)
+    assert.equal(new Set(imgs).size, 18, 'one distinct picture per device');
+    passed++; console.log('  ✓ device template pictures: all 18 photo templates (distinct), lazy pictures cached');
+  }
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };
     for (const [old, now] of [['builtin-stick-classic', 'builtin-stick'], ['builtin-throttle-classic', 'builtin-throttle']]) {
