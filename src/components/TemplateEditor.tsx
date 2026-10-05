@@ -3,8 +3,8 @@ import { GP_AXES, GP_BUTTONS, JS_AXES } from '../lib/capture';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { usePadHits, type PressHit } from '../lib/listen';
 import {
-  BLANK_ASPECT, CALLOUT_KINDS, calloutFor, calloutTitle, coveredInputs, exportTemplates, freeBoxSpot, hatInputs, inputRole, inputsForKind,
-  loadImageFile, matchFor, matchScore, shortInput, uid, usedInputs, type Callout, type CalloutKind, type DeviceIdentity, type DeviceTemplate, type Pt,
+  BLANK_ASPECT, CALLOUT_KINDS, HAT_DIRS, calloutFor, calloutTitle, coveredInputs, exportTemplates, freeBoxSpot, hatInputs, inputRole, inputsForKind,
+  calloutView, loadImageFile, matchFor, matchScore, shortInput, templateViews, uid, usedInputs, viewTemplate, type Callout, type CalloutKind, type DeviceIdentity, type DeviceTemplate, type Pt,
 } from '../lib/templates';
 import { CalloutBody, DeviceCanvas, useLiveInputs, type CalloutState, type Entry } from './DeviceCanvas';
 
@@ -21,6 +21,8 @@ interface Props {
   notify: (kind: 'ok' | 'err', text: string) => void;
 }
 const INPUT_RE = /^[a-z][a-z0-9_]{0,24}$/;
+/** typed input name: a bare number means that button ("7" -> button7) */
+const numIn = (v: string) => { const t = v.trim().toLowerCase(); return /^\d{1,3}$/.test(t) && Number(t) > 0 ? `button${Number(t)}` : t; };
 const field = 'min-w-0 rounded border border-edge bg-panel2 px-1.5 py-0.5 text-xs text-slate-200';
 
 /** create / edit a device template: image, callouts (click or press to place, drag anchor and label), device link, export */
@@ -38,6 +40,12 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   const tRef = useRef(t);
   useEffect(() => { tRef.current = t; }, [t]);
   const live = useLiveInputs(device.pad);
+  // multi-view templates: the view shown (tabs); new callouts go on it. Single-view templates have no tabs.
+  const multi = !!t.views?.length;
+  const [viewSel, setViewSel] = useState<string>(() => templateViews(initial)[0].id);
+  const activeView = multi && t.views!.some((v) => v.id === viewSel) ? viewSel : templateViews(t)[0].id;
+  const viewRef = useRef(activeView);
+  useEffect(() => { viewRef.current = activeView; }, [activeView]);
 
   const pushHist = useCallback(() => { histRef.current = [...histRef.current.slice(-99), tRef.current]; setHistLen(histRef.current.length); }, []);
   const commit = useCallback((next: DeviceTemplate) => { pushHist(); tRef.current = next; setT(next); }, [pushHist]);
@@ -54,7 +62,8 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   const removeCallout = useCallback((id: string) => { commit({ ...tRef.current, callouts: tRef.current.callouts.filter((c) => c.id !== id) }); setSel(null); }, [commit]);
   const addCallout = useCallback((kind: CalloutKind, inputs: string[], anchor: Pt) => {
     const cur = tRef.current;
-    const c: Callout = { id: uid(), kind, inputs, anchor, box: freeBoxSpot(cur, anchor) };
+    const onView = cur.views?.length ? viewRef.current : undefined;
+    const c: Callout = { id: uid(), kind, inputs, anchor, box: freeBoxSpot(onView ? viewTemplate(cur, onView) : cur, anchor), ...(onView ? { view: onView } : {}) };
     commit({ ...cur, callouts: [...cur.callouts, c] });
     setSel(c.id);
     return c;
@@ -100,12 +109,24 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
     setBusy(true);
     try {
       const img = await loadImageFile(f);
+      const cur = tRef.current;
+      if (cur.views?.length) { // multi-view: replaces the picture of the shown view (canvas widened for the label columns, as the built-ins)
+        const views = cur.views.map((v) => (v.id === viewRef.current ? { ...v, image: img.dataUrl, width: Math.round(img.w + 0.68 * img.h), height: img.h } : v));
+        commit({ ...cur, views, aspect: views[0].width / views[0].height });
+        notify('ok', `Image loaded (${img.w}×${img.h}, ${(img.dataUrl.length / 1024).toFixed(0)} KB stored)`);
+        setBusy(false);
+        return;
+      }
       commit({ ...tRef.current, image: img.dataUrl, aspect: img.w / img.h, callouts: tRef.current.callouts.map(({ region: _r, inputRegions: _ir, ...c }) => c) });
       notify('ok', `Image loaded (${img.w}×${img.h}, ${(img.dataUrl.length / 1024).toFixed(0)} KB stored)`);
     } catch (e) { notify('err', (e as Error).message); }
     setBusy(false);
   };
   const selC = t.callouts.find((c) => c.id === sel);
+  const selView = selC && multi ? calloutView(t, selC) : null;
+  // selecting a callout (e.g. by pressing its control) shows its view (state adjusted while rendering, not in an effect)
+  const [seenSelView, setSeenSelView] = useState(selView);
+  if (selView !== seenSelView) { setSeenSelView(selView); if (selView) setViewSel(selView); }
   const groups = [...new Set(t.callouts.map((c) => c.group).filter(Boolean))] as string[];
   const stateOf = (c: Callout): CalloutState => {
     const es = coveredInputs(c).flatMap(entriesFor);
@@ -125,9 +146,9 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
         <select value={t.slot} onChange={(e) => commit({ ...t, slot: e.target.value as 'js' | 'gp' })} aria-label="Device type" className={field}>
           <option value="js">Joystick / HOTAS</option><option value="gp">Gamepad</option>
         </select>
-        <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="tpl-upload" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">🖼 {t.image ? 'Replace image' : 'Upload image'}</button>
-        {t.image && <button type="button" onClick={() => commit({ ...t, image: undefined, aspect: BLANK_ASPECT, callouts: t.callouts.map(({ region: _r, inputRegions: _ir, ...c }) => c) })} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Blank canvas</button>}
-        {!t.image && (
+        <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="tpl-upload" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">🖼 {t.image || t.views?.find((v) => v.id === activeView)?.image ? 'Replace image' : 'Upload image'}</button>
+        {t.image && !multi && <button type="button" onClick={() => commit({ ...t, image: undefined, aspect: BLANK_ASPECT, callouts: t.callouts.map(({ region: _r, inputRegions: _ir, ...c }) => c) })} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Blank canvas</button>}
+        {!t.image && !multi && (
           <label className="flex items-center gap-1 text-[11px] text-slate-400">Canvas
             <select value={String(t.aspect)} onChange={(e) => commit({ ...t, aspect: Number(e.target.value) })} aria-label="Canvas shape" className={field}>
               {[[BLANK_ASPECT, 'wide 16:10'], [4 / 3, '4:3'], [1, 'square'], [0.75, 'tall 3:4']].map(([v, l]) => <option key={String(v)} value={String(v)}>{l}</option>)}
@@ -159,7 +180,17 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
       </div>
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-auto p-4 scrollbar-thin">
-          <DeviceCanvas template={t} editable stateOf={stateOf} selected={sel} onSelect={setSel}
+          {multi && (
+            <div role="tablist" aria-label="Views" data-testid="tpl-views" className="mb-2 flex flex-wrap gap-1">
+              {t.views!.map((v) => (
+                <button key={v.id} type="button" role="tab" aria-selected={v.id === activeView} data-view-tab={v.id} onClick={() => { setViewSel(v.id); if (selC && calloutView(t, selC) !== v.id) setSel(null); }}
+                  className={`rounded border px-2.5 py-1 text-xs ${v.id === activeView ? 'border-hud/60 bg-hud/10 text-hud2' : 'border-edge text-slate-400 hover:border-hud/40'}`}>
+                  {v.label || v.id} <span className="text-slate-500">({t.callouts.filter((c) => calloutView(t, c) === v.id).length})</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <DeviceCanvas template={t} view={multi ? activeView : undefined} editable stateOf={stateOf} selected={sel} onSelect={setSel}
             onDragStart={pushHist}
             onMove={(id, part, p) => {
               // labels stay (mostly) inside the canvas; anchors can go anywhere on it
@@ -177,7 +208,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
             <section className="space-y-2 rounded border border-mod/40 bg-black/30 p-2.5" data-testid="callout-props">
               <div className="flex items-center gap-2">
                 <b className="font-mono text-hud2">{calloutTitle(selC)}</b>
-                <button type="button" onClick={() => { const cur = tRef.current; const c = { ...structuredClone(selC), id: uid(), anchor: { x: Math.min(1, selC.anchor.x + 0.03), y: Math.min(1, selC.anchor.y + 0.03) }, box: freeBoxSpot(cur, selC.anchor) }; commit({ ...cur, callouts: [...cur.callouts, c] }); setSel(c.id); }} className="ml-auto rounded border border-edge px-1.5 text-[10px] text-slate-300 hover:border-hud/60">Duplicate</button>
+                <button type="button" onClick={() => { const cur = tRef.current; const c = { ...structuredClone(selC), id: uid(), anchor: { x: Math.min(1, selC.anchor.x + 0.03), y: Math.min(1, selC.anchor.y + 0.03) }, box: freeBoxSpot(viewTemplate(cur, calloutView(cur, selC)), selC.anchor) }; commit({ ...cur, callouts: [...cur.callouts, c] }); setSel(c.id); }} className="ml-auto rounded border border-edge px-1.5 text-[10px] text-slate-300 hover:border-hud/60">Duplicate</button>
                 <button type="button" onClick={() => removeCallout(selC.id)} data-testid="callout-delete" className="rounded border border-edge px-1.5 text-[10px] text-slate-400 hover:border-alert hover:text-alert">Delete</button>
               </div>
               <label className="flex items-center gap-2">Type
@@ -185,6 +216,13 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
                   {CALLOUT_KINDS.map((k) => <option key={k.kind} value={k.kind} title={k.hint}>{k.label}</option>)}
                 </select>
               </label>
+              {multi && (
+                <label className="flex items-center gap-2">View
+                  <select value={calloutView(t, selC)} onChange={(e) => patchCallout(selC.id, { view: e.target.value })} aria-label="Callout view" className={field}>
+                    {t.views!.map((v) => <option key={v.id} value={v.id}>{v.label || v.id}</option>)}
+                  </select>
+                </label>
+              )}
               <InputsEditor c={selC} slot={t.slot} pressTarget={pressTarget} setPressTarget={setPressTarget} canPress={!!device.pad} onChange={(inputs) => patchCallout(selC.id, { inputs })} />
               <label className="flex items-center gap-2">Name
                 <input value={selC.label ?? ''} placeholder={calloutTitle({ ...selC, label: undefined })} aria-label="Callout name"
@@ -251,20 +289,33 @@ function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange
   );
   if (c.kind === 'hat') {
     const n = Number(/^hat(\d)_/.exec(c.inputs[0] ?? '')?.[1] ?? 0);
+    const dpad = /^dpad_/.test(c.inputs[0] ?? '');
+    // a joystick hat is either a POV hat (hatN_up...) or four buttons (many grips report their 4-way hats as buttons)
+    const asButtons = slot === 'js' && !n;
     return (
       <div className="space-y-1">
         {slot === 'js' && (
-          <label className="flex items-center gap-2">Hat number
-            <select value={n || 1} onChange={(e) => onChange([...hatInputs(Number(e.target.value)), ...c.inputs.slice(4)])} aria-label="Hat number" className={field}>
-              {[1, 2, 3, 4].map((k) => <option key={k} value={k}>hat {k}</option>)}
+          <label className="flex items-center gap-2">Reports as
+            <select value={asButtons ? 'b' : String(n)} aria-label="Hat number"
+              onChange={(e) => onChange(e.target.value === 'b' ? ['', '', '', '', ...c.inputs.slice(4)] : [...hatInputs(Number(e.target.value)), ...c.inputs.slice(4)])} className={field}>
+              {[1, 2, 3, 4].map((k) => <option key={k} value={k}>POV hat {k}</option>)}
+              <option value="b">4 buttons</option>
             </select>
-            {pressBtn(0)}
+            {!asButtons && pressBtn(0)}
           </label>
         )}
-        <div className="font-mono text-[10px] text-slate-500">{c.inputs.slice(0, 4).map((i, k) => `${inputRole(c, k)} ${i}`).join('  ')}</div>
+        {asButtons ? HAT_DIRS.map((d, k) => (
+          <label key={d} className="flex items-center gap-2"><span className="w-28 shrink-0">{inputRole(c, k)} {d}</span>
+            <input defaultValue={c.inputs[k] ?? ''} key={`${c.id}:${k}:${c.inputs[k]}`} placeholder="not set, e.g. button7" aria-label={`Hat ${d} input`}
+              onBlur={(e) => { const v = numIn(e.target.value); if (v === '' || INPUT_RE.test(v)) { if (v !== (c.inputs[k] ?? '')) onChange(HAT_DIRS.map((_, j) => (j === k ? v : c.inputs[j] ?? '')).concat(c.inputs.slice(4))); } else e.target.value = c.inputs[k] ?? ''; }}
+              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
+            {pressBtn(k)}
+          </label>
+        )) : !dpad && <div className="font-mono text-[10px] text-slate-500">{c.inputs.slice(0, 4).map((i, k) => `${inputRole(c, k)} ${i}`).join('  ')}</div>}
+        {dpad && <div className="font-mono text-[10px] text-slate-500">{c.inputs.slice(0, 4).map((i, k) => `${inputRole(c, k)} ${i}`).join('  ')}</div>}
         <label className="flex items-center gap-2">Push button
           <input value={c.inputs[4] ?? ''} placeholder="optional, e.g. button5" aria-label="Hat push button"
-            onChange={(e) => { const v = e.target.value.trim().toLowerCase(); onChange(v && INPUT_RE.test(v) ? [...c.inputs.slice(0, 4), v] : c.inputs.slice(0, 4)); }} className={`${field} flex-1 font-mono`} />
+            onChange={(e) => { const v = e.target.value.trim().toLowerCase(); onChange(v && INPUT_RE.test(v) ? [...c.inputs.slice(0, 4), v] : c.inputs.slice(0, 4)); }} className={`${field} min-w-0 flex-1 font-mono`} />
           {c.inputs[4] !== undefined && pressBtn(4)}
         </label>
       </div>
@@ -276,7 +327,7 @@ function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange
         {c.inputs.map((a, i) => (
           <label key={i} className="flex items-center gap-2">{c.inputs.length > 1 ? (i ? 'Axis 2' : 'Axis 1') : 'Axis'}
             <select value={a} onChange={(e) => set(i, e.target.value)} aria-label={`Axis ${i + 1}`} className={`${field} font-mono`}>
-              {[...new Set([a, ...axes])].map((x) => <option key={x} value={x}>{x}</option>)}
+              {[...new Set([a, ...axes])].map((x) => <option key={x} value={x}>{x || '— not set —'}</option>)}
             </select>
             {pressBtn(i)}
             {i > 0 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 1))} className="text-slate-500 hover:text-alert" aria-label="Remove second axis">✕</button>}
@@ -291,8 +342,8 @@ function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange
     <div className="space-y-1">
       {c.inputs.map((x, i) => (
         <label key={i} className="flex items-center gap-2"><span className="w-28 shrink-0">{labels[i] ?? `Input ${i + 1}`}</span>
-          <input defaultValue={x} key={`${c.id}:${i}:${x}`} list={slot === 'gp' ? 'tpl-gp-buttons' : undefined} aria-label={`${labels[i] ?? `Input ${i + 1}`} input`}
-            onBlur={(e) => { const v = e.target.value.trim().toLowerCase(); if (v !== x && INPUT_RE.test(v)) set(i, v); else e.target.value = x; }}
+          <input defaultValue={x} key={`${c.id}:${i}:${x}`} list={slot === 'gp' ? 'tpl-gp-buttons' : undefined} aria-label={`${labels[i] ?? `Input ${i + 1}`} input`} placeholder="not set, e.g. button5"
+            onBlur={(e) => { const v = numIn(e.target.value); if (v !== x && (v === '' || INPUT_RE.test(v))) set(i, v); else e.target.value = x; }}
             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
           {pressBtn(i)}
           {c.kind === 'encoder' && i === 2 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 2))} className="text-slate-500 hover:text-alert" aria-label="Remove push">✕</button>}

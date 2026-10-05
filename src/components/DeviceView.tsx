@@ -1,10 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
+import { ChromiumBanner, ChromiumButtonNotice } from './ChromiumBanner';
 import { createPortal } from 'react-dom';
 import { padLabel, parseProfileProduct, type PadInfo, type PadLike } from '../lib/devices';
 import { formatInput, searchSpec } from '../lib/inputs';
 import {
-  calloutFor, calloutTitle, cloneTemplate, coveredInputs, exportTemplates, identityKey, inputRole, matchFor, matchScore, newTemplate,
-  parseTemplates, pickTemplate, shortInput, splitCombo, useTemplates, type Callout, type DeviceIdentity, type DeviceTemplate,
+  calloutFor, calloutTitle, cloneTemplate, coveredInputs, exportTemplates, identityKey, inputRole, matchFor, matchScore, maxButton, newTemplate,
+  calloutView, imageSrc, parseTemplates, pickTemplate, resolveTemplateImage, templateViews, shortInput, splitCombo, templateGroups, unassignedCount, useTemplateImage, useTemplates,
+  type Callout, type DeviceIdentity, type DeviceTemplate,
 } from '../lib/templates';
 import type { Binding, ProfileDevice, Row, Slot } from '../lib/types';
 import { CalloutBody, DeviceCanvas, TONE_STROKE, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
@@ -58,7 +60,9 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
   const { slot, instance, ident } = opt;
   const idKey = identityKey(ident);
   const chosen = pickTemplate(T.templates, ident, T.picks[idKey]);
-  const tpl = chosen.template;
+  const tpl = useTemplateImage(chosen.template); // built-in device templates: the picture arrives on demand
+  const tplMax = maxButton(tpl);
+  const unassigned = tpl.callouts.reduce((n, c) => n + unassignedCount(c), 0);
   const live = useLiveInputs(opt.pad);
 
   // bindings of this device by physical input
@@ -116,8 +120,16 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
     return { title: `${calloutTitle(c)}${c.label ? ` (${c.inputs.map(shortInput).join(' ')})` : ''}`, lines: lines.length ? lines : ['—'], tone: stateOf(c).tone };
   };
   const exportPng = async () => {
-    try { download(`${slug(opt.label)}-${slot}${instance}.png`, await renderPng(tpl, labelInfo, `${slot.toUpperCase()}${instance} · ${ident.name ?? tpl.name}`)); }
+    try { download(`${slug(opt.label)}-${slot}${instance}.png`, await renderPng(await resolveTemplateImage(tpl), labelInfo, `${slot.toUpperCase()}${instance} · ${ident.name ?? tpl.name}`)); }
     catch (e) { notify('err', `PNG export failed: ${(e as Error).message}`); }
+  };
+  const customize = async () => {
+    try { setEditing(withLink(cloneTemplate(await resolveTemplateImage(tpl), ident.name ?? `${tpl.name} (copy)`))); }
+    catch (e) { notify('err', `Could not load the template picture: ${(e as Error).message}`); }
+  };
+  const exportJson = async () => {
+    try { download(`${slug(tpl.name)}.sc-template.json`, `data:application/json;charset=utf-8,${encodeURIComponent(exportTemplates([await resolveTemplateImage(tpl)]))}`); }
+    catch (e) { notify('err', `Template export failed: ${(e as Error).message}`); }
   };
 
   return (
@@ -131,26 +143,42 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
         </label>
         <label className="flex items-center gap-1.5 text-xs text-slate-400">Template
           <select value={T.picks[idKey] && T.templates.some((t) => t.id === T.picks[idKey]) ? T.picks[idKey] : ''} onChange={(e) => T.pick(idKey, e.target.value || null)} data-testid="template-select"
-            className="max-w-[16rem] rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200">
+            className="max-w-[20rem] rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200">
             <option value="">Automatic ({pickTemplate(T.templates, ident).template.name})</option>
-            {T.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.builtin ? ' · built-in' : ''}{t.slot !== slot ? ` · ${t.slot}` : ''}</option>)}
+            {templateGroups(T.templates).map((g) => (
+              <optgroup key={g.label} label={g.label} data-group={g.label}>
+                {g.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.slot !== slot ? ` · ${t.slot}` : ''}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
+              </optgroup>
+            ))}
           </select>
         </label>
         {tpl.builtin
-          ? <button type="button" onClick={() => setEditing(withLink(cloneTemplate(tpl, ident.name ?? `${tpl.name} (copy)`)))} data-testid="template-customize" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">✎ Customize a copy</button>
+          ? <button type="button" onClick={() => void customize()} data-testid="template-customize" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">✎ Customize a copy</button>
           : <button type="button" onClick={() => setEditing(structuredClone(tpl))} data-testid="template-edit" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">✎ Edit template</button>}
         <button type="button" onClick={() => setEditing(withLink(newTemplate(slot, ident.name ?? 'My device')))} data-testid="template-new" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">＋ New template</button>
         <span className="ml-auto flex flex-wrap gap-1.5">
           <button type="button" onClick={() => importRef.current?.click()} data-testid="template-import" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">⇪ Import template</button>
-          <button type="button" onClick={() => download(`${slug(tpl.name)}.sc-template.json`, `data:application/json;charset=utf-8,${encodeURIComponent(exportTemplates([tpl]))}`)} data-testid="template-export" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">⇩ Export template</button>
+          <button type="button" onClick={() => void exportJson()} data-testid="template-export" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">⇩ Export template</button>
           <button type="button" onClick={exportPng} data-testid="device-png" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">🖼 PNG</button>
           <button type="button" onClick={() => window.print()} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">🖨 Print</button>
         </span>
         <input ref={importRef} type="file" accept=".json,application/json" className="hidden" data-testid="template-import-file"
           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
       </div>
+      <div className="print:hidden"><ChromiumBanner detected={pads.length} compact /></div>
+      <ChromiumButtonNotice templateMax={tplMax} deviceButtons={opt.pad?.buttons} device={ident.name ?? `${slot.toUpperCase()}${instance}`} />
+      {unassigned > 0 && (
+        <div data-testid="template-unassigned" className="flex flex-wrap items-center gap-2 rounded border border-mod/50 bg-mod/10 px-3 py-1.5 text-[11px] text-slate-200 print:hidden">
+          <span><b className="text-mod">{unassigned} input{unassigned === 1 ? '' : 's'} on this picture have no number yet</b> (marked “?”): this device numbers its buttons the way you configured it.
+            {tpl.builtin ? <> Customize a copy, select a callout and type its number or press ⦿ and then the control.</> : <> Edit the template, select a callout and type its number or press ⦿ and then the control.</>}</span>
+          {tpl.builtin
+            ? <button type="button" onClick={() => void customize()} className="rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20">✎ Assign numbers</button>
+            : <button type="button" onClick={() => setEditing(structuredClone(tpl))} className="rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20">✎ Assign numbers</button>}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 print:hidden" data-testid="device-status">
         <span>Template <b className="text-slate-300">{tpl.name}</b>: {chosen.how === 'chosen' ? 'picked by you for this device' : chosen.how === 'matched' ? `linked to this device (${describeMatch(tpl, ident)})` : 'generic (no template linked to this device yet: customize a copy to place the callouts on your own device)'}</span>
+        {tpl.notes && <span className="text-slate-400" data-testid="template-notes">ⓘ {tpl.notes}</span>}
         <span>{opt.pad ? <span className="text-ok">● live: press or move a control and it lights up</span> : 'Connect the device (and press a button) for live highlight.'}</span>
         <Legend />
       </div>
@@ -221,8 +249,9 @@ function InputPanel({ c, slot, instance, index, rows, live, onEdit, onRemove, on
   onEdit: (row: Row) => void; onRemove: (row: Row, b: Binding) => void; onBind: (row: Row, slot: Slot, instance: number, input: string) => void;
   onShowInList: (spec: string) => void; onClose: () => void;
 }) {
-  const inputs = [...c.inputs, ...coveredInputs(c).slice(c.inputs.length).filter((i) => index.has(i))];
-  const [target, setTarget] = useState(c.inputs[0]);
+  const own = c.inputs.filter(Boolean), missing = c.inputs.length - own.length;
+  const inputs = [...own, ...coveredInputs(c).slice(own.length).filter((i) => index.has(i))];
+  const [target, setTarget] = useState(own[0] ?? '');
   const [q, setQ] = useState('');
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -236,6 +265,7 @@ function InputPanel({ c, slot, instance, index, rows, live, onEdit, onRemove, on
         <span className="font-mono text-[10px] text-slate-500">{slot.toUpperCase()}{instance} · {c.kind}</span>
         <button type="button" onClick={onClose} className="ml-auto text-slate-500 hover:text-slate-200" aria-label="Close">✕</button>
       </div>
+      {missing > 0 && <p className="mt-1 text-[11px] text-mod" data-testid="input-panel-unassigned">{missing === c.inputs.length ? 'This control has' : `${missing} of its inputs have`} no button number yet: customize a copy of the template to set {missing === 1 ? 'it' : 'them'}.</p>}
       <ul className="mt-2 space-y-2">
         {inputs.map((i) => {
           const es = index.get(i) ?? [];
@@ -263,12 +293,12 @@ function InputPanel({ c, slot, instance, index, rows, live, onEdit, onRemove, on
           );
         })}
       </ul>
-      <div className="mt-3 border-t border-edge/50 pt-2">
+      {own.length > 0 && <div className="mt-3 border-t border-edge/50 pt-2">
         <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
           Bind an action to
-          {c.inputs.length > 1 ? (
+          {own.length > 1 ? (
             <select value={target} onChange={(e) => setTarget(e.target.value)} aria-label="Input to bind" className="rounded border border-edge bg-panel2 px-1 py-0.5 font-mono text-[11px] text-slate-200">
-              {c.inputs.map((i) => <option key={i} value={i}>{i}</option>)}
+              {own.map((i) => <option key={i} value={i}>{i}</option>)}
             </select>
           ) : <code className="text-hud/90">{target}</code>}
         </div>
@@ -285,27 +315,38 @@ function InputPanel({ c, slot, instance, index, rows, live, onEdit, onRemove, on
             ))}
           </ul>
         )}
-      </div>
+      </div>}
     </section>
   );
 }
 
-/** the device picture with its callouts and bound actions as a PNG data URL (2000 px wide) */
+/** the device picture(s) with the callouts and bound actions as a PNG data URL (2000 px wide; multi-view templates side by side) */
 async function renderPng(t: DeviceTemplate, info: (c: Callout) => { title: string; lines: string[]; tone: Tone }, heading: string): Promise<string> {
-  const W = 2000, top = 80, IH = Math.round(W / t.aspect), H = IH + top;
+  const views = templateViews(t), multi = !!t.views?.length;
+  const sum = views.reduce((n, v) => n + v.width / v.height, 0);
+  const W = 2000, top = 80, IH = Math.round(W / sum), H = IH + top;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d')!;
   g.fillStyle = '#04070c'; g.fillRect(0, 0, W, H);
   g.fillStyle = '#8be9ff'; g.font = 'bold 36px sans-serif'; g.fillText(heading, 30, 54);
-  if (t.image) {
-    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('image')); i.src = t.image!; });
-    g.drawImage(img, 0, top, W, IH);
+  // each view: its x offset and width on the sheet
+  const frame = new Map<string, { x: number; w: number }>();
+  let x0 = 0;
+  for (const v of views) { const w = (W * v.width) / v.height / sum; frame.set(v.id, { x: x0, w }); x0 += w; }
+  for (const v of views) {
+    const f = frame.get(v.id)!;
+    if (!v.image) continue;
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('image')); i.src = imageSrc(v.image!); });
+    if (!multi) { g.drawImage(img, f.x, top, f.w, IH); continue; }
+    const k = Math.min(f.w / img.naturalWidth, IH / img.naturalHeight), iw = img.naturalWidth * k, ih = img.naturalHeight * k; // aspect kept, centred
+    g.drawImage(img, f.x + (f.w - iw) / 2, top + (IH - ih) / 2, iw, ih);
+    if (views.length > 1 && v.label) { g.fillStyle = '#4fd8ff'; g.font = 'bold 22px sans-serif'; g.fillText(v.label.toUpperCase(), f.x + 16, top + 30); }
   }
-  const P = (p: { x: number; y: number }) => [p.x * W, top + p.y * IH] as const;
+  const P = (c: Callout, p: { x: number; y: number }) => { const f = frame.get(calloutView(t, c))!; return [f.x + p.x * f.w, top + p.y * IH] as const; };
   for (const c of t.callouts) {
     const col = TONE_STROKE[info(c).tone];
-    const [ax, ay] = P(c.anchor), [bx, by] = P(c.box);
+    const [ax, ay] = P(c, c.anchor), [bx, by] = P(c, c.box);
     g.strokeStyle = col; g.lineWidth = 3; g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
     g.fillStyle = col; g.beginPath(); g.arc(ax, ay, 8, 0, Math.PI * 2); g.fill();
   }
@@ -316,7 +357,7 @@ async function renderPng(t: DeviceTemplate, info: (c: Callout) => { title: strin
     g.font = '22px sans-serif';
     const wTxt = Math.min(360, Math.max(...shown.map((l) => g.measureText(l).width), (g.font = 'bold 24px monospace', g.measureText(title).width)));
     const bw = wTxt + 24, bh = 36 + shown.length * 26;
-    const [bx, by] = P(c.box);
+    const [bx, by] = P(c, c.box);
     const x = Math.min(W - bw - 4, Math.max(4, bx - bw / 2)), y = Math.min(H - bh - 4, Math.max(top, by - bh / 2));
     g.fillStyle = 'rgba(8,17,29,0.96)'; g.strokeStyle = TONE_STROKE[tone]; g.lineWidth = 2;
     g.beginPath(); if (g.roundRect) g.roundRect(x, y, bw, bh, 8); else g.rect(x, y, bw, bh); g.fill(); g.stroke();

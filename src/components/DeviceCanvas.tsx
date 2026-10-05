@@ -1,7 +1,7 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { isHatRest, snapshot } from '../lib/capture';
 import { getPads, type PadInfo } from '../lib/devices';
-import { calloutTitle, coveredInputs, inputRole, liveInputs, shortInput, type Callout, type DeviceTemplate, type Pt } from '../lib/templates';
+import { BUILTIN_PHOTO_RE, calloutTitle, coveredInputs, imageSrc, inputRole, liveInputs, shortInput, viewTemplate, type Callout, type DeviceTemplate, type Pt } from '../lib/templates';
 import type { Binding, Row } from '../lib/types';
 
 export interface Entry { row: Row; b: Binding; prefix: string; conflict: boolean }
@@ -64,10 +64,42 @@ interface Props {
   onDragStart?: () => void;
   onCanvasClick?: (p: Pt) => void;
   minWidth?: number;
+  /** multi-view templates: show only this view (the editor's view tabs); default: every view side by side */
+  view?: string;
+}
+/** photo views: height (px) a view keeps before the views wrap under each other, and the largest one when stacked. High on
+ * purpose: in a usual window two views do not fit side by side at that height, so they stack and each photo gets the full width
+ * (the device is the hero, the labels sit around it); very wide windows show them side by side. */
+const VIEW_MIN_H = 440, VIEW_MAX_H = 720;
+/** soft blend of a cut-out product photo into the dark UI: faint cyan rim, cyan glow and a drop shadow */
+const PHOTO_FILTER = 'drop-shadow(0 0 1px rgba(139,233,255,.45)) drop-shadow(0 0 18px rgba(79,216,255,.16)) drop-shadow(0 14px 22px rgba(0,0,0,.75))';
+const PHOTO_BG = 'radial-gradient(ellipse 60% 55% at 50% 48%, rgba(79,216,255,.09), rgba(79,216,255,.025) 55%, rgba(0,0,0,0) 75%), linear-gradient(180deg, #070d16, #04070c)';
+const VIGNETTE = 'radial-gradient(ellipse 75% 70% at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,.55) 100%)';
+
+/** device picture(s) with callouts: classic templates one canvas; multi-view (photo) templates every view side by side (stacked when narrow) */
+export function DeviceCanvas(props: Props) {
+  const { template: t, view, minWidth = 860 } = props;
+  if (!t.views?.length) return <ViewCanvas {...props} />;
+  const views = view ? t.views.filter((v) => v.id === view).slice(0, 1) : t.views;
+  const shown = views.length ? views : t.views.slice(0, 1);
+  return (
+    <div data-testid="device-canvas" data-views={shown.length} className="flex w-full flex-wrap items-start justify-center gap-3" style={{ minWidth: Math.min(minWidth, 420) }}>
+      {shown.map((v) => {
+        const a = v.width / v.height;
+        return (
+          <div key={v.id} className="min-w-0" style={{ flex: `${a} 1 ${Math.round(a * VIEW_MIN_H)}px`, maxWidth: Math.round(a * VIEW_MAX_H) }}>
+            <ViewCanvas {...props} template={viewTemplate(t, v.id)} photo caption={t.views!.length > 1 ? v.label : undefined} viewId={v.id} minWidth={0} />
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-/** device image with callout anchors, leader lines and label boxes (positions are fractions of the canvas) */
-export function DeviceCanvas({ template: t, stateOf, renderLabel, selected, onSelect, editable, onMove, onDragStart, onCanvasClick, minWidth = 860 }: Props) {
+/** one device image with callout anchors, leader lines and label boxes (positions are fractions of the canvas) */
+function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, editable, onMove, onDragStart, onCanvasClick, minWidth = 860, photo: photoProp, caption, viewId }: Props & { photo?: boolean; caption?: string; viewId?: string }) {
+  // product photos (built-in photo templates, multi-view templates): drawn aspect kept, blended into the UI, a marker per control
+  const photo = !!t.image && (photoProp || BUILTIN_PHOTO_RE.test(t.image));
   const ref = useRef<HTMLDivElement>(null);
   const glowId = `dc-glow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const stop = useRef<(() => void) | null>(null);
@@ -93,14 +125,60 @@ export function DeviceCanvas({ template: t, stateOf, renderLabel, selected, onSe
     stop.current = up;
   };
   useEffect(() => () => stop.current?.(), []);
+  // view mode: label boxes grow with their bindings, so push overlapping boxes apart (vertically) to keep every label readable
+  const [nudge, setNudge] = useState<Record<string, number>>({});
+  const relayout = useRef<() => void>(() => {});
+  relayout.current = () => {
+    const root = ref.current;
+    if (!root || editable) { if (Object.keys(nudge).length) setNudge({}); return; }
+    const W = root.clientWidth, H = root.clientHeight;
+    if (!W || !H) return;
+    const items = t.callouts.flatMap((c) => {
+      const el = root.querySelector<HTMLElement>(`[data-callout="${CSS.escape(c.id)}"]`);
+      if (!el) return [];
+      const w = el.offsetWidth, h = el.offsetHeight;
+      // keep the box inside the canvas horizontally (wide labels in a narrow label gutter would be cut off at the edge)
+      const x0 = c.box.x * W - w / 2, dx = x0 < 2 ? Math.min(2 - x0, W - 2 - (x0 + w)) : x0 + w > W - 2 ? Math.max(W - 2 - (x0 + w), 2 - x0) : 0;
+      return [{ id: c.id, x0: x0 + dx, x1: x0 + w + dx, dx, y: c.box.y * H, h }];
+    }).sort((a, b) => a.y - b.y);
+    const gap = 3, placed: typeof items = [];
+    for (const it of items) { // top-down: below any earlier box it overlaps horizontally
+      it.y = Math.max(it.y, it.h / 2 + 2); // not above the canvas top
+      for (const p of placed) if (it.x0 < p.x1 - 1 && p.x0 < it.x1 - 1 && it.y - it.h / 2 < p.y + p.h / 2 + gap) it.y = p.y + p.h / 2 + gap + it.h / 2;
+      placed.push(it);
+    }
+    for (let i = placed.length - 1; i >= 0; i--) { // bottom-up: keep boxes inside the canvas
+      const it = placed[i];
+      it.y = Math.min(it.y, H - it.h / 2 - 2);
+      for (let j = i + 1; j < placed.length; j++) { const p = placed[j]; if (it.x0 < p.x1 - 1 && p.x0 < it.x1 - 1 && it.y + it.h / 2 > p.y - p.h / 2 - gap) it.y = p.y - p.h / 2 - gap - it.h / 2; }
+    }
+    const next: Record<string, number> = {};
+    for (const it of placed) { const c = t.callouts.find((x) => x.id === it.id)!; const d = it.y / H - c.box.y; if (Math.abs(d) > 0.0005) next[it.id] = d; if (Math.abs(it.dx) > 0.5) next[`x:${it.id}`] = it.dx / W; }
+    const same = Object.keys(next).length === Object.keys(nudge).length && Object.entries(next).every(([k, v]) => Math.abs((nudge[k] ?? 99) - v) < 0.001);
+    if (!same) setNudge(next);
+  };
+  useLayoutEffect(() => { relayout.current(); });
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => relayout.current());
+    ro.observe(root);
+    return () => ro.disconnect();
+  }, []);
+  const by = (c: { id: string; box: Pt }) => c.box.y + (editable ? 0 : nudge[c.id] ?? 0);
+  const bx = (c: { id: string; box: Pt }) => c.box.x + (editable ? 0 : nudge[`x:${c.id}`] ?? 0);
   return (
-    <div ref={ref} data-testid="device-canvas" className={`relative w-full select-none overflow-hidden rounded-lg border border-edge/70 ${t.image ? 'bg-black/30' : 'bg-[length:24px_24px] bg-[linear-gradient(rgba(79,216,255,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(79,216,255,.06)_1px,transparent_1px)]'} ${editable ? 'cursor-crosshair' : ''}`}
-      style={{ aspectRatio: String(t.aspect), minWidth }}
+    <div ref={ref} data-testid={viewId ? 'device-canvas-view' : 'device-canvas'} data-view={viewId} data-photo={photo ? '1' : undefined}
+      className={`relative w-full select-none overflow-hidden rounded-lg border border-edge/70 ${photo ? '' : t.image ? 'bg-black/30' : 'bg-[length:24px_24px] bg-[linear-gradient(rgba(79,216,255,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(79,216,255,.06)_1px,transparent_1px)]'} ${editable ? 'cursor-crosshair' : ''}`}
+      style={{ aspectRatio: String(t.aspect), minWidth, ...(photo ? { backgroundImage: PHOTO_BG } : {}) }}
       onClick={(e) => {
         if (!editable || !onCanvasClick) return;
         if (e.target === e.currentTarget || (e.target as Element).getAttribute?.('data-bg') === '1') onCanvasClick(at(e));
       }}>
-      {t.image && <img src={t.image} alt="" data-bg="1" draggable={false} className="absolute inset-0 h-full w-full object-fill" />}
+      {t.image && !photo && <img src={imageSrc(t.image)} alt="" data-bg="1" draggable={false} className="absolute inset-0 h-full w-full object-fill" />}
+      {t.image && photo && <img src={imageSrc(t.image)} alt={caption ?? ''} data-bg="1" draggable={false} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" style={{ filter: PHOTO_FILTER }} />}
+      {photo && <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: VIGNETTE }} />}
+      {caption && <span className="pointer-events-none absolute left-2 top-1.5 z-10 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-hud/60" data-view-caption={viewId}>{caption}</span>}
       <svg viewBox={`0 0 1000 ${VH}`} preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
         <defs>
           <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
@@ -125,6 +203,7 @@ export function DeviceCanvas({ template: t, stateOf, renderLabel, selected, onSe
               </g>
             );
           }
+          if (photo && !c.region) return null; // photos: the marker below lights up
           if (!c.region) return s.active ? <circle key={`r-${c.id}`} data-glow={c.id} cx={c.anchor.x * 1000} cy={c.anchor.y * VH} r={16} fill="rgba(79,216,255,.35)" filter={`url(#${glowId})`} /> : null;
           const tint = s.tone === 'conflict' || s.tone === 'custom' ? TONE_STROKE[s.tone] : null;
           if (!s.active && !tint && selected !== c.id) return null;
@@ -140,8 +219,15 @@ export function DeviceCanvas({ template: t, stateOf, renderLabel, selected, onSe
           const col = s.active ? '#4fd8ff' : TONE_STROKE[s.tone];
           return (
             <g key={c.id} opacity={s.dim ? 0.25 : 1}>
-              <line x1={c.anchor.x * 1000} y1={c.anchor.y * VH} x2={c.box.x * 1000} y2={c.box.y * VH} stroke={col} strokeWidth={s.active || selected === c.id ? 2.5 : 1.4} />
-              <circle cx={c.anchor.x * 1000} cy={c.anchor.y * VH} r={s.active ? 9 : 5} fill={s.active ? '#4fd8ff' : col} stroke="#04070c" strokeWidth={1.5} />
+              <line x1={c.anchor.x * 1000} y1={c.anchor.y * VH} x2={bx(c) * 1000} y2={by(c) * VH} stroke={col} strokeWidth={s.active || selected === c.id ? 2.5 : 1.4} />
+              {photo ? (
+                // glowing ring on the control; it lights up while the control is used
+                <g data-marker={c.id} data-active={s.active ? '1' : undefined} filter={`url(#${glowId})`}>
+                  <circle cx={c.anchor.x * 1000} cy={c.anchor.y * VH} r={s.active ? 17 : 11} fill={s.active ? 'rgba(79,216,255,.38)' : 'rgba(4,7,12,.35)'}
+                    stroke={s.active ? '#c9f7ff' : selected === c.id ? '#ffb547' : col} strokeWidth={s.active ? 3 : 2} />
+                  <circle cx={c.anchor.x * 1000} cy={c.anchor.y * VH} r={s.active ? 6 : 3.5} fill={s.active ? '#e6fbff' : col} />
+                </g>
+              ) : <circle cx={c.anchor.x * 1000} cy={c.anchor.y * VH} r={s.active ? 9 : 5} fill={s.active ? '#4fd8ff' : col} stroke="#04070c" strokeWidth={1.5} />}
             </g>
           );
         })}
@@ -157,7 +243,7 @@ export function DeviceCanvas({ template: t, stateOf, renderLabel, selected, onSe
           <div key={c.id} data-callout={c.id} data-active={s.active ? '1' : undefined} data-tone={s.tone}
             onPointerDown={start(c.id, 'box')} onClick={(e) => e.stopPropagation()}
             className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 ${editable ? 'cursor-move' : 'cursor-pointer'} ${s.dim ? 'opacity-30' : ''}`}
-            style={{ left: `${c.box.x * 100}%`, top: `${c.box.y * 100}%` }}>
+            style={{ left: `${bx(c) * 100}%`, top: `${by(c) * 100}%` }}>
             <div className={`rounded-md border bg-panel/95 px-1.5 py-1 text-[10px] leading-tight shadow-lg transition ${TONE_CLS[s.tone]} ${s.active ? '!border-hud bg-[#0d3550] shadow-[0_0_14px_rgba(79,216,255,.55)]' : ''} ${selected === c.id ? 'ring-2 ring-mod/70' : ''}`}>
               {renderLabel(c, s)}
             </div>
@@ -183,19 +269,19 @@ export function CalloutBody({ c, s, entriesFor, live }: { c: Callout; s: Callout
   const head = (
     <div className="flex items-baseline gap-1 whitespace-nowrap">
       <b className={`font-mono ${s.active ? 'text-white' : 'text-hud2'}`}>{calloutTitle(c)}</b>
-      {c.label && <span className="font-mono text-[9px] text-slate-500">{c.inputs.length > 4 ? '' : c.inputs.map(shortInput).join(' ')}</span>}
+      {c.label && <span className="font-mono text-[9px] text-slate-500">{c.inputs.every((i) => !i) ? 'no number yet' : c.inputs.length > 4 ? '' : c.inputs.map(shortInput).join(' ')}</span>}
     </div>
   );
   const none = <div className="text-slate-600">unbound</div>;
   if (c.kind === 'hat') {
     const cell = (k: number) => {
       const i = c.inputs[k];
-      if (!i) return <span />;
+      if (!i) return k < c.inputs.length ? <span className="text-center font-mono text-slate-600" data-unassigned="1" title="no button number yet">{inputRole(c, k)}?</span> : <span />;
       const e = entriesFor(i)[0];
       const on = live.active.has(i);
       return (
         <span data-dir={i} data-active={on ? '1' : undefined} className={`flex min-w-0 items-center justify-center gap-0.5 truncate rounded px-0.5 ${on ? 'bg-hud text-black' : e ? (e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-300') : 'text-slate-600'}`} title={i + (e ? ` · ${entriesFor(i).map((x) => x.row.label).join(', ')}` : '')}>
-          <span className="font-mono">{inputRole(c, k)}</span><span className="truncate">{e ? e.row.label : ''}</span>
+          <span className="font-mono">{inputRole(c, k)}{/^button\d+$/.test(i) ? shortInput(i) : ''}</span><span className="truncate">{e ? e.row.label : ''}</span>
         </span>
       );
     };
@@ -240,7 +326,7 @@ export function CalloutBody({ c, s, entriesFor, live }: { c: Callout; s: Callout
   return (
     <div className="min-w-[90px]">
       {head}
-      {multi && <div className="flex max-w-[150px] flex-wrap gap-0.5">{c.inputs.map((i, k) => <span key={i} data-dir={i} data-active={live.active.has(i) ? '1' : undefined} className={`rounded px-1 font-mono text-[9px] ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-slate-400'}`}>{inputRole(c, k)} {shortInput(i)}</span>)}</div>}
+      {multi && <div className="flex max-w-[150px] flex-wrap gap-0.5">{c.inputs.map((i, k) => <span key={k} data-dir={i || undefined} data-active={live.active.has(i) ? '1' : undefined} className={`rounded px-1 font-mono text-[9px] ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-slate-400'}`}>{inputRole(c, k)} {shortInput(i)}</span>)}</div>}
       {all.slice(0, 3).map(({ e, role }, k) => <ActionLine key={k} e={e} role={role} />)}
       {all.length > 3 && <div className="text-slate-500">+{all.length - 3} more</div>}
       {!all.length && none}
