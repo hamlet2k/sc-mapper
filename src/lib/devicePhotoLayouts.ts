@@ -37,7 +37,7 @@ export interface DevicePhotoLayout {
 }
 
 // Photo layouts (measured on the photos with grid overlays; controls hidden on every photo are placed at their best estimated spot).
-// Done: Thrustmaster HOTAS Warthog stick + throttle, T.16000M, TWCS, MOZA AB6 + MGH, VKB Gladiator SCG, VKB Gunfighter MCG, VIRPIL Alpha Prime, WinCtrl CarrierAce / ViperAce, Logitech X56 stick + throttle, VKB STECS, MOZA MTP, MOZA MTQ, VIRPIL VMAX Prime, WinCtrl Orion (F-15EX), WinCtrl URSA MINOR Combat (measured with grid overlays). All device templates now have a photo layout.
+// Done: Thrustmaster HOTAS Warthog stick + throttle, T.16000M, TWCS, MOZA AB6 + MGH, VKB Gladiator SCG, VKB Gunfighter MCG, VIRPIL Alpha Prime, WinCtrl CarrierAce / ViperAce, Logitech X56 stick + throttle, VKB STECS, MOZA MTP, MOZA MTQ, VIRPIL VMAX Prime, WinCtrl Orion (F-15EX), WinCtrl URSA MINOR Combat (measured with grid overlays, grips per the WinCtrl grip maps). All device templates now have a photo layout.
 // Thrustmaster HOTAS Warthog: measured on the photos with grid overlays (see the Thrustmaster manual for the control names).
 export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
   'builtin-tm-warthog-stick': {
@@ -462,7 +462,10 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
     },
   },
   'builtin-winctrl-ursa-combat': {
-    views: [{ id: 'base', label: 'Base and side panel', photo: 'winctrl-ursa-combat-front' }, { id: 'grip', label: 'Grip and levers', photo: 'winctrl-ursa-combat-front' }, { id: 'back', label: 'Grip rear', photo: 'winctrl-ursa-combat-back' }],
+    // Grip controls per the WinCtrl grip maps (left grip: rear thumbwheel 60/61; front buttons 28, 29 and toggle 33-35. Right grip:
+    // rear button 27, hats 46-50 / 36-40 / 41-45 and knob 30-32; front Rz knob 56, Z wheel with switch-mode buttons 57-59, hat 51-55).
+    // The front photo shows the rear of the grips, the back photo their front.
+    views: [{ id: 'base', label: 'Base and side panel', photo: 'winctrl-ursa-combat-front' }, { id: 'grip', label: 'Grips (rear) and levers', photo: 'winctrl-ursa-combat-front' }, { id: 'back', label: 'Grips (front)', photo: 'winctrl-ursa-combat-back' }],
     anchors: {
       keys: { view: 'base', x: 0.35, y: 0.604 },
       mode: { view: 'base', x: 0.149, y: 0.616 },
@@ -478,24 +481,25 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       xwb: { view: 'base', x: 0.885, y: 0.585 },
       yw: { view: 'base', x: 0.776, y: 0.644 },
       ywb: { view: 'base', x: 0.78, y: 0.66 },
-      detl: { view: 'base', x: 0.46, y: 0.53 },
-      detr: { view: 'base', x: 0.555, y: 0.57 },
+      det: { view: 'base', x: 0.46, y: 0.53 },
       lthr: { view: 'grip', x: 0.45, y: 0.47 },
       rthr: { view: 'grip', x: 0.54, y: 0.49 },
-      lift: { view: 'grip', x: 0.477, y: 0.408 },
+      thw: { view: 'grip', x: 0.483, y: 0.255 },
       rzk: { view: 'grip', x: 0.914, y: 0.149 },
       rzkb: { view: 'grip', x: 0.92, y: 0.16 },
+      h46: { view: 'grip', x: 0.776, y: 0.247 },
+      b27: { view: 'grip', x: 0.722, y: 0.295 },
+      h36: { view: 'grip', x: 0.688, y: 0.356 },
+      h41: { view: 'grip', x: 0.793, y: 0.345 },
+      knob30: { view: 'grip', x: 0.858, y: 0.286 },
       mini: { view: 'back', x: 0.161, y: 0.245 },
       minib: { view: 'back', x: 0.168, y: 0.258 },
-      knob30: { view: 'grip', x: 0.69, y: 0.356 },
-      h36: { view: 'grip', x: 0.776, y: 0.247 },
-      h41: { view: 'grip', x: 0.793, y: 0.345 },
-      h46: { view: 'grip', x: 0.73, y: 0.299 },
-      b27: { view: 'back', x: 0.44, y: 0.315 },
+      zw: { view: 'back', x: 0.247, y: 0.258 },
+      zwb: { view: 'back', x: 0.252, y: 0.272 },
+      b28: { view: 'back', x: 0.415, y: 0.306 },
+      b29: { view: 'back', x: 0.457, y: 0.318 },
       tog33: { view: 'back', x: 0.592, y: 0.298 },
-      zw: { view: 'grip', x: 0.862, y: 0.287 },
-      zwb: { view: 'grip', x: 0.868, y: 0.297 },
-      thw: { view: 'back', x: 0.247, y: 0.258 },
     },
   },
+
 };
