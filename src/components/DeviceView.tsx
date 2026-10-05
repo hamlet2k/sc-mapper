@@ -186,7 +186,7 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
         </div>
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 print:hidden" data-testid="device-status">
-        <span>Template <b className="text-slate-300">{tpl.name}</b>: {chosen.how === 'chosen' ? 'picked by you for this device' : chosen.how === 'guessed' ? `guessed: device ${ident.dup!.n} of ${ident.dup!.of} identical ${guessLabel(ident)} (the 1st is taken as the stick, the others as the throttle plugged into the base; pick another template if it is not)` : chosen.how === 'matched' ? `linked to this device (${describeMatch(tpl, ident)})` : 'generic (no template linked to this device yet: customize a copy to place the callouts on your own device)'}</span>
+        <span>Template <b className="text-slate-300">{tpl.name}</b>: {chosen.how === 'chosen' ? 'picked by you for this device' : chosen.how === 'guessed' ? `guessed: device ${ident.dup!.n} of ${ident.dup!.of} identical ${guessLabel(ident)} (the last is taken as the stick, the others as the throttle plugged into the base; pick another template if it is not)` : chosen.how === 'matched' ? `linked to this device (${describeMatch(tpl, ident)})` : 'generic (no template linked to this device yet: customize a copy to place the callouts on your own device)'}</span>
         {tpl.notes && <span className="text-slate-400" data-testid="template-notes">ⓘ {tpl.notes}</span>}
         <span>{opt.pad ? <span className="text-ok">● live: press or move a control and it lights up</span> : 'Connect the device (and press a button) for live highlight.'}</span>
         <Legend />

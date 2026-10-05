@@ -895,18 +895,18 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(pick('TWCS Throttle (Vendor: 044f Product: b687)', 14), 'builtin-tm-twcs');
     assert.equal(pick('MOZA AB6 Flight Base (Vendor: 346e Product: 1002)', 128), 'builtin-moza-ab6', 'AB6 with 128 buttons');
     assert.equal(pick('346e-1002-MOZA AB6 Flight Base', 133), 'builtin-moza-ab6', 'AB6 with 133 buttons');
-    // two identical MOZA bases: the 2nd is the throttle plugged into the base (AB6 -> MTQ, AB9 -> MTP); a pick wins; user templates don't
+    // two identical MOZA bases: the last is the stick, the others the throttle plugged into a base (AB6 -> MTQ, AB9 -> MTP); a pick wins; user templates don't
     const ab6 = (n: number, of = 2) => ({ ...ident('MOZA AB6 FFB Base (Vendor: 346e Product: 1002)', 128), dup: { n, of } });
     const ab9 = (n: number, of = 2) => ({ ...ident('MOZA AB9 FFB Base (Vendor: 346e Product: 1000)', 128), dup: { n, of } });
-    assert.deepEqual([tp.pickTemplate(all, ab6(1)).template.id, tp.pickTemplate(all, ab6(2)).template.id, tp.pickTemplate(all, ab6(3, 3)).template.id], ['builtin-moza-ab6', 'builtin-moza-mtq', 'builtin-moza-mtq']);
-    assert.equal(tp.pickTemplate(all, ab6(2)).how, 'guessed');
-    assert.equal(tp.pickTemplate(all, ab6(2), 'builtin-moza-mtp').template.id, 'builtin-moza-mtp', 'the user pick wins over the guess');
-    assert.equal(tp.pickTemplate(all, ab9(2)).template.id, 'builtin-moza-mtp', 'AB9: the 2nd is the MTP');
-    assert.notEqual(tp.pickTemplate(all, ab9(1)).how, 'guessed', 'AB9: no stick guess for the 1st (no AB9 template)');
+    assert.deepEqual([tp.pickTemplate(all, ab6(1)).template.id, tp.pickTemplate(all, ab6(2)).template.id, tp.pickTemplate(all, ab6(1, 3)).template.id], ['builtin-moza-mtq', 'builtin-moza-ab6', 'builtin-moza-mtq']);
+    assert.equal(tp.pickTemplate(all, ab6(1)).how, 'guessed');
+    assert.equal(tp.pickTemplate(all, ab6(1), 'builtin-moza-mtp').template.id, 'builtin-moza-mtp', 'the user pick wins over the guess');
+    assert.equal(tp.pickTemplate(all, ab9(1)).template.id, 'builtin-moza-mtp', 'AB9: the 1st is the MTP');
+    assert.notEqual(tp.pickTemplate(all, ab9(2)).how, 'guessed', 'AB9: no stick guess for the last (no AB9 template)');
     assert.equal(tp.pickTemplate(all, { ...ab6(1), dup: undefined }).template.id, 'builtin-moza-ab6', 'one AB6: the stick');
-    assert.equal(tp.pickTemplate([tpl('mine', [{ vendor: '346E', product: '1002' }]), ...all], ab6(2)).template.id, 'builtin-moza-mtq', 'identical devices: the order guess beats a match rule (a copy is picked explicitly)');
-    assert.equal(tp.pickTemplate([tpl('mine-128', [{ vendor: '346E', product: '1002', buttons: 128 }]), ...all], ab6(2)).template.id, 'mine-128', 'a user template linked by the exact button count beats the guess');
-    assert.equal(tp.pickTemplate(all, { ...ab6(2), slot: 'gp' }).how, 'fallback', 'slot respected');
+    assert.equal(tp.pickTemplate([tpl('mine', [{ vendor: '346E', product: '1002' }]), ...all], ab6(1)).template.id, 'builtin-moza-mtq', 'identical devices: the order guess beats a match rule (a copy is picked explicitly)');
+    assert.equal(tp.pickTemplate([tpl('mine-128', [{ vendor: '346E', product: '1002', buttons: 128 }]), ...all], ab6(1)).template.id, 'mine-128', 'a user template linked by the exact button count beats the guess');
+    assert.equal(tp.pickTemplate(all, { ...ab6(1), slot: 'gp' }).how, 'fallback', 'slot respected');
     assert.equal(pick('WINCTRL URSA MINOR Combat Joystick (Vendor: 4098 Product: b970)', 81), 'builtin-winctrl-ursa-combat');
     assert.equal(pick('4098-bc27-WINCTRL URSA MINOR Throttle', 81), 'builtin-winctrl-ursa-combat');
     assert.equal(tp.pickTemplate(all, { name: 'URSA MINOR Throttle L', slot: 'js' }).template.id, 'builtin-winctrl-ursa-combat', 'URSA by name');

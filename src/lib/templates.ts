@@ -214,18 +214,18 @@ export function migratePicks(p: unknown): { picks: Record<string, string>; chang
 }
 /**
  * Identical devices told apart by their order: a MOZA flight base reports the throttle plugged into it as a second device with the
- * base's own USB id, so with two (or more) of them the 1st is the stick and the others the throttle: AB6 -> MTQ, AB9 -> MTP (a
- * guess; the user's pick for the device overrides it). `first` = template for the 1st one (none: the usual matching).
+ * base's own USB id, so with two (or more) of them the last is the stick and the others the throttle: AB6 -> MTQ, AB9 -> MTP (a
+ * guess; the user's pick for the device overrides it). `last` = template for the last one (none: the usual matching).
  */
-export const DUP_ORDER_GUESSES: readonly { vendor: string; product: string; label: string; first?: string; rest: string }[] = [
-  { vendor: '346E', product: '1002', label: 'MOZA AB6 bases', first: 'builtin-moza-ab6', rest: 'builtin-moza-mtq' },
+export const DUP_ORDER_GUESSES: readonly { vendor: string; product: string; label: string; last?: string; rest: string }[] = [
+  { vendor: '346E', product: '1002', label: 'MOZA AB6 bases', last: 'builtin-moza-ab6', rest: 'builtin-moza-mtq' },
   { vendor: '346E', product: '1000', label: 'MOZA AB9 bases', rest: 'builtin-moza-mtp' },
 ];
 /** the template guessed from a device's place among identical devices (DUP_ORDER_GUESSES), if any applies and is in `all` */
 export function dupOrderGuess(all: DeviceTemplate[], d: DeviceIdentity): DeviceTemplate | undefined {
   if (!d.dup || d.dup.of < 2 || d.dup.n < 1) return undefined;
   const g = DUP_ORDER_GUESSES.find((x) => x.vendor === hex4(d.vendor) && x.product === hex4(d.productId));
-  const id = g && (d.dup.n === 1 ? g.first : g.rest);
+  const id = g && (d.dup.n === d.dup.of ? g.last : g.rest); // the browser lists the throttle(s) first, the stick base last
   return id ? all.find((t) => t.id === id && (!d.slot || t.slot === d.slot)) : undefined;
 }
 /** generic built-in fallback for a device */
