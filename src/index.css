@@ -65,6 +65,10 @@ body {
 .flash-chip { animation: flash-chip 1.8s ease-out; }
 .flash-key { animation: flash-chip 1.8s ease-out; }
 .flash-row { animation: flash-row 1.8s ease-out; }
+/* device photos: the view a press just brought into sight gets a short cyan rim pulse */
+@keyframes view-pulse { 0% { box-shadow: inset 0 0 0 2px rgba(139, 233, 255, 0.95), 0 0 0 1px rgba(79, 216, 255, 0.9), 0 0 28px 4px rgba(79, 216, 255, 0.45); } 100% { box-shadow: inset 0 0 0 1px transparent, 0 0 0 0 transparent, 0 0 0 0 transparent; } }
+.view-pulse { animation: view-pulse 1.2s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) { .view-pulse { animation-duration: 0.01s; } }
 @media (prefers-reduced-motion: reduce) { .flash-chip, .flash-key, .flash-row { animation-duration: 0.01s; outline: 2px solid var(--color-mod); } }
 
 /* printable device view: only the device picture with its callouts */

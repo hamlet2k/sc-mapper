@@ -918,6 +918,61 @@ log('photo template (test-only layout via __SC_TEST_PHOTO_LAYOUTS)');
   await pp.evaluate(() => window.__axis(0, 0, 0));
   await pp.waitForTimeout(250);
   check((await canvas.locator('[data-marker][data-active="1"]').count()) === 0, 'marker goes dark again at rest');
+  // a press brings the view with that control's marker into sight (smooth scroll of the Devices scroll area) and pulses it briefly
+  {
+    const litView = (where.find(([id]) => id === lit[0]) ?? [])[1];
+    const other = litView === 'front' ? 'thumb' : 'front';
+    // share of a view showing inside its scroll area (nearest scrolling ancestor)
+    const shown = (v) => canvas.locator(`[data-testid="device-canvas-view"][data-view="${v}"]`).evaluate((el) => {
+      let sp = el.parentElement;
+      while (sp && !(/(auto|scroll)/.test(getComputedStyle(sp).overflowY) && sp.scrollHeight > sp.clientHeight + 1)) sp = sp.parentElement;
+      const r = el.getBoundingClientRect(), p = sp ? sp.getBoundingClientRect() : { top: 0, bottom: innerHeight };
+      return Math.max(0, Math.min(r.bottom, p.bottom) - Math.max(r.top, p.top)) / Math.min(r.height, p.bottom - p.top);
+    });
+    const away = async () => { await canvas.locator(`[data-view="${other}"]`).first().evaluate((el, block) => el.scrollIntoView({ block, behavior: 'instant' }), litView === 'front' ? 'end' : 'start'); await pp.waitForTimeout(250); };
+    await away();
+    const before = await shown(litView);
+    check(before < 0.6, `precondition: the ${litView} view is scrolled out of sight (${(before * 100).toFixed(0)}% visible)`);
+    await pp.evaluate(() => window.__axis(0, 0, 0.8));
+    await pp.waitForTimeout(450);
+    const pulsed = await canvas.locator(`[data-view="${litView}"][data-focused="1"] [data-view-pulse]`).count();
+    const otherPulsed = await canvas.locator(`[data-view="${other}"][data-focused="1"]`).count();
+    await pp.waitForTimeout(700);
+    const after = await shown(litView);
+    check(after > 0.95, `moving the stick scrolls its ${litView} view into sight (${(before * 100).toFixed(0)}% -> ${(after * 100).toFixed(0)}% visible)`);
+    check(pulsed === 1 && otherPulsed === 0, 'the view brought into sight gets a short rim pulse (only that one)');
+    await pp.screenshot({ path: shots + '24-photo-view-focus-on-press.png', fullPage: false });
+    await pp.waitForTimeout(800);
+    check((await canvas.locator('[data-focused="1"], [data-view-pulse]').count()) === 0, 'the pulse fades out (no lasting highlight)');
+    await pp.evaluate(() => window.__axis(0, 0, 0));
+    await pp.waitForTimeout(250);
+    // already in sight: another press does not move the panel
+    const y0 = await canvas.evaluate((el) => el.getBoundingClientRect().top);
+    await pp.evaluate(() => window.__axis(0, 0, 0.8));
+    await pp.waitForTimeout(700);
+    check(Math.abs((await canvas.evaluate((el) => el.getBoundingClientRect().top)) - y0) < 2, 'view already in sight: a press does not scroll');
+    await pp.evaluate(() => window.__axis(0, 0, 0));
+    await pp.waitForTimeout(250);
+    // the user just scrolled (mouse wheel): a press does not take the panel away from them
+    await away();
+    const vb = await canvas.locator(`[data-view="${other}"]`).first().boundingBox();
+    await pp.mouse.move(vb.x + 20, vb.y + vb.height / 2);
+    await pp.mouse.wheel(0, litView === 'front' ? 40 : -40);
+    await pp.waitForTimeout(150);
+    const held = await shown(litView);
+    await pp.evaluate(() => window.__axis(0, 0, 0.8));
+    await pp.waitForTimeout(700);
+    check(Math.abs((await shown(litView)) - held) < 0.02, `right after the user scrolled, a press does not auto-scroll (${(held * 100).toFixed(0)}% stays)`);
+    await pp.evaluate(() => window.__axis(0, 0, 0));
+    await pp.waitForTimeout(1600);
+    // a burst of presses (stick wiggle) settles on one view, no thrashing
+    await away();
+    for (const v of [0.8, 0, 0.8, 0, 0.8]) { await pp.evaluate((x) => window.__axis(0, 0, x), v); await pp.waitForTimeout(45); }
+    await pp.waitForTimeout(1100);
+    check((await shown(litView)) > 0.95, 'a burst of presses coalesces into one move to the view');
+    await pp.evaluate(() => window.__axis(0, 0, 0));
+    await pp.waitForTimeout(250);
+  }
   {
     const [d] = await Promise.all([pp.waitForEvent('download'), pv.getByTestId('device-png').click()]);
     const f = '/tmp/photo-' + d.suggestedFilename();

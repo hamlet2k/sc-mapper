@@ -943,4 +943,47 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     } finally { (globalThis as any).localStorage = prev; }
   });
 }
+
+console.log('\nphoto views: focus on press');
+{
+  const vf = await import('../src/lib/viewFocus');
+  const tpl = {
+    aspect: 1, image: undefined, views: [{ id: 'front', label: 'Front', width: 100, height: 100 }, { id: 'thumb', label: 'Thumb', width: 100, height: 100 }],
+    callouts: [
+      { id: 'trig', kind: 'button', inputs: ['button1'], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } },
+      { id: 'hat', kind: 'hat', view: 'thumb', inputs: ['hat1_up', 'hat1_right', 'hat1_down', 'hat1_left'], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } },
+      { id: 'xy', kind: 'axis', view: 'front', inputs: ['x', 'y'], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } },
+      { id: 'b2', kind: 'button', view: 'nope', inputs: ['button2'], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } },
+    ],
+  } as any;
+  t('inputViews: every input of a multi-view template mapped to its callout view (unknown / missing view: the first)', () => {
+    const m = vf.inputViews(tpl);
+    assert.deepEqual(Object.fromEntries(m), { button1: 'front', hat1_up: 'thumb', hat1_right: 'thumb', hat1_down: 'thumb', hat1_left: 'thumb', x: 'front', y: 'front', button2: 'front' });
+    assert.equal(vf.inputViews({ ...tpl, views: [tpl.views[0]] }).size, 0, 'single view: nothing to focus');
+    assert.equal(vf.inputViews({ ...tpl, views: undefined }).size, 0, 'classic template: nothing to focus');
+  });
+  t('pressedView: only newly active inputs count; a chord goes to the view most of them are on, a tie to the newest', () => {
+    const m = vf.inputViews(tpl);
+    const S = (...a: string[]) => new Set(a);
+    assert.equal(vf.pressedView(S(), S(), m), null);
+    assert.deepEqual(vf.pressedView(S(), S('hat1_up'), m), { view: 'thumb', input: 'hat1_up' });
+    assert.equal(vf.pressedView(S('hat1_up'), S('hat1_up'), m), null, 'held input: no new focus');
+    assert.equal(vf.pressedView(S('hat1_up'), S(), m), null, 'release: no focus');
+    assert.equal(vf.pressedView(S(), S('button99'), m), null, 'input without a callout');
+    assert.deepEqual(vf.pressedView(S(), S('button1', 'hat1_up', 'hat1_right'), m), { view: 'thumb', input: 'hat1_right' }, 'two on thumb beat one on front');
+    assert.deepEqual(vf.pressedView(S(), S('hat1_up', 'x'), m), { view: 'front', input: 'x' }, 'tie: the newest');
+    assert.deepEqual(vf.pressedView(S('hat1_up'), S('hat1_up', 'x'), m), { view: 'front', input: 'x' }, 'the held one does not count');
+  });
+  t('viewInSight / scrollDelta: scroll only when the view (or its marker) is out of sight, centring it', () => {
+    const port = { top: 100, bottom: 900 };
+    assert.equal(vf.viewInSight({ top: 150, bottom: 750 }, port), true);
+    assert.equal(vf.scrollDelta({ top: 150, bottom: 750 }, port), 0, 'fully visible: stay');
+    assert.equal(vf.scrollDelta({ top: 400, bottom: 1000 }, port, { top: 500, bottom: 520 }), 0, 'mostly visible with the marker in sight: stay');
+    assert.equal(vf.scrollDelta({ top: 400, bottom: 1000 }, port, { top: 950, bottom: 970 }), 200, 'marker cut off: centre the view (mid 700 -> 500)');
+    assert.equal(vf.scrollDelta({ top: 1200, bottom: 1800 }, port), 1000, 'below: centred');
+    assert.equal(vf.scrollDelta({ top: -900, bottom: -300 }, port), -1100, 'above: centred');
+    assert.equal(vf.scrollDelta({ top: 1000, bottom: 2200 }, port, { top: 1990, bottom: 2010 }), 1300, 'taller than the area: marker centred, clamped to the view bottom');
+    assert.equal(vf.scrollDelta({ top: 1000, bottom: 2200 }, port, { top: 1590, bottom: 1610 }), 1100, 'taller than the area: marker centred');
+  });
+}
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);

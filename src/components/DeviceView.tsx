@@ -11,6 +11,7 @@ import {
 import type { Binding, ProfileDevice, Row, Slot } from '../lib/types';
 import { CalloutBody, DeviceCanvas, TONE_STROKE, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
 import { TemplateEditor } from './TemplateEditor';
+import { useFocusPressedView } from './useFocusPressedView';
 
 interface DevOption { key: string; slot: 'js' | 'gp'; instance: number; label: string; pad?: PadInfo; ident: DeviceIdentity }
 interface Props {
@@ -64,6 +65,9 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
   const tplMax = maxButton(tpl);
   const unassigned = tpl.callouts.reduce((n, c) => n + unassignedCount(c), 0);
   const live = useLiveInputs(opt.pad);
+  // multi-view photo templates: a pressed control brings the photo with its marker into sight (not while the editor is open)
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const pulse = useFocusPressedView(tpl, live.active, canvasRef, !editing);
 
   // bindings of this device by physical input
   const index = useMemo(() => {
@@ -191,9 +195,9 @@ export function DeviceView({ rows, conflictRows, pads, describe, profileDevices,
         </div>
       )}
       <div className="flex min-h-0 flex-1 gap-3">
-        <div className="min-w-0 flex-1 overflow-auto scrollbar-thin" data-print-area>
+        <div ref={canvasRef} className="min-w-0 flex-1 overflow-auto scrollbar-thin" data-print-area>
           <div className="mb-1 hidden font-display text-lg font-bold text-black print:block">{slot.toUpperCase()}{instance} · {ident.name ?? tpl.name}</div>
-          <DeviceCanvas template={tpl} stateOf={stateOf} selected={selected} onSelect={(id) => setSelected(id)}
+          <DeviceCanvas template={tpl} stateOf={stateOf} selected={selected} onSelect={(id) => setSelected(id)} pulse={pulse}
             renderLabel={(c, s) => <CalloutBody c={c} s={s} entriesFor={(i) => index.get(i) ?? []} live={live} />} />
         </div>
         <aside className="w-80 shrink-0 space-y-3 overflow-y-auto scrollbar-thin print:hidden">

@@ -66,6 +66,8 @@ interface Props {
   minWidth?: number;
   /** multi-view templates: show only this view (the editor's view tabs); default: every view side by side */
   view?: string;
+  /** multi-view templates: briefly emphasize this view (it was just brought into sight by a press); n restarts the pulse */
+  pulse?: { view: string; n: number } | null;
 }
 /** photo views: height (px) a view keeps before the views wrap under each other, and the largest one when stacked. High on
  * purpose: in a usual window two views do not fit side by side at that height, so they stack and each photo gets the full width
@@ -97,7 +99,7 @@ export function DeviceCanvas(props: Props) {
 }
 
 /** one device image with callout anchors, leader lines and label boxes (positions are fractions of the canvas) */
-function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, editable, onMove, onDragStart, onCanvasClick, minWidth = 860, photo: photoProp, caption, viewId }: Props & { photo?: boolean; caption?: string; viewId?: string }) {
+function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, editable, onMove, onDragStart, onCanvasClick, minWidth = 860, photo: photoProp, caption, viewId, pulse }: Props & { photo?: boolean; caption?: string; viewId?: string }) {
   // product photos (built-in photo templates, multi-view templates): drawn aspect kept, blended into the UI, a marker per control
   const photo = !!t.image && (photoProp || BUILTIN_PHOTO_RE.test(t.image));
   const ref = useRef<HTMLDivElement>(null);
@@ -167,8 +169,9 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
   }, []);
   const by = (c: { id: string; box: Pt }) => c.box.y + (editable ? 0 : nudge[c.id] ?? 0);
   const bx = (c: { id: string; box: Pt }) => c.box.x + (editable ? 0 : nudge[`x:${c.id}`] ?? 0);
+  const focused = !!viewId && pulse?.view === viewId;
   return (
-    <div ref={ref} data-testid={viewId ? 'device-canvas-view' : 'device-canvas'} data-view={viewId} data-photo={photo ? '1' : undefined}
+    <div ref={ref} data-testid={viewId ? 'device-canvas-view' : 'device-canvas'} data-view={viewId} data-photo={photo ? '1' : undefined} data-focused={focused ? '1' : undefined}
       className={`relative w-full select-none overflow-hidden rounded-lg border border-edge/70 ${photo ? '' : t.image ? 'bg-black/30' : 'bg-[length:24px_24px] bg-[linear-gradient(rgba(79,216,255,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(79,216,255,.06)_1px,transparent_1px)]'} ${editable ? 'cursor-crosshair' : ''}`}
       style={{ aspectRatio: String(t.aspect), minWidth, ...(photo ? { backgroundImage: PHOTO_BG } : {}) }}
       onClick={(e) => {
@@ -178,7 +181,8 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
       {t.image && !photo && <img src={imageSrc(t.image)} alt="" data-bg="1" draggable={false} className="absolute inset-0 h-full w-full object-fill" />}
       {t.image && photo && <img src={imageSrc(t.image)} alt={caption ?? ''} data-bg="1" draggable={false} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" style={{ filter: PHOTO_FILTER }} />}
       {photo && <div aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: VIGNETTE }} />}
-      {caption && <span className="pointer-events-none absolute left-2 top-1.5 z-10 font-display text-[10px] font-bold uppercase tracking-[0.2em] text-hud/60" data-view-caption={viewId}>{caption}</span>}
+      {focused && <div key={pulse!.n} aria-hidden data-view-pulse={viewId} className="view-pulse pointer-events-none absolute inset-0 z-30 rounded-lg" />}
+      {caption && <span className={`pointer-events-none absolute left-2 top-1.5 z-10 font-display text-[10px] font-bold uppercase tracking-[0.2em] transition-colors duration-500 ${focused ? 'glow-text text-hud2' : 'text-hud/60'}`} data-view-caption={viewId}>{caption}</span>}
       <svg viewBox={`0 0 1000 ${VH}`} preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
         <defs>
           <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
