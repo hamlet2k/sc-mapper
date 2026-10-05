@@ -32,3 +32,4 @@ data/raw/
 screenshots/
 package-lock.json
 .tmp/
+src/lib/deviceArt/
