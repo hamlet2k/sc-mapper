@@ -148,8 +148,7 @@ function photoTpl(meta: Meta & { id: string }, specs: Spec[] = []): void {
 
 /**
  * Photo built-in with callouts already placed (anchor + box fractions as authored). Skips withPhotoLayout's
- * auto box layout so exported positions stay exact. `photo` must be a key of DEVICE_PHOTO_SIZES; the view
- * uses that file and the given width/height (same aspect as the photo — image fills the canvas).
+ * auto box layout so exported positions stay exact. Each view's `photo` must be a key of DEVICE_PHOTO_SIZES.
  */
 function photoTplExact(
   meta: Meta & { id: string },
@@ -160,11 +159,21 @@ function photoTplExact(
   height: number,
   callouts: Callout[],
 ): void {
-  if (!DEVICE_PHOTO_SIZES[photo]) { PHOTO_LAYOUT_PROBLEMS.push(`${meta.id}: unknown photo “${photo}”`); return; }
+  photoTplExactViews(meta, [{ id: viewId, label: viewLabel, photo, width, height }], callouts);
+}
+function photoTplExactViews(
+  meta: Meta & { id: string },
+  views: { id: string; label: string; photo: string; width: number; height: number }[],
+  callouts: Callout[],
+): void {
+  for (const v of views) {
+    if (!DEVICE_PHOTO_SIZES[v.photo]) { PHOTO_LAYOUT_PROBLEMS.push(`${meta.id}: unknown photo “${v.photo}”`); return; }
+  }
+  const { width, height } = views[0]!;
   ALL.push({
     version: 1, builtin: true, slot: 'js', ...meta,
     aspect: width / height,
-    views: [{ id: viewId, label: viewLabel, image: `/device-photos/${photo}.webp`, width, height }],
+    views: views.map((v) => ({ id: v.id, label: v.label, image: `/device-photos/${v.photo}.webp`, width: v.width, height: v.height })),
     callouts,
   });
 }
@@ -447,58 +456,133 @@ tpl('winctrl-orion', {
   c('mini', 'axis', ['x', 'y'], 'Ministick', 'Right grip'), c('minib', 'hat', b(36, 37, 38, 39, 35), 'Ministick (digital + press)', 'Right grip', { art: 'mini' }),
   c('zw', 'axis', ['z'], 'Z wheel', 'Right grip'), c('zwb', 'switch', b(40, 41, 42), 'Z wheel (buttons)', 'Right grip', { art: 'zw' }),
 ]);
-tpl('winctrl-ursa-combat', {
+// WinCtrl URSA MINOR Combat: exact callouts from Federico's export (2026-10-06) — photoTplExactViews.
+photoTplExactViews({
   id: 'builtin-winctrl-ursa-combat', name: 'WinCtrl URSA MINOR throttle (Combat grip)', brand: 'WinCtrl',
-  notes: 'Grip numbers from the WinCtrl grip maps; base / side panel numbers from WinCtrl material (not yet verified on a unit): if yours differ, use “Customize a copy”. Lever detents are mechanical stops (soft 18 / 22, hard 24 / 25), not finger lifts. 1-based: button N = jsX_buttonN. Uses buttons up to 81: Chrome / Edge only report the first 32, use Firefox.',
+  notes: 'Grip numbers from the WinCtrl grip maps; base from published export. Lever detents soft 18/22, hard 24/25. Buttons to 81: use Firefox (Chrome caps at 32). Customize a copy if yours differ.',
   match: [{ vendor: '4098', product: 'B970' }, { vendor: '4098', product: 'BC27' }, { name: 'URSA MINOR Combat' }, { name: 'URSA MINOR Throttle' }],
 }, [
-  c('keys', 'buttons', b(...range(1, 8)), 'Keys B1-B8', 'Base'), c('mode', 'switch', b(9, 10, 11), 'MODE (3 pos)', 'Base'),
-  c('enc1', 'encoder', b(12, 13), 'Encoder 1', 'Base'), c('enc2', 'encoder', b(14, 15), 'Encoder 2', 'Base'),
-  c('det', 'buttons', b(...range(16, 25)), 'Lever detents (soft 18 / 22, hard 24 / 25)', 'Base', { art: 'detl' }),
-  c('lthr', 'axis', ['rotx'], 'Left lever', 'Axes'), c('rthr', 'axis', ['roty'], 'Right lever', 'Axes'),
-  c('thw', 'encoder', b(60, 61), 'Side thumbwheel', 'Left grip'),
-  c('b28', 'button', b(28), 'Button 28', 'Left grip', { art: 'b27' }), c('b29', 'button', b(29), 'Button 29', 'Left grip', { art: 'b27' }),
-  c('tog33', 'switch', b(33, 34, 35), 'Toggle (3 pos)', 'Left grip'),
-  c('b27', 'button', b(27), 'Button 27', 'Right grip'), c('knob30', 'switch', b(30, 31, 32), 'Knob (3 pos)', 'Right grip'),
-  c('h36', 'hat', b(36, 37, 38, 39, 40), 'Hat (4-way + push)', 'Right grip'),
-  c('h41', 'hat', b(42, 43, 44, 41, 45), 'Hat (4-way + push)', 'Right grip'), c('h46', 'hat', b(47, 48, 49, 46, 50), 'Hat (4-way + push)', 'Right grip'),
-  c('mini', 'axis', ['slider1', 'slider2'], 'Hat axes (Dial / Slider)', 'Right grip'), c('minib', 'hat', b(52, 53, 54, 55, 51), 'Hat (4-way + push)', 'Right grip', { art: 'mini' }),
-  c('rzk', 'axis', ['rotz'], 'Rz thumbwheel', 'Right grip'), c('rzkb', 'button', b(56), 'Rz thumbwheel press', 'Right grip', { art: 'rzk' }),
-  c('zw', 'axis', ['z'], 'Z wheel', 'Right grip'), c('zwb', 'switch', b(58, 57, 59), 'Z wheel switch mode', 'Right grip', { art: 'zw' }),
-  c('start', 'button', b(62), 'START', 'Side panel'), c('sw1', 'switch', b(63, 64, 65), 'SW1-3 (3 pos)', 'Side panel'),
-  c('sw4', 'switch', b(66, 67, 68), 'SW4-6 (3 pos)', 'Side panel'), c('rk1', 'switch', b(69, 70, 71), 'Rocker 1 (3 pos)', 'Side panel'),
-  c('rk2', 'switch', b(72, 73, 74), 'Rocker 2 (3 pos)', 'Side panel'), c('rudt', 'switch', b(75, 76, 77), 'Rudder trim (L / C / R)', 'Side panel'),
-  c('xw', 'axis', ['x'], 'X wheel', 'Side panel'), c('xwb', 'encoder', b(78, 79), 'X wheel (buttons)', 'Side panel', { art: 'xw' }),
-  c('yw', 'axis', ['y'], 'Y wheel', 'Side panel'), c('ywb', 'encoder', b(80, 81), 'Y wheel (buttons)', 'Side panel', { art: 'yw' }),
+  { id: 'base', label: 'Base and side panel', photo: 'winctrl-ursa-combat-front', width: 2284, height: 1423 },
+  { id: 'grip', label: 'Grips (rear) and levers', photo: 'winctrl-ursa-combat-front', width: 2284, height: 1423 },
+  { id: 'back', label: 'Grips (front)', photo: 'winctrl-ursa-combat-back', width: 2176, height: 1243 },
+], [
+  { id: 'keys', kind: 'buttons', inputs: ["button1","button2","button3","button4","button5","button6","button7","button8"], label: "Keys B1-B8", group: "Base", view: 'base',
+    anchor: { x: 0.40608581436077057, y: 0.604 }, box: { x: 0.2741444808901943, y: 0.37700249194030516 } },
+  { id: 'mode', kind: 'switch', inputs: ["button9","button10","button11"], label: "MODE (3 pos)", group: "Base", view: 'base',
+    anchor: { x: 0.2802408056042031, y: 0.616 }, box: { x: 0.09543725655559351, y: 0.43436908094336146 } },
+  { id: 'enc1', kind: 'encoder', inputs: ["button12","button13"], label: "Encoder 1", group: "Base", view: 'base',
+    anchor: { x: 0.34034588441330993, y: 0.687 }, box: { x: 0.10228137462311371, y: 0.6760412883592118 } },
+  { id: 'enc2', kind: 'encoder', inputs: ["button14","button15"], label: "Encoder 2", group: "Base", view: 'base',
+    anchor: { x: 0.3779115586690017, y: 0.72 }, box: { x: 0.11368821872957759, y: 0.8151858898070702 } },
+  { id: 'det', kind: 'buttons', inputs: ["button16","button17","button18","button19","button20","button21","button22","button23","button24","button25"], label: "Lever detents (soft 18 / 22, hard 24 / 25)", group: "Base", view: 'grip',
+    anchor: { x: 0.5106463994363415, y: 0.4783095034557513 }, box: { x: 0.7859315473317193, y: 0.8457000527069586 } },
+  { id: 'lthr', kind: 'axis', inputs: ["rotx"], label: "Left lever", group: "Axes", view: 'grip',
+    anchor: { x: 0.43764260875861455, y: 0.5210293315155952 }, box: { x: 0.08250950860433252, y: 0.5625285651228928 } },
+  { id: 'rthr', kind: 'axis', inputs: ["roty"], label: "Right lever", group: "Axes", view: 'grip',
+    anchor: { x: 0.5038022813688213, y: 0.5783959670795689 }, box: { x: 0.0817490494296578, y: 0.6455271254593234 } },
+  { id: 'thw', kind: 'encoder', inputs: ["button60","button61"], label: "Side thumbwheel", group: "Left grip", view: 'grip',
+    anchor: { x: 0.45969579428321056, y: 0.24274017518079605 }, box: { x: 0.18745248308653162, y: 0.21466710806416467 } },
+  { id: 'b28', kind: 'button', inputs: ["button28"], label: "Button 28", group: "Left grip", view: 'back',
+    anchor: { x: 0.44414062499999996, y: 0.306 }, box: { x: 0.637642573947689, y: 0.8651541709815826 } },
+  { id: 'b29', kind: 'button', inputs: ["button29"], label: "Button 29", group: "Left grip", view: 'back',
+    anchor: { x: 0.47174172794117647, y: 0.318 }, box: { x: 0.7486691783136288, y: 0.7346904107908312 } },
+  { id: 'tog33', kind: 'switch', inputs: ["button33","button34","button35"], label: "Toggle (3 pos)", group: "Left grip", view: 'back',
+    anchor: { x: 0.5604595588235294, y: 0.298 }, box: { x: 0.885, y: 0.18542665593993024 } },
+  { id: 'b27', kind: 'button', inputs: ["button27"], label: "Button 27", group: "Right grip", view: 'grip',
+    anchor: { x: 0.6389929947460595, y: 0.295 }, box: { x: 0.23992394857080263, y: 0.3135330237963537 } },
+  { id: 'knob30', kind: 'switch', inputs: ["button30","button31","button32"], label: "Knob (3 pos)", group: "Right grip", view: 'grip',
+    anchor: { x: 0.7241418563922942, y: 0.286 }, box: { x: 0.885, y: 0.45459170765987345 } },
+  { id: 'h36', kind: 'hat', inputs: ["button36","button37","button38","button39","button40"], label: "Hat (4-way + push)", group: "Right grip", view: 'grip',
+    anchor: { x: 0.6177057793345009, y: 0.356 }, box: { x: 0.1844106463878327, y: 0.419722320000149 } },
+  { id: 'h41', kind: 'hat', inputs: ["button42","button43","button44","button41","button45"], label: "Hat (4-way + push)", group: "Right grip", view: 'grip',
+    anchor: { x: 0.6834457092819615, y: 0.345 }, box: { x: 0.8863118102795271, y: 0.6613944342941644 } },
+  { id: 'h46', kind: 'hat', inputs: ["button47","button48","button49","button46","button50"], label: "Hat (4-way + push)", group: "Right grip", view: 'grip',
+    anchor: { x: 0.6728021015761821, y: 0.247 }, box: { x: 0.2665399181525517, y: 0.07796367224093971 } },
+  { id: 'mini', kind: 'axis', inputs: ["slider1","slider2"], label: "Hat axes (Dial / Slider)", group: "Right grip", view: 'back',
+    anchor: { x: 0.27721966911764706, y: 0.24499999999999997 }, box: { x: 0.09771861957506535, y: 0.31800532659360053 } },
+  { id: 'minib', kind: 'hat', inputs: ["button52","button53","button54","button55","button51"], label: "Hat (4-way + push)", group: "Right grip", view: 'back',
+    anchor: { x: 0.27718631758889317, y: 0.24478589214450341 }, box: { x: 0.11520913707892705, y: 0.5243510054956015 } },
+  { id: 'rzk', kind: 'axis', inputs: ["rotz"], label: "Rz thumbwheel", group: "Right grip", view: 'back',
+    anchor: { x: 0.22091254172669617, y: 0.1356223615363958 }, box: { x: 0.08022813108030834, y: 0.08902817597787946 } },
+  { id: 'rzkb', kind: 'button', inputs: ["button56"], label: "Rz thumbwheel press", group: "Right grip", view: 'back',
+    anchor: { x: 0.21863117870722434, y: 0.13695360366747203 }, box: { x: 0.6216730038022814, y: 0.061071659564406446 } },
+  { id: 'zw', kind: 'axis', inputs: ["z"], label: "Z wheel", group: "Right grip", view: 'back',
+    anchor: { x: 0.3337362132352941, y: 0.258 }, box: { x: 0.17984792034888902, y: 0.7466717931050453 } },
+  { id: 'zwb', kind: 'switch', inputs: ["button58","button57","button59"], label: "Z wheel switch mode", group: "Right grip", view: 'back',
+    anchor: { x: 0.3334600644419855, y: 0.25942975872087 }, box: { x: 0.3053232055199917, y: 0.8811292796890254 } },
+  { id: 'start', kind: 'button', inputs: ["button62"], label: "START", group: "Side panel", view: 'base',
+    anchor: { x: 0.7266462346760071, y: 0.489 }, box: { x: 0.9152091718898526, y: 0.33428266388046135 } },
+  { id: 'sw1', kind: 'switch', inputs: ["button63","button64","button65"], label: "SW1-3 (3 pos)", group: "Side panel", view: 'base',
+    anchor: { x: 0.6803152364273205, y: 0.5 }, box: { x: 0.8901140916483484, y: 0.09993388349713464 } },
+  { id: 'sw4', kind: 'switch', inputs: ["button66","button67","button68"], label: "SW4-6 (3 pos)", group: "Side panel", view: 'base',
+    anchor: { x: 0.6283493870402802, y: 0.558 }, box: { x: 0.27110267320060005, y: 0.08650764716509197 } },
+  { id: 'rk1', kind: 'switch', inputs: ["button69","button70","button71"], label: "Rocker 1 (3 pos)", group: "Side panel", view: 'base',
+    anchor: { x: 0.557600700525394, y: 0.673 }, box: { x: 0.7045627492462274, y: 0.8688907420134058 } },
+  { id: 'rk2', kind: 'switch', inputs: ["button72","button73","button74"], label: "Rocker 2 (3 pos)", group: "Side panel", view: 'base',
+    anchor: { x: 0.521913309982487, y: 0.707 }, box: { x: 0.5387832583583353, y: 0.9128312110867132 } },
+  { id: 'rudt', kind: 'switch', inputs: ["button75","button76","button77"], label: "Rudder trim (L / C / R)", group: "Side panel", view: 'base',
+    anchor: { x: 0.4279991243432575, y: 0.778 }, box: { x: 0.2019011348825897, y: 0.9262574241382971 } },
+  { id: 'xw', kind: 'axis', inputs: ["x"], label: "X wheel", group: "Side panel", view: 'base',
+    anchor: { x: 0.7395437262357415, y: 0.5820576107544545 }, box: { x: 0.9053232171236335, y: 0.5332349966755505 } },
+  { id: 'xwb', kind: 'encoder', inputs: ["button78","button79"], label: "X wheel (buttons)", group: "Side panel", view: 'base',
+    anchor: { x: 0.7410464098073555, y: 0.585 }, box: { x: 0.9022813224067253, y: 0.6186746062343206 } },
+  { id: 'yw', kind: 'axis', inputs: ["y"], label: "Y wheel", group: "Side panel", view: 'base',
+    anchor: { x: 0.6728021015761821, y: 0.644 }, box: { x: 0.9053232171236335, y: 0.728525592673919 } },
+  { id: 'ywb', kind: 'encoder', inputs: ["button80","button81"], label: "Y wheel (buttons)", group: "Side panel", view: 'base',
+    anchor: { x: 0.6787072243346007, y: 0.6540710538225583 }, box: { x: 0.8992395437262357, y: 0.810303605118721 } },
 ]);
 
 /* ------------------------------------------------------------------ MOZA */
 const MOZA_NOTE = 'Default numbering from the MOZA diagrams (1-based: button N = jsX_buttonN). MOZA Cockpit can change it: if yours differs, use “Customize a copy”.';
-tpl('moza-ab6', {
+// MOZA AB6 + MHG: exact callouts from Federico's export (2026-10-06) — photoTplExact, not withPhotoLayout.
+photoTplExactViews({
   id: 'builtin-moza-ab6', name: 'MOZA AB6 base + MHG grip', brand: 'MOZA',
-  notes: MOZA_NOTE + ' Per the MOZA Cockpit diagrams: MHG grip 1-24, ministick RX / RY + buttons 25-29, base keys 49-56, slider 57-59, dial 60-62. The base reports 128+ buttons: Chrome / Edge only report the first 32, use Firefox.',
-  match: [{ vendor: '346E', product: '1002' }, { name: 'AB6' }],
+  notes: MOZA_NOTE + ' MHG 1-24, ministick 25-29, base 49-62. Positions from published export. 128+ buttons: Chrome / Edge cap at 32 — use Firefox.',
+  match: [{ vendor: '346E', product: '1002' }, { name: 'AB6' }, { name: 'MOZA AB6' }],
 }, [
-  c('b2', 'button', b(2), 'Button 2', 'Grip head', { side: 'L' }),
-  c('hat7', 'hat', b(7, 8, 9, 10, 11), 'Hat (4-way + push)', 'Grip head', { side: 'L' }),
-  c('hat17', 'hat', b(17, 18, 19, 20, 21), 'Thumb hat (4-way + push)', 'Grip', { side: 'L' }),
-  c('trig', 'switch', b(1, 6), 'Trigger (stage 1 / 2)', 'Grip', { side: 'L' }),
-  c('b3', 'button', b(3), 'Rear button', 'Grip', { side: 'L' }),
-  c('mini', 'axis', ['rotx', 'roty'], 'Ministick (RX / RY)', 'Grip head', { side: 'R', art: 'hat25' }),
-  c('minib', 'hat', b(25, 26, 27, 28, 29), 'Ministick buttons (4-way + push)', 'Grip head', { side: 'R', art: 'hat25' }),
-  c('hat12', 'hat', b(12, 13, 14, 15, 16), 'Hat (4-way + push)', 'Grip head', { side: 'R' }),
-  c('b5', 'button', b(5), 'Button 5', 'Grip head', { side: 'R' }),
-  c('b4', 'button', b(4), 'Button 4', 'Grip head', { side: 'R' }),
-  c('rock', 'switch', b(22, 24, 23), 'Rocker (up / push / down)', 'Grip head', { side: 'R' }),
-  c('twist', 'axis', ['z', 'rotz'], 'Twist (Z / RZ)', 'Axes', { side: 'R' }),
-  c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
-  c('bkeys', 'buttons', b(49, 50, 51, 52), 'Base keys (left) 49-52', 'Base', { side: 'L' }),
-  c('bkeysr', 'buttons', b(53, 54, 55, 56), 'Base keys (right) 53-56', 'Base', { side: 'R', art: 'bkeys' }),
-  c('wl', 'axis', ['slider1'], 'Slider wheel (left)', 'Base', { side: 'L' }),
-  c('wlb', 'switch', b(57, 58, 59), 'Slider wheel (zones)', 'Base', { side: 'L', art: 'wl' }),
-  c('wr', 'axis', ['slider2'], 'Dial wheel (right)', 'Base', { side: 'R' }),
-  c('wrb', 'switch', b(60, 61, 62), 'Dial wheel (zones)', 'Base', { side: 'R', art: 'wr' }),
+  { id: 'front', label: 'Front', photo: 'moza-ab6-front', width: 1594, height: 990 },
+  { id: 'back', label: 'Back', photo: 'moza-ab6-back', width: 1594, height: 990 },
+], [
+  { id: 'b2', kind: 'button', inputs: b(2), label: 'Button 2', group: 'Grip head', view: 'front',
+    anchor: { x: 0.4429657794676806, y: 0.11616457568739635 }, box: { x: 0.29884200810005684, y: 0.0521026303093653 } },
+  { id: 'hat7', kind: 'hat', inputs: b(7, 8, 9, 10, 11), label: 'Hat (4-way + push)', group: 'Grip head', view: 'front',
+    anchor: { x: 0.4490494528650784, y: 0.17126240257852568 }, box: { x: 0.2611249067055676, y: 0.17214708206189713 } },
+  { id: 'hat17', kind: 'hat', inputs: b(17, 18, 19, 20, 21), label: 'Thumb hat (4-way + push)', group: 'Grip', view: 'back',
+    anchor: { x: 0.5310612597066436, y: 0.2365825319836805 }, box: { x: 0.7491803173364701, y: 0.14878443232936364 } },
+  { id: 'trig', kind: 'switch', inputs: b(1, 6), label: 'Trigger (stage 1 / 2)', group: 'Grip', view: 'back',
+    anchor: { x: 0.4291272885789015, y: 0.21700000000000003 }, box: { x: 0.2653149266609146, y: 0.46885854531921956 } },
+  { id: 'b3', kind: 'button', inputs: b(3), label: 'Rear button', group: 'Grip', view: 'back',
+    anchor: { x: 0.4848145163192947, y: 0.3410511788914619 }, box: { x: 0.7105263157894737, y: 0.4566334674410995 } },
+  { id: 'mini', kind: 'axis', inputs: ['rotx', 'roty'], label: 'Ministick (RX / RY)', group: 'Grip head', view: 'front',
+    anchor: { x: 0.47490491975849575, y: 0.1222865564530774 }, box: { x: 0.6958643406062603, y: 0.42557426740640414 } },
+  { id: 'minib', kind: 'hat', inputs: b(25, 26, 27, 28, 29), label: 'Ministick buttons (4-way + push)', group: 'Grip head', view: 'front',
+    anchor: { x: 0.47262358574812857, y: 0.12106215562924053 }, box: { x: 0.6899089955218672, y: 0.5244998117809441 } },
+  { id: 'hat12', kind: 'hat', inputs: b(12, 13, 14, 15, 16), label: 'Hat (4-way + push)', group: 'Grip head', view: 'front',
+    anchor: { x: 0.5015208893402447, y: 0.09290105344850907 }, box: { x: 0.6799834372092122, y: 0.0320952075502003 } },
+  { id: 'b5', kind: 'button', inputs: b(5), label: 'Button 5', group: 'Grip head', view: 'front',
+    anchor: { x: 0.5015208893402447, y: 0.1406524987501205 }, box: { x: 0.693217514959419, y: 0.2010466573796668 } },
+  { id: 'b4', kind: 'button', inputs: b(4), label: 'Button 4', group: 'Grip head', view: 'back',
+    anchor: { x: 0.39370145624932595, y: 0.0943273847866357 }, box: { x: 0.2680759380561098, y: 0.0487612759945968 } },
+  { id: 'rock', kind: 'switch', inputs: b(22, 24, 23), label: 'Rocker (up / push / down)', group: 'Grip head', view: 'back',
+    anchor: { x: 0.3750647214901046, y: 0.13544802420333008 }, box: { x: 0.203882646930948, y: 0.22991433851949877 } },
+  { id: 'twist', kind: 'axis', inputs: ['z', 'rotz'], label: 'Twist (Z / RZ)', group: 'Axes', view: 'front',
+    anchor: { x: 0.5053231707090661, y: 0.5900058495855034 }, box: { x: 0.2710504650182227, y: 0.5267228658210561 } },
+  { id: 'xy', kind: 'axis', inputs: ['x', 'y'], label: 'Stick X / Y', group: 'Axes', view: 'front',
+    anchor: { x: 0.5015208893402447, y: 0.4345075755028103 }, box: { x: 0.2928866882576639, y: 0.355548340750863 } },
+  { id: 'bkeys', kind: 'buttons', inputs: b(49, 50, 51, 52), label: 'Base keys (left) 49-52', group: 'Base', view: 'back',
+    anchor: { x: 0.43787748058671266, y: 0.5611021143488809 }, box: { x: 0.19076790863116103, y: 0.8400555667243724 } },
+  { id: 'bkeysr', kind: 'buttons', inputs: b(53, 54, 55, 56), label: 'Base keys (right) 53-56', group: 'Base', view: 'back',
+    anchor: { x: 0.5579810286514506, y: 0.5944431664604699 }, box: { x: 0.7830025884383088, y: 0.8578374442257505 } },
+  { id: 'wl', kind: 'axis', inputs: ['slider1'], label: 'Slider wheel (left)', group: 'Base', view: 'front',
+    anchor: { x: 0.5304182509505704, y: 0.6793868061300518 }, box: { x: 0.2882547559966915, y: 0.7556965415267886 } },
+  { id: 'wlb', kind: 'switch', inputs: b(57, 58, 59), label: 'Slider wheel (zones)', group: 'Base', view: 'front',
+    anchor: { x: 0.5288973616103255, y: 0.6793868061300518 }, box: { x: 0.3444995864350703, y: 0.9124212365368678 } },
+  { id: 'wr', kind: 'axis', inputs: ['slider2'], label: 'Dial wheel (right)', group: 'Base', view: 'front',
+    anchor: { x: 0.5958174788906547, y: 0.6438792990062991 }, box: { x: 0.7726219814606596, y: 0.7468043253663402 } },
+  { id: 'wrb', kind: 'switch', inputs: b(60, 61, 62), label: 'Dial wheel (zones)', group: 'Base', view: 'front',
+    anchor: { x: 0.59429658955041, y: 0.6451036764766327 }, box: { x: 0.7626964231480046, y: 0.921313452697316 } },
 ]);
+
 tpl('moza-mtp', {
   id: 'builtin-moza-mtp', name: 'MOZA MTP throttle', brand: 'MOZA',
   notes: MOZA_NOTE + ' Uses buttons up to 71: Chrome / Edge only report the first 32, use Firefox.',
@@ -672,5 +756,49 @@ photoTpl({
   id: 'builtin-azeron-keypad', name: 'Azeron Keypad (XInput)', brand: 'Azeron', notes: PHOTO_ONLY_NOTE,
   match: [{ vendor: '16D0', product: '12F7' }, { name: 'Azeron Keypad' }, { name: 'Azeron Cyborg' }],
 });
+
+
+// Honeycomb Bravo Throttle Quadrant: USB 294B:1901. Button/axis numbers from published DI maps (RoystonS / Sporty's);
+// callout positions invented on Federico's cut-out photo — Customize a copy to nudge.
+photoTplExact({
+  id: 'builtin-honeycomb-bravo', name: 'Honeycomb Bravo Throttle Quadrant', brand: 'Honeycomb',
+  notes: 'DI: AP 1-8, INCR/DECR 13/14, mode 17-21, flaps 15/16, trim 22/23, gear 31/32, switches 34-47, rev detents 24-28+33, lever btns 9-12+29+30+48. Axes Y=L1 X=L2 RZ=L3 RY=L4 RX=L5 Z=L6. Spots approximate — Customize a copy. Buttons to 48: use Firefox (Chrome caps at 32).',
+  match: [{ vendor: '294B', product: '1901' }, { name: 'Bravo Throttle' }, { name: 'Honeycomb Bravo' }, { name: 'Bravo Throttle Quadrant' }],
+}, 'honeycomb-bravo-main', 'main', 'Bravo', 1825, 1031, [
+  { id: 'apsel', kind: 'switch', inputs: b(17, 18, 19, 20, 21), label: 'AP mode (IAS/CRS/HDG/VS/ALT)', group: 'Autopilot', view: 'main',
+    anchor: { x: 0.315, y: 0.17 }, box: { x: 0.09, y: 0.06 } },
+  { id: 'ap', kind: 'buttons', inputs: b(1, 2, 3, 4, 5, 6, 7), label: 'AP modes (HDG…IAS)', group: 'Autopilot', view: 'main',
+    anchor: { x: 0.4868, y: 0.16 }, box: { x: 0.09, y: 0.14 } },
+  { id: 'apenc', kind: 'encoder', inputs: b(13, 14), label: 'AP value (INCR / DECR)', group: 'Autopilot', view: 'main',
+    anchor: { x: 0.6322, y: 0.17 }, box: { x: 0.91, y: 0.06 } },
+  { id: 'apm', kind: 'button', inputs: b(8), label: 'AUTO PILOT', group: 'Autopilot', view: 'main',
+    anchor: { x: 0.7115, y: 0.19 }, box: { x: 0.91, y: 0.14 } },
+  { id: 'gear', kind: 'switch', inputs: b(31, 32), label: 'Gear (UP / DOWN)', group: 'Panel', view: 'main',
+    anchor: { x: 0.2621, y: 0.42 }, box: { x: 0.09, y: 0.28 } },
+  { id: 'sw14', kind: 'buttons', inputs: b(34, 35, 36, 37, 38, 39, 40, 41), label: 'Panel switches 1-4', group: 'Panel', view: 'main',
+    anchor: { x: 0.42, y: 0.4 }, box: { x: 0.09, y: 0.40 } },
+  { id: 'sw57', kind: 'buttons', inputs: b(42, 43, 44, 45, 46, 47), label: 'Panel switches 5-7', group: 'Panel', view: 'main',
+    anchor: { x: 0.58, y: 0.4 }, box: { x: 0.09, y: 0.48 } },
+  { id: 'flaps', kind: 'switch', inputs: b(15, 16), label: 'Flaps (down / up)', group: 'Panel', view: 'main',
+    anchor: { x: 0.7511, y: 0.48 }, box: { x: 0.91, y: 0.28 } },
+  { id: 'trim', kind: 'encoder', inputs: b(22, 23), label: 'Trim (nose down / up)', group: 'Levers', view: 'main',
+    anchor: { x: 0.2555, y: 0.72 }, box: { x: 0.09, y: 0.58 } },
+  { id: 'l1', kind: 'axis', inputs: ['y'], label: 'Lever 1 (Y)', group: 'Levers', view: 'main',
+    anchor: { x: 0.3678, y: 0.68 }, box: { x: 0.09, y: 0.72 } },
+  { id: 'l2', kind: 'axis', inputs: ['x'], label: 'Lever 2 (X)', group: 'Levers', view: 'main',
+    anchor: { x: 0.4339, y: 0.68 }, box: { x: 0.09, y: 0.84 } },
+  { id: 'l3', kind: 'axis', inputs: ['rotz'], label: 'Lever 3 (RZ)', group: 'Levers', view: 'main',
+    anchor: { x: 0.5, y: 0.68 }, box: { x: 0.91, y: 0.58 } },
+  { id: 'l4', kind: 'axis', inputs: ['roty'], label: 'Lever 4 (RY)', group: 'Levers', view: 'main',
+    anchor: { x: 0.5529, y: 0.68 }, box: { x: 0.91, y: 0.70 } },
+  { id: 'l5', kind: 'axis', inputs: ['rotx'], label: 'Lever 5 (RX)', group: 'Levers', view: 'main',
+    anchor: { x: 0.6057, y: 0.68 }, box: { x: 0.91, y: 0.82 } },
+  { id: 'l6', kind: 'axis', inputs: ['z'], label: 'Lever 6 (Z)', group: 'Levers', view: 'main',
+    anchor: { x: 0.6586, y: 0.68 }, box: { x: 0.91, y: 0.94 } },
+  { id: 'rev', kind: 'buttons', inputs: b(24, 25, 26, 27, 28, 33), label: 'Reverse detents', group: 'Levers', view: 'main',
+    anchor: { x: 0.467, y: 0.82 }, box: { x: 0.5, y: 0.94 } },
+  { id: 'toga', kind: 'buttons', inputs: b(9, 10, 11, 12, 29, 30, 48), label: 'Lever TOGA / rev btns', group: 'Levers', view: 'main',
+    anchor: { x: 0.4207, y: 0.55 }, box: { x: 0.09, y: 0.94 } },
+]);
 
 export const DEVICE_TEMPLATES: DeviceTemplate[] = ALL;

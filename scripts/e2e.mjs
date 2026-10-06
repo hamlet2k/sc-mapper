@@ -1025,6 +1025,42 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await dv.getByTestId('template-select').selectOption('');
   await page.waitForTimeout(300);
 }
+{ // Honeycomb Bravo: researched DI callouts on Federico photo
+  await dv.getByTestId('template-select').selectOption('builtin-honeycomb-bravo');
+  await page.waitForTimeout(600);
+  check((await dv.locator('[data-callout]').count()) === 17, 'Bravo: 17 callouts');
+  const ap = dv.locator('[data-callout="ap"]');
+  check(await ap.isVisible(), 'Bravo: AP modes callout visible');
+  const apTxt = await ap.innerText();
+  check(/1/.test(apTxt) && /7/.test(apTxt), `Bravo AP chips show DI 1–7 (${apTxt.replace(/\n/g, ' | ').slice(0, 100)})`);
+  await dv.getByTestId('device-canvas').screenshot({ path: shots + '125-bravo-builtin.png' });
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(300);
+}
+{ // MOZA AB6: faithful Federico export (exact coords)
+  await dv.getByTestId('template-select').selectOption('builtin-moza-ab6');
+  await page.waitForTimeout(600);
+  check((await dv.locator('[data-callout]').count()) === 19, 'MOZA AB6: 19 callouts');
+  const front = dv.locator('[data-testid=device-canvas-view][data-view=front]');
+  const back = dv.locator('[data-testid=device-canvas-view][data-view=back]');
+  check(await front.count() === 1 && await back.count() === 1, 'MOZA AB6: front + back photo pages');
+  await front.scrollIntoViewIfNeeded();
+  await front.screenshot({ path: shots + '126-moza-ab6-faithful-front.png' });
+  await back.scrollIntoViewIfNeeded();
+  await back.screenshot({ path: shots + '126-moza-ab6-faithful-back.png' });
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(300);
+}
+{ // URSA Combat: faithful Federico export
+  await dv.getByTestId('template-select').selectOption('builtin-winctrl-ursa-combat');
+  await page.waitForTimeout(600);
+  check((await dv.locator('[data-callout]').count()) === 32, 'URSA: 32 callouts');
+  const base = dv.locator('[data-testid=device-canvas-view][data-view=base]');
+  await base.scrollIntoViewIfNeeded();
+  await base.screenshot({ path: shots + '127-ursa-faithful-base.png' });
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(300);
+}
 { // device templates: a >32-button device warns in Chrome; numbers can be assigned on a copy of an unassigned built-in
   await dv.getByTestId('template-select').selectOption('builtin-winctrl-orion');
   await page.waitForTimeout(600);

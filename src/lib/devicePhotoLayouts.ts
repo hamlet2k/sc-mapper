@@ -122,31 +122,8 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       paddle: { view: 'front', x: 0.48, y: 0.32 },
     },
   },
-  // MOZA AB6 + MHG: numbering per the MOZA Cockpit MHG diagram; b4 and the rocker (head's right side), b3 (rear) and the base wheels on the back photo placed by estimate.
-  'builtin-moza-ab6': {
-    views: [{ id: 'front', label: 'Front', photo: 'moza-ab6-front' }, { id: 'back', label: 'Back', photo: 'moza-ab6-back' }],
-    anchors: {
-      b2: { view: 'front', x: 0.314, y: 0.116 },
-      mini: { view: 'front', x: 0.405, y: 0.111 },
-      minib: { view: 'front', x: 0.412, y: 0.104 },
-      hat12: { view: 'front', x: 0.498, y: 0.089 },
-      b5: { view: 'front', x: 0.485, y: 0.136 },
-      hat7: { view: 'front', x: 0.352, y: 0.157 },
-      hat17: { view: 'back', x: 0.588, y: 0.243, side: 'R' },
-      trig: { view: 'back', x: 0.353, y: 0.217 },
-      b3: { view: 'back', x: 0.467, y: 0.333 },
-      b4: { view: 'back', x: 0.185, y: 0.14, side: 'L' },
-      rock: { view: 'back', x: 0.205, y: 0.1, side: 'L' },
-      twist: { view: 'front', x: 0.56, y: 0.4 },
-      xy: { view: 'front', x: 0.5, y: 0.56 },
-      bkeys: { view: 'back', x: 0.3, y: 0.578 },
-      bkeysr: { view: 'back', x: 0.69, y: 0.61 },
-      wl: { view: 'front', x: 0.575, y: 0.672, side: 'L' },
-      wlb: { view: 'front', x: 0.59, y: 0.685, side: 'L' },
-      wr: { view: 'front', x: 0.765, y: 0.64, side: 'R' },
-      wrb: { view: 'front', x: 0.78, y: 0.652, side: 'R' },
-    },
-  },
+  // builtin-moza-ab6: exact callouts via photoTplExactViews (Federico's export) — not listed here.
+  // builtin-honeycomb-bravo: exact callouts via photoTplExact (researched DI + invented spots) — not listed here.
   // VKB Gladiator NXT EVO SCG: head hats by position (uncertain); d1 (pinky) and en1 (right-side encoder) estimated.
   'builtin-vkb-gladiator-scg': {
     views: [{ id: 'thumb', label: 'Thumb side', photo: 'vkb-gladiator-scg-thumb' }, { id: 'front', label: 'Right side', photo: 'vkb-gladiator-scg-front' }],
@@ -488,49 +465,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       b56: { view: 'left', x: 0.667, y: 0.249 },
     },
   },
-  'builtin-winctrl-ursa-combat': {
-    // Grip controls per the WinCtrl grip maps (left grip: rear thumbwheel 60/61; front buttons 28, 29 and toggle 33-35. Right grip:
-    // rear button 27, hats 46-50 / 36-40 / 41-45 and knob 30-32; front Rz knob 56, Z wheel with switch-mode buttons 57-59, hat 51-55).
-    // The front photo shows the rear of the grips, the back photo their front.
-    views: [{ id: 'base', label: 'Base and side panel', photo: 'winctrl-ursa-combat-front' }, { id: 'grip', label: 'Grips (rear) and levers', photo: 'winctrl-ursa-combat-front' }, { id: 'back', label: 'Grips (front)', photo: 'winctrl-ursa-combat-back' }],
-    // Round of 2026-10-06: Federico's exported layout. Photos unchanged (base + grip both use the front photo — his export
-    // had the same). Moved the lever detents onto the grips view, the Rz thumbwheel onto the front-of-grips (back) photo, and
-    // nudged the lever / thumbwheel anchors on the grips view.
-    anchors: {
-      keys: { view: 'base', x: 0.35, y: 0.604 },
-      mode: { view: 'base', x: 0.149, y: 0.616 },
-      enc1: { view: 'base', x: 0.245, y: 0.687 },
-      enc2: { view: 'base', x: 0.305, y: 0.72 },
-      rudt: { view: 'base', x: 0.385, y: 0.778 },
-      start: { view: 'base', x: 0.862, y: 0.489 },
-      sw1: { view: 'base', x: 0.788, y: 0.5 },
-      sw4: { view: 'base', x: 0.705, y: 0.558 },
-      rk1: { view: 'base', x: 0.592, y: 0.673 },
-      rk2: { view: 'base', x: 0.535, y: 0.707 },
-      xw: { view: 'base', x: 0.883, y: 0.582 },
-      xwb: { view: 'base', x: 0.885, y: 0.585 },
-      yw: { view: 'base', x: 0.776, y: 0.644 },
-      ywb: { view: 'base', x: 0.785, y: 0.654 },
-      det: { view: 'grip', x: 0.517, y: 0.478 },
-      lthr: { view: 'grip', x: 0.4, y: 0.521 },
-      rthr: { view: 'grip', x: 0.506, y: 0.578 },
-      thw: { view: 'grip', x: 0.436, y: 0.243 },
-      h46: { view: 'grip', x: 0.776, y: 0.247 },
-      b27: { view: 'grip', x: 0.722, y: 0.295 },
-      h36: { view: 'grip', x: 0.688, y: 0.356 },
-      h41: { view: 'grip', x: 0.793, y: 0.345 },
-      knob30: { view: 'grip', x: 0.858, y: 0.286 },
-      mini: { view: 'back', x: 0.161, y: 0.245 },
-      minib: { view: 'back', x: 0.161, y: 0.245 },
-      rzk: { view: 'back', x: 0.075, y: 0.136 },
-      rzkb: { view: 'back', x: 0.072, y: 0.137 },
-      zw: { view: 'back', x: 0.247, y: 0.258 },
-      zwb: { view: 'back', x: 0.247, y: 0.259 },
-      b28: { view: 'back', x: 0.415, y: 0.306 },
-      b29: { view: 'back', x: 0.457, y: 0.318 },
-      tog33: { view: 'back', x: 0.592, y: 0.298 },
-    },
-  },
+  // builtin-winctrl-ursa-combat: exact callouts via photoTplExactViews (Federico's export) — not listed here.
 
 
   // ---- photo-only / new devices from Federico's exports (2026-10-06) ----
