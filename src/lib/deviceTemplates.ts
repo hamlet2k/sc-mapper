@@ -125,6 +125,26 @@ function tpl(art: string, meta: Meta, specs: Spec[], layout?: Parameters<typeof 
   ALL.push(t);
 }
 
+/**
+ * A built-in that only has photos (and optional callouts placed on them): used for devices we have a cut-out picture of but no
+ * SVG art yet. Empty callouts are fine — the picture still shows so users can Customize a copy and place their own.
+ * The layout must already be in DEVICE_PHOTO_LAYOUTS (looked up by `meta.id`).
+ */
+function photoTpl(meta: Meta & { id: string }, specs: Spec[] = []): void {
+  const layout = photoLayoutFor(meta.id);
+  if (!layout) { PHOTO_LAYOUT_PROBLEMS.push(`${meta.id}: no photo layout`); return; }
+  const stub: DeviceTemplate = {
+    version: 1, builtin: true, slot: 'js', ...meta, aspect: 1,
+    callouts: specs.map((sp) => ({
+      id: sp.id, kind: sp.kind, inputs: sp.inputs, anchor: { x: 0.5, y: 0.5 }, box: { x: 0.5, y: 0.5 },
+      ...(sp.label ? { label: sp.label } : {}), ...(sp.group ? { group: sp.group } : {}),
+    })),
+  };
+  const r = withPhotoLayout(stub, layout);
+  if (Array.isArray(r)) PHOTO_LAYOUT_PROBLEMS.push(`${meta.id}: ${r.join('; ')}`);
+  else ALL.push(r);
+}
+
 /* ------------------------------------------------------------------ photo templates */
 /** label gutter on each side of a photo view, as a fraction of the photo height (room for the label columns) */
 export const PHOTO_GUTTER = 0.3;
@@ -573,5 +593,40 @@ tpl('logitech-x56-throttle', {
   c('sw', 'buttons', u(6), 'SW 1-6', 'Base'), c('tgl', 'buttons', u(8), 'TGL 1-4 (up / down)', 'Base'),
 ]);
 
+
+
+/* ------------------------------------------------------------------ photo-only / new WinCtrl + Azeron (Federico's exports, 2026-10-06) */
+// Distinct from builtin-winctrl-orion (the F-15EX throttle): pedals use USB 4098:BEF0 and the "Orion Pedals" / "Combat Rudder" names.
+photoTpl({
+  id: 'builtin-winctrl-orion-pedals', name: 'WinCtrl Orion Combat Rudder Pedals', brand: 'WinCtrl',
+  notes: 'Toe brakes = rotx / roty, rudder = rotz. Button numbers as reported by DirectInput on a Metal unit.',
+  match: [{ vendor: '4098', product: 'BEF0' }, { name: 'Orion Pedals' }, { name: 'Orion Combat Rudder' }, { name: 'Combat Rudder Pedals' }],
+}, [
+  c('ltoe', 'axis', ['roty'], 'Left toe brake', 'Pedals', { side: 'L' }),
+  c('lbtns', 'buttons', b(2, 7, 8, 9, 10), 'Left buttons', 'Pedals', { side: 'L' }),
+  c('rudder', 'axis', ['rotz'], 'Rudder', 'Pedals', { side: 'L' }),
+  c('rudbtns', 'buttons', b(11, 12, 13, 14, 15), 'Rudder buttons', 'Pedals', { side: 'L' }),
+  c('rtoe', 'axis', ['rotx'], 'Right toe brake', 'Pedals', { side: 'R' }),
+  c('rbtns', 'buttons', b(1, 3, 4, 5, 6), 'Right buttons', 'Pedals', { side: 'R' }),
+]);
+
+// Photo only: picture shows so users can Customize a copy and place their own callouts.
+const PHOTO_ONLY_NOTE = 'Picture only for now — Customize a copy to place callouts on the controls.';
+photoTpl({
+  id: 'builtin-winctrl-carrierace-mfd-l', name: 'WinCtrl CarrierAce MFD L', brand: 'WinCtrl', notes: PHOTO_ONLY_NOTE,
+  match: [{ vendor: '4098', product: 'BEE1' }, { name: 'CarrierAce MFD L' }, { name: 'CarrierAce MFD' }],
+});
+photoTpl({
+  id: 'builtin-winctrl-carrierace-pto2', name: 'WinCtrl CarrierAce PTO 2', brand: 'WinCtrl', notes: PHOTO_ONLY_NOTE,
+  match: [{ vendor: '4098', product: 'BF05' }, { name: 'CarrierAce PTO 2' }, { name: 'CarrierAce PTO' }],
+});
+photoTpl({
+  id: 'builtin-winctrl-carrierace-ufc-hud', name: 'WinCtrl CarrierAce UFC + HUD', brand: 'WinCtrl', notes: PHOTO_ONLY_NOTE,
+  match: [{ vendor: '4098', product: 'BEDE' }, { name: 'CarrierAce UFC' }, { name: 'CarrierAce HUD' }, { name: 'UFC+HUD' }],
+});
+photoTpl({
+  id: 'builtin-azeron-keypad', name: 'Azeron Keypad (XInput)', brand: 'Azeron', notes: PHOTO_ONLY_NOTE,
+  match: [{ vendor: '16D0', product: '12F7' }, { name: 'Azeron Keypad' }, { name: 'Azeron Cyborg' }],
+});
 
 export const DEVICE_TEMPLATES: DeviceTemplate[] = ALL;

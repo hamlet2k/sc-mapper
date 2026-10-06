@@ -4,6 +4,7 @@ import { getPads, padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { formatInput } from '../lib/inputs';
 import { browserName } from '../lib/browser';
 import { shouldFollowScroll, TesterFollow, type FollowHit } from '../lib/testerFollow';
+import { FirefoxCta } from './ChromiumBanner';
 import { Ico } from './icons';
 
 interface LivePad { info: PadInfo; timestamp: number; buttons: { p: boolean; v: number }[]; axes: number[]; hats: boolean[]; last?: string; lastAt?: number }
@@ -168,12 +169,12 @@ export function InputTester({ describe, compact, only, follow = !compact }: {
             </div>
             {!compact && <div className="mt-0.5 break-all font-mono text-[9px] text-slate-600">id: {d.id}</div>}
             {env.chromium && d.kind === 'js' && d.buttons >= CHROMIUM_BUTTON_CAP && (
-              <p className="mt-1 text-[10px] text-mod"><Ico name="alert" /> {env.browser.replace(/\s*\d+$/, '')} reports at most {CHROMIUM_BUTTON_CAP} buttons per device. Buttons above {CHROMIUM_BUTTON_CAP} (common on VKB/Virpil) can&apos;t be seen here: type them in manual entry (e.g. js1_button40), or try Firefox.</p>
+              <p className="mt-1 flex items-start gap-2 text-[10px] text-mod"><FirefoxCta size="sm" /><span><Ico name="alert" /> {env.browser.replace(/\s*\d+$/, '')} reports at most {CHROMIUM_BUTTON_CAP} buttons per device. Buttons above {CHROMIUM_BUTTON_CAP} (common on VKB/Virpil) can&apos;t be seen here: type them in manual entry (e.g. js1_button40), or try Firefox.</span></p>
             )}
             {d.buttons > GAME_BUTTON_CAP && (
               <p className="mt-1 text-[10px] text-alert" data-testid="tester-over-cap"><Ico name="alert" /> This device reports {d.buttons} buttons. Star Citizen reads joysticks through DirectInput, which has {GAME_BUTTON_CAP} buttons per device, so buttons {GAME_BUTTON_CAP + 1}–{d.buttons} (outlined red) most likely can&apos;t be bound in game. Remap them in the device&apos;s software if you need them.</p>
             )}
-            {env.chromium && d.axes >= CHROMIUM_AXIS_CAP && <p className="mt-1 text-[10px] text-mod"><Ico name="alert" /> Only the first {CHROMIUM_AXIS_CAP} axes are visible in this browser.</p>}
+            {env.chromium && d.axes >= CHROMIUM_AXIS_CAP && <p className="mt-1 flex items-start gap-2 text-[10px] text-mod"><FirefoxCta size="sm" /><span><Ico name="alert" /> Only the first {CHROMIUM_AXIS_CAP} axes are visible in this browser.</span></p>}
             <div className="mt-2 flex flex-wrap gap-[3px]">
               {l.buttons.map((b, i) => (
                 <span key={fl?.hit.kind === 'button' && fl.hit.index === i ? `f${fl.n}` : i} data-tester-button={i} title={`${d.kind === 'gp' ? GP_BUTTONS[i] ?? `button ${i + 1}` : `button${i + 1}`}: ${b.v.toFixed(2)}`}

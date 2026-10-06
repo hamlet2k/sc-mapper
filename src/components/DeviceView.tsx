@@ -54,6 +54,8 @@ interface Props {
   axisLimit: Record<'js' | 'gp', number>;
   /** "Refresh game state": pick a fresh export to rematch the mappings to the game's device numbers */
   onRefresh: () => void;
+  /** Edit toggle: off = inspect callouts only; on = bind / unbind / open the action editor */
+  editMode?: boolean;
   onEdit: (row: Row) => void;
   onRemove: (row: Row, b: Binding) => void;
   onBind: (row: Row, slot: Slot, instance: number, input: string) => void;
@@ -134,7 +136,7 @@ function NoSlots({ onOpenControllers, hasKm }: { onOpenControllers: () => void; 
 }
 
 type Chosen = ReturnType<typeof resolveSlotTemplate>;
-function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, onRefresh, highlight, scroll, query, chip, onEdit, onRemove, onBind, onShowInList, notify }:
+function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, onRefresh, highlight, scroll, query, chip, editMode, onEdit, onRemove, onBind, onShowInList, notify }:
   Props & { opt: DevOption; chosen: Chosen; T: ReturnType<typeof useTemplates>; strip: ReactNode }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
@@ -407,7 +409,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
         <aside className="w-80 shrink-0 space-y-3 overflow-y-auto scrollbar-thin print:hidden">
           {selCallout ? (
             <InputPanel key={selCallout.id} c={selCallout} slot={slot} instance={instance} index={index} rows={rows} live={live}
-              onEdit={onEdit} onRemove={onRemove} onBind={onBind} onShowInList={onShowInList} onClose={() => setSelected(null)} />
+              editMode={!!editMode} onEdit={onEdit} onRemove={onRemove} onBind={onBind} onShowInList={onShowInList} onClose={() => setSelected(null)} />
           ) : <p className="rounded border border-edge/60 bg-black/20 p-3 text-xs text-slate-400">Click a callout to see and change what that control does.</p>}
           <section className="rounded border border-edge/60 bg-black/20 p-3" data-testid="device-overflow">
             <h4 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Bound, not on the picture ({overflow.length})</h4>
@@ -453,8 +455,8 @@ function Legend() {
   return <span className="ml-auto flex gap-2">{item('#4fd8ff', 'active')}{item(TONE_STROKE.custom, 'customized')}{item(TONE_STROKE.conflict, 'conflict')}{item(TONE_STROKE.bound, 'default')}{item(TONE_STROKE.unbound, 'unbound')}</span>;
 }
 
-function InputPanel({ c, slot, instance, index, rows, live, onEdit, onRemove, onBind, onShowInList, onClose }: {
-  c: Callout; slot: 'js' | 'gp'; instance: number; index: Map<string, Entry[]>; rows: Row[]; live: Live;
+function InputPanel({ c, slot, instance, index, rows, live, editMode, onEdit, onRemove, onBind, onShowInList, onClose }: {
+  c: Callout; slot: 'js' | 'gp'; instance: number; index: Map<string, Entry[]>; rows: Row[]; live: Live; editMode: boolean;
   onEdit: (row: Row) => void; onRemove: (row: Row, b: Binding) => void; onBind: (row: Row, slot: Slot, instance: number, input: string) => void;
   onShowInList: (spec: string) => void; onClose: () => void;
 }) {
@@ -492,8 +494,10 @@ function InputPanel({ c, slot, instance, index, rows, live, onEdit, onRemove, on
                         <span className={`block truncate ${e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-200'}`}>{e.conflict && <Ico name="alert" className="mr-0.5" />}{e.prefix && <span className="font-mono text-[10px] text-hud/70">{e.prefix}+ </span>}{e.row.label}</span>
                         <span className="block truncate text-[10px] text-slate-500">{e.row.mapLabel}{e.b.mode ? ` · ${e.b.mode}` : ''}{e.b.custom ? ' · customized' : ''}</span>
                       </span>
-                      <button type="button" onClick={() => onEdit(e.row)} className="rounded border border-edge px-1.5 text-[10px] text-slate-300 hover:border-hud/60">Edit</button>
-                      <button type="button" onClick={() => onRemove(e.row, e.b)} title="Unbind" aria-label={`Unbind ${e.row.label}`} className="rounded border border-edge px-1.5 text-[10px] text-slate-400 hover:border-alert hover:text-alert"><Ico name="close" /></button>
+                      {editMode && <>
+                        <button type="button" onClick={() => onEdit(e.row)} className="rounded border border-edge px-1.5 text-[10px] text-slate-300 hover:border-hud/60">Edit</button>
+                        <button type="button" onClick={() => onRemove(e.row, e.b)} title="Unbind" aria-label={`Unbind ${e.row.label}`} className="rounded border border-edge px-1.5 text-[10px] text-slate-400 hover:border-alert hover:text-alert"><Ico name="close" /></button>
+                      </>}
                     </li>
                   ))}
                 </ul>
@@ -502,7 +506,7 @@ function InputPanel({ c, slot, instance, index, rows, live, onEdit, onRemove, on
           );
         })}
       </ul>
-      {own.length > 0 && <div className="mt-3 border-t border-edge/50 pt-2">
+      {editMode && own.length > 0 && <div className="mt-3 border-t border-edge/50 pt-2">
         <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
           Bind an action to
           {own.length > 1 ? (

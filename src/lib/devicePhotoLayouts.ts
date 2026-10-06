@@ -41,7 +41,7 @@ export interface DevicePhotoLayout {
 }
 
 // Photo layouts (measured on the photos with grid overlays; controls hidden on every photo are placed at their best estimated spot).
-// Done: Thrustmaster HOTAS Warthog stick + throttle, T.16000M, TWCS, MOZA AB6 + MHG, VKB Gladiator SCG, VKB Gunfighter MCG, VIRPIL Alpha Prime, WinCtrl CarrierAce / ViperAce, Logitech X56 stick + throttle, VKB STECS, MOZA MTP, MOZA MTQ, VIRPIL VMAX Prime, WinCtrl Orion (F-15EX), WinCtrl URSA MINOR Combat (measured with grid overlays, grips per the WinCtrl grip maps). All device templates now have a photo layout.
+// Done: Thrustmaster HOTAS Warthog stick + throttle, T.16000M, TWCS, MOZA AB6 + MHG, VKB Gladiator SCG, VKB Gunfighter MCG, VIRPIL Alpha Prime, WinCtrl CarrierAce / ViperAce / Orion throttle / Orion pedals / URSA / CarrierAce MFD L+PTO 2+UFC+HUD, Azeron keypad, Logitech X56 stick + throttle, VKB STECS, MOZA MTP, MOZA MTQ, VIRPIL VMAX Prime, WinCtrl Orion (F-15EX), WinCtrl URSA MINOR Combat (measured with grid overlays, grips per the WinCtrl grip maps). All device templates now have a photo layout.
 // Thrustmaster HOTAS Warthog: measured on the photos with grid overlays (see the Thrustmaster manual for the control names).
 export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
   'builtin-tm-warthog-stick': {
@@ -493,6 +493,9 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
     // rear button 27, hats 46-50 / 36-40 / 41-45 and knob 30-32; front Rz knob 56, Z wheel with switch-mode buttons 57-59, hat 51-55).
     // The front photo shows the rear of the grips, the back photo their front.
     views: [{ id: 'base', label: 'Base and side panel', photo: 'winctrl-ursa-combat-front' }, { id: 'grip', label: 'Grips (rear) and levers', photo: 'winctrl-ursa-combat-front' }, { id: 'back', label: 'Grips (front)', photo: 'winctrl-ursa-combat-back' }],
+    // Round of 2026-10-06: Federico's exported layout. Photos unchanged (base + grip both use the front photo — his export
+    // had the same). Moved the lever detents onto the grips view, the Rz thumbwheel onto the front-of-grips (back) photo, and
+    // nudged the lever / thumbwheel anchors on the grips view.
     anchors: {
       keys: { view: 'base', x: 0.35, y: 0.604 },
       mode: { view: 'base', x: 0.149, y: 0.616 },
@@ -504,29 +507,61 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       sw4: { view: 'base', x: 0.705, y: 0.558 },
       rk1: { view: 'base', x: 0.592, y: 0.673 },
       rk2: { view: 'base', x: 0.535, y: 0.707 },
-      xw: { view: 'base', x: 0.88, y: 0.57 },
+      xw: { view: 'base', x: 0.883, y: 0.582 },
       xwb: { view: 'base', x: 0.885, y: 0.585 },
       yw: { view: 'base', x: 0.776, y: 0.644 },
-      ywb: { view: 'base', x: 0.78, y: 0.66 },
-      det: { view: 'base', x: 0.46, y: 0.53 },
-      lthr: { view: 'grip', x: 0.45, y: 0.47 },
-      rthr: { view: 'grip', x: 0.54, y: 0.49 },
-      thw: { view: 'grip', x: 0.483, y: 0.255 },
-      rzk: { view: 'grip', x: 0.914, y: 0.149 },
-      rzkb: { view: 'grip', x: 0.92, y: 0.16 },
+      ywb: { view: 'base', x: 0.785, y: 0.654 },
+      det: { view: 'grip', x: 0.517, y: 0.478 },
+      lthr: { view: 'grip', x: 0.4, y: 0.521 },
+      rthr: { view: 'grip', x: 0.506, y: 0.578 },
+      thw: { view: 'grip', x: 0.436, y: 0.243 },
       h46: { view: 'grip', x: 0.776, y: 0.247 },
       b27: { view: 'grip', x: 0.722, y: 0.295 },
       h36: { view: 'grip', x: 0.688, y: 0.356 },
       h41: { view: 'grip', x: 0.793, y: 0.345 },
       knob30: { view: 'grip', x: 0.858, y: 0.286 },
       mini: { view: 'back', x: 0.161, y: 0.245 },
-      minib: { view: 'back', x: 0.168, y: 0.258 },
+      minib: { view: 'back', x: 0.161, y: 0.245 },
+      rzk: { view: 'back', x: 0.075, y: 0.136 },
+      rzkb: { view: 'back', x: 0.072, y: 0.137 },
       zw: { view: 'back', x: 0.247, y: 0.258 },
-      zwb: { view: 'back', x: 0.252, y: 0.272 },
+      zwb: { view: 'back', x: 0.247, y: 0.259 },
       b28: { view: 'back', x: 0.415, y: 0.306 },
       b29: { view: 'back', x: 0.457, y: 0.318 },
       tog33: { view: 'back', x: 0.592, y: 0.298 },
     },
   },
+
+
+  // ---- photo-only / new devices from Federico's exports (2026-10-06) ----
+  // Photo-only templates (empty callouts) still show the picture so users can Customize a copy and place their own.
+  'builtin-winctrl-orion-pedals': {
+    views: [{ id: 'main', label: 'Pedals', photo: 'winctrl-orion-pedals-main' }],
+    anchors: {
+      ltoe: { view: 'main', x: 0.125, y: 0.108 },
+      rtoe: { view: 'main', x: 0.873, y: 0.373 },
+      rudder: { view: 'main', x: 0.373, y: 0.469 },
+      rudbtns: { view: 'main', x: 0.314, y: 0.554 },
+      rbtns: { view: 'main', x: 0.85, y: 0.442 },
+      lbtns: { view: 'main', x: 0.104, y: 0.199 },
+    },
+  },
+  'builtin-winctrl-carrierace-mfd-l': {
+    views: [{ id: 'main', label: 'MFD', photo: 'winctrl-carrierace-mfd-l' }],
+    anchors: {},
+  },
+  'builtin-winctrl-carrierace-pto2': {
+    views: [{ id: 'main', label: 'PTO 2', photo: 'winctrl-carrierace-pto2' }],
+    anchors: {},
+  },
+  'builtin-winctrl-carrierace-ufc-hud': {
+    views: [{ id: 'ufc', label: 'UFC', photo: 'winctrl-carrierace-ufc' }, { id: 'hud', label: 'HUD', photo: 'winctrl-carrierace-hud' }],
+    anchors: {},
+  },
+  'builtin-azeron-keypad': {
+    views: [{ id: 'main', label: 'Azeron', photo: 'azeron-keypad-main' }],
+    anchors: {},
+  },
+
 
 };

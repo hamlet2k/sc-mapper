@@ -81,9 +81,10 @@ const PRESS_HINT: Record<View, string> = {
  */
 const VIEW_FILTERS: Record<View, { input: boolean; unbound: boolean; custom: boolean; conflictOnly: boolean; categories: boolean; defaultOverlaps: boolean; edit: boolean }> = {
   list: { input: true, unbound: true, custom: true, conflictOnly: true, categories: true, defaultOverlaps: false, edit: true },
-  keyboard: { input: false, unbound: false, custom: true, conflictOnly: true, categories: true, defaultOverlaps: false, edit: false },
-  conflicts: { input: true, unbound: false, custom: true, conflictOnly: false, categories: true, defaultOverlaps: true, edit: false },
-  devices: { input: false, unbound: false, custom: false, conflictOnly: false, categories: false, defaultOverlaps: false, edit: false },
+  // Edit on every view: off = view-only; on = bind / unbind / open the action editor
+  keyboard: { input: false, unbound: false, custom: true, conflictOnly: true, categories: true, defaultOverlaps: false, edit: true },
+  conflicts: { input: true, unbound: false, custom: true, conflictOnly: false, categories: true, defaultOverlaps: true, edit: true },
+  devices: { input: false, unbound: false, custom: false, conflictOnly: false, categories: false, defaultOverlaps: false, edit: true },
 };
 const NO_FILTERS = new Set<Device>(ALL_DEVICES);
 const EXPORT_TYPE: Record<GameSlot['slot'], ExportDevice['type']> = { kb: 'keyboard', mo: 'mouse', js: 'joystick', gp: 'gamepad' };
@@ -659,7 +660,6 @@ export default function App() {
     setView('list');
   }, []);
   const onBindingClick = useCallback((b: Binding) => pickInput(searchSpec(b.slot, b.instance, b.input)), [pickInput]);
-  const pickKey = useCallback((combo: string) => pickInput(searchSpec('kb', kbInst, combo)), [pickInput, kbInst]);
 
   const toggleDevice = (d: Device) => setDevices((s) => {
     const n = new Set(s);
@@ -818,7 +818,7 @@ export default function App() {
                 </span>
               )}
               {vf.edit && (
-                <button type="button" onClick={() => setEditMode((v) => !v)} aria-pressed={editMode} data-testid="edit-toggle" title="Edit these bindings: click any binding to rebind it"
+                <button type="button" onClick={() => setEditMode((v) => !v)} aria-pressed={editMode} data-testid="edit-toggle" title={view === 'keyboard' ? 'Edit: bind or unbind from the key inspector' : view === 'devices' ? 'Edit: bind or unbind from a callout' : view === 'conflicts' ? 'Edit: change or unbind a conflicting binding' : 'Edit these bindings: click any binding to rebind it'}
                   className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-wider transition ${editMode ? 'border-mod bg-mod/20 text-mod shadow-[0_0_18px_-6px_var(--color-mod)]' : 'border-mod/50 text-mod/90 hover:bg-mod/10'}`}>
                   <Ico name="edit" className="h-4 w-4" /> {editMode ? 'Done' : 'Edit'}
                 </button>
@@ -829,8 +829,11 @@ export default function App() {
             <div className="flex flex-wrap items-center gap-2 border-b border-mod/40 bg-mod/[0.06] px-4 py-2 text-xs" data-testid="edit-bar">
               <span className="flex items-center gap-1.5 font-display text-sm font-bold uppercase tracking-[0.2em] text-mod"><Ico name="edit" className="h-4 w-4" /> Editing</span>
               <span className="text-slate-400">
-                Click a binding to rebind it, <b className="text-slate-200">+</b> to add one, hover <Ico name="close" className="h-3 w-3" /> to unbind, or click an action name for the full editor.
-                Saved to <b className="text-mod">{profile ? profile.name : 'a new profile (created on first edit)'}</b>.
+                {view === 'list' && <>Click a binding to rebind it, <b className="text-slate-200">+</b> to add one, hover <Ico name="close" className="h-3 w-3" /> to unbind, or click an action name for the full editor.</>}
+                {view === 'keyboard' && <>Click a key to inspect it. Rebind or unbind from the inspector, or search an action to bind to that key.</>}
+                {view === 'devices' && <>Click a callout, then rebind, unbind or search an action to bind to that control.</>}
+                {view === 'conflicts' && <>Edit or unbind a conflicting binding from its card. The input chip still opens these actions in the List.</>}
+                {' '}Saved to <b className="text-mod">{profile ? profile.name : 'a new profile (created on first edit)'}</b>.
               </span>
               <button type="button" onClick={() => undoLast()} disabled={!undoCount} title="Undo (Ctrl+Z)" data-testid="undo"
                 className="ml-auto flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60 disabled:opacity-40"><Ico name="undo" /> Undo{undoCount ? ` (${undoCount})` : ''}</button>
@@ -875,13 +878,15 @@ export default function App() {
             <ActionList rows={visible} grouped={!filtered.hasQuery} devices={devices} conflictsOf={conflictsOf} onBindingClick={onBindingClick}
               editMode={editMode} onCapture={onCaptureCell} onRemove={onRemoveCell} onEdit={onEditRow} flash={flash?.keys} />
           )}
-          {view === 'keyboard' && <KeyboardView rows={visible} conflictRows={conflicts.byRow} onPick={pickKey} kb={kbInst} mo={moInst}
+          {view === 'keyboard' && <KeyboardView rows={visible} conflictRows={conflicts.byRow} kb={kbInst} mo={moInst}
+            editMode={editMode} onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onCapture={onCaptureCell} onShowInList={pickInput}
             flash={flash && (flash.hit.slot === 'kb' || flash.hit.slot === 'mo') ? { combo: flash.hit.inputs[0], at: flash.at } : null} />}
           {view === 'devices' && <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads}
             slots={deviceSlots} slotMap={slotMap} selKey={devSel} onSelect={selectDevice} compact={!wide} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => setDevicesOpen('slots')} highlight={highlightOn} scroll={highlightOn && scrollOn}
             query={dq} chip={chip} onOpenAxis={(gs) => setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance })} axisLimit={AXIS_LIMIT} onRefresh={() => refreshRef.current?.click()}
-            onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })} />}
-          {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} hasProfile={!!profile} flash={flash?.keys} />}
+            editMode={editMode} onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })} />}
+          {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} hasProfile={!!profile} flash={flash?.keys}
+            editMode={editMode} onEdit={onEditRow} onRemove={onRemoveCell} />}
         </main>
         </div>
       </div>

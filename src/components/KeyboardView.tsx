@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { isModifier, keyLabel, normalizeCombo, tokens } from '../lib/inputs';
-import type { Binding, Row } from '../lib/types';
+import { isModifier, keyLabel, normalizeCombo, searchSpec, tokens } from '../lib/inputs';
+import type { Binding, Device, Row } from '../lib/types';
+import { BindingChip } from './BindingChip';
 
 type K = { k: string; w?: number; label?: string } | { gap: number };
 const g = (n: number): K => ({ gap: n });
@@ -22,7 +23,6 @@ const NAV: K[][] = [
   [g(1), { k: 'up' }, g(1)],
   keys('left down right'),
 ];
-// numpad as grid placements [key, col, row, colSpan, rowSpan]
 const NUMPAD: [string, number, number, number, number][] = [
   ['numlock', 1, 3, 1, 1], ['np_divide', 2, 3, 1, 1], ['np_multiply', 3, 3, 1, 1], ['np_subtract', 4, 3, 1, 1],
   ['np_7', 1, 4, 1, 1], ['np_8', 2, 4, 1, 1], ['np_9', 3, 4, 1, 1], ['np_add', 4, 4, 1, 2],
@@ -37,20 +37,24 @@ interface Hit { row: Row; b: Binding }
 interface Props {
   rows: Row[];
   conflictRows: Map<string, Set<string>>;
-  onPick: (combo: string) => void;
-  /** a keyboard/mouse combo just pressed (live highlight) */
   flash?: { combo: string; at: number } | null;
-  /** which keyboard / mouse slot to show (kb1 / mo1 unless several exist) */
   kb?: number;
   mo?: number;
+  /** Edit toggle: off = inspect only (click a key stays on this view); on = rebind / unbind / bind an action */
+  editMode?: boolean;
+  onEdit?: (row: Row) => void;
+  onRemove?: (row: Row, b: Binding) => void;
+  onBind?: (row: Row, slot: 'kb' | 'mo', instance: number, input: string) => void;
+  onCapture?: (row: Row, device: Device, replace?: Binding) => void;
+  onShowInList?: (spec: string) => void;
 }
 
-const U = 40; // px per key unit
+const U = 40;
 
-export function KeyboardView({ rows, conflictRows, onPick, flash, kb = 1, mo = 1 }: Props) {
+export function KeyboardView({ rows, conflictRows, flash, kb = 1, mo = 1, editMode, onEdit, onRemove, onBind, onCapture, onShowInList }: Props) {
   const [mod, setMod] = useState('');
   const [focus, setFocus] = useState<string | null>(null);
-  // a pressed combo shows up in the inspector, with its modifier held
+  const [q, setQ] = useState('');
   useEffect(() => {
     if (!flash) return;
     const t = tokens(normalizeCombo(flash.combo));
@@ -61,7 +65,6 @@ export function KeyboardView({ rows, conflictRows, onPick, flash, kb = 1, mo = 1
   }, [flash]);
   const flashKeys = new Set(flash ? tokens(flash.combo) : []);
 
-  // combo -> hits (keyboard & mouse slot bindings)
   const index = useMemo(() => {
     const m = new Map<string, Hit[]>();
     for (const row of rows) {
@@ -94,6 +97,15 @@ export function KeyboardView({ rows, conflictRows, onPick, flash, kb = 1, mo = 1
 
   const focusCombo = focus ? comboFor(focus) : null;
   const focusHits = focus ? hitsFor(focus) : [];
+  const focusSlot: 'kb' | 'mo' = focus && MOUSE.includes(focus) ? 'mo' : 'kb';
+  const focusInst = focusSlot === 'mo' ? mo : kb;
+  const focusDevice: Device = focusSlot === 'mo' ? 'mouse' : 'keyboard';
+
+  const results = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!editMode || !focusCombo || t.length < 2) return [];
+    return rows.filter((r) => !r.hidden && `${r.label} ${r.action} ${r.mapLabel}`.toLowerCase().includes(t)).slice(0, 8);
+  }, [q, rows, editMode, focusCombo]);
 
   const renderKey = (k: string, w = 1, label?: string, style?: React.CSSProperties) => {
     const hits = hitsFor(k);
@@ -108,7 +120,11 @@ export function KeyboardView({ rows, conflictRows, onPick, flash, kb = 1, mo = 1
         key={k}
         type="button"
         onMouseEnter={() => setFocus(k)}
-        onClick={() => (isModifier(k) ? setMod(mod === k ? '' : k) : onPick(comboFor(k)))}
+        onClick={() => {
+          // stay on the Keyboard view: modifiers hold a chord, every other key just selects itself in the inspector
+          if (isModifier(k)) setMod(mod === k ? '' : k);
+          else setFocus(k);
+        }}
         title={`${keyLabel(k, 'kb')}${mod && k !== mod ? ` with ${keyLabel(mod, 'kb')}` : ''}: ${n} action${n === 1 ? '' : 's'}`}
         className={`relative flex flex-col items-start justify-between overflow-hidden rounded-md border px-1.5 py-1 text-left transition
           ${heat || 'border-edge/70 bg-panel2/70 text-slate-500'}
@@ -135,7 +151,7 @@ export function KeyboardView({ rows, conflictRows, onPick, flash, kb = 1, mo = 1
   );
 
   return (
-    <div className="flex flex-col gap-4 xl:flex-row">
+    <div className="flex flex-col gap-4 xl:flex-row" data-testid="keyboard-view">
       <div className="hud-panel hud-corners min-w-0 flex-1 overflow-x-auto rounded-lg p-4 scrollbar-thin">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {kb > 1 && <span className="rounded border border-hud/40 px-1.5 font-mono text-[11px] text-hud2" data-testid="kb-instance">kb{kb}</span>}
@@ -146,7 +162,7 @@ export function KeyboardView({ rows, conflictRows, onPick, flash, kb = 1, mo = 1
               {m ? keyLabel(m, 'kb') : 'None'} <span className="text-slate-500">{modCounts[m] ?? 0}</span>
             </button>
           ))}
-          <span className="ml-auto font-mono text-[10px] text-slate-500">hover a key · click to filter · click a modifier key to hold it</span>
+          <span className="ml-auto font-mono text-[10px] text-slate-500">hover or click a key · click a modifier to hold it</span>
         </div>
         <div className="flex w-max gap-4">
           <div className="flex flex-col gap-1">{MAIN.map((r, i) => <div key={i} className={i === 0 ? 'mb-2' : ''}>{renderRow(r, i)}</div>)}</div>
@@ -168,29 +184,65 @@ export function KeyboardView({ rows, conflictRows, onPick, flash, kb = 1, mo = 1
           <span className="flex items-center gap-1"><span className="h-1 w-1 rounded-full bg-hud/50" /> also used with another modifier</span>
         </div>
       </div>
-      <aside className="hud-panel w-full shrink-0 rounded-lg p-4 xl:w-80">
+      <aside className="hud-panel w-full shrink-0 rounded-lg p-4 xl:w-80" data-testid="keyboard-inspector">
         <div className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-hud/70">Input inspector</div>
         {focusCombo ? (
           <>
             <div className="mt-2 flex flex-wrap items-center gap-1">
               {tokens(normalizeCombo(focusCombo)).map((t, i) => <span key={i} className="flex items-center gap-1">{i > 0 && <span className="text-slate-500">+</span>}<kbd className="keycap !text-sm">{keyLabel(t, 'kb')}</kbd></span>)}
               <span className="ml-2 font-mono text-xs text-slate-400">{focusHits.length} action{focusHits.length === 1 ? '' : 's'}</span>
+              {onShowInList && (
+                <button type="button" onClick={() => onShowInList(searchSpec(focusSlot, focusInst, focusCombo))}
+                  className="ml-auto text-[10px] text-hud hover:underline" title="Filter the List to this exact input">show in list</button>
+              )}
             </div>
-            <ul className="mt-3 max-h-[420px] space-y-1 overflow-y-auto pr-1 scrollbar-thin">
+            <ul className="mt-3 max-h-[320px] space-y-1.5 overflow-y-auto pr-1 scrollbar-thin">
               {focusHits.map((h, i) => {
                 const c = conflictRows.get(h.row.id)?.has(h.b.phys);
                 return (
                   <li key={i} className={`rounded border px-2 py-1.5 ${c ? 'border-alert/60 bg-alert/5' : h.b.custom ? 'border-mod/40 bg-mod/5' : 'border-edge/60 bg-black/20'}`}>
-                    <div className="text-sm text-slate-100">{h.row.label}</div>
-                    <div className="font-mono text-[10px] text-slate-500">{h.row.mapLabel}{h.b.mode ? ` · ${h.b.mode}` : ''}{c ? ' · conflict' : ''}</div>
+                    <div className="flex items-start gap-1.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm text-slate-100">{h.row.label}</div>
+                        <div className="font-mono text-[10px] text-slate-500">{h.row.mapLabel}{h.b.mode ? ` · ${h.b.mode}` : ''}{c ? ' · conflict' : ''}</div>
+                      </div>
+                      {editMode && onEdit && (
+                        <button type="button" onClick={() => onEdit(h.row)} className="rounded border border-edge px-1.5 text-[10px] text-slate-300 hover:border-hud/60">Edit</button>
+                      )}
+                    </div>
+                    {editMode && onCapture && onRemove ? (
+                      <div className="mt-1.5">
+                        <BindingChip b={h.b} conflict={c ? ['conflict'] : undefined}
+                          onClick={(b) => onCapture(h.row, focusDevice, b)} onRemove={(b) => onRemove(h.row, b)} />
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}
               {!focusHits.length && <li className="text-sm text-slate-500">Free — nothing bound here in the current view.</li>}
             </ul>
+            {editMode && onBind && (
+              <div className="mt-3 border-t border-edge/50 pt-2" data-testid="keyboard-bind">
+                <div className="text-[11px] text-slate-400">Bind an action to <code className="text-hud/90">{focusCombo}</code></div>
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="search actions…" aria-label="Search actions to bind"
+                  className="mt-1 w-full rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600" />
+                {results.length > 0 && (
+                  <ul className="mt-1 space-y-0.5" data-testid="keyboard-bind-results">
+                    {results.map((r) => (
+                      <li key={r.id}>
+                        <button type="button" onClick={() => { onBind(r, focusSlot, focusInst, focusCombo); setQ(''); }}
+                          className="w-full truncate rounded px-1.5 py-1 text-left hover:bg-hud/10">
+                          <span className="text-slate-200">{r.label}</span> <span className="text-[10px] text-slate-500">{r.mapLabel}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </>
         ) : (
-          <p className="mt-2 text-sm text-slate-500">Hover a key to see what it does. The keyboard reflects your current search, category and filters.</p>
+          <p className="mt-2 text-sm text-slate-500">Hover or click a key to see what it does{editMode ? ', then bind or unbind from here' : ''}. The keyboard reflects your current search, category and filters.</p>
         )}
       </aside>
     </div>

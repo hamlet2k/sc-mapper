@@ -1,5 +1,7 @@
 import { bindKey, comboLabel, searchSpec, prettyMode } from '../lib/inputs';
 import type { ConflictGroup } from '../lib/conflicts';
+import type { Binding, Row } from '../lib/types';
+import { Ico } from './icons';
 
 interface Props {
   groups: ConflictGroup[]; onPick: (combo: string) => void;
@@ -7,9 +9,13 @@ interface Props {
   includeDefault: boolean; hasProfile: boolean;
   /** inputs just pressed (bindKey form, Settings → Highlight on press): the groups on them flash */
   flash?: Set<string> | null;
+  /** Edit toggle: off = view-only (input chip still opens the List); on = Edit / Unbind on each entry */
+  editMode?: boolean;
+  onEdit?: (row: Row) => void;
+  onRemove?: (row: Row, b: Binding) => void;
 }
 
-export function ConflictsView({ groups, onPick, includeDefault, hasProfile, flash }: Props) {
+export function ConflictsView({ groups, onPick, includeDefault, hasProfile, flash, editMode, onEdit, onRemove }: Props) {
   if (!groups.length) {
     return (
       <div className="hud-panel hud-corners rounded-lg p-10 text-center">
@@ -49,10 +55,17 @@ export function ConflictsView({ groups, onPick, includeDefault, hasProfile, flas
                 {g.entries.map((e, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm">
                     <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${e.binding.custom ? 'bg-mod' : 'bg-hud/60'}`} />
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1">
                       <span className="block text-slate-100">{e.row.label}{e.binding.custom && <span className="ml-2 font-mono text-[9px] uppercase text-mod" title="A custom binding: you changed or added it in this profile">custom</span>}</span>
                       <span className="block font-mono text-[10px] text-slate-500">{e.row.mapLabel}{e.binding.mode ? ` · ${prettyMode(e.binding.mode)}` : ''}</span>
                     </span>
+                    {editMode && onEdit && onRemove && (
+                      <span className="flex shrink-0 gap-1">
+                        <button type="button" onClick={() => onEdit(e.row)} className="rounded border border-edge px-1.5 text-[10px] text-slate-300 hover:border-hud/60">Edit</button>
+                        <button type="button" onClick={() => onRemove(e.row, e.binding)} title="Unbind" aria-label={`Unbind ${e.row.label}`}
+                          className="rounded border border-edge px-1.5 text-[10px] text-slate-400 hover:border-alert hover:text-alert"><Ico name="close" /></button>
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

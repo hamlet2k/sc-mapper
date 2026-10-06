@@ -339,7 +339,7 @@ Judgment calls made while building round 1, where the decisions above didn't say
   Fixes:
   - One layout pass with shared constants (`CALLOUT_EDGE_PX` = 2, `CALLOUT_GAP_PX` = 3) runs in both modes.
   - The editor draws each picture at the width the Devices view last showed it, keyed by view id + aspect ratio, which a customized copy keeps.
-  - Result: the e2e measures every URSA MINOR Combat label box in both modes and finds a max difference < 0.75 px. Screenshot `114-ursa-view-vs-editor.png`.
+  - Result: the e2e measures every URSA MINOR Combat label box on the shown page in both modes and finds a max difference < 0.75 px. Lever detents now live on the grips view (Federico layout update). Screenshot `114-ursa-view-vs-editor.png`.
   - Trade-off: in the editor, a box dragged onto another is pushed aside, exactly as the view will show it.
 
 ## Round 6
@@ -577,3 +577,45 @@ Judgment calls made while building round 1, where the decisions above didn't say
   - the narrow dropdown;
   - the whole slot bar sticking.
 - Screenshots: `119-devices-sidebar-picker.png` (js1 selected, kb / mo dimmed), `119-keyboard-sidebar-picker.png` (kb1 + mo1 selected, kb2 selectable, js / gp dimmed), `119-narrow-fallback.png`. `112-keyboard-kb-mo-picker.png` is retaken with kb2 picked in the sidebar.
+
+## New built-in templates (Federico's exports, Oct 6 2026)
+
+### Added
+
+| Id | Name | USB | Callouts | Photos |
+|---|---|---|---|---|
+| `builtin-winctrl-orion-pedals` | WinCtrl Orion Combat Rudder Pedals | 4098:BEF0 | 6 (toe brakes, rudder, button rows) | `winctrl-orion-pedals-main.webp` |
+| `builtin-winctrl-carrierace-mfd-l` | WinCtrl CarrierAce MFD L | 4098:BEE1 | none (photo only) | `winctrl-carrierace-mfd-l.webp` |
+| `builtin-winctrl-carrierace-pto2` | WinCtrl CarrierAce PTO 2 | 4098:BF05 | none | `winctrl-carrierace-pto2.webp` |
+| `builtin-winctrl-carrierace-ufc-hud` | WinCtrl CarrierAce UFC + HUD | 4098:BEDE | none | `winctrl-carrierace-ufc.webp` + `winctrl-carrierace-hud.webp` |
+| `builtin-azeron-keypad` | Azeron Keypad (XInput) | 16D0:12F7 | none | `azeron-keypad-main.webp` |
+
+- Photos decoded from the exported dataURLs as-is (already cut out with transparency / glow). Sizes recorded in `devicePhotoSizes.ts`.
+- Distinct from the existing Orion throttle (`builtin-winctrl-orion`, F-15EX grips) and CarrierAce stick (`builtin-winctrl-carrierace`, JGRIP-F18 name match). Pedals / MFD / PTO / UFC match by USB id (and name), so they never steal the stick or throttle.
+- **Photo-only templates** (empty callouts) are intentional: the picture still shows on the Devices view so users can Customize a copy and place their own callouts. Documented in each template's `notes` and in `photoTpl()` in `deviceTemplates.ts`.
+
+### URSA MINOR Combat layout update
+
+Federico's export of `builtin-winctrl-ursa-combat` (32 callouts):
+
+- **Photos kept as-is.** His export pointed both the base and grip views at `winctrl-ursa-combat-front.webp` (the same as live). No photo swap.
+- **Callout ids / inputs / labels / groups unchanged.**
+- **Anchor moves applied** (converted from his view-canvas fractions back to photo fractions):
+  - Lever detents (`det`) moved from the base view onto the grips view.
+  - Rz thumbwheel (`rzk` / `rzkb`) moved from the grips (rear) view onto the grips (front) / back photo — that is where the wheel sits.
+  - Left / right levers and the side thumbwheel nudged on the grips view.
+  - Small tweaks to X/Y wheel / minib / zwb on base and back.
+
+### Edit toggle on every view (follow-up)
+
+Federico: clicking a Keyboard key must not jump to the List; key bindings must be editable from the Keyboard inspector; and the List's Edit toggle should exist on Keyboard, Devices and Conflicts too.
+
+- **Edit is on every view** (`VIEW_FILTERS.*.edit = true`). Off = view-only (inspect). On = bind / unbind / open the action editor. The same `editMode` flag is shared across views, so turning Edit on in the List and switching to Keyboard keeps it on.
+- **Keyboard view:** clicking a key (or hovering it) only selects it in the Input inspector — it no longer filters the List or changes the view. Modifier keys still toggle the chord. With Edit on, the inspector shows each binding with Edit / rebind (capture) / Unbind, plus a search box to bind an action to that key. "Show in list" remains an explicit link.
+- **Devices view:** callouts still open the input panel for inspection. Edit / Unbind / "Bind an action" only appear when Edit is on.
+- **Conflicts view:** the input chip still opens those actions in the List (review). With Edit on, each entry gets Edit / Unbind.
+- The edit bar's help text is view-specific.
+
+### Firefox download CTA on Chromium warnings
+
+Every Chrome/Chromium limitation banner (4-controller cap, 32-button notice, input-tester button/axis notes) shows a Firefox logo that links to `https://www.mozilla.org/firefox/download/` (`target=_blank`, `rel=noopener noreferrer`). The existing "Copy link for Firefox" button on the button-limit notice stays; the logo is the clear primary CTA (`FirefoxCta` in `ChromiumBanner.tsx`).

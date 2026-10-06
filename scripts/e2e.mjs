@@ -82,14 +82,30 @@ log('joystick-only rows:', await rows.count());
 await page.locator('[data-device-filter=joystick]').dblclick();
 await page.locator('[data-view-tab=keyboard]').click();
 await page.waitForTimeout(300);
+check(await page.getByTestId('edit-toggle').isVisible(), 'Keyboard view has the Edit toggle');
 await page.locator('button[title^="V:"]').first().hover();
 await page.waitForTimeout(200);
 await page.screenshot({ path: shots + '05-keyboard-view.png' });
+// clicking a key stays on the Keyboard view and only selects it in the inspector (does not jump to the List)
+const vKey = page.locator('button[title^="V:"]').first();
+await vKey.click();
+await page.waitForTimeout(250);
+check((await page.locator('[data-view-tab][aria-current=page]').getAttribute('data-view-tab')) === 'keyboard'
+  && /V/.test(await page.getByTestId('keyboard-inspector').innerText()),
+  'clicking a keyboard key stays on Keyboard and selects it in the inspector');
+await page.getByTestId('edit-toggle').click();
+await page.waitForTimeout(200);
+check(await page.getByTestId('edit-bar').isVisible() && await page.getByTestId('keyboard-bind').isVisible(), 'Edit on Keyboard: edit bar + bind-an-action search in the inspector');
+await page.getByTestId('edit-toggle').click();
+await page.waitForTimeout(150);
 await page.locator('[data-view-tab=conflicts]').click();
+
 await page.waitForTimeout(300);
 log('conflict cards:', await page.locator('#main .hud-panel.border-l-2').count());
+check(await page.getByTestId('edit-toggle').isVisible(), 'Conflicts view has the Edit toggle');
 await page.screenshot({ path: shots + '06-conflicts.png' });
 await page.locator('[data-view-tab=list]').click();
+
 
 // ===================== exact-input search from a binding chip =====================
 console.log('\nexact input search');
@@ -125,6 +141,11 @@ await page.waitForTimeout(500);
 check(await page.getByTestId('tester-device').count() === 3, 'all three controllers appear after one button press (no gamepadconnected event)');
 check(await panel.getByTestId('chromium-banner').isVisible(), 'Chromium banner in the controllers modal (headless Chrome)');
 check(/at most 4 controllers/i.test(await panel.getByTestId('chromium-banner').innerText()) && /32 buttons \/ 16 axes/.test(await panel.getByTestId('chromium-banner').innerText()), 'banner explains the 4-device / 32-button / 16-axis limits and recommends Firefox');
+{
+  const ff = panel.getByTestId('chromium-banner').getByTestId('firefox-download');
+  check(await ff.isVisible() && (await ff.getAttribute('href')) === 'https://www.mozilla.org/firefox/download/' && (await ff.getAttribute('target')) === '_blank' && /noopener/.test(await ff.getAttribute('rel') ?? ''),
+    'Chromium banner: Firefox logo links to the download page (new tab, noopener)');
+}
 await page.screenshot({ path: shots + '19-chromium-banner.png' });
 const rCard = page.getByTestId('tester-device').filter({ hasText: 'EVO R' });
 await page.evaluate(() => window.__btn(1, 11, true));
@@ -658,6 +679,7 @@ const dv = page.getByTestId('device-view');
 let gladIds = []; // callout ids of the VKB Gladiator template (for the test-only photo layout below)
 await page.waitForTimeout(600);
 check(await dv.isVisible(), 'devices view opens');
+check(await page.getByTestId('edit-toggle').isVisible(), 'Devices view has the Edit toggle');
 const slotChip = async (id) => { await page.getByTestId('sidebar-slots').locator(`[data-slot-row="${id}"]`).click(); await page.waitForTimeout(200); };
 const dopts = (await page.getByTestId('sidebar-slots').locator('[data-selectable="1"]').allInnerTexts()).map((x) => x.replace(/\s+/g, ' ').trim());
 const dimmed = await page.getByTestId('sidebar-slots').locator('[data-selectable="0"]').evaluateAll((ls) => ls.map((l) => l.dataset.slotRow + ':' + getComputedStyle(l).opacity));
@@ -721,6 +743,8 @@ await page.waitForTimeout(300);
   check(/VKB Gladiator/.test(st) && /name “Gladiator”/.test(st) && /^data:image\/svg\+xml|\/device-photos\/vkb-gladiator-scg-[a-z]+\.webp$/.test(src ?? ''), `Gladiator EVO R auto-links to the VKB Gladiator template, drawing / photos lazy-loaded (${st.split('\n')[0]})`);
   check(await dv.getByTestId('template-unassigned').isVisible() && /^A2 red button\s+no number yet/.test(await dv.locator('[data-callout="a2"]').innerText()), 'unassigned callouts flagged (“no number yet”) with an Assign numbers prompt');
   check(await dv.getByTestId('chromium-button-notice').isVisible() && /Firefox/.test(await dv.getByTestId('chromium-button-notice').innerText()), 'a 32-button device in Chrome shows the prominent Chromium button-limit notice with the Firefox advice');
+  check(await dv.getByTestId('chromium-button-notice').getByTestId('firefox-download').isVisible() && await dv.getByRole('button', { name: /Copy link for Firefox/ }).isVisible(),
+    'button-limit notice: Firefox logo download link + Copy link for Firefox button');
   gladIds = await dv.locator('[data-callout]').evaluateAll((els) => els.map((e) => e.getAttribute('data-callout')));
   await dv.getByTestId('template-select').selectOption('builtin-stick');
   await page.waitForTimeout(300);
@@ -784,6 +808,8 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
 await b1.click();
 const ip = dv.getByTestId('input-panel');
 check(await ip.isVisible() && (await ip.innerText()).includes('js1_button1'), 'clicking a callout opens the binding panel for js1_button1');
+// Edit must be on for bind / unbind / Edit in the panel (view-only when off)
+if (!(await page.getByTestId('edit-bar').isVisible().catch(() => false))) { await page.getByTestId('edit-toggle').click(); await page.waitForTimeout(200); }
 await ip.getByRole('button', { name: 'Edit' }).first().click();
 check(await page.getByTestId('action-editor').isVisible(), 'Edit opens the action editor');
 await page.getByTestId('action-editor').getByRole('button', { name: 'Close' }).first().click();
@@ -1151,8 +1177,9 @@ console.log('\nslot order & axis settings limit (Firefox, 10 joysticks)');
   const fdv = fp.getByTestId('device-view');
   await fdv.getByTestId('template-select').selectOption('builtin-stick');
   await fp.waitForTimeout(300);
-  await fdv.locator('[data-callout="b6"]').click();
+    await fdv.locator('[data-callout="b6"]').click();
   const fip = fdv.getByTestId('input-panel');
+  if (!(await fp.getByTestId('edit-bar').isVisible().catch(() => false))) { await fp.getByTestId('edit-toggle').click(); await fp.waitForTimeout(200); }
   await fip.getByLabel('Search actions to bind').fill('landing system');
   await fip.getByTestId('bind-results').locator('button').first().click();
   await fp.waitForTimeout(300);
@@ -1449,8 +1476,19 @@ console.log('\nrefresh game state (drop a reshuffled export)');
     return { w: vr.width, h: vr.height, view: v.dataset.view, boxes: Object.fromEntries([...v.querySelectorAll('[data-callout]')].map((c) => { const r = c.getBoundingClientRect(); return [c.dataset.callout, [r.left - vr.left, r.top - vr.top, r.width, r.height]]; })) };
   }, sel);
   const inView = await boxesIn('[data-testid=device-view]');
-  const det = inView.boxes.det;
-  check(det && det[1] >= 1, `Lever detents box fully inside the picture in the Devices view (top ${det?.[1].toFixed(1)}px)`);
+  // base-view callout (Keys): still fully inside the picture. Lever detents moved to the grips view in Federico's layout update.
+  const keys = inView.boxes.keys;
+  check(keys && keys[1] >= 1, `Keys box fully inside the picture in the Devices view (top ${keys?.[1].toFixed(1)}px)`);
+  const gripBoxes = await rp.evaluate(() => {
+    const v = [...document.querySelectorAll('[data-testid=device-view] [data-testid=device-canvas-view]')].find((el) => el.dataset.view === 'grip');
+    if (!v) return null;
+    const vr = v.getBoundingClientRect();
+    const d = v.querySelector('[data-callout=det]');
+    if (!d) return null;
+    const r = d.getBoundingClientRect();
+    return [r.left - vr.left, r.top - vr.top, r.width, r.height];
+  });
+  check(gripBoxes && gripBoxes[1] >= 1, `Lever detents now sit on the grips view (top ${gripBoxes?.[1]?.toFixed(1)}px)`);
   await rp.locator('[data-testid=device-view] [data-testid=device-canvas-view]').first().screenshot({ path: '/tmp/ursa-view.png' });
   await rp.getByTestId('template-customize').click();
   await rp.waitForTimeout(1500);
@@ -1458,7 +1496,7 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   const diffs = Object.entries(inView.boxes).map(([id, b]) => { const e = inEd.boxes[id]; return e ? Math.max(...b.map((v, k) => Math.abs(v - e[k]))) : 99; });
   check(inEd.view === inView.view && Math.abs(inEd.w - inView.w) < 0.5 && Math.abs(inEd.h - inView.h) < 0.5 && Math.max(...diffs) < 0.75,
     `editor draws the "${inView.view}" view at the same size (${Math.round(inEd.w)}×${Math.round(inEd.h)} vs ${Math.round(inView.w)}×${Math.round(inView.h)}) with every label box in the same place (max Δ ${Math.max(...diffs).toFixed(2)}px over ${diffs.length})`);
-  check(inEd.boxes.det && inEd.boxes.det[1] >= 1, `Lever detents box not cut off in the editor (top ${inEd.boxes.det?.[1].toFixed(1)}px)`);
+  check(inEd.boxes.keys && inEd.boxes.keys[1] >= 1, `Keys box not cut off in the editor (top ${inEd.boxes.keys?.[1].toFixed(1)}px)`);
   await rp.locator('[data-testid=template-editor] [data-testid=device-canvas-view]').first().screenshot({ path: '/tmp/ursa-editor.png' });
   const sbs = await rc.newPage();
   const b64 = (f) => readFileSync(f).toString('base64');
