@@ -1771,7 +1771,7 @@ console.log('\nround 6: template pages, picture preparation');
   await p6.waitForTimeout(300);
   const pv2 = ed.getByTestId('device-canvas-view');
   const img2 = await pv2.evaluate((el) => ({ src: el.querySelector('img')?.getAttribute('src')?.slice(0, 15), ar: el.style.aspectRatio, photo: el.getAttribute('data-photo') }));
-  check((await prep.count()) === 0 && img2.src === 'data:image/webp' && Math.abs(img2.ar.split('/').map(Number).reduce((a, b) => a / b) - Math.round(334 + 0.68 * 674) / 674) < 0.01 && img2.photo === '1', `"Use formatted" puts the picture on the page (photo, canvas widened for labels: ${img2.ar})`);
+  check((await prep.count()) === 0 && img2.src === 'data:image/webp' && Math.abs(img2.ar.split('/').map(Number).reduce((a, b) => a / b) - Math.round(334 + 2 * 0.3 * 674) / 674) < 0.01 && img2.photo === '1', `"Use formatted" puts the picture on the page (photo, canvas widened for labels: ${img2.ar})`);
   const pb = await pv2.boundingBox();
   await p6.mouse.click(pb.x + pb.width * 0.5, pb.y + pb.height * 0.5);
   await p6.waitForTimeout(150);
@@ -1992,7 +1992,7 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   // a prepared portrait picture on a single-page template: drawn like the built-in photos (label columns, at most 720 px tall),
   // not stretched to the column width
   const ev = await ed.getByTestId('device-canvas-view').evaluate((el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, photo: el.dataset.photo, col: el.closest('[data-testid=device-canvas]').getBoundingClientRect().width }; });
-  check(ev.photo === '1' && ev.h <= 722 && Math.abs(ev.w / ev.h - Math.round(334 + 0.68 * 674) / 674) < 0.01 && ev.w < ev.col - 100, `editor: prepared portrait picture capped like the built-in photos (${Math.round(ev.w)}×${Math.round(ev.h)} in a ${Math.round(ev.col)} px column, label columns)`);
+  check(ev.photo === '1' && ev.h <= 722 && Math.abs(ev.w / ev.h - Math.round(334 + 2 * 0.3 * 674) / 674) < 0.01 && ev.w < ev.col - 100, `editor: prepared portrait picture capped like the built-in photos (${Math.round(ev.w)}×${Math.round(ev.h)} in a ${Math.round(ev.col)} px column, label columns)`);
 
   // input picker: the template is linked to the connected Gladiator (32 buttons, POV hat on axis 9, 8 axes)
   const pv = ed.getByTestId('device-canvas-view');

@@ -923,6 +923,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     // new builtins from Federico's exports: USB + name auto-match
     assert.equal(pick('WINCTRL Orion Combat Rudder Pedals Metal (Vendor: 4098 Product: bef0)', 15), 'builtin-winctrl-orion-pedals');
     assert.equal(pick('WINCTRL CarrierAce MFD L (Vendor: 4098 Product: bee1)', 32), 'builtin-winctrl-carrierace-mfd-l');
+    assert.equal(pick('WINCTRL CarrierAce MFD (Vendor: 4098 Product: bee0)', 32), 'builtin-winctrl-carrierace-mfd-l', 'MFD USB BEE0');
+    assert.equal(pick('WINCTRL CarrierAce MFD R (Vendor: 4098 Product: bee2)', 32), 'builtin-winctrl-carrierace-mfd-l', 'MFD USB BEE2');
     assert.equal(pick('WINCTRL CarrierAce PTO 2 (Vendor: 4098 Product: bf05)', 32), 'builtin-winctrl-carrierace-pto2');
     assert.equal(pick('WINCTRL CarrierAce UFC (Vendor: 4098 Product: bede)', 32), 'builtin-winctrl-carrierace-ufc-hud');
     assert.equal(pick('Controller (Azeron Keypad - XInput) (Vendor: 16d0 Product: 12f7)', 20), 'builtin-azeron-keypad');
@@ -1493,7 +1495,7 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
   t('pages: picture set / cleared, and they survive export -> import (12 pages, labels, images); old files still import', () => {
     let t1 = pg.addPage(classic(), 'Throttle top').template;
     t1 = pg.setPageImage(t1, 'p2', { dataUrl: 'data:image/webp;base64,BBBB', w: 990, h: 1064 });
-    assert.deepEqual([t1.views![1].width, t1.views![1].height, t1.views![1].image], [Math.round(990 + 0.68 * 1064), 1064, 'data:image/webp;base64,BBBB'], 'label columns on both sides, as the built-ins');
+    assert.deepEqual([t1.views![1].width, t1.views![1].height, t1.views![1].image], [Math.round(990 + 2 * 0.3 * 1064), 1064, 'data:image/webp;base64,BBBB'], 'label columns on both sides (PHOTO_LABEL_GUTTER 0.3/side, same as built-ins)');
     assert.equal(pg.setPageImage(t1, 'p2', null).views![1].image, undefined);
     for (let i = 0; i < 10; i++) t1 = pg.addPage(t1, `Extra ${i + 1}`).template;
     t1 = { ...t1, callouts: [...t1.callouts, { id: 'z', kind: 'button', inputs: ['button9'], anchor: { x: 0.5, y: 0.5 }, box: { x: 0.5, y: 0.5 }, view: 'p12' }] };
@@ -1508,6 +1510,49 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.equal(old.image, 'data:image/png;base64,AAAA');
     assert.equal(old.callouts[0].region, 'M0 0L1 1Z');
   });
+
+  t('pages: setPageImage remaps callouts onto the new photo (no shift); export→import keeps fractions', () => {
+    const base = tp.newTemplate('js', 'Shift check');
+    let t0 = pg.ensurePages(base);
+    // place a marker at the centre of a first photo (canvas fractions for object-contain with label gutters)
+    const w0 = 526, h0 = 990;
+    t0 = pg.setPageImage(t0, t0.views![0].id, { dataUrl: 'data:image/webp;base64,AAAA', w: w0, h: h0 });
+    const v0 = t0.views![0];
+    const mid = pg.photoToCanvas({ x: 0.42, y: 0.31 }, v0.width, v0.height, w0, h0);
+    const box = pg.photoToCanvas({ x: 0.08, y: 0.31 }, v0.width, v0.height, w0, h0);
+    t0 = { ...t0, callouts: [{ id: 'a', kind: 'button', inputs: ['button1'], anchor: mid, box, view: v0.id, label: 'A' }] };
+    // replace with a wider photo (and the old 0.68-sized canvas path is gone — shared gutter): marker stays on photo 0.42 / 0.31
+    const w1 = 921, h1 = 990;
+    const t1 = pg.setPageImage(t0, v0.id, { dataUrl: 'data:image/webp;base64,BBBB', w: w1, h: h1 });
+    const v1 = t1.views![0];
+    assert.deepEqual([v1.width, v1.height], [pg.pageSizeForPhoto(w1, h1).width, h1]);
+    const onPhoto = pg.canvasToPhoto(t1.callouts[0].anchor, v1.width, v1.height, w1, h1);
+    assert.ok(Math.abs(onPhoto.x - 0.42) < 1e-6 && Math.abs(onPhoto.y - 0.31) < 1e-6, `anchor stayed on the product (got ${onPhoto.x}, ${onPhoto.y})`);
+    const boxPhoto = pg.canvasToPhoto(t1.callouts[0].box, v1.width, v1.height, w1, h1);
+    assert.ok(Math.abs(boxPhoto.x - 0.08) < 1e-6 && Math.abs(boxPhoto.y - 0.31) < 1e-6, `box stayed on the product (got ${boxPhoto.x}, ${boxPhoto.y})`);
+    // export → import round-trip preserves the canvas fractions exactly
+    const again = tp.parseTemplates(tp.exportTemplates([t1]))[0];
+    assert.equal(again.callouts[0].anchor.x, t1.callouts[0].anchor.x);
+    assert.equal(again.callouts[0].anchor.y, t1.callouts[0].anchor.y);
+    assert.equal(again.callouts[0].box.x, t1.callouts[0].box.x);
+    assert.equal(again.views![0].width, t1.views![0].width);
+  });
+  t('pages: remapping from a legacy 0.68 canvas keeps the product spot', () => {
+    const ph = 990, pw = 921;
+    const legacyW = Math.round(pw + 0.68 * ph); // old setPageImage formula
+    const view = { id: 'front', label: 'Front', width: legacyW, height: ph, image: 'data:image/webp;base64,X' };
+    const inferred = pg.inferPhotoSize(view, pw);
+    assert.ok(Math.abs(inferred.pw - pw) < 1 && inferred.ph === ph, `infer legacy photo size (got ${inferred.pw}×${inferred.ph})`);
+    // without a hint, 0.6 and 0.68 can both reverse to a valid width — setPageImage passes the new image width as the hint
+    assert.equal(pg.inferPhotoSize(view, pw).pw, pw);
+    const anchor = pg.photoToCanvas({ x: 0.55, y: 0.2 }, legacyW, ph, pw, ph);
+    const callouts = [{ id: 'b', kind: 'button' as const, inputs: ['button2'], anchor, box: anchor, view: 'front' }];
+    const next = pg.pageSizeForPhoto(pw, ph);
+    const remapped = pg.remapPageCallouts(callouts, 'front', { viewW: legacyW, viewH: ph, pw, ph }, { viewW: next.width, viewH: next.height, pw, ph });
+    const back = pg.canvasToPhoto(remapped[0].anchor, next.width, next.height, pw, ph);
+    assert.ok(Math.abs(back.x - 0.55) < 1e-6 && Math.abs(back.y - 0.2) < 1e-6, `legacy→shared gutter kept photo spot (${back.x}, ${back.y})`);
+  });
+
   const solid = (w: number, h: number, rgba: number[]) => { const p = pf.makePx(w, h); for (let i = 0; i < p.data.length; i += 4) p.data.set(rgba, i); return p; };
   t('photo format: trim transparent edges, built-in scale and 5 % margin', () => {
     const px = readPng('scripts/fixtures/photos/cutout-offcentre.png');

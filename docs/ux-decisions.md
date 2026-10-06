@@ -358,7 +358,7 @@ Judgment calls made while building round 1, where the decisions above didn't say
   - Callout spots are fractions of that picture, so on another picture they would point at random places, and a pile of misplaced callouts is worse than none.
   - The confirm names the page and the callout count ("Delete the page “Grip top” and its 1 callout? (Undo brings it back.)"). Undo (Ctrl+Z) restores the page and its callouts.
   - The last page can't be deleted.
-- **Pictures per page.** Upload or Replace applies to the shown page. The canvas gets label columns on both sides (`width = w + 0.68 h`, as before for photo templates), and *Blank page* clears it. The callout panel's selector is now called "Page".
+- **Pictures per page.** Upload or Replace applies to the shown page. The canvas gets label columns on both sides (`width = w + 2 × 0.3 h` (`PHOTO_LABEL_GUTTER`, same as built-in photoViews)), and *Blank page* clears it. The callout panel's selector is now called "Page".
 - **Devices view.** Already renders multi-view templates as one photo section per view, with the view label as caption (`data-view-caption`). Custom pages use the same path:
   - a page with a picture renders in photo mode (object-contain, the CSS glow / shadow, vignette);
   - a blank page renders as the grid canvas.
@@ -486,7 +486,7 @@ Judgment calls made while building round 1, where the decisions above didn't say
 ### Picture size in the editor and the Devices view (round 7 follow-up)
 
 - **Problem.** A newly uploaded portrait picture on a single-page template filled the full column width, e.g. 1300 × 2600 px, in both the editor and the Devices view. Labels sat on top of the product.
-- **Prepared pictures go on a page.** "Use formatted" / "Use cut-out" now always stores the picture as a page (`setPageImage`), also on a single-page template. It gets the label columns (`w + 0.68 h`) and is drawn like the built-in photos: at most `VIEW_MAX_H` = 720 px tall (the same constant the built-in photo views use), centred, filling the width only up to that. A portrait product 334×674 now shows at 846×720 instead of filling the column.
+- **Prepared pictures go on a page.** "Use formatted" / "Use cut-out" now always stores the picture as a page (`setPageImage`), also on a single-page template. It gets the label columns (`w + 2 × PHOTO_LABEL_GUTTER × h` = `w + 0.6 h`, same as built-in photoViews) and is drawn like the built-in photos: at most `VIEW_MAX_H` = 720 px tall, centred, filling the width only up to that. A portrait product 334×674 now shows at ~789×720 instead of filling the column.
 - **Classic single-picture canvases** (Keep original, old templates) keep the picture's shape. An uploaded raster picture is no longer drawn taller than 720 px (`cappedWidth` = aspect × 720, centred). Built-in drawings (SVG), their customized copies and blank canvases keep filling the width as before.
 - **Same in both places.** Both views use the one constant in `DeviceCanvas`, and the editor still reuses the width the Devices view showed. So the editor and the Devices view draw a picture at the same size with the label boxes in the same place. The e2e checks this for a custom portrait page (Δ 0 px) and for the URSA built-in (unchanged).
 - The viewport-height alternative ("fit below the sticky lines") was not used. It would differ between the editor (no sticky lines) and the Devices view, which breaks the shared coordinates.
@@ -585,7 +585,7 @@ Judgment calls made while building round 1, where the decisions above didn't say
 | Id | Name | USB | Callouts | Photos |
 |---|---|---|---|---|
 | `builtin-winctrl-orion-pedals` | WinCtrl Orion Combat Rudder Pedals | 4098:BEF0 | 6 (toe brakes, rudder, button rows) | `winctrl-orion-pedals-main.webp` |
-| `builtin-winctrl-carrierace-mfd-l` | WinCtrl CarrierAce MFD L | 4098:BEE1 | none (photo only) | `winctrl-carrierace-mfd-l.webp` |
+| `builtin-winctrl-carrierace-mfd-l` | WinCtrl CarrierAce MFD | 4098:BEE0 / BEE1 / BEE2 | none (photo only) | `winctrl-carrierace-mfd-l.webp` |
 | `builtin-winctrl-carrierace-pto2` | WinCtrl CarrierAce PTO 2 | 4098:BF05 | none | `winctrl-carrierace-pto2.webp` |
 | `builtin-winctrl-carrierace-ufc-hud` | WinCtrl CarrierAce UFC + HUD | 4098:BEDE | none | `winctrl-carrierace-ufc.webp` + `winctrl-carrierace-hud.webp` |
 | `builtin-azeron-keypad` | Azeron Keypad (XInput) | 16D0:12F7 | none | `azeron-keypad-main.webp` |
@@ -619,3 +619,8 @@ Federico: clicking a Keyboard key must not jump to the List; key bindings must b
 ### Firefox download CTA on Chromium warnings
 
 Every Chrome/Chromium limitation banner (4-controller cap, 32-button notice, input-tester button/axis notes) shows a Firefox logo that links to `https://www.mozilla.org/firefox/download/` (`target=_blank`, `rel=noopener noreferrer`). The existing "Copy link for Firefox" button on the button-limit notice stays; the logo is the clear primary CTA (`FirefoxCta` in `ChromiumBanner.tsx`).
+
+### Callout shift on Save / prepared picture (coordinate bug)
+
+- **Cause.** `setPageImage` widened the page with `w + 0.68 h` while built-in photoViews used `w + 2×0.3 h` (`PHOTO_LABEL_GUTTER`). Replacing a picture (Customize a copy → Use formatted/cut-out, or Replace) changed the canvas aspect without remapping callout fractions, so anchors/boxes slid on the product after Save / Export / reload.
+- **Fix.** One shared `PHOTO_LABEL_GUTTER` (0.3/side) for built-ins and user pages; `setPageImage` remaps each callout on that page through object-contain photo space so the marker stays on the same spot of the picture. Legacy 0.68 canvases are still inferred when remapping. Unit: round-trip of callout positions through `setPageImage` and export→import.

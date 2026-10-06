@@ -7,6 +7,7 @@ import type { DeviceArt } from './deviceArtTypes';
 import { DEVICE_ART, DEVICE_SVG } from './deviceArt';
 import { DEVICE_PHOTO_LAYOUTS, type DevicePhotoLayout } from './devicePhotoLayouts';
 import { DEVICE_PHOTO_SIZES } from './devicePhotoSizes';
+import { PHOTO_LABEL_GUTTER, pageSizeForPhoto } from './templatePages';
 
 const b = (...n: number[]) => n.map((i) => `button${i}`);
 const hat = (n: number) => ['up', 'right', 'down', 'left'].map((d) => `hat${n}_${d}`);
@@ -146,8 +147,8 @@ function photoTpl(meta: Meta & { id: string }, specs: Spec[] = []): void {
 }
 
 /* ------------------------------------------------------------------ photo templates */
-/** label gutter on each side of a photo view, as a fraction of the photo height (room for the label columns) */
-export const PHOTO_GUTTER = 0.3;
+/** @deprecated use PHOTO_LABEL_GUTTER from templatePages — kept as alias for call sites */
+export const PHOTO_GUTTER = PHOTO_LABEL_GUTTER;
 /** incomplete / broken entries of DEVICE_PHOTO_LAYOUTS (those templates keep their art); the unit tests require none */
 export const PHOTO_LAYOUT_PROBLEMS: string[] = [];
 /** test hook (e2e only): `globalThis.__SC_TEST_PHOTO_LAYOUTS = { [templateId]: DevicePhotoLayout }`, set before the app loads,
@@ -166,7 +167,8 @@ export function photoViews(layout: DevicePhotoLayout): { views: TemplateView[]; 
     if (!size || !/^[a-z0-9][a-z0-9-]{0,80}$/.test(v.photo)) { problems.push(`unknown photo “${v.photo}”`); continue; }
     ids.add(v.id);
     const [pw, ph] = size;
-    views.push({ id: v.id, label: v.label, image: `/device-photos/${v.photo}.webp`, width: Math.round(pw + 2 * PHOTO_GUTTER * ph), height: ph, ...(v.swap ? { swap: v.swap } : {}) });
+    const canvas = pageSizeForPhoto(pw, ph);
+    views.push({ id: v.id, label: v.label, image: `/device-photos/${v.photo}.webp`, width: canvas.width, height: canvas.height, ...(v.swap ? { swap: v.swap } : {}) });
   }
   return { views, problems };
 }
@@ -613,8 +615,8 @@ photoTpl({
 // Photo only: picture shows so users can Customize a copy and place their own callouts.
 const PHOTO_ONLY_NOTE = 'Picture only for now — Customize a copy to place callouts on the controls.';
 photoTpl({
-  id: 'builtin-winctrl-carrierace-mfd-l', name: 'WinCtrl CarrierAce MFD L', brand: 'WinCtrl', notes: PHOTO_ONLY_NOTE,
-  match: [{ vendor: '4098', product: 'BEE1' }, { name: 'CarrierAce MFD L' }, { name: 'CarrierAce MFD' }],
+  id: 'builtin-winctrl-carrierace-mfd-l', name: 'WinCtrl CarrierAce MFD', brand: 'WinCtrl', notes: PHOTO_ONLY_NOTE,
+  match: [{ vendor: '4098', product: 'BEE0' }, { vendor: '4098', product: 'BEE1' }, { vendor: '4098', product: 'BEE2' }, { name: 'CarrierAce MFD' }],
 });
 photoTpl({
   id: 'builtin-winctrl-carrierace-pto2', name: 'WinCtrl CarrierAce PTO 2', brand: 'WinCtrl', notes: PHOTO_ONLY_NOTE,
