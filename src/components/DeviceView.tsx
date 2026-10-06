@@ -33,6 +33,11 @@ interface Props {
   /** the profile's game slots (kb, mo, js, gp): what the export will contain */
   slots: SlotOption[];
   slotMap: SlotMap;
+  /** the selected slot (`slot:js1`, from the profile card's Game slots list, App state) and how to change it */
+  selKey: string;
+  onSelect: (key: string) => void;
+  /** narrow layout (no sidebar): a compact slot dropdown in the hardware / template line */
+  compact?: boolean;
   /** remember a template for a slot (null = automatic) */
   onPickTemplate: (slot: GameSlot, templateId: string | null) => void;
   onOpenControllers: () => void;
@@ -56,7 +61,13 @@ interface Props {
   notify: (kind: 'ok' | 'err', text: string) => void;
 }
 
-const SEL_KEY = 'sc-mapper:device-view';
+export const DEVICE_SEL_KEY = 'sc-mapper:device-view';
+export const deviceSlotKey = (gs: GameSlot) => `slot:${slotId(gs)}`;
+/** the slot the Devices view shows: the selected one, else the first connected joystick, else the first js / gp slot */
+export function shownDeviceSlot(slots: SlotOption[], selKey: string): SlotOption | undefined {
+  const c = slots.filter(({ gs }) => isController(gs));
+  return c.find(({ gs }) => deviceSlotKey(gs) === selKey) ?? c.find((o) => o.pad && o.gs.slot === 'js') ?? c[0];
+}
 const download = (name: string, href: string) => { const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'device';
 const ICON_BTN = 'flex h-7 w-7 items-center justify-center text-slate-300 transition hover:bg-hud/10 hover:text-hud2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-hud';
@@ -73,40 +84,36 @@ const NO_ACTIVE: Live = { active: new Set<string>(), values: {} };
 
 /** visual view of one game slot: a controller's picture with every control's bindings (live highlight, click to edit), or the keyboard */
 export function DeviceView(props: Props) {
-  const { slots, chip, onOpenControllers } = props;
+  const { slots, chip, onOpenControllers, selKey, onSelect, compact } = props;
   const T = useTemplates();
-  // the profile's joystick / gamepad slots (what goes into the export); keyboard and mouse live in the Keyboard view
+  // the profile's joystick / gamepad slots (what goes into the export); keyboard and mouse live in the Keyboard view.
+  // The slot is picked in the profile card's Game slots list (round 9); narrow layouts get a dropdown in the line instead.
   const options = useMemo(() => slots.filter(({ gs }) => isController(gs)).map(({ gs, pad }): DevOption => {
     const name = pad ? padLabel(pad) : slotDeviceName(gs);
-    return { key: `slot:${slotId(gs)}`, slot: gs.slot, instance: gs.instance, gs, pad, name, label: `${slotId(gs).toUpperCase()} · ${name ?? 'no device assigned'}` };
+    return { key: deviceSlotKey(gs), slot: gs.slot, instance: gs.instance, gs, pad, name, label: `${slotId(gs).toUpperCase()} · ${name ?? 'no device assigned'}` };
   }), [slots]);
-  const [selKey, setSelKey] = useState<string>(() => localStorage.getItem(SEL_KEY) ?? '');
-  const pick = (k: string) => { setSelKey(k); localStorage.setItem(SEL_KEY, k); };
   // find by pressing on this view: the pressed device's slot comes up (and the control gets selected below)
   useEffect(() => {
     if (!chip) return;
     const o = options.find((x) => x.slot === chip.slot && x.instance === chip.instance);
-    if (o) { setSelKey(o.key); localStorage.setItem(SEL_KEY, o.key); }
+    if (o) onSelect(o.key);
   }, [chip]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!options.length) return <NoSlots onOpenControllers={onOpenControllers} hasKm={slots.length > 0} />;
-  const opt = options.find((o) => o.key === selKey) ?? options.find((o) => o.pad && o.slot === 'js') ?? options[0];
+  const shown = shownDeviceSlot(slots, selKey)!;
+  const opt = options.find((o) => o.key === deviceSlotKey(shown.gs))!;
   const chosen = resolveSlotTemplate(T.templates, props.slotMap, opt.gs, opt.pad, T.picks);
-  const strip = (
-    <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Game slot" data-testid="device-slot-strip">
-      <span className={`mr-1 ${LABEL}`}>Game slot</span>
-      {options.map((o) => {
-        const on = o.key === opt.key;
-        return (
-          <button key={o.key} type="button" role="tab" aria-selected={on} onClick={() => pick(o.key)} data-slot-chip={slotId(o.gs)} title={o.label}
-            className={`flex max-w-[15rem] items-center gap-1.5 rounded border px-2 py-1 text-xs transition ${on ? 'border-hud/70 bg-hud/15 text-hud2 shadow-[0_0_14px_-6px_var(--color-hud)]' : 'border-edge text-slate-400 hover:border-hud/40 hover:text-slate-200'}`}>
-            <Ico name={o.slot === 'gp' ? 'gamepad' : 'joystick'} className="h-3.5 w-3.5" />
-            <span className="font-mono font-bold">{slotId(o.gs).toUpperCase()}</span>
-            <span className="min-w-0 truncate">{o.name ?? 'no device'}</span>
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${o.pad ? 'bg-ok shadow-[0_0_6px_var(--color-ok)]' : 'bg-slate-600'}`} />
-          </button>
-        );
-      })}
-    </div>
+  const strip = compact ? (
+    <label className="flex items-center gap-1.5 text-slate-400">
+      <span className={LABEL}>Slot</span>
+      <select value={opt.key} onChange={(e) => onSelect(e.target.value)} data-testid="device-slot-select" aria-label="Game slot"
+        className="max-w-[14rem] rounded border border-edge bg-panel2 px-2 py-1 font-mono text-xs text-slate-200 outline-none focus:border-hud">
+        {options.map((o) => <option key={o.key} value={o.key}>{o.label}{o.pad ? ' ●' : ''}</option>)}
+      </select>
+    </label>
+  ) : (
+    <span className="flex items-center gap-1.5 font-mono text-xs font-bold text-hud2" data-testid="device-slot-badge" title="Pick the slot in the profile card's Game slots list">
+      <Ico name={opt.slot === 'gp' ? 'gamepad' : 'joystick'} className="h-3.5 w-3.5" />{slotId(opt.gs).toUpperCase()}
+    </span>
   );
   return (
     <div className="flex min-h-full flex-col gap-3" data-testid="device-view">
@@ -237,8 +244,8 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
     catch (e) { notify('err', `Could not load the template picture: ${(e as Error).message}`); }
   };
   const axisLocked = instance > axisLimit[slot];
-  // sticky lines: the slot bar sticks with its chip strip scrolled away (negative top), so the hardware / template line stays
-  // in sight; the Groups + legend line sticks right under it. Both stick inside the scrolling <main>.
+  // sticky lines: the slot bar (slot · hardware / template line) sticks at the top; the Groups + legend line sticks right
+  // under it. Both stick inside the scrolling <main>.
   const barRef = useRef<HTMLElement>(null);
   const lineRef = useRef<HTMLDivElement>(null);
   const groupsRef = useRef<HTMLDivElement>(null);
@@ -252,7 +259,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
       let sp: HTMLElement | null = bar.parentElement;
       while (sp && !/(auto|scroll)/.test(getComputedStyle(sp).overflowY)) sp = sp.parentElement;
       const pad = sp ? parseFloat(getComputedStyle(sp).paddingTop) || 0 : 0;
-      const hide = line.offsetTop + 1; // the strip and the line's top border scroll away
+      const hide = 0; // round 9: no slot chips above the line any more, the whole bar sticks
       const groups = bar.offsetHeight - hide - pad;
       const next = { bar: -hide - pad, groups, page: groups + (groupsLine?.offsetHeight ?? 0) };
       setStick((s) => (s.bar === next.bar && s.groups === next.groups && s.page === next.page ? s : next));
@@ -289,8 +296,8 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
       {/* ---- slot bar: slot chips, then hardware · template (+ template tools) · axis settings for the selected slot ---- */}
       <section ref={barRef} className="hud-panel sticky z-40 rounded-lg px-3 py-2.5 print:hidden" data-testid="device-slot-bar" data-sticky-head
         style={{ top: stick.bar, background: STICKY_BAR_BG }}>
-        {strip}
-        <div ref={lineRef} className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge/50 pt-2 text-xs" data-testid="device-slot-line">
+        <div ref={lineRef} className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" data-testid="device-slot-line">
+          {strip}
           <span className="flex min-w-0 items-center gap-1.5 text-slate-400" data-testid="device-hardware">
             <span className={LABEL}>Hardware</span>
             {opt.gs.hw ? <span className="max-w-[16rem] truncate text-slate-200" title={opt.pad ? padLabel(opt.pad) : opt.gs.hw.name}>{opt.pad ? padLabel(opt.pad) : opt.gs.hw.name}</span> : <span className="text-slate-500">none assigned</span>}

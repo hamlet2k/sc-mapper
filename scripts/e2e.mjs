@@ -179,7 +179,7 @@ await page.keyboard.press('Escape');
 check(await page.getByTestId('open-curves').count() === 0, 'no "Axis settings & curves" link under the profile card');
 await page.locator('[data-view-tab=devices]').click();
 await page.waitForTimeout(600);
-const pickChip = async (id) => { await page.getByTestId('device-slot-strip').locator(`[data-slot-chip="${id}"]`).click(); await page.waitForTimeout(250); };
+const pickChip = async (id) => { await page.getByTestId('sidebar-slots').locator(`[data-slot-row="${id}"]`).click(); await page.waitForTimeout(250); };
 const axisModal = page.getByTestId('axis-settings-modal');
 const ds = axisModal.getByTestId('device-settings');
 const openAxis = async (id) => { await pickChip(id); await page.getByTestId('slot-axis-settings').click(); await page.waitForTimeout(250); };
@@ -586,16 +586,25 @@ await search.fill('');
 await page.getByTestId('edit-toggle').click();
 await page.locator('[data-view-tab=keyboard]').click();
 await page.waitForTimeout(300);
-check(await page.getByTestId('km-slot-kb').isVisible(), 'Keyboard view gets a kb1 / kb2 picker in its View section');
-await page.locator('[data-km-slot=kb2]').click();
+// round 9: kb / mo are picked in the profile card's Game slots list (no picker in the view's toolbar on a wide screen)
+const sideRow = (id) => page.getByTestId('sidebar-slots').locator(`[data-slot-row="${id}"]`);
+check(await page.getByTestId('km-slot-kb').count() === 0 && (await page.getByTestId('sidebar-slots').getAttribute('data-mode')) === 'keyboard'
+  && (await sideRow('kb2').getAttribute('data-selectable')) === '1' && (await sideRow('kb1').getAttribute('data-selected')) === '1' && (await sideRow('mo1').getAttribute('data-selected')) === '1',
+  'Keyboard view: kb1 / kb2 / mo1 selectable in the sidebar Game slots list (kb1 + mo1 marked as shown), no picker in the toolbar');
+await sideRow('kb2').click();
 await page.waitForTimeout(250);
+check((await sideRow('kb2').getAttribute('data-selected')) === '1' && (await sideRow('kb1').getAttribute('data-selected')) === null && (await page.getByTestId('kb-instance').innerText()).trim() === 'kb2', 'clicking kb2 in the sidebar shows kb2');
 await page.screenshot({ path: shots + '112-keyboard-kb-mo-picker.png' });
 const boundKeys = async () => page.locator('#main button[title]').evaluateAll((bs) => bs.filter((b) => /: [1-9]\d* actions?$/.test(b.title)).map((b) => b.title));
 const kb2Keys = (await boundKeys()).filter((t) => !/^(LMB|MMB|RMB|Wheel|Mouse|M\d)/.test(t)); // the mouse block follows the mouse slot (mo1)
 check(kb2Keys.length === 1 && /^J:/.test(kb2Keys[0]), `kb2 keyboard shows only kb2 bindings (${kb2Keys.join(', ')})`);
-await page.locator('[data-km-slot=kb1]').click();
+await sideRow('kb2').focus();
+await page.keyboard.press('ArrowUp');
 await page.waitForTimeout(250);
-check((await boundKeys()).length > 50, 'kb1 keyboard shows the kb1 bindings');
+check((await boundKeys()).length > 50 && (await sideRow('kb1').getAttribute('data-selected')) === '1' && (await page.evaluate(() => document.activeElement?.dataset.slotRow)) === 'kb1', 'arrow up in the sidebar list selects kb1 (and keeps the focus on it): the kb1 bindings are back');
+check(await page.getByTestId('flash-badge').count() === 0, 'arrow keys in the slot list are not taken as a keyboard press (no live highlight)');
+await page.mouse.move(900, 600);
+await page.screenshot({ path: shots + '119-keyboard-sidebar-picker.png' });
 await page.locator('[data-view-tab=list]').click();
 await page.getByTestId('open-slots').click();
 const kb2Row = page.locator('[data-testid=slot-row][data-slot=kb2]');
@@ -649,13 +658,19 @@ const dv = page.getByTestId('device-view');
 let gladIds = []; // callout ids of the VKB Gladiator template (for the test-only photo layout below)
 await page.waitForTimeout(600);
 check(await dv.isVisible(), 'devices view opens');
-const slotChip = async (id) => { await page.getByTestId('device-slot-strip').locator(`[data-slot-chip="${id}"]`).click(); await page.waitForTimeout(200); };
-const dopts = (await page.getByTestId('device-slot-strip').locator('[data-slot-chip]').allInnerTexts()).map((x) => x.replace(/\s+/g, ' ').trim());
-check(dopts.some((o) => /^JS1 VKBsim Gladiator EVO R/.test(o)) && dopts.some((o) => /^JS2 VKBsim Gladiator EVO L/.test(o)) && dopts.some((o) => /^GP1/.test(o)), `inline slot strip lists the js/gp slots with their hardware (${dopts.join(' | ')})`);
-check(!dopts.some((o) => /^(KB|MO)\d/.test(o)), 'no kb / mo slots in the Devices slot bar (they live in the Keyboard view)');
+const slotChip = async (id) => { await page.getByTestId('sidebar-slots').locator(`[data-slot-row="${id}"]`).click(); await page.waitForTimeout(200); };
+const dopts = (await page.getByTestId('sidebar-slots').locator('[data-selectable="1"]').allInnerTexts()).map((x) => x.replace(/\s+/g, ' ').trim());
+const dimmed = await page.getByTestId('sidebar-slots').locator('[data-selectable="0"]').evaluateAll((ls) => ls.map((l) => l.dataset.slotRow + ':' + getComputedStyle(l).opacity));
+check(await page.getByTestId('device-slot-strip').count() === 0 && dopts.some((o) => /^JS1 VKBsim Gladiator EVO R/.test(o)) && dopts.some((o) => /^JS2 VKBsim Gladiator EVO L/.test(o)) && dopts.some((o) => /^GP1/.test(o)),
+  `Devices view: no slot chip bar; the sidebar Game slots list offers the js/gp slots with their hardware (${dopts.join(' | ')})`);
+check(!dopts.some((o) => /^(KB|MO)\d/.test(o)) && dimmed.length >= 2 && dimmed.every((d) => /^(kb|mo)\d+:0\.4/.test(d)), `kb / mo rows dimmed in the Devices view (${dimmed.join(', ')})`);
 check(await page.getByTestId('device-manage-slots').count() === 0, 'no "Game slots & controllers…" link in the slot bar (the profile card button is the entry point)');
 await slotChip('js1');
 check(/VKBsim Gladiator EVO R/.test(await page.getByTestId('device-hardware').innerText()), 'slot bar shows the hardware assigned to js1');
+check((await page.getByTestId('sidebar-slots').locator('[data-slot-row="js1"]').getAttribute('data-selected')) === '1' && /^JS1/.test((await page.getByTestId('device-slot-badge').innerText()).trim()), 'the picked js1 row is marked in the sidebar; the slot bar names JS1');
+await page.mouse.move(900, 600);
+await page.waitForTimeout(500);
+await page.screenshot({ path: shots + '119-devices-sidebar-picker.png' });
 await page.waitForTimeout(300);
 { // the template line: dropdown + icon groups (template tools | picture tools) on the same line, and the slot's axis settings CTA
   const bar = page.getByTestId('device-slot-bar');
@@ -793,6 +808,8 @@ await page.waitForTimeout(150);
 await page.evaluate(() => window.__btn(1, 4, false));
 await page.waitForTimeout(500);
 check(await dv.isVisible() && await rows.count() === 0 && (await page.getByTestId('device-slot-view').getAttribute('data-slot')) === 'js1', 'find-by-press on Devices stays there and switches to the pressed device (js1)');
+check((await page.getByTestId('sidebar-slots').locator('[data-slot-row="js1"]').getAttribute('data-selected')) === '1' && (await page.getByTestId('sidebar-slots').locator('[data-slot-row="js2"]').getAttribute('data-selected')) === null,
+  'press-to-switch moves the sidebar highlight to js1');
 check((await dv.locator('[data-callout="b5"]').getAttribute('data-dim')) === null && (await dv.locator('[data-callout="trig"]').getAttribute('data-dim')) === '1' && /Pressed js1_button5/.test(await dv.getByTestId('device-search-status').innerText()), 'the pressed control is picked out, the rest dimmed');
 await page.getByTestId('press-chip').getByRole('button', { name: 'Remove input filter' }).click();
 await page.waitForTimeout(200);
@@ -1077,7 +1094,7 @@ writeFileSync('/tmp/moza133.json', JSON.stringify({ format: 'sc-mapper-device-te
 await fp.getByTestId('template-import-file').setInputFiles('/tmp/moza133.json');
 await fp.waitForTimeout(400);
 {
-  const st = async (id) => { await fp.locator(`[data-slot-chip="${id}"]`).click(); await fp.waitForTimeout(250); return fp.getByTestId('device-status').innerText(); };
+  const st = async (id) => { await fp.locator(`[data-slot-row="${id}"]`).click(); await fp.waitForTimeout(250); return fp.getByTestId('device-status').innerText(); };
   const s133 = await st(moza133);
   const s128 = await st(mozaSlots.find(([id]) => id !== moza133)[0]);
   check(/MOZA base \(133\)/.test(s133) && /133 buttons/.test(s133) && !/MOZA base \(133\)/.test(s128), 'Firefox: template linked by USB id + 133 buttons applies to the second MOZA base only');
@@ -1122,7 +1139,7 @@ console.log('\nslot order & axis settings limit (Firefox, 10 joysticks)');
   // an axis setting on js1, to see it travel with the device
   await fp.locator('[data-view-tab=devices]').click();
   await fp.waitForTimeout(400);
-  const fchipSel = async (id) => { await fp.getByTestId('device-slot-strip').locator(`[data-slot-chip="${id}"]`).click(); await fp.waitForTimeout(250); };
+  const fchipSel = async (id) => { await fp.getByTestId('sidebar-slots').locator(`[data-slot-row="${id}"]`).click(); await fp.waitForTimeout(250); };
   const fam = fp.getByTestId('axis-settings-modal');
   const pitchOf = async (id) => { await fchipSel(id); await fp.getByTestId('slot-axis-settings').click(); await fp.waitForTimeout(200); const t = await fam.locator('[data-testid=settings-groups] button[data-group="flight_move_pitch"]').innerText(); await fam.getByRole('button', { name: 'Close' }).first().click(); await fp.waitForTimeout(120); return t; };
   await fchipSel('js1');
@@ -1147,6 +1164,9 @@ console.log('\nslot order & axis settings limit (Firefox, 10 joysticks)');
     && !/reorder/i.test(lockTxt) && await fbar.getByTestId('axis-refresh').isVisible(),
     `js9: Axis settings CTA disabled; the note says the order comes from the game / USB order, not the app (${lockTxt.slice(0, 70)}…)`);
   await fp.screenshot({ path: shots + '113-js9-note.png' });
+  const fside = fp.getByTestId('sidebar-slots');
+  check(await fside.locator('[data-slot-row="js9"] [data-testid=slot-axis-locked]').count() === 1 && await fside.locator('[data-slot-row="js8"] [data-testid=slot-axis-locked]').count() === 0 && (await fside.locator('[data-slot-row="js9"]').getAttribute('data-selected')) === '1',
+    'sidebar: js9 row selected, with the subtle "no curves" marker (js8 has none)');
   await fbar.getByTestId('axis-reorder').click();
   await fp.waitForTimeout(250);
   check(await fpanel.isVisible() && await fpanel.getByTestId('slots-tab').isVisible(), 'the reorder button opens Game slots & controllers');
@@ -1324,7 +1344,7 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   // ---- Devices: the hardware / template line and the Groups + legend line stick while the picture scrolls
   await rp.locator('[data-view-tab=devices]').click();
   await rp.waitForTimeout(400);
-  await rp.getByTestId('device-slot-strip').locator('[data-slot-chip="js4"]').click();
+  await rp.getByTestId('sidebar-slots').locator('[data-slot-row="js4"]').click();
   await rp.getByTestId('template-select').selectOption('builtin-winctrl-ursa-combat');
   await rp.waitForTimeout(1500);
   const gl = rp.getByTestId('device-groups-line');
@@ -1338,11 +1358,11 @@ console.log('\nrefresh game state (drop a reshuffled export)');
     const line = document.querySelector('[data-testid=device-slot-line]').getBoundingClientRect();
     const grp = document.querySelector('[data-testid=device-groups-line]').getBoundingClientRect();
     const hit = (r) => { const el = document.elementFromPoint(r.left + 40, r.top + r.height / 2); return !!el?.closest('[data-sticky-head]'); };
-    const strip = document.querySelector('[data-testid=device-slot-strip]').getBoundingClientRect();
-    return { lineTop: line.top - m.top, grpTop: grp.top - line.bottom, onTop: hit(line) && hit(grp), stripGone: strip.bottom <= m.top + 1, scrolled: document.getElementById('main').scrollTop };
+    const bar = document.querySelector('[data-testid=device-slot-bar]').getBoundingClientRect();
+    return { lineTop: line.top - m.top, barTop: bar.top - m.top, grpTop: grp.top - line.bottom, onTop: hit(line) && hit(grp), scrolled: document.getElementById('main').scrollTop };
   });
-  check(st.scrolled >= 800 && st.lineTop >= -1 && st.lineTop < 4 && st.grpTop >= -1 && st.grpTop < 24 && st.onTop && st.stripGone,
-    `scrolled ${st.scrolled}px: hardware/template line stuck at the top (${Math.round(st.lineTop)}px), Groups line under it (${Math.round(st.grpTop)}px), both above the callouts, slot chips scrolled away`);
+  check(st.scrolled >= 800 && Math.abs(st.barTop) < 1.5 && st.lineTop >= -1 && st.lineTop < 16 && st.grpTop >= -1 && st.grpTop < 30 && st.onTop,
+    `scrolled ${st.scrolled}px: the slot bar (slot · hardware / template line) stuck at the top (line at ${Math.round(st.lineTop)}px), Groups line under it (${Math.round(st.grpTop)}px), both above the callouts`);
   await rp.screenshot({ path: shots + '114-devices-sticky-lines.png' });
   // the page headings of a multi-page template stick right under the Groups line while their page scrolls by
   {
@@ -1505,7 +1525,7 @@ log('photo template (test-only layout via __SC_TEST_PHOTO_LAYOUTS)');
   await pp.locator('[data-view-tab=devices]').click();
   await pp.waitForTimeout(800);
   const pv = pp.getByTestId('device-view');
-  await pv.locator('[data-slot-chip]').filter({ hasText: /^\s*JS/ }).first().click();
+  await pp.getByTestId('sidebar-slots').locator('[data-slot-row^="js"]').first().click();
   await pp.waitForTimeout(800);
   const canvas = pv.getByTestId('device-canvas');
   const views = canvas.getByTestId('device-canvas-view');
@@ -1660,7 +1680,7 @@ console.log('\nround 6: template pages, picture preparation');
   await p6.locator('[data-view-tab=devices]').click();
   await p6.waitForTimeout(800);
   const dv6 = p6.getByTestId('device-view');
-  await dv6.locator('[data-slot-chip]').filter({ hasText: /^\s*JS/ }).first().click();
+  await p6.getByTestId('sidebar-slots').locator('[data-slot-row^="js"]').first().click();
   await p6.waitForTimeout(500);
   await dv6.getByTestId('template-new').click();
   const ed = p6.getByTestId('template-editor');
@@ -1813,7 +1833,7 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   await p7.locator('[data-view-tab=devices]').click();
   await p7.waitForTimeout(800);
   const dv7 = p7.getByTestId('device-view');
-  await dv7.locator('[data-slot-chip]').filter({ hasText: /^\s*JS/ }).first().click();
+  await p7.getByTestId('sidebar-slots').locator('[data-slot-row^="js"]').first().click();
   await p7.waitForTimeout(500);
   await dv7.getByTestId('template-new').click();
   const ed = p7.getByTestId('template-editor');
@@ -2135,6 +2155,59 @@ console.log('\nround 8: paths from Settings, copy buttons, export modal wrapping
     'help: actionmaps, mappings and Data.p4k paths from Settings, pp_RebindKeys with a copy button');
   await p8.keyboard.press('Escape');
   await c8.close();
+}
+
+// ---- round 9: the profile card's Game slots list is the slot picker; narrow layouts get a dropdown in the view
+console.log('\nround 9: slot picker in the sidebar, narrow fallback');
+{
+  const c9 = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1 });
+  const p9 = await c9.newPage();
+  p9.on('pageerror', (e) => errors.push('[r9] ' + String(e)));
+  await p9.goto(url, { waitUntil: 'networkidle' });
+  await p9.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+  await p9.waitForTimeout(800);
+  const side = p9.getByTestId('sidebar-slots'), row = (id) => side.locator(`[data-slot-row="${id}"]`);
+  const shownSlot = () => p9.getByTestId('device-slot-view').getAttribute('data-slot');
+  const view = () => p9.locator('[data-view-tab][aria-current=page]').getAttribute('data-view-tab');
+  // List: nothing selected, nothing dimmed; a click opens the slot in the view that shows it
+  check((await side.getAttribute('data-mode')) === 'jump' && await side.locator('[data-selected]').count() === 0 && await side.locator('[data-selectable="0"]').count() === 0 && /open it in the Devices or Keyboard view/.test(await p9.getByTestId('slot-pick-hint').innerText()),
+    'List view: slot rows are links to their view (nothing selected or dimmed)');
+  await row('js2').click();
+  await p9.waitForTimeout(500);
+  check((await view()) === 'devices' && (await shownSlot()) === 'js2' && (await row('js2').getAttribute('data-selected')) === '1' && (await side.getAttribute('role')) === 'listbox', 'List: clicking js2 opens the Devices view on js2');
+  // keyboard: ↓ / ↑ walk the selectable rows only (js / gp), Tab lands on the selected row
+  await row('js2').focus();
+  await p9.keyboard.press('ArrowDown');
+  await p9.waitForTimeout(300);
+  const afterDown = await shownSlot();
+  await p9.keyboard.press('Home');
+  await p9.waitForTimeout(300);
+  check(afterDown === 'gp1' && (await shownSlot()) === 'js1' && (await row('js1').getAttribute('tabindex')) === '0' && (await row('kb1').getAttribute('tabindex')) === '-1' && (await p9.evaluate(() => document.activeElement?.dataset.slotRow)) === 'js1',
+    'Devices: ↓ selects gp1, Home goes back to js1 (kb / mo skipped); the selected row is the Tab stop');
+  // a dimmed row opens its own view
+  await row('mo1').click();
+  await p9.waitForTimeout(400);
+  check((await view()) === 'keyboard' && (await side.getAttribute('data-mode')) === 'keyboard' && (await row('kb1').getAttribute('data-selected')) === '1' && (await row('js1').getAttribute('data-selectable')) === '0',
+    'Devices: clicking the dimmed mo1 row switches to the Keyboard view (kb1 + mo1 marked, js dimmed)');
+  // the Devices selection persists (reload)
+  await row('gp1').click();
+  await p9.waitForTimeout(400);
+  await p9.reload({ waitUntil: 'networkidle' });
+  await p9.locator('[data-view-tab=devices]').click();
+  await p9.waitForTimeout(600);
+  check((await shownSlot()) === 'gp1' && (await row('gp1').getAttribute('data-selected')) === '1', 'the Devices slot choice survives a reload (gp1, marked in the sidebar)');
+  // narrow: the sidebar is hidden, the slot bar gets a compact dropdown
+  await p9.setViewportSize({ width: 600, height: 900 });
+  await p9.waitForTimeout(400);
+  const sel = p9.getByTestId('device-slot-select');
+  const opts = await sel.locator('option').allInnerTexts();
+  await sel.selectOption('slot:js2');
+  await p9.waitForTimeout(400);
+  check(!(await p9.getByTestId('sidebar').isVisible()) && opts.length === 3 && /^JS1/.test(opts[0]) && (await shownSlot()) === 'js2' && (await row('js2').getAttribute('data-selected')) === '1',
+    `narrow: no sidebar; a slot dropdown in the slot bar (${opts.join(' | ')}) switches to js2 and the profile card list follows`);
+  await p9.getByTestId('device-slot-bar').scrollIntoViewIfNeeded();
+  await p9.screenshot({ path: shots + '119-narrow-fallback.png' });
+  await c9.close();
 }
 
 // ---- drag & drop in a real Firefox (Gecko): synthetic file drags exercise the page's handlers there (types list, text-node

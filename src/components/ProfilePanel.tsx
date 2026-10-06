@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { slotDeviceName, slotId, type GameSlot } from '../lib/slots';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { isController, slotDeviceName, slotId, type GameSlot } from '../lib/slots';
 import type { Profile } from '../lib/types';
 import { DROP_HINT, GamePathHint } from './GameState';
 import { Tip } from './Tooltip';
@@ -10,10 +10,26 @@ import { useEscape } from './useEscape';
  * The profile, in one place: which profile is active, its file actions (import / export / delete, plus new, duplicate,
  * revert, reset) and its game slots with the way into the Controllers modal.
  */
-export function ProfilePanel({ profiles, profile, versionLabel, slots, connected, onSelect, onImport, onExport, onDelete, onNew, onDuplicate, onRevert, onResetAll, onOpenSlots, onRefresh }: {
+/**
+ * The Game slots list doubles as the slot picker (round 9).
+ * - `devices`: js / gp rows pick the slot the Devices view shows; kb / mo rows are dimmed (a click opens them in the Keyboard view).
+ * - `keyboard`: kb / mo rows pick the keyboard / mouse the Keyboard view shows; js / gp rows are dimmed (a click opens the Devices view).
+ * - `jump` (List, Conflicts): nothing is selected; every row opens its slot in the view that shows it.
+ */
+export interface SlotPicker {
+  mode: 'devices' | 'keyboard' | 'jump';
+  /** slot ids shown right now (`js1`, or `kb1` + `mo1`) */
+  selected: string[];
+  onPick: (gs: GameSlot) => void;
+  /** device numbers the game keeps axis / curve settings for (js1–js8, gp1) */
+  axisLimit: Record<'js' | 'gp', number>;
+}
+
+export function ProfilePanel({ profiles, profile, versionLabel, slots, connected, onSelect, onImport, onExport, onDelete, onNew, onDuplicate, onRevert, onResetAll, onOpenSlots, onRefresh, picker }: {
   profiles: Profile[]; profile: Profile | null; versionLabel: string; slots: GameSlot[]; connected: (gs: GameSlot) => boolean;
   onSelect: (id: string | null) => void; onImport: () => void; onExport: () => void; onDelete: () => void;
   onNew: () => void; onDuplicate: () => void; onRevert?: () => void; onResetAll: () => void; onOpenSlots: () => void; onRefresh: () => void;
+  picker?: SlotPicker;
 }) {
   const [menu, setMenu] = useState(false);
   useEscape(() => setMenu(false), menu);
@@ -61,24 +77,92 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
         </div>
         {profile && <GamePathHint className="mt-1" />}
         {profile && <p className="mt-0.5 text-[10px] text-slate-500" data-testid="profile-drop-hint">Refresh picks the file, {DROP_HINT}.</p>}
-        {slots.length ? (
-          <ul className="mt-1.5 space-y-0.5" data-testid="sidebar-slots">
-            {slots.map((gs) => (
-              <li key={slotId(gs)} className="flex items-center gap-2 font-mono text-[10px]">
-                <span className="w-7 text-hud/80">{slotId(gs).toUpperCase()}</span>
-                <span className={`min-w-0 flex-1 truncate ${gs.gameMissing ? 'text-slate-500 line-through decoration-slate-600' : 'text-slate-300'}`}
-                  title={gs.gameMissing ? 'Not in the latest game state: its mappings are kept' : undefined}>{slotDeviceName(gs) ?? (gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'no device')}</span>
-                {(gs.slot === 'js' || gs.slot === 'gp') && <span className={`h-1.5 w-1.5 rounded-full ${connected(gs) ? 'bg-ok shadow-[0_0_6px_var(--color-ok)]' : 'bg-slate-600'}`} title={connected(gs) ? 'connected' : 'not connected'} />}
-              </li>
-            ))}
-          </ul>
-        ) : <p className="mt-1 text-[11px] text-slate-500">{profile ? 'No game slots yet.' : 'Import a profile to fill these in, or add them by hand.'}</p>}
+        {slots.length > 0 && picker && (
+          <p className="mt-1.5 text-[10px] text-slate-500" data-testid="slot-pick-hint">
+            {picker.mode === 'devices' ? <>Pick the joystick or gamepad to show <span className="text-slate-600">(↑ / ↓)</span>.</>
+              : picker.mode === 'keyboard' ? <>Pick the keyboard / mouse to show <span className="text-slate-600">(↑ / ↓)</span>.</>
+              : 'Click a slot to open it in the Devices or Keyboard view.'}
+          </p>
+        )}
+        {slots.length ? <SlotList slots={slots} connected={connected} picker={picker} />
+          : <p className="mt-1 text-[11px] text-slate-500">{profile ? 'No game slots yet.' : 'Import a profile to fill these in, or add them by hand.'}</p>}
         <button type="button" onClick={onOpenSlots} data-testid="open-slots" title="Which device is kb1, js1, js2, gp1… in the game, the hardware for each and its template"
           className="mt-2.5 flex w-full items-center justify-center gap-2 rounded border border-hud/50 bg-hud/10 px-2.5 py-1.5 font-display text-xs font-semibold uppercase tracking-wider text-hud2 transition hover:bg-hud/20 hover:shadow-[0_0_14px_-6px_var(--color-hud)]">
           <Ico name="slots" /> Game slots &amp; controllers
         </button>
       </div>
     </section>
+  );
+}
+
+const VIEW_OF = (gs: GameSlot) => (isController(gs) ? 'Devices' : 'Keyboard');
+const slotName = (gs: GameSlot) => slotDeviceName(gs) ?? (gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'no device');
+
+/** the profile's game slots; with a picker, the rows the current view can show are selectable (click, ↑ / ↓, Home / End) */
+function SlotList({ slots, connected, picker }: { slots: GameSlot[]; connected: (gs: GameSlot) => boolean; picker?: SlotPicker }) {
+  const listRef = useRef<HTMLUListElement>(null);
+  const mode = picker?.mode;
+  const pickable = (gs: GameSlot) => (mode === 'devices' ? isController(gs) : mode === 'keyboard' ? !isController(gs) : !!mode);
+  const selectable = slots.filter(pickable);
+  const isSel = (gs: GameSlot) => !!picker && mode !== 'jump' && picker.selected.includes(slotId(gs));
+  const listbox = mode === 'devices' || mode === 'keyboard';
+  // the row that takes Tab focus (roving tabindex): the selected one, else the first selectable one
+  const focusId = slotId(selectable.find(isSel) ?? selectable[0] ?? slots[0]);
+  // a slot picked elsewhere (find by pressing, the narrow dropdown, a reload) comes into sight in the sidebar
+  const selKey = picker?.selected.join(',') ?? '';
+  useEffect(() => {
+    if (!listbox) return;
+    listRef.current?.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest' });
+  }, [selKey, listbox]);
+  const onKey = (e: KeyboardEvent<HTMLLIElement>, gs: GameSlot) => {
+    if (!picker) return;
+    // keys the list handles don't reach the app's live keyboard highlight (window listener) either
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); picker.onPick(gs); return; }
+    const order = listbox ? selectable : slots;
+    const i = order.findIndex((x) => slotId(x) === slotId(gs));
+    const next = e.key === 'ArrowDown' ? order[Math.min(order.length - 1, i + 1)] : e.key === 'ArrowUp' ? order[Math.max(0, i - 1)]
+      : e.key === 'Home' ? order[0] : e.key === 'End' ? order[order.length - 1] : undefined;
+    if (!next) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // in a view that shows slots, moving selects (like radio buttons); in List / Conflicts it only moves the focus
+    if (listbox) picker.onPick(next);
+    listRef.current?.querySelector<HTMLElement>(`[data-slot-row="${slotId(next)}"]`)?.focus();
+  };
+  return (
+    <ul ref={listRef} className="mt-1 space-y-px" data-testid="sidebar-slots" data-mode={mode ?? 'none'}
+      {...(listbox ? { role: 'listbox', 'aria-label': `Game slot shown in the ${mode === 'devices' ? 'Devices' : 'Keyboard'} view`, 'aria-multiselectable': mode === 'keyboard' || undefined } : {})}>
+      {slots.map((gs) => {
+        const id = slotId(gs);
+        const can = pickable(gs), sel = isSel(gs);
+        const dim = listbox && !can;
+        const locked = (gs.slot === 'js' || gs.slot === 'gp') && !!picker && gs.instance > picker.axisLimit[gs.slot];
+        const title = !picker ? undefined
+          : sel ? `${id.toUpperCase()} is shown in the ${VIEW_OF(gs)} view`
+          : can && listbox ? `Show ${id.toUpperCase()} in the ${VIEW_OF(gs)} view`
+          : `${id.toUpperCase()} is shown in the ${VIEW_OF(gs)} view: click to switch there`;
+        return (
+          <li key={id} data-slot-row={id} data-selectable={listbox ? (can ? '1' : '0') : undefined} data-selected={sel ? '1' : undefined}
+            {...(picker ? {
+              role: listbox ? 'option' : 'button', tabIndex: id === focusId ? 0 : -1, title,
+              onClick: () => picker.onPick(gs), onKeyDown: (e: KeyboardEvent<HTMLLIElement>) => onKey(e, gs),
+              // a dimmed row is not this view's slot, but it still does something (opens its own view), so no aria-disabled
+              ...(listbox ? { 'aria-selected': sel, ...(dim ? { 'aria-description': `opens the ${VIEW_OF(gs)} view` } : {}) } : {}),
+            } : {})}
+            className={`relative flex items-center gap-2 rounded-sm border-l-2 py-[3px] pl-1.5 pr-1 font-mono text-[10px] outline-none transition
+              ${sel ? 'border-hud bg-hud/15 shadow-[inset_0_0_0_1px_rgba(79,216,255,.25)]' : 'border-transparent'}
+              ${picker ? 'cursor-pointer focus-visible:ring-1 focus-visible:ring-hud' : ''}
+              ${picker && !sel && !dim ? 'hover:bg-white/[0.06]' : ''}
+              ${dim ? 'opacity-45 hover:opacity-80' : ''}`}>
+            <span className={`w-7 ${sel ? 'font-bold text-hud2' : 'text-hud/80'}`}>{id.toUpperCase()}</span>
+            <span className={`min-w-0 flex-1 truncate ${gs.gameMissing ? 'text-slate-500 line-through decoration-slate-600' : sel ? 'text-slate-100' : 'text-slate-300'}`}
+              title={gs.gameMissing ? 'Not in the latest game state: its mappings are kept' : undefined}>{slotName(gs)}</span>
+            {locked && <span className="shrink-0 text-[9px] text-mod/70" data-testid="slot-axis-locked" title={`No axis / curve tuning: Star Citizen keeps axis settings for js1–js${picker!.axisLimit.js} and gp1 only`}>no curves</span>}
+            {(gs.slot === 'js' || gs.slot === 'gp') && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${connected(gs) ? 'bg-ok shadow-[0_0_6px_var(--color-ok)]' : 'bg-slate-600'}`} title={connected(gs) ? 'connected' : 'not connected'} />}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

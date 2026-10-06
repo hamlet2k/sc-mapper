@@ -541,3 +541,39 @@ Judgment calls made while building round 1, where the decisions above didn't say
 - Paths and commands are code boxes with `overflow-wrap:anywhere`, plus a `<wbr>` after every backslash, so they break at folder boundaries first. The file names in the format cards and the "→ file" line wrap the same way. The header keeps the close button at the top right, with the title and stats wrapping beside it.
 - Below `md`, the whole body scrolls as one column: options, guide, then a 288 px preview. Wide, the two columns scroll on their own as before.
 - e2e checks that no text box overflows the modal at 1680 px and at 420 px. Screenshots: `118-export-paths.png`, `118-export-paths-narrow.png`, `118-export-paths-narrow-guide.png`, `118-settings-paths.png`.
+
+## Round 9
+
+### The profile card's Game slots list is the slot picker
+
+- **Removed:** the slot chip bar at the top of the Devices view, and the kb / mo picker in the Keyboard view's toolbar on wide screens. The Devices slot bar now holds a single sticky line: slot badge (`JS1`) · hardware · template + tools · Axis settings & curves. The whole bar sticks, because there is no strip above it to scroll away any more.
+- **One list, three behaviours** (`SlotList` in `ProfilePanel.tsx`):
+  - **Devices view:** js and gp rows are selectable and show that slot. kb and mo rows are dimmed (45 % opacity, still readable).
+  - **Keyboard view:** kb and mo rows are selectable. The shown kb and the shown mo are both marked (kb1 + mo1 by default; with only one of each, they are the shown ones). Picking kb2 or mo2 switches. js and gp rows are dimmed.
+  - **List / Conflicts (my call):** nothing is selected or dimmed, because these views show every device at once. Every row is a link that opens its slot in the view that shows it: js / gp → Devices view on that slot, kb / mo → Keyboard view on that keyboard / mouse. Filtering the List by slot was not added; the List already has the input-type toggles and `key:` search.
+  - **Dimmed rows (my call):** they still react to a click and open their own view, e.g. clicking mo1 in the Devices view goes to the Keyboard view with mo1. The tooltip says so ("… is shown in the Keyboard view: click to switch there"). They are not `aria-disabled`, since they do something.
+- **Marking:** the selected row gets a 2 px accent bar on the left, an accent background with a thin inner outline, and a bold slot id. Selectable rows have a hover background and a pointer cursor. A one-line hint above the list says what clicking does in the current view ("Pick the joystick or gamepad to show (↑ / ↓)" / "Pick the keyboard / mouse to show" / "Click a slot to open it in the Devices or Keyboard view").
+- **Keyboard:** in the Devices and Keyboard views the list is a `listbox` with a roving tabindex: Tab lands on the selected row. ↑ / ↓ / Home / End move through the selectable rows only and select as they move, like radio buttons; Enter / Space also select. In List / Conflicts the rows are buttons: ↑ / ↓ only move the focus, and Enter opens the slot.
+- **Each row** keeps the hardware name and connection dot as before. js9+ (and gp2+) rows show a subtle amber "no curves" marker, with a tooltip saying the game keeps axis / curve settings for js1–js8 and gp1 only. The Devices view's axis note for those slots is unchanged.
+- **State:** the Devices selection moved from DeviceView to App (`sc-mapper:device-view`, persisted as before), so the sidebar and the view always agree. The fallback is also unchanged (first connected joystick, else the first js / gp slot), and the sidebar marks that slot too. kb / mo stay per session, as before.
+- Keys the list handles (arrows, Home / End, Enter / Space) stop there, so they no longer also light up as a live keyboard press.
+- **Find by pressing** on the Devices view still selects the pressed device's slot. The sidebar highlight follows, and the list scrolls the selected row into sight (`block: nearest`) whenever the selection changes.
+
+### Narrow layout fallback
+
+- Below `md` (768 px) the sidebar is hidden, and the profile card sits above the view. Its slot list still works as the picker. The view also keeps a compact dropdown: in the Devices view a "Slot" `<select>` takes the slot badge's place in the slot bar (`device-slot-select`, "JS1 · VKBsim Gladiator EVO R"); in the Keyboard view, kb and mo `<select>`s show in the View section when there are several (`km-slot-kb` / `km-slot-mo`).
+
+### Tests and screenshots
+
+- e2e uses the sidebar rows (`data-slot-row`) everywhere the chip bar was used. Round 9 checks:
+  - List → Devices / Keyboard jump;
+  - ↓ / Home keyboard picking and the Tab stop;
+  - a dimmed row switching views;
+  - persistence across a reload;
+  - dimmed kb / mo in the Devices view;
+  - kb2 picking and ↑ in the Keyboard view;
+  - the press-to-switch highlight;
+  - the js9 "no curves" marker (Firefox run);
+  - the narrow dropdown;
+  - the whole slot bar sticking.
+- Screenshots: `119-devices-sidebar-picker.png` (js1 selected, kb / mo dimmed), `119-keyboard-sidebar-picker.png` (kb1 + mo1 selected, kb2 selectable, js / gp dimmed), `119-narrow-fallback.png`. `112-keyboard-kb-mo-picker.png` is retaken with kb2 picked in the sidebar.

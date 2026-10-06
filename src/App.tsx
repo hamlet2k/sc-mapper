@@ -8,7 +8,7 @@ import { ControllersPanel, type SlotActions } from './components/ControllersPane
 import { ExportDialog, type ExportSlot } from './components/ExportDialog';
 import { SettingsModal, loadAppSettings, saveAppSettings, type AppSettings } from './components/SettingsModal';
 import { KeyboardView } from './components/KeyboardView';
-import { DeviceView, type SlotOption } from './components/DeviceView';
+import { DEVICE_SEL_KEY, DeviceView, deviceSlotKey, shownDeviceSlot, type SlotOption } from './components/DeviceView';
 import { AxisSettingsModal, settingsInstances } from './components/DeviceSettings';
 import { Sidebar, type MapCount } from './components/Sidebar';
 import { findConflicts } from './lib/conflicts';
@@ -138,6 +138,9 @@ export default function App() {
   // which keyboard / mouse slot (kb1, kb2… / mo1, mo2…) the Keyboard view shows and captures go to, when there are several
   const [kbInst, setKbInst] = useState(1);
   const [moInst, setMoInst] = useState(1);
+  // which js / gp slot the Devices view shows (picked in the profile card's Game slots list; remembered across reloads)
+  const [devSel, setDevSel] = useState(() => localStorage.getItem(DEVICE_SEL_KEY) ?? '');
+  const selectDevice = useCallback((k: string) => { setDevSel(k); localStorage.setItem(DEVICE_SEL_KEY, k); }, []);
   const [undo, setUndo] = useState<UndoEntry[]>([]);
   // ---- press-to-search and live highlight
   const [pressMode, setPressMode] = useState(false);
@@ -677,13 +680,27 @@ export default function App() {
   const meta = DEFAULTS.meta;
   const versionLabel = `${meta.branch?.replace('sc-alpha-', 'Alpha ') ?? 'Star Citizen'} ${meta.channel ?? ''}`.trim();
 
+  // the profile card's Game slots list is the slot picker (round 9): a js / gp row shows that slot in the Devices view, a kb / mo
+  // row in the Keyboard view (switching to that view when another one is open)
+  const shownDev = shownDeviceSlot(deviceSlots, devSel);
+  const pickSlot = (gs: GameSlot) => {
+    if (isController(gs)) { selectDevice(deviceSlotKey(gs)); setView('devices'); return; }
+    if (gs.slot === 'kb') setKbInst(gs.instance); else setMoInst(gs.instance);
+    setView('keyboard');
+  };
+  const slotPicker = {
+    mode: view === 'devices' ? 'devices' as const : view === 'keyboard' ? 'keyboard' as const : 'jump' as const,
+    selected: view === 'devices' ? (shownDev ? [slotId(shownDev.gs)] : []) : view === 'keyboard' ? [`kb${kbInst}`, `mo${moInst}`] : [],
+    onPick: pickSlot,
+    axisLimit: AXIS_LIMIT,
+  };
   const kmSlots = { kb: slotMap.slots.filter((s) => s.slot === 'kb').map((s) => s.instance), mo: slotMap.slots.filter((s) => s.slot === 'mo').map((s) => s.instance) };
   const profilePanel = (
     <ProfilePanel profiles={store.profiles} profile={profile} versionLabel={versionLabel} slots={slotMap.slots}
       connected={(gs) => !!gs.hw && pads.some((p) => p.key === gs.hw!.key)}
       onSelect={(id) => setStore((s) => ({ ...s, activeId: id }))} onImport={() => fileRef.current?.click()} onExport={() => setExportOpen(true)}
       onDelete={() => setDeleting(true)} onNew={() => createLayout(false)} onDuplicate={() => createLayout(true)} onRevert={profile?.original ? revertImported : undefined}
-      onResetAll={resetAll} onOpenSlots={() => setDevicesOpen('slots')} onRefresh={() => refreshRef.current?.click()} />
+      onResetAll={resetAll} onOpenSlots={() => setDevicesOpen('slots')} onRefresh={() => refreshRef.current?.click()} picker={slotPicker} />
   );
 
   return (
@@ -763,7 +780,7 @@ export default function App() {
                 <Ico name="target" className="h-4 w-4" />
               </button>
             </div>
-            {(vf.input || (view === 'keyboard' && (kmSlots.kb.length > 1 || kmSlots.mo.length > 1))) && (
+            {(vf.input || (!wide && view === 'keyboard' && (kmSlots.kb.length > 1 || kmSlots.mo.length > 1))) && (
               <FilterGroup label="View" testid="section-view">
                 {vf.input && (
                   <div className="flex items-center gap-0.5 rounded-md border border-edge p-0.5" role="group" aria-label="Input types" data-filter="input">
@@ -776,8 +793,9 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                {view === 'keyboard' && kmSlots.kb.length > 1 && <SlotPick label="Keyboard" slot="kb" list={kmSlots.kb} value={kbInst} set={setKbInst} />}
-                {view === 'keyboard' && kmSlots.mo.length > 1 && <SlotPick label="Mouse" slot="mo" list={kmSlots.mo} value={moInst} set={setMoInst} />}
+                {/* narrow layout only: wide, kb / mo are picked in the profile card's Game slots list */}
+                {!wide && view === 'keyboard' && kmSlots.kb.length > 1 && <SlotPick label="Keyboard" slot="kb" list={kmSlots.kb} value={kbInst} set={setKbInst} />}
+                {!wide && view === 'keyboard' && kmSlots.mo.length > 1 && <SlotPick label="Mouse" slot="mo" list={kmSlots.mo} value={moInst} set={setMoInst} />}
               </FilterGroup>
             )}
             {(vf.unbound || vf.custom || vf.conflictOnly || vf.defaultOverlaps || (vf.categories && (selGroup || selMap))) && (
@@ -860,7 +878,7 @@ export default function App() {
           {view === 'keyboard' && <KeyboardView rows={visible} conflictRows={conflicts.byRow} onPick={pickKey} kb={kbInst} mo={moInst}
             flash={flash && (flash.hit.slot === 'kb' || flash.hit.slot === 'mo') ? { combo: flash.hit.inputs[0], at: flash.at } : null} />}
           {view === 'devices' && <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads}
-            slots={deviceSlots} slotMap={slotMap} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => setDevicesOpen('slots')} highlight={highlightOn} scroll={highlightOn && scrollOn}
+            slots={deviceSlots} slotMap={slotMap} selKey={devSel} onSelect={selectDevice} compact={!wide} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => setDevicesOpen('slots')} highlight={highlightOn} scroll={highlightOn && scrollOn}
             query={dq} chip={chip} onOpenAxis={(gs) => setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance })} axisLimit={AXIS_LIMIT} onRefresh={() => refreshRef.current?.click()}
             onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })} />}
           {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} hasProfile={!!profile} flash={flash?.keys} />}
@@ -928,16 +946,16 @@ function FilterGroup({ label, testid, children }: { label: string; testid: strin
   );
 }
 
-/** keyboard / mouse slot picker (kb1 · kb2…) for the Keyboard view */
+/** narrow layout (no sidebar): compact keyboard / mouse slot dropdown (kb1 · kb2…) for the Keyboard view */
 function SlotPick({ label, slot, list, value, set }: { label: string; slot: 'kb' | 'mo'; list: number[]; value: number; set: (n: number) => void }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-md border border-edge p-0.5" role="group" aria-label={`${label} slot`} data-testid={`km-slot-${slot}`}>
-      <Ico name={slot === 'kb' ? 'keyboard' : 'mouse'} className="mx-1 h-4 w-4 text-slate-500" />
-      {list.map((n) => (
-        <button key={n} type="button" onClick={() => set(n)} aria-pressed={value === n} data-km-slot={`${slot}${n}`}
-          className={`rounded px-1.5 py-0.5 font-mono text-[11px] ${value === n ? 'bg-hud/15 text-hud2' : 'text-slate-500 hover:text-slate-200'}`}>{slot}{n}</button>
-      ))}
-    </div>
+    <label className="flex items-center gap-1 rounded-md border border-edge py-0.5 pl-1.5 pr-0.5">
+      <Ico name={slot === 'kb' ? 'keyboard' : 'mouse'} className="h-4 w-4 text-slate-500" />
+      <select value={value} onChange={(e) => set(Number(e.target.value))} aria-label={`${label} slot`} data-testid={`km-slot-${slot}`}
+        className="rounded bg-panel2 px-1 py-0.5 font-mono text-[11px] text-slate-200 outline-none focus:ring-1 focus:ring-hud">
+        {list.map((n) => <option key={n} value={n}>{slot}{n}</option>)}
+      </select>
+    </label>
   );
 }
 
