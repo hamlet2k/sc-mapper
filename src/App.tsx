@@ -602,13 +602,28 @@ export default function App() {
         searchRef.current?.focus();
       }
     };
-    let depth = 0;
-    const zoneOf = (e: DragEvent): DropZone => ((e.target as HTMLElement | null)?.closest?.('[data-drop-zone]')?.getAttribute('data-drop-zone') === 'import' ? 'import' : 'refresh');
-    const enter = (e: DragEvent) => { if (e.dataTransfer?.types.includes('Files')) { depth++; setDragging(true); } };
-    const leave = () => { depth = Math.max(0, depth - 1); if (!depth) setDragging(false); };
-    const over = (e: DragEvent) => { e.preventDefault(); setDropZone(zoneOf(e)); };
+    // file drag & drop over the whole page. Cross-browser details (Firefox in particular): dragenter AND dragover are both
+    // cancelled (MDN: needed for the page to accept a drop), types is read as a list (DOMStringList in older engines), event
+    // targets can be text nodes (Firefox), dragenter / dragleave fire for every child crossed (counted), and a missing final
+    // dragleave when the pointer leaves the window can't leave the overlay stuck (it hides when dragover stops arriving).
+    let depth = 0, idle = 0;
+    const isFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types ?? []).includes('Files');
+    const elOf = (t: EventTarget | null) => { const n = t as Node | null; return (n && n.nodeType === 3 ? n.parentElement : n) as HTMLElement | null; };
+    const zoneOf = (e: DragEvent): DropZone => (elOf(e.target)?.closest?.('[data-drop-zone]')?.getAttribute('data-drop-zone') === 'import' ? 'import' : 'refresh');
+    const end = () => { depth = 0; window.clearTimeout(idle); setDragging(false); };
+    const keepAlive = () => { window.clearTimeout(idle); idle = window.setTimeout(end, 1200); };
+    const enter = (e: DragEvent) => { if (!isFiles(e)) return; e.preventDefault(); depth++; setDragging(true); keepAlive(); };
+    const leave = (e: DragEvent) => { if (!isFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) end(); };
+    const over = (e: DragEvent) => {
+      if (!isFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      setDragging(true); keepAlive();
+      setDropZone(zoneOf(e));
+    };
     const drop = (e: DragEvent) => {
-      e.preventDefault(); depth = 0; setDragging(false);
+      if (!isFiles(e) && !e.dataTransfer?.files.length) return;
+      e.preventDefault(); end();
       const files = e.dataTransfer?.files;
       if (!files?.length) return;
       // with a profile active, a dropped file refreshes the game state unless it lands on "Import as profile"
@@ -627,6 +642,7 @@ export default function App() {
       window.removeEventListener('dragleave', leave);
       window.removeEventListener('dragover', over);
       window.removeEventListener('drop', drop);
+      window.clearTimeout(idle);
     };
   }, [importFiles]);
   const refreshRef2 = useRef(refreshGameState);

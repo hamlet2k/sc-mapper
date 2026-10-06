@@ -74,6 +74,13 @@ interface Props {
  * purpose: in a usual window two views do not fit side by side at that height, so they stack and each photo gets the full width
  * (the device is the hero, the labels sit around it); very wide windows show them side by side. */
 const VIEW_MIN_H = 440, VIEW_MAX_H = 720;
+/** label-box layout, the same in the Devices view and the template editor (so a box sits exactly where it will be shown):
+ * boxes keep this many px from the canvas edges and this gap between each other */
+export const CALLOUT_EDGE_PX = 2, CALLOUT_GAP_PX = 3;
+/** label boxes have a fixed size in px, so a picture drawn at another width puts them elsewhere: the editor draws each picture
+ * at the width the Devices view last showed it (same picture = same view id and aspect ratio; a copy keeps both) */
+const shownWidth = new Map<string, number>();
+const widthKey = (t: { aspect: number }, viewId?: string) => `${viewId ?? '-'}:${t.aspect.toFixed(4)}`;
 /** soft blend of a cut-out product photo into the dark UI: faint cyan rim, cyan glow and a drop shadow */
 const PHOTO_FILTER = 'drop-shadow(0 0 1px rgba(139,233,255,.45)) drop-shadow(0 0 18px rgba(79,216,255,.16)) drop-shadow(0 14px 22px rgba(0,0,0,.75))';
 const PHOTO_BG = 'radial-gradient(ellipse 60% 55% at 50% 48%, rgba(79,216,255,.09), rgba(79,216,255,.025) 55%, rgba(0,0,0,0) 75%), linear-gradient(180deg, #070d16, #04070c)';
@@ -90,7 +97,9 @@ export function DeviceCanvas(props: Props) {
       {shown.map((v) => {
         const a = v.width / v.height;
         return (
-          <div key={v.id} className="min-w-0" style={{ flex: `${a} 1 ${Math.round(a * VIEW_MIN_H)}px`, maxWidth: Math.round(a * VIEW_MAX_H) }}>
+          <div key={v.id} className="min-w-0" style={props.editable && shownWidth.get(widthKey(viewTemplate(t, v.id), v.id))
+            ? { flex: 'none', width: shownWidth.get(widthKey(viewTemplate(t, v.id), v.id)) }
+            : { flex: `${a} 1 ${Math.round(a * VIEW_MIN_H)}px`, maxWidth: Math.round(a * VIEW_MAX_H) }}>
             <ViewCanvas {...props} template={viewTemplate(t, v.id)} photo caption={t.views!.length > 1 ? v.label : undefined} viewId={v.id} minWidth={0} />
           </div>
         );
@@ -128,31 +137,33 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
     stop.current = up;
   };
   useEffect(() => () => stop.current?.(), []);
-  // view mode: label boxes grow with their bindings, so push overlapping boxes apart (vertically) to keep every label readable
+  // label boxes grow with their bindings: keep them inside the canvas and push overlapping boxes apart (vertically) so every
+  // label stays readable. Done in the editor too, so the editor shows the boxes exactly where the Devices view will.
   const [nudge, setNudge] = useState<Record<string, number>>({});
   const relayout = useRef<() => void>(() => {});
   relayout.current = () => {
     const root = ref.current;
-    if (!root || editable) { if (Object.keys(nudge).length) setNudge({}); return; }
+    if (!root) return;
     const W = root.clientWidth, H = root.clientHeight;
     if (!W || !H) return;
+    if (!editable) shownWidth.set(widthKey(t, viewId), root.offsetWidth);
     const items = t.callouts.flatMap((c) => {
       const el = root.querySelector<HTMLElement>(`[data-callout="${CSS.escape(c.id)}"]`);
       if (!el) return [];
       const w = el.offsetWidth, h = el.offsetHeight;
       // keep the box inside the canvas horizontally (wide labels in a narrow label gutter would be cut off at the edge)
-      const x0 = c.box.x * W - w / 2, dx = x0 < 2 ? Math.min(2 - x0, W - 2 - (x0 + w)) : x0 + w > W - 2 ? Math.max(W - 2 - (x0 + w), 2 - x0) : 0;
+      const E = CALLOUT_EDGE_PX, x0 = c.box.x * W - w / 2, dx = x0 < E ? Math.min(E - x0, W - E - (x0 + w)) : x0 + w > W - E ? Math.max(W - E - (x0 + w), E - x0) : 0;
       return [{ id: c.id, x0: x0 + dx, x1: x0 + w + dx, dx, y: c.box.y * H, h }];
     }).sort((a, b) => a.y - b.y);
-    const gap = 3, placed: typeof items = [];
+    const gap = CALLOUT_GAP_PX, E = CALLOUT_EDGE_PX, placed: typeof items = [];
     for (const it of items) { // top-down: below any earlier box it overlaps horizontally
-      it.y = Math.max(it.y, it.h / 2 + 2); // not above the canvas top
+      it.y = Math.max(it.y, it.h / 2 + E); // not above the canvas top
       for (const p of placed) if (it.x0 < p.x1 - 1 && p.x0 < it.x1 - 1 && it.y - it.h / 2 < p.y + p.h / 2 + gap) it.y = p.y + p.h / 2 + gap + it.h / 2;
       placed.push(it);
     }
     for (let i = placed.length - 1; i >= 0; i--) { // bottom-up: keep boxes inside the canvas
       const it = placed[i];
-      it.y = Math.min(it.y, H - it.h / 2 - 2);
+      it.y = Math.min(it.y, H - it.h / 2 - E);
       for (let j = i + 1; j < placed.length; j++) { const p = placed[j]; if (it.x0 < p.x1 - 1 && p.x0 < it.x1 - 1 && it.y + it.h / 2 > p.y - p.h / 2 - gap) it.y = p.y - p.h / 2 - gap - it.h / 2; }
     }
     const next: Record<string, number> = {};
@@ -168,13 +179,13 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
     ro.observe(root);
     return () => ro.disconnect();
   }, []);
-  const by = (c: { id: string; box: Pt }) => c.box.y + (editable ? 0 : nudge[c.id] ?? 0);
-  const bx = (c: { id: string; box: Pt }) => c.box.x + (editable ? 0 : nudge[`x:${c.id}`] ?? 0);
+  const by = (c: { id: string; box: Pt }) => c.box.y + (nudge[c.id] ?? 0);
+  const bx = (c: { id: string; box: Pt }) => c.box.x + (nudge[`x:${c.id}`] ?? 0);
   const focused = !!viewId && pulse?.view === viewId;
   return (
     <div ref={ref} data-testid={viewId ? 'device-canvas-view' : 'device-canvas'} data-view={viewId} data-photo={photo ? '1' : undefined} data-focused={focused ? '1' : undefined}
       className={`relative w-full select-none overflow-hidden rounded-lg border border-edge/70 ${photo ? '' : t.image ? 'bg-black/30' : 'bg-[length:24px_24px] bg-[linear-gradient(rgba(79,216,255,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(79,216,255,.06)_1px,transparent_1px)]'} ${editable ? 'cursor-crosshair' : ''}`}
-      style={{ aspectRatio: String(t.aspect), minWidth, ...(photo ? { backgroundImage: PHOTO_BG } : {}) }}
+      style={{ aspectRatio: String(t.aspect), minWidth, ...(editable && !viewId && shownWidth.get(widthKey(t)) ? { width: shownWidth.get(widthKey(t)), minWidth: 0 } : {}), ...(photo ? { backgroundImage: PHOTO_BG } : {}) }}
       onClick={(e) => {
         if (!editable || !onCanvasClick) return;
         if (e.target === e.currentTarget || (e.target as Element).getAttribute?.('data-bg') === '1') onCanvasClick(at(e));

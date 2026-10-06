@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { slotDeviceName, slotId, type GameSlot } from '../lib/slots';
 import type { Profile } from '../lib/types';
-import { GamePathHint } from './GameState';
+import { DROP_HINT, GamePathHint } from './GameState';
+import { Tip } from './Tooltip';
 import { Ico, type IconName } from './icons';
 import { useEscape } from './useEscape';
 
@@ -40,7 +41,7 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
             <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-md border border-edge bg-panel p-1 shadow-xl" role="menu" data-testid="profile-menu">
               <MenuItem icon="filePlus" label="New profile from the game defaults" onClick={() => { setMenu(false); onNew(); }} />
               {profile && <MenuItem icon="duplicate" label="Duplicate this profile" onClick={() => { setMenu(false); onDuplicate(); }} />}
-              {profile && <MenuItem icon="refresh" label="Refresh game state (device order)…" onClick={() => { setMenu(false); onRefresh(); }} />}
+              {profile && <MenuItem icon="refresh" label="Refresh game state (device order)…" hint={DROP_HINT} onClick={() => { setMenu(false); onRefresh(); }} />}
               {profile && onRevert && <MenuItem icon="undo" label="Revert to the imported file" onClick={() => { setMenu(false); onRevert(); }} />}
               {profile && <MenuItem icon="reset" label="Reset every binding to the defaults" danger disabled={!profile.rebindCount} onClick={() => { setMenu(false); onResetAll(); }} />}
             </div>
@@ -59,6 +60,7 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
           )}
         </div>
         {profile && <GamePathHint className="mt-1" />}
+        {profile && <p className="mt-0.5 text-[10px] text-slate-500" data-testid="profile-drop-hint">Refresh picks the file, {DROP_HINT}.</p>}
         {slots.length ? (
           <ul className="mt-1.5 space-y-0.5" data-testid="sidebar-slots">
             {slots.map((gs) => (
@@ -83,18 +85,21 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
 function IconBtn({ icon, label, onClick, disabled, testid, tone, pressed }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean; testid: string; tone?: 'hud' | 'ok' | 'alert'; pressed?: boolean }) {
   const hover = tone === 'ok' ? 'hover:border-ok/70 hover:text-ok' : tone === 'alert' ? 'hover:border-alert/70 hover:text-alert' : 'hover:border-hud/70 hover:text-hud2';
   return (
-    <button type="button" onClick={onClick} disabled={disabled} title={label} aria-label={label} data-testid={testid} aria-pressed={pressed}
+    <Tip label={label}>
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={label} data-testid={testid} aria-pressed={pressed}
       className={`flex h-8 flex-1 items-center justify-center rounded border transition disabled:opacity-35 disabled:hover:border-edge disabled:hover:text-slate-400 ${pressed ? 'border-hud/70 bg-hud/15 text-hud2' : `border-edge text-slate-300 ${hover}`}`}>
       <Ico name={icon} className="h-4 w-4" />
     </button>
+    </Tip>
   );
 }
 
-function MenuItem({ icon, label, onClick, danger, disabled }: { icon: IconName; label: string; onClick: () => void; danger?: boolean; disabled?: boolean }) {
+function MenuItem({ icon, label, hint, onClick, danger, disabled }: { icon: IconName; label: string; hint?: string; onClick: () => void; danger?: boolean; disabled?: boolean }) {
   return (
     <button type="button" role="menuitem" onClick={onClick} disabled={disabled}
-      className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition disabled:opacity-40 ${danger ? 'text-slate-300 hover:bg-alert/10 hover:text-alert' : 'text-slate-300 hover:bg-hud/10 hover:text-hud2'}`}>
-      <Ico name={icon} className="h-3.5 w-3.5" /> {label}
+      className={`flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs transition disabled:opacity-40 ${danger ? 'text-slate-300 hover:bg-alert/10 hover:text-alert' : 'text-slate-300 hover:bg-hud/10 hover:text-hud2'}`}>
+      <Ico name={icon} className="mt-px h-3.5 w-3.5 shrink-0" />
+      <span>{label}{hint && <span className="block text-[10px] text-slate-500">{hint}</span>}</span>
     </button>
   );
 }

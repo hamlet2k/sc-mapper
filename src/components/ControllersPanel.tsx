@@ -114,7 +114,8 @@ export function ControllersPanel({ profile, pads, describe, slots, onClose, onRe
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-void/85 p-4 backdrop-blur-sm" onClick={onClose} data-testid="controllers-panel">
       <div className="hud-panel hud-corners my-4 w-full max-w-6xl rounded-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex flex-wrap items-center gap-3 border-b border-edge px-5 py-3">
+        <div className="flex items-center gap-3 border-b border-edge px-5 py-3" data-testid="controllers-header">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
           <h2 className="flex items-center gap-2 font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2"><Ico name="slots" className="h-5 w-5" /> Game slots &amp; controllers</h2>
           <div className="ml-4 flex rounded-md border border-edge p-0.5" role="tablist">
             {([['slots', 'Game slots'], ['tester', 'Input tester']] as const).map(([k, l]) => (
@@ -123,16 +124,13 @@ export function ControllersPanel({ profile, pads, describe, slots, onClose, onRe
             ))}
           </div>
           {profile && <span className="font-mono text-[11px] text-slate-500">{profile.name}</span>}
-          <span className="ml-auto flex flex-col items-end gap-0.5">
-            <RefreshGameButton onClick={onRefresh} disabled={!profile} />
-            {profile && <GamePathHint />}
-          </span>
-          <button type="button" onClick={onClose} className="rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2" aria-label="Close"><Ico name="close" /></button>
+          </div>
+          <button type="button" onClick={onClose} data-testid="controllers-close" className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-edge text-slate-400 hover:border-hud/60 hover:text-hud2" aria-label="Close"><Ico name="close" /></button>
         </div>
         <div className="space-y-4 p-5">
           {banner}
           <ChromiumBanner detected={pads.length} compact />
-          {tab === 'slots' && <SlotsTab profile={profile} pads={pads} describe={describe} slots={slots} />}
+          {tab === 'slots' && <SlotsTab profile={profile} pads={pads} describe={describe} slots={slots} onRefresh={onRefresh} />}
           {tab === 'tester' && (
             <section>
               <p className="mb-2 text-[11px] text-slate-500">Everything the browser reports, live. &quot;last&quot; shows the Star Citizen input a press or move would be captured as. If a device or button doesn&apos;t show up here, the browser can&apos;t see it.</p>
@@ -183,7 +181,7 @@ function usePressToPick(armed: boolean, describe: (l: readonly PadLike[]) => Pad
   }, [armed]);
 }
 
-function SlotsTab({ profile, pads, describe, slots }: { profile: Profile | null; pads: PadInfo[]; describe: (l: readonly PadLike[]) => PadInfo[]; slots: SlotActions }) {
+function SlotsTab({ profile, pads, describe, slots, onRefresh }: { profile: Profile | null; pads: PadInfo[]; describe: (l: readonly PadLike[]) => PadInfo[]; slots: SlotActions; onRefresh: () => void }) {
   const T = useTemplates();
   const { map } = slots;
   const [removing, setRemoving] = useState<GameSlot | null>(null);
@@ -205,6 +203,15 @@ function SlotsTab({ profile, pads, describe, slots }: { profile: Profile | null;
 
   return (
     <div className="space-y-4" data-testid="slots-tab">
+      {/* the game's current device order: refresh from a fresh export (picker or drop), and where the game saves it */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded border border-edge/70 bg-black/25 px-3 py-2 text-xs" data-testid="game-state-strip">
+        <RefreshGameButton onClick={onRefresh} disabled={!profile} />
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Exported layouts</span>
+          <GamePathHint />
+        </span>
+        {!profile && <span className="text-[11px] text-slate-500">Import a profile first: a refresh moves its mappings to the game&apos;s device order.</span>}
+      </div>
       <div className="rounded border border-hud/30 bg-hud/5 p-3 text-xs leading-relaxed text-slate-300">
         Star Citizen knows your devices as <b>game slots</b>: <code className="text-hud2">kb1</code>, <code className="text-hud2">mo1</code>, <code className="text-hud2">js1</code>, <code className="text-hud2">js2</code>… and <code className="text-hud2">gp1</code>.
         Each row is one slot: the device the game file names, the controller this browser sees for it, and the template that draws it. Only these slots are shown on the main page and written to the export.

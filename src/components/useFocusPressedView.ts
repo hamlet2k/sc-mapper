@@ -72,6 +72,11 @@ export function useFocusPressedView(t: DeviceTemplate, active: ReadonlySet<strin
       const mk = cid ? el.querySelector<Element>(`[data-marker="${CSS.escape(cid)}"], [data-region="${CSS.escape(cid)}"]`) : null;
       const sp = scrollParent(el);
       const port: Box = sp ? box(sp.getBoundingClientRect()) : { top: 0, bottom: window.innerHeight };
+      // the sticky slot bar / Groups line cover the top of the scroll area: a view under them isn't in sight
+      (sp ?? document).querySelectorAll<HTMLElement>('[data-sticky-head]').forEach((h) => {
+        const r = h.getBoundingClientRect();
+        if (r.bottom > port.top && r.top <= port.top + 1 + r.height) port.top = Math.max(port.top, r.bottom);
+      });
       const d = !scroll || performance.now() - userAt.current < USER_SCROLL_HOLD_MS ? 0 : scrollDelta(box(el.getBoundingClientRect()), port, mk ? box(mk.getBoundingClientRect()) : null);
       if (d) {
         const behavior: ScrollBehavior = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';

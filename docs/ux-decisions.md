@@ -283,3 +283,61 @@ Judgment calls made while building round 1, where the decisions above didn't say
 - **The arrows** stay as the manual fallback. Their tooltip reads "Move mappings to the next slot (use when the game renumbered your devices): …'s bindings, hardware, template and axis settings go to … The game's device order doesn't change." The undo label reads "Move mappings js1 ⇄ js2", and the notice adds "The game's own device order is never changed here."
 - **js9+ / gp2+ note:** uses the agreed text ("The game lists this device as jsN; … then refresh game state here."). It has buttons for Refresh game state and Game slots & controllers.
 - **Still to verify in game** (from the section above): whether a Product string in an `<options>` block that doesn't match makes the game drop or reassign bindings. Apply avoids the question by writing the game's own strings.
+
+## Round 5 live feedback (Oct 6, 2026)
+- **Input tester follows presses.**
+  - A new press or move scrolls its device card into sight (or, for a card taller than the screen, the pressed button / axis row) and flashes the card and that button.
+  - It reacts to rising edges only (`lib/testerFollow.ts`, unit-tested):
+    - A button held down fires once.
+    - An axis fires when it moves ≥ 0.5 from rest and re-arms only once back within 0.2, so noise and wobble around the threshold don't refire.
+    - A hat fires on a new direction.
+  - Scrolling is throttled: none while the card is already in sight (flash only), at least 0.7 s between automatic scrolls, and none for 2 s after the user scrolled by hand (wheel, touch, keys, scrollbar).
+  - Only the full tester (modal tab) follows; compact testers don't.
+- **Controllers modal header.**
+  - The header is the title row and tabs, plus a lone close button at the top right, vertically centred on the title row.
+  - Refresh game state and the mappings folder + copy moved into a strip at the top of the Game slots tab. The Input tester tab doesn't show them.
+- **Drag hint.** "or drag the exported file anywhere onto the page" now sits next to every Refresh entry:
+  - the Game slots strip;
+  - the profile card (under the folder);
+  - the profile ⋯ menu item;
+  - the js9+ note.
+- **Drop overlay in Firefox.** The handlers were made robust and are checked in a real Gecko (Playwright Firefox) with synthetic file drags:
+  - Both dragenter and dragover are cancelled (MDN: both are needed to accept a drop), and dropEffect is set to copy.
+  - `types` is read as a list.
+  - Text-node event targets (Gecko) resolve to their parent element. Before this fix, a drop on the text inside "Import as profile" counted as a refresh.
+  - Non-file drags are ignored.
+  - The enter/leave counter is kept, plus a fallback: the overlay hides 1.2 s after the last dragover, so a drag that leaves the window without a final dragleave can't leave it stuck.
+  - A native OS drag can't be automated headless. Real-desktop Firefox drag from Explorer is still worth a manual check.
+- **Settings → Star Citizen folder.**
+  - The game root defaults to `C:\Program Files\Roberts Space Industries\StarCitizen`, and the channel to LIVE (PTU / EPTU / TECH-PREVIEW also offered).
+  - The mappings folder `<root>\<channel>\user\client\0\controls\mappings\` is derived from them and shown with copy wherever the path appeared:
+    - the Game slots strip;
+    - the profile card;
+    - the drop overlay;
+    - Settings itself.
+  - Both are stored in localStorage (`sc-mapper:game-folder`). All path hints update live.
+  - Normalisation (unit-tested):
+    - quotes and spaces trimmed;
+    - `/` → `\` and repeated separators collapsed (a UNC `\\` prefix kept);
+    - no trailing separator, and the drive letter upper-cased;
+    - a pasted path that goes into a channel folder is cut back to the root, and that channel is selected;
+    - an empty value falls back to the default.
+- **Devices: sticky lines.**
+  - `<main>` is what scrolls (checked in the e2e; the canvas wrapper doesn't).
+  - The slot bar is `position: sticky` with a negative top (its height above the hardware / template line, plus main's top padding). The slot chips scroll away, and the hardware · template · icons · axis settings line (and the js9+ note) stays at the very top.
+  - The Groups line sticks right under it. The legend moved onto it, right-aligned, and it is always shown (even for templates without groups).
+  - Both have opaque backgrounds and z-40: above the callouts (z-20) and the view pulse (z-30), below modals (z-50).
+  - The "bring the pressed photo into sight" scroll treats the area under the sticky lines as hidden.
+- **Tooltips.**
+  - A small `Tip` component shows a visible bubble on hover (250 ms) and immediately on keyboard focus.
+  - It is portalled to `<body>`, so the rounded `overflow: hidden` icon groups and the sticky bar can't clip it. It hides on scroll, key press and click.
+  - It is used on the template icons, PNG / Print, the axis settings button, the profile card icons and the folder copy button.
+  - The icon buttons keep their aria-label and drop the native title, so two tooltips don't show at once.
+- **Template view vs editor.** There were two causes:
+  - The editor skipped the label layout pass: keep boxes inside the canvas, push overlapping ones apart. So a box near the top was cut off.
+  - It drew the picture at another width, and label boxes are px-sized, so they land elsewhere relative to the picture.
+  Fixes:
+  - One layout pass with shared constants (`CALLOUT_EDGE_PX` = 2, `CALLOUT_GAP_PX` = 3) runs in both modes.
+  - The editor draws each picture at the width the Devices view last showed it, keyed by view id + aspect ratio, which a customized copy keeps.
+  - Result: the e2e measures every URSA MINOR Combat label box in both modes and finds a max difference < 0.75 px. Screenshot `114-ursa-view-vs-editor.png`.
+  - Trade-off: in the editor, a box dragged onto another is pushed aside, exactly as the view will show it.

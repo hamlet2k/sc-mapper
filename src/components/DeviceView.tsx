@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChromiumBanner, ChromiumButtonNotice } from './ChromiumBanner';
 import { createPortal } from 'react-dom';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
@@ -14,7 +14,9 @@ import {
 } from '../lib/templates';
 import type { Binding, Row, Slot } from '../lib/types';
 import { CalloutBody, DeviceCanvas, TONE_STROKE, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
+import { DROP_HINT } from './GameState';
 import { Ico } from './icons';
+import { Tip } from './Tooltip';
 import { TemplateEditor } from './TemplateEditor';
 import { useFocusPressedView } from './useFocusPressedView';
 import { useSwapViews } from './useSwapViews';
@@ -60,10 +62,12 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 const ICON_BTN = 'flex h-7 w-7 items-center justify-center text-slate-300 transition hover:bg-hud/10 hover:text-hud2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-hud';
 const ICON_GROUP = 'flex items-stretch divide-x divide-edge overflow-hidden rounded border border-edge';
 const LABEL = 'font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500';
-/** an icon-only toolbar button: tooltip (title) and accessible name both carry the full label */
+/** an icon-only toolbar button: a visible tooltip on hover / keyboard focus, and the same text as its accessible name */
 function IconButton({ icon, label, onClick, testid }: { icon: Parameters<typeof Ico>[0]['name']; label: string; onClick: () => void; testid?: string }) {
-  return <button type="button" onClick={onClick} title={label} aria-label={label} data-testid={testid} className={ICON_BTN}><Ico name={icon} className="h-4 w-4" /></button>;
+  return <Tip label={label}><button type="button" onClick={onClick} aria-label={label} data-testid={testid} className={ICON_BTN}><Ico name={icon} className="h-4 w-4" /></button></Tip>;
 }
+/** opaque backgrounds for the sticky lines (the canvas and its callouts scroll underneath) */
+const STICKY_BAR_BG = 'linear-gradient(180deg, #0c1828, #08111d)';
 
 const NO_ACTIVE: Live = { active: new Set<string>(), values: {} };
 
@@ -233,6 +237,29 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
     catch (e) { notify('err', `Could not load the template picture: ${(e as Error).message}`); }
   };
   const axisLocked = instance > axisLimit[slot];
+  // sticky lines: the slot bar sticks with its chip strip scrolled away (negative top), so the hardware / template line stays
+  // in sight; the Groups + legend line sticks right under it. Both stick inside the scrolling <main>.
+  const barRef = useRef<HTMLElement>(null);
+  const lineRef = useRef<HTMLDivElement>(null);
+  const [stick, setStick] = useState({ bar: 0, groups: 0 });
+  useLayoutEffect(() => {
+    const bar = barRef.current, line = lineRef.current;
+    if (!bar || !line) return;
+    const measure = () => {
+      // sticky offsets count from the scroll container's padding edge: take its top padding out so the line meets the very top
+      let sp: HTMLElement | null = bar.parentElement;
+      while (sp && !/(auto|scroll)/.test(getComputedStyle(sp).overflowY)) sp = sp.parentElement;
+      const pad = sp ? parseFloat(getComputedStyle(sp).paddingTop) || 0 : 0;
+      const hide = line.offsetTop + 1; // the strip and the line's top border scroll away
+      const next = { bar: -hide - pad, groups: bar.offsetHeight - hide - pad };
+      setStick((s) => (s.bar === next.bar && s.groups === next.groups ? s : next));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, []);
   const exportJson = async () => {
     try { download(`${slug(tpl.name)}.sc-template.json`, `data:application/json;charset=utf-8,${encodeURIComponent(exportTemplates([await resolveTemplateImage(tpl)]))}`); }
     catch (e) { notify('err', `Template export failed: ${(e as Error).message}`); }
@@ -241,9 +268,10 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="device-slot-view" data-slot={`${slot}${instance}`}>
       {/* ---- slot bar: slot chips, then hardware · template (+ template tools) · axis settings for the selected slot ---- */}
-      <section className="hud-panel rounded-lg px-3 py-2.5 print:hidden" data-testid="device-slot-bar">
+      <section ref={barRef} className="hud-panel sticky z-40 rounded-lg px-3 py-2.5 print:hidden" data-testid="device-slot-bar" data-sticky-head
+        style={{ top: stick.bar, background: STICKY_BAR_BG }}>
         {strip}
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge/50 pt-2 text-xs" data-testid="device-slot-line">
+        <div ref={lineRef} className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge/50 pt-2 text-xs" data-testid="device-slot-line">
           <span className="flex min-w-0 items-center gap-1.5 text-slate-400" data-testid="device-hardware">
             <span className={LABEL}>Hardware</span>
             {opt.gs.hw ? <span className="max-w-[16rem] truncate text-slate-200" title={opt.pad ? padLabel(opt.pad) : opt.gs.hw.name}>{opt.pad ? padLabel(opt.pad) : opt.gs.hw.name}</span> : <span className="text-slate-500">none assigned</span>}
@@ -280,12 +308,15 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
             <input ref={importRef} type="file" accept=".json,application/json" className="hidden" data-testid="template-import-file"
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
           </span>
-          <button type="button" onClick={() => !axisLocked && onOpenAxis(opt.gs)} disabled={axisLocked} data-testid="slot-axis-settings"
+          <span className="ml-auto flex" data-testid="slot-axis-wrap">
+          <Tip label={axisLocked ? `Not available for ${slot}${instance}: Star Citizen only keeps axis settings for js1–js${axisLimit.js} / gp1 (see below)` : `Invert, exponent, custom response curves${slot === 'js' ? ' and deadzone / saturation' : ''} for ${slot}${instance} only`}>
+          <button type="button" onClick={() => !axisLocked && onOpenAxis(opt.gs)} aria-disabled={axisLocked || undefined} disabled={axisLocked} data-testid="slot-axis-settings"
             aria-label={`Axis settings & curves for ${slot}${instance}`} aria-describedby={axisLocked ? 'axis-locked-msg' : undefined}
-            title={axisLocked ? `Not available for ${slot}${instance}: see below` : `Invert, exponent, custom response curves${slot === 'js' ? ' and deadzone / saturation' : ''} for ${slot}${instance} only`}
-            className="ml-auto flex items-center gap-1.5 rounded border border-hud/50 bg-hud/10 px-2.5 py-1 font-display text-[11px] font-semibold uppercase tracking-wider text-hud2 transition hover:bg-hud/20 disabled:cursor-not-allowed disabled:border-edge disabled:bg-transparent disabled:text-slate-500">
+            className="flex items-center gap-1.5 rounded border border-hud/50 bg-hud/10 px-2.5 py-1 font-display text-[11px] font-semibold uppercase tracking-wider text-hud2 transition hover:bg-hud/20 disabled:cursor-not-allowed disabled:border-edge disabled:bg-transparent disabled:text-slate-500">
             <Ico name="curve" className="h-3.5 w-3.5" /> Axis settings &amp; curves <span className="font-mono normal-case">· {slot}{instance}</span>
           </button>
+          </Tip>
+          </span>
         </div>
         {axisLocked && (
           <div id="axis-locked-msg" className="mt-2 flex flex-wrap items-center gap-2 rounded border border-mod/40 bg-mod/5 px-3 py-1.5 text-[11px] text-slate-300" data-testid="axis-locked">
@@ -295,6 +326,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
               : <>The game lists this device as {slot}{instance}; Star Citizen only allows gamepad axis, inversion and curve tuning on gp1. The order comes from the game and Windows USB order, not this app. To tune it, change which devices connect first, then refresh game state here.</>}</span>
             <span className="ml-auto flex shrink-0 gap-1.5">
               <button type="button" onClick={onRefresh} data-testid="axis-refresh" className="flex items-center gap-1 rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20"><Ico name="refresh" className="h-3 w-3" /> Refresh game state</button>
+              <span className="self-center text-[10px] text-slate-500" data-testid="axis-drop-hint">{DROP_HINT}</span>
               <button type="button" onClick={onOpenControllers} data-testid="axis-reorder" className="flex items-center gap-1 rounded border border-edge px-2 py-0.5 text-slate-300 hover:border-mod/60 hover:text-mod"><Ico name="slots" className="h-3 w-3" /> Game slots &amp; controllers</button>
             </span>
           </div>
@@ -316,16 +348,18 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
         {tpl.notes && <span className="flex items-center gap-1 text-slate-400" data-testid="template-notes"><Ico name="info" className="h-3 w-3" /> {tpl.notes}</span>}
         <span className="flex items-center gap-1.5">{!opt.pad ? 'Connect the device (and press a button) for live highlight.' : highlight ? <><span className="h-1.5 w-1.5 rounded-full bg-ok" /><span className="text-ok">live: press or move a control and it lights up</span></> : <><span className="h-1.5 w-1.5 rounded-full bg-slate-500" />connected · highlight on press is off (Settings); grips still switch</>}</span>
         {filtering && <span className="text-mod" data-testid="device-search-status">{chipInputs.length ? `Pressed ${formatInput(slot, instance, chipInputs[0])}: ${matchCount ? 'selected below' : 'not on this picture (see the list on the right)'}` : `${matchCount} control${matchCount === 1 ? '' : 's'} match “${query.trim()}”`}</span>}
-        <Legend />
       </div>
-      {groups.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1 text-[11px] print:hidden">
-          <span className="text-slate-500">Groups:</span>
+      {/* Groups + legend: sticks under the slot bar while the picture scrolls */}
+      <div className="sticky z-40 -my-1.5 flex flex-wrap items-center gap-1 bg-void py-1.5 text-[11px] text-slate-500 shadow-[0_8px_10px_-8px_rgba(0,0,0,.8)] print:hidden" style={{ top: stick.groups }}
+        data-testid="device-groups-line" data-sticky-head>
+        {groups.length > 0 && <>
+          <span>Groups:</span>
           {[null, ...groups].map((g) => (
             <button key={g ?? '*'} type="button" onClick={() => setGroup(g)} className={`rounded border px-2 py-0.5 ${group === g ? 'border-hud/60 bg-hud/10 text-hud2' : 'border-edge text-slate-400'}`}>{g ?? 'All'}</button>
           ))}
-        </div>
-      )}
+        </>}
+        <Legend />
+      </div>
       {[...swap.groups].map(([g, ids]) => (
         <div key={g} className="flex flex-wrap items-center gap-1 text-[11px] print:hidden" data-testid="swap-views" data-swap={g}>
           <span className="text-slate-500">{g}:</span>

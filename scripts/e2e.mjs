@@ -1,6 +1,6 @@
 // End-to-end test + screenshots. Usage: node scripts/e2e.mjs [url]
 // Controllers are simulated by replacing navigator.getGamepads() (a headless browser has no real HID devices).
-import { chromium } from 'playwright';
+import { chromium, firefox } from 'playwright';
 import { readFileSync, writeFileSync } from 'node:fs';
 const url = process.argv[2] ?? 'http://localhost:4173/';
 const shots = new URL('../screenshots/', import.meta.url).pathname;
@@ -660,11 +660,11 @@ await page.waitForTimeout(300);
   const line = bar.getByTestId('template-line');
   const tools = line.getByTestId('template-tools'), pic = line.getByTestId('picture-tools');
   const labels = await tools.locator('button').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')));
-  const titlesOk = await line.locator('button').evaluateAll((bs) => bs.every((b) => b.title && b.title === b.getAttribute('aria-label') && !b.innerText.trim()));
+  const titlesOk = await line.locator('button').evaluateAll((bs) => bs.every((b) => b.getAttribute('aria-label') && !b.title && !b.innerText.trim())); // tooltip: the Tip bubble (round 5)
   check(await line.getByTestId('template-select').isVisible() && labels.length === 4 && /Customize a copy|Edit this template/.test(labels[0]) && /^New/.test(labels[1]) && /^Import/.test(labels[2]) && /^Export/.test(labels[3]),
     `template group: Customize a copy, New, Import, Export as icon buttons next to the Template dropdown (${labels.join(' | ')})`);
   check(await pic.locator('button').count() === 2 && /PNG/.test(await pic.getByTestId('device-png').getAttribute('aria-label')) && /Print/.test(await pic.getByTestId('device-print').getAttribute('aria-label')), 'second group: PNG, Print');
-  check(titlesOk, 'icon buttons: icon only, with a tooltip and the same accessible name');
+  check(titlesOk, 'icon buttons: icon only, with an accessible name (the visible tooltip is checked in round 5)');
   const [sb, tb, pb] = await Promise.all([line.getByTestId('template-select').boundingBox(), tools.boundingBox(), pic.boundingBox()]);
   check(Math.abs((sb.y + sb.height / 2) - (tb.y + tb.height / 2)) < 6 && Math.abs((tb.y + tb.height / 2) - (pb.y + pb.height / 2)) < 6 && pb.x - (tb.x + tb.width) >= 12, `dropdown and both groups on one line, the groups visibly apart (gap ${Math.round(pb.x - tb.x - tb.width)} px)`);
   check(await dv.getByTestId('device-slot-view').getByTestId('template-tools').count() === 1 && await bar.locator('[data-testid=template-tools]').count() === 1, 'no separate template button row any more');
@@ -1008,6 +1008,43 @@ const mozaSlots = await fpanel.locator('[data-testid=slot-row]').evaluateAll((rs
 check(mozaSlots.length === 2 && mozaSlots.every(([, t]) => /MOZA AB6/.test(t)), `MOZA bases added as slots (${mozaSlots.map((x) => x.join('=')).join(', ')})`);
 const moza133 = mozaSlots.find(([, t]) => /133 buttons/.test(t))?.[0];
 await fpanel.getByTestId('tab-tester').click();
+await fp.waitForTimeout(400);
+// round 5: a press scrolls its device card into sight and flashes it (held buttons don't repeat; the user scrolling wins)
+{
+  await fpanel.evaluate((el) => el.scrollTo(0, 0));
+  await fp.waitForTimeout(200);
+  const cardOf = (i) => fpanel.locator('[data-testid=tester-device]').nth(i);
+  const inSight = (i) => cardOf(i).evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= -1 && r.bottom <= window.innerHeight + 1; });
+  check(!(await inSight(14)), 'precondition: the last device (Bravo) is out of sight');
+  await fp.evaluate(() => window.__btn(14, 3, true));
+  await fp.waitForTimeout(900);
+  check(await inSight(14) && (await cardOf(14).getAttribute('data-flash')) !== null && await cardOf(14).locator('[data-tester-button="3"].tester-flash-chip').count() === 1,
+    'input tester: a press on the last device scrolls its card into sight and flashes it (and the button)');
+  await fp.screenshot({ path: shots + '114-input-tester-follow.png' });
+  const top1 = await fpanel.evaluate((el) => el.scrollTop);
+  await fp.mouse.move(800, 500);
+  await fp.mouse.wheel(0, -1500);
+  await fp.waitForTimeout(400);
+  const top2 = await fpanel.evaluate((el) => el.scrollTop);
+  await fp.evaluate(() => window.__btn(14, 3, false));
+  await fp.evaluate(() => window.__btn(14, 4, true));
+  await fp.waitForTimeout(700);
+  check(top2 < top1 && Math.abs((await fpanel.evaluate((el) => el.scrollTop)) - top2) < 2, `right after the user scrolled, a press doesn't pull the page back (${top1} -> ${top2})`);
+  await fp.evaluate(() => window.__btn(14, 4, false));
+  await fp.waitForTimeout(2100);
+  await fp.evaluate(() => window.__btn(14, 5, true));
+  await fp.waitForTimeout(900);
+  check(await inSight(14), 'after the pause, presses follow again');
+  const t3 = await fpanel.evaluate((el) => el.scrollTop);
+  await fp.evaluate(() => window.__btn(0, 1, true)); // held: one scroll to device #0, no fighting afterwards
+  await fp.waitForTimeout(900);
+  const t4 = await fpanel.evaluate((el) => el.scrollTop);
+  await fpanel.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await fp.waitForTimeout(2300);
+  check(t4 < t3 && (await fpanel.evaluate((el) => el.scrollTop)) > t4 + 100, 'a held button scrolls once, then lets the user scroll away');
+  await fp.evaluate(() => { window.__btn(0, 1, false); window.__btn(14, 5, false); });
+  await fp.waitForTimeout(200);
+}
 await fp.evaluate(() => window.__btn(13, 132, true));
 await fp.waitForTimeout(300);
 check(await fpanel.getByTestId('tester-over-cap').first().isVisible(), 'input tester marks buttons above 128');
@@ -1203,7 +1240,7 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   const rRow = (id) => rpanel.locator(`[data-testid=slot-row][data-slot="${id}"]`);
   check(/CarrierAce MFD L/.test(await rRow('js3').innerText()) && /Orion Pedals/.test(await rRow('js5').innerText()), 'slots now follow the game: js3 CarrierAce MFD L, js5 Orion Pedals');
   check((await rRow('js5').getByTestId('slot-count').innerText()) === '(1 custom)' && (await rRow('js3').getByTestId('slot-count').innerText()) === '(2 custom)', 'bindings moved with them (pedal yaw on js5, MFD bindings on js3)');
-  check(/Refresh game state \(2 devices renumbered\)/.test(await rpanel.getByTestId('slot-move-notice').innerText()) && await rpanel.getByTestId('refresh-game-state').isEnabled(), 'one undo step, with Refresh game state in the modal header');
+  check(/Refresh game state \(2 devices renumbered\)/.test(await rpanel.getByTestId('slot-move-notice').innerText()) && await rpanel.getByTestId('game-state-strip').getByTestId('refresh-game-state').isEnabled(), 'one undo step, with Refresh game state at the top of the Game slots tab');
   await rp.screenshot({ path: shots + '113-after-apply-slots-modal.png' });
   await rpanel.getByTestId('slot-move-undo').click();
   await rp.waitForTimeout(300);
@@ -1231,6 +1268,126 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   await rp.getByTestId('open-slots').click();
   await rp.waitForTimeout(300);
   check(/Orion Pedals/.test(await rRow('js5').innerText()) && (await rRow('js5').getByTestId('slot-count').innerText()) === '(1 custom)', 'the shifted profile has the pedal bindings on js5');
+
+  // ---- round 5: modal header = title row + tabs + a lone close button; refresh + folder live in the Game slots tab
+  console.log('\nround 5: controllers header, settings folder, sticky device lines, tooltips, view vs editor');
+  await rpanel.evaluate((el) => el.scrollTo(0, 0));
+  const hdr = rpanel.getByTestId('controllers-header');
+  const hb = await hdr.boundingBox(), cb = await hdr.getByTestId('controllers-close').boundingBox(), tb = await hdr.locator('h2').boundingBox();
+  check(await hdr.getByTestId('refresh-game-state').count() === 0 && await hdr.getByTestId('game-path').count() === 0, 'header: no Refresh game state / path any more');
+  check(Math.abs((cb.y + cb.height / 2) - (tb.y + tb.height / 2)) <= 3 && hb.x + hb.width - (cb.x + cb.width) <= 24, `header: close button alone at the top right, aligned with the title row (Δy ${Math.round((cb.y + cb.height / 2) - (tb.y + tb.height / 2))}px)`);
+  const strip = rpanel.getByTestId('game-state-strip');
+  check(await strip.getByTestId('refresh-game-state').isVisible() && /or drag the exported file anywhere onto the page/.test(await strip.innerText()) && await strip.getByTestId('game-path-copy').isVisible(),
+    'Game slots tab: strip with Refresh game state, the drag hint and the folder + copy');
+  const panelBox = await rpanel.locator('.hud-panel').first().boundingBox();
+  await rp.screenshot({ path: shots + '114-controllers-header.png', clip: { x: panelBox.x - 10, y: Math.max(0, panelBox.y - 10), width: panelBox.width + 20, height: 330 } });
+  await rpanel.getByTestId('tab-tester').click();
+  await rp.waitForTimeout(200);
+  check(await rpanel.getByTestId('game-state-strip').count() === 0, 'Input tester tab: no refresh strip');
+  await rp.keyboard.press('Escape');
+  await rp.waitForTimeout(200);
+  check(/or drag the exported file anywhere onto the page/.test(await rp.getByTestId('profile-drop-hint').innerText()), 'profile card: the drag hint next to Refresh');
+
+  // ---- settings: Star Citizen folder + channel -> mappings folder everywhere
+  await rp.getByTestId('open-settings').click();
+  const sm = rp.getByTestId('settings-modal');
+  check((await sm.getByTestId('setting-game-root').inputValue()) === 'C:\\Program Files\\Roberts Space Industries\\StarCitizen' && (await sm.getByTestId('setting-game-channel').inputValue()) === 'LIVE', 'settings: default game folder and LIVE');
+  await sm.getByTestId('setting-game-root').fill('  d:/Games//StarCitizen/  ');
+  await sm.getByTestId('setting-game-root').press('Enter');
+  await sm.getByTestId('setting-game-channel').selectOption('PTU');
+  await rp.waitForTimeout(150);
+  const want = 'D:\\Games\\StarCitizen\\PTU\\user\\client\\0\\controls\\mappings\\';
+  check((await sm.getByTestId('setting-game-root').inputValue()) === 'D:\\Games\\StarCitizen' && (await sm.getByTestId('game-path-text').innerText()).trim() === want,
+    `settings: folder normalised and the mappings folder derived (${(await sm.getByTestId('game-path-text').innerText()).trim()})`);
+  await rp.screenshot({ path: shots + '114-settings-game-folder.png' });
+  await sm.getByTestId('setting-game-root').fill('E:\\SC\\StarCitizen\\EPTU\\user\\client\\0\\controls\\mappings\\');
+  await sm.getByTestId('setting-game-root').press('Enter');
+  await rp.waitForTimeout(150);
+  check((await sm.getByTestId('setting-game-root').inputValue()) === 'E:\\SC\\StarCitizen' && (await sm.getByTestId('setting-game-channel').inputValue()) === 'EPTU', 'settings: a pasted mappings path is cut back to the game folder and its channel');
+  await sm.getByTestId('setting-game-root').fill('D:/Games/StarCitizen');
+  await sm.getByTestId('setting-game-root').press('Enter');
+  await sm.getByTestId('setting-game-channel').selectOption('PTU');
+  await rp.keyboard.press('Escape');
+  await rp.reload({ waitUntil: 'networkidle' });
+  check((await rp.getByTestId('profile-panel').getByTestId('game-path-text').innerText()).trim() === want, 'the folder persists (reload) and the profile card shows it');
+  await rp.getByTestId('open-slots').click();
+  await rp.waitForTimeout(200);
+  check((await rpanel.getByTestId('game-state-strip').getByTestId('game-path-text').innerText()).trim() === want, 'the Game slots strip shows the same folder');
+  await rp.keyboard.press('Escape');
+
+  // ---- Devices: the hardware / template line and the Groups + legend line stick while the picture scrolls
+  await rp.locator('[data-view-tab=devices]').click();
+  await rp.waitForTimeout(400);
+  await rp.getByTestId('device-slot-strip').locator('[data-slot-chip="js4"]').click();
+  await rp.getByTestId('template-select').selectOption('builtin-winctrl-ursa-combat');
+  await rp.waitForTimeout(1500);
+  const gl = rp.getByTestId('device-groups-line');
+  check(await gl.getByText('customized').isVisible() && await gl.getByRole('button', { name: 'All' }).isVisible(), 'legend moved onto the Groups line');
+  const scroller = await rp.evaluate(() => { const m = document.getElementById('main'); return { main: m.scrollHeight > m.clientHeight + 100, wrap: (() => { const w = document.querySelector('[data-print-area]'); return w.scrollHeight > w.clientHeight + 1; })() }; });
+  check(scroller.main && !scroller.wrap, 'Devices: <main> is the element that scrolls (not the canvas wrapper)');
+  await rp.evaluate(() => document.getElementById('main').scrollBy(0, 900));
+  await rp.waitForTimeout(300);
+  const st = await rp.evaluate(() => {
+    const m = document.getElementById('main').getBoundingClientRect();
+    const line = document.querySelector('[data-testid=device-slot-line]').getBoundingClientRect();
+    const grp = document.querySelector('[data-testid=device-groups-line]').getBoundingClientRect();
+    const hit = (r) => { const el = document.elementFromPoint(r.left + 40, r.top + r.height / 2); return !!el?.closest('[data-sticky-head]'); };
+    const strip = document.querySelector('[data-testid=device-slot-strip]').getBoundingClientRect();
+    return { lineTop: line.top - m.top, grpTop: grp.top - line.bottom, onTop: hit(line) && hit(grp), stripGone: strip.bottom <= m.top + 1, scrolled: document.getElementById('main').scrollTop };
+  });
+  check(st.scrolled >= 800 && st.lineTop >= -1 && st.lineTop < 4 && st.grpTop >= -1 && st.grpTop < 24 && st.onTop && st.stripGone,
+    `scrolled ${st.scrolled}px: hardware/template line stuck at the top (${Math.round(st.lineTop)}px), Groups line under it (${Math.round(st.grpTop)}px), both above the callouts, slot chips scrolled away`);
+  await rp.screenshot({ path: shots + '114-devices-sticky-lines.png' });
+  // tooltips on the icon buttons (a real bubble, not only the title attribute)
+  await rp.getByTestId('template-customize').hover();
+  await rp.waitForTimeout(500);
+  const tip = rp.getByRole('tooltip');
+  check(await tip.isVisible() && (await tip.innerText()) === 'Customize a copy of this template' && (await rp.getByTestId('template-customize').getAttribute('aria-label')) === 'Customize a copy of this template',
+    'hovering a template icon shows its tooltip (aria-label kept)');
+  await rp.screenshot({ path: shots + '114-template-tooltip.png' });
+  await rp.getByTestId('device-png').hover();
+  await rp.waitForTimeout(500);
+  check(/PNG/.test(await rp.getByRole('tooltip').innerText()), 'PNG button tooltip');
+  await rp.getByTestId('slot-axis-settings').hover();
+  await rp.waitForTimeout(500);
+  check(/Invert, exponent/.test(await rp.getByRole('tooltip').innerText()), 'Axis settings button tooltip');
+  await rp.getByTestId('device-print').focus();
+  await rp.keyboard.press('Shift+Tab'); await rp.keyboard.press('Tab');
+  await rp.waitForTimeout(150);
+  check(/Print/.test(await rp.getByRole('tooltip').innerText().catch(() => '')), 'tooltip also on keyboard focus');
+  await rp.mouse.move(5, 500);
+  await rp.evaluate(() => document.activeElement?.blur());
+
+  // ---- URSA MINOR Combat: the editor draws the picture exactly like the Devices view (same size, same label layout)
+  await rp.evaluate(() => document.getElementById('main').scrollTo(0, 0));
+  await rp.waitForTimeout(300);
+  const boxesIn = (sel) => rp.evaluate((sel) => {
+    const v = document.querySelector(sel).querySelector('[data-testid=device-canvas-view]');
+    const vr = v.getBoundingClientRect();
+    return { w: vr.width, h: vr.height, view: v.dataset.view, boxes: Object.fromEntries([...v.querySelectorAll('[data-callout]')].map((c) => { const r = c.getBoundingClientRect(); return [c.dataset.callout, [r.left - vr.left, r.top - vr.top, r.width, r.height]]; })) };
+  }, sel);
+  const inView = await boxesIn('[data-testid=device-view]');
+  const det = inView.boxes.det;
+  check(det && det[1] >= 1, `Lever detents box fully inside the picture in the Devices view (top ${det?.[1].toFixed(1)}px)`);
+  await rp.locator('[data-testid=device-view] [data-testid=device-canvas-view]').first().screenshot({ path: '/tmp/ursa-view.png' });
+  await rp.getByTestId('template-customize').click();
+  await rp.waitForTimeout(1500);
+  const inEd = await boxesIn('[data-testid=template-editor]');
+  const diffs = Object.entries(inView.boxes).map(([id, b]) => { const e = inEd.boxes[id]; return e ? Math.max(...b.map((v, k) => Math.abs(v - e[k]))) : 99; });
+  check(inEd.view === inView.view && Math.abs(inEd.w - inView.w) < 0.5 && Math.abs(inEd.h - inView.h) < 0.5 && Math.max(...diffs) < 0.75,
+    `editor draws the "${inView.view}" view at the same size (${Math.round(inEd.w)}×${Math.round(inEd.h)} vs ${Math.round(inView.w)}×${Math.round(inView.h)}) with every label box in the same place (max Δ ${Math.max(...diffs).toFixed(2)}px over ${diffs.length})`);
+  check(inEd.boxes.det && inEd.boxes.det[1] >= 1, `Lever detents box not cut off in the editor (top ${inEd.boxes.det?.[1].toFixed(1)}px)`);
+  await rp.locator('[data-testid=template-editor] [data-testid=device-canvas-view]').first().screenshot({ path: '/tmp/ursa-editor.png' });
+  const sbs = await rc.newPage();
+  const b64 = (f) => readFileSync(f).toString('base64');
+  await sbs.setViewportSize({ width: Math.round(inView.w) * 2 + 60, height: Math.round(inView.h) + 70 });
+  await sbs.setContent(`<body style="margin:0;background:#04070c;color:#8be9ff;font:12px monospace;display:flex;gap:20px;padding:10px 20px">
+    <figure style="margin:0"><figcaption>Devices view</figcaption><img src="data:image/png;base64,${b64('/tmp/ursa-view.png')}"></figure>
+    <figure style="margin:0"><figcaption>Template editor</figcaption><img src="data:image/png;base64,${b64('/tmp/ursa-editor.png')}"></figure></body>`);
+  await sbs.screenshot({ path: shots + '114-ursa-view-vs-editor.png' });
+  await sbs.close();
+  await rp.getByRole('button', { name: 'Cancel' }).click();
+  await rp.waitForTimeout(300);
   await rc.close();
 }
 
@@ -1395,6 +1552,53 @@ log('photo template (test-only layout via __SC_TEST_PHOTO_LAYOUTS)');
   check((await ed.getByTestId('device-canvas-view').getAttribute('data-view')) === 'front' && (await ed.locator('[data-anchor]').count()) === nFront + 1, 'editor: moving a callout to another view follows it there');
   await ed.getByRole('button', { name: 'Cancel', exact: true }).click();
   await pctx.close();
+}
+
+// ---- drag & drop in a real Firefox (Gecko): synthetic file drags exercise the page's handlers there (types list, text-node
+// targets, cancelled dragenter / dragover, the overlay hiding when the drag leaves without a final dragleave)
+console.log('\ndrop overlay in Firefox (Gecko)');
+{
+  let gecko = null;
+  try { gecko = await firefox.launch(); } catch (e) { console.log('  - skipped: Playwright Firefox not installed (npx playwright install firefox)'); }
+  if (gecko) {
+    const gp = await (await gecko.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
+    gp.on('pageerror', (e) => errors.push('[gecko] ' + String(e)));
+    await gp.goto(url, { waitUntil: 'networkidle' });
+    await gp.evaluate(() => localStorage.clear());
+    await gp.reload({ waitUntil: 'networkidle' });
+    const tunedX = readFileSync('scripts/fixtures/round4-tuned.xml', 'utf8'), repl = readFileSync('scripts/fixtures/round4-replugged.xml', 'utf8');
+    // enter on <body>, dragover / drop on a zone; textNode: use the zone's first text node as the event target (Gecko does that)
+    const gdrag = (name, text, zone, { textNode = false, drop = true } = {}) => gp.evaluate(async ({ name, text, zone, textNode, drop }) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([text], name, { type: 'text/xml' }));
+      const ev = (type) => new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true });
+      const enterCancelled = !document.body.dispatchEvent(ev('dragenter'));
+      await new Promise((r) => setTimeout(r, 120));
+      const zoneEl = document.querySelector(`[data-drop-zone="${zone}"]`);
+      let target = zoneEl ?? document.body;
+      if (textNode && zoneEl) { const w = document.createTreeWalker(zoneEl, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode()) && !n.textContent.trim()); if (n) target = n; }
+      const overCancelled = !target.dispatchEvent(ev('dragover'));
+      const overlay = !!document.querySelector('[data-testid=drop-overlay]');
+      if (drop) target.dispatchEvent(ev('drop'));
+      return { enterCancelled, overCancelled, overlay, textTarget: target.nodeType === 3, types: [...dt.types] };
+    }, { name, text, zone, textNode, drop });
+    const r1 = await gdrag('round4-tuned.xml', tunedX, 'import');
+    await gp.waitForTimeout(500);
+    check(r1.types.includes('Files') && r1.enterCancelled && r1.overCancelled && r1.overlay && (await gp.locator('#profile option').count()) === 2,
+      `Firefox: file drag shows the overlay (types ${r1.types.join('/')}, dragenter + dragover cancelled) and the drop imports`);
+    const r2 = await gdrag('round4-replugged.xml', repl, 'refresh', { textNode: true });
+    await gp.waitForTimeout(500);
+    check(r2.textTarget && await gp.getByTestId('rematch-banner').isVisible(), 'Firefox: drop on the Refresh zone (text-node target) refreshes the game state');
+    await gp.getByTestId('rematch-dismiss').click();
+    const r3 = await gdrag('round4-tuned.xml', tunedX, 'import', { textNode: true });
+    await gp.waitForTimeout(500);
+    check(r3.textTarget && (await gp.getByTestId('import-shift').isVisible() || (await gp.locator('#profile option').count()) === 3), 'Firefox: a text node inside "Import as profile" still counts as that zone');
+    if (await gp.getByTestId('import-shift').isVisible()) await gp.getByTestId('import-as-is').click();
+    await gdrag('round4-tuned.xml', tunedX, 'refresh', { drop: false }); // the drag leaves the window without a final dragleave
+    await gp.waitForTimeout(1600);
+    check(await gp.getByTestId('drop-overlay').count() === 0, 'Firefox: the overlay hides by itself when no dragover arrives any more (no stuck overlay)');
+    await gecko.close();
+  }
 }
 
 // persistence

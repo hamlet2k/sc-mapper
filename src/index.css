@@ -71,7 +71,12 @@ body {
 /* device photos: the view a press just brought into sight gets a short cyan rim pulse */
 @keyframes view-pulse { 0% { box-shadow: inset 0 0 0 2px rgba(139, 233, 255, 0.95), 0 0 0 1px rgba(79, 216, 255, 0.9), 0 0 28px 4px rgba(79, 216, 255, 0.45); } 100% { box-shadow: inset 0 0 0 1px transparent, 0 0 0 0 transparent, 0 0 0 0 transparent; } }
 .view-pulse { animation: view-pulse 1.2s ease-out forwards; }
-@media (prefers-reduced-motion: reduce) { .view-pulse { animation-duration: 0.01s; } }
+/* input tester: the card (and the button / axis row) of a just-pressed input */
+@keyframes tester-flash { 0% { box-shadow: inset 0 0 0 2px rgba(255, 181, 71, 0.95), 0 0 24px 2px rgba(255, 181, 71, 0.4); } 100% { box-shadow: inset 0 0 0 1px transparent, 0 0 0 0 transparent; } }
+.tester-flash { animation: tester-flash 1.4s ease-out forwards; }
+@keyframes tester-flash-chip { 0%, 30% { outline: 2px solid rgba(255, 181, 71, 1); outline-offset: 1px; } 100% { outline: 2px solid transparent; outline-offset: 3px; } }
+.tester-flash-chip { animation: tester-flash-chip 1.4s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) { .view-pulse, .tester-flash, .tester-flash-chip { animation-duration: 0.01s; } }
 @media (prefers-reduced-motion: reduce) { .flash-chip, .flash-key, .flash-row, .flash-card { animation-duration: 0.01s; outline: 2px solid var(--color-mod); } }
 
 /* printable device view: only the device picture with its callouts */

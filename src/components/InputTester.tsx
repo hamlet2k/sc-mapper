@@ -3,6 +3,7 @@ import { CHROMIUM_AXIS_CAP, CHROMIUM_BUTTON_CAP, GAME_BUTTON_CAP, gamepadInput, 
 import { getPads, padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { formatInput } from '../lib/inputs';
 import { browserName } from '../lib/browser';
+import { shouldFollowScroll, TesterFollow, type FollowHit } from '../lib/testerFollow';
 import { Ico } from './icons';
 
 interface LivePad { info: PadInfo; timestamp: number; buttons: { p: boolean; v: number }[]; axes: number[]; hats: boolean[]; last?: string; lastAt?: number }
@@ -33,8 +34,16 @@ function nameOf(info: PadInfo, e: Parameters<typeof joystickInput>[0]): string |
  * Live controller diagnostics: everything the browser exposes through the Gamepad API, updated every frame,
  * plus the Star Citizen input name each press/move would be captured as.
  */
-export function InputTester({ describe, compact, only }: { describe: (l: readonly PadLike[]) => PadInfo[]; compact?: boolean; only?: (p: PadInfo) => boolean }) {
+export function InputTester({ describe, compact, only, follow = !compact }: {
+  describe: (l: readonly PadLike[]) => PadInfo[]; compact?: boolean; only?: (p: PadInfo) => boolean;
+  /** a press or move scrolls its device card (and the button / axis) into sight and flashes it */
+  follow?: boolean;
+}) {
   const [live, setLive] = useState<LivePad[]>([]);
+  const [flash, setFlash] = useState<{ key: string; hit: FollowHit; n: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const followRef = useRef(follow);
+  useEffect(() => { followRef.current = follow; }, [follow]);
   const [env, setEnv] = useState<Env>(() => readEnv());
   const [log, setLog] = useState<LogLine[]>([]);
   const describeRef = useRef(describe);
@@ -42,18 +51,50 @@ export function InputTester({ describe, compact, only }: { describe: (l: readonl
 
   useEffect(() => {
     const tracker = new PadTracker();
+    const follower = new TesterFollow();
     const last = new Map<string, { name: string; at: number }>();
-    let raf = 0, lastPaint = 0, lastEnv = 0;
+    let raf = 0, lastPaint = 0, lastEnv = 0, lastScrollAt = 0, userScrollAt = 0, flashN = 0, pending: { key: string; hit: FollowHit } | null = null;
+    // the user scrolling by hand (wheel, touch, keys, scrollbar drag) pauses following for a moment
+    const userScrolled = () => { userScrollAt = performance.now(); };
+    const keyScroll = (e: KeyboardEvent) => { if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) userScrolled(); };
+    const scrollbarDown = (e: PointerEvent) => { const el = e.target as HTMLElement | null; if (el && el.scrollHeight > el.clientHeight && e.offsetX > el.clientWidth) userScrolled(); };
+    window.addEventListener('wheel', userScrolled, { passive: true });
+    window.addEventListener('touchmove', userScrolled, { passive: true });
+    window.addEventListener('keydown', keyScroll);
+    window.addEventListener('pointerdown', scrollbarDown);
+    /** after the cards re-rendered: bring the hit into sight (throttled) */
+    const goTo = (key: string, hit: FollowHit, now: number) => {
+      const card = rootRef.current?.querySelector<HTMLElement>(`[data-tester-key="${CSS.escape(key)}"]`);
+      if (!card) return;
+      const part = card.querySelector<HTMLElement>(hit.kind === 'button' ? `[data-tester-button="${hit.index}"]` : `[data-tester-axis="${hit.index}"]`) ?? card;
+      const scroller = scrollParent(card);
+      const view = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+      const r = part.getBoundingClientRect(), c = card.getBoundingClientRect();
+      const fits = c.height <= view.bottom - view.top;
+      // the card when it fits (its header names the device), else the pressed button / axis row
+      const visible = fits ? c.top >= view.top - 1 && c.bottom <= view.bottom + 1 : r.top >= view.top && r.bottom <= view.bottom;
+      if (!shouldFollowScroll({ now, visible, lastScrollAt, userScrollAt })) return;
+      lastScrollAt = now;
+      (fits ? card : part).scrollIntoView({ block: fits ? 'nearest' : 'center', behavior: 'smooth' });
+    };
     const loop = (now: number) => {
       const list = getPads();
       const infos = describeRef.current(list);
       const states = list.map((p) => snapshot(p));
       const evs = tracker.update(infos.map((d, i) => ({ key: d.key, state: states[i] })), now);
-      infos.forEach((d) => {
+      infos.forEach((d, i) => {
         const e = evs.get(d.key)?.[0];
         const n = e && nameOf(d, e);
         if (n) last.set(d.key, { name: n, at: Date.now() });
+        const st = states[i];
+        const hit = follower.update(d.key, st.buttons, st.axes, tracker.restOf(d.key)?.axes);
+        if (hit && followRef.current) pending = { key: d.key, hit };
       });
+      if (pending) {
+        const p = pending; pending = null;
+        setFlash({ ...p, n: ++flashN });
+        requestAnimationFrame(() => goTo(p.key, p.hit, performance.now()));
+      }
       if (now - lastPaint > 60) {
         lastPaint = now;
         setLive(list.map((p, i) => ({
@@ -70,7 +111,10 @@ export function InputTester({ describe, compact, only }: { describe: (l: readonl
     const on = (e: Event) => { const g = (e as GamepadEvent).gamepad; add(`${e.type === 'gamepadconnected' ? 'connected' : 'disconnected'} #${g?.index}: ${g?.id}`); };
     window.addEventListener('gamepadconnected', on);
     window.addEventListener('gamepaddisconnected', on);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('gamepadconnected', on); window.removeEventListener('gamepaddisconnected', on); };
+    return () => {
+      cancelAnimationFrame(raf); window.removeEventListener('gamepadconnected', on); window.removeEventListener('gamepaddisconnected', on);
+      window.removeEventListener('wheel', userScrolled); window.removeEventListener('touchmove', userScrolled); window.removeEventListener('keydown', keyScroll); window.removeEventListener('pointerdown', scrollbarDown);
+    };
   }, []);
 
   const shown = only ? live.filter((l) => only(l.info)) : live;
@@ -79,7 +123,7 @@ export function InputTester({ describe, compact, only }: { describe: (l: readonl
   );
 
   return (
-    <div className="space-y-2" data-testid="input-tester">
+    <div ref={rootRef} className="space-y-2" data-testid="input-tester">
       {!compact && (
         <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px]" data-testid="tester-env">
           <span className="rounded border border-edge px-1.5 py-0.5 text-slate-300">{env.browser}</span>
@@ -109,8 +153,10 @@ export function InputTester({ describe, compact, only }: { describe: (l: readonl
         const d = l.info;
         const tag = d.kind === 'gp' ? `gp${d.instance}` : `js${d.instance}`;
         const fresh = l.lastAt && Date.now() - l.lastAt < 2500;
+        const fl = flash?.key === d.key ? flash : null;
         return (
-          <div key={d.key} className="rounded-lg border border-edge/70 bg-black/30 p-3" data-testid="tester-device">
+          <div key={d.key} className="relative rounded-lg border border-edge/70 bg-black/30 p-3" data-testid="tester-device" data-tester-key={d.key} data-flash={fl ? fl.n : undefined}>
+            {fl && <span key={fl.n} aria-hidden className="tester-flash pointer-events-none absolute inset-0 rounded-lg" />}
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-mono text-[10px] text-slate-500">#{d.index}</span>
               <span className="font-semibold text-slate-100">{padLabel(d)}</span>
@@ -130,8 +176,8 @@ export function InputTester({ describe, compact, only }: { describe: (l: readonl
             {env.chromium && d.axes >= CHROMIUM_AXIS_CAP && <p className="mt-1 text-[10px] text-mod"><Ico name="alert" /> Only the first {CHROMIUM_AXIS_CAP} axes are visible in this browser.</p>}
             <div className="mt-2 flex flex-wrap gap-[3px]">
               {l.buttons.map((b, i) => (
-                <span key={i} title={`${d.kind === 'gp' ? GP_BUTTONS[i] ?? `button ${i + 1}` : `button${i + 1}`}: ${b.v.toFixed(2)}`}
-                  className={`flex h-5 min-w-[1.6rem] items-center justify-center rounded-sm border font-mono text-[9px] ${b.p ? 'border-mod bg-mod/40 text-white' : b.v > 0.02 ? 'border-hud/50 bg-hud/15 text-hud2' : i >= GAME_BUTTON_CAP && d.kind === 'js' ? 'border-dashed border-alert/70 text-alert/80' : 'border-edge/70 text-slate-500'}`}>
+                <span key={fl?.hit.kind === 'button' && fl.hit.index === i ? `f${fl.n}` : i} data-tester-button={i} title={`${d.kind === 'gp' ? GP_BUTTONS[i] ?? `button ${i + 1}` : `button${i + 1}`}: ${b.v.toFixed(2)}`}
+                  className={`flex h-5 min-w-[1.6rem] items-center justify-center rounded-sm border font-mono text-[9px] ${fl?.hit.kind === 'button' && fl.hit.index === i ? 'tester-flash-chip ' : ''}${b.p ? 'border-mod bg-mod/40 text-white' : b.v > 0.02 ? 'border-hud/50 bg-hud/15 text-hud2' : i >= GAME_BUTTON_CAP && d.kind === 'js' ? 'border-dashed border-alert/70 text-alert/80' : 'border-edge/70 text-slate-500'}`}>
                   {i + 1}
                 </span>
               ))}
@@ -141,7 +187,7 @@ export function InputTester({ describe, compact, only }: { describe: (l: readonl
                 const hat = l.hats[i];
                 const label = hat ? `hat ${isHatRest(v) ? 'centred' : hatDirection(v) ?? 'diagonal'}` : d.kind === 'gp' ? GP_AXES[i] ?? `axis ${i}` : JS_AXES[i] ?? `axis ${i}`;
                 return (
-                  <div key={i} className="flex items-center gap-2 font-mono text-[10px]">
+                  <div key={fl && fl.hit.kind !== 'button' && fl.hit.index === i ? `f${fl.n}` : i} data-tester-axis={i} className={`flex items-center gap-2 rounded font-mono text-[10px] ${fl && fl.hit.kind !== 'button' && fl.hit.index === i ? 'tester-flash-chip' : ''}`}>
                     <span className="w-24 shrink-0 truncate text-slate-500" title={`browser axis ${i}`}>A{i} {label}</span>
                     <span className="relative h-2 flex-1 rounded bg-edge/60">
                       <span className="absolute top-0 h-2 w-px bg-slate-500" style={{ left: '50%' }} />
@@ -162,4 +208,13 @@ export function InputTester({ describe, compact, only }: { describe: (l: readonl
       )}
     </div>
   );
+}
+
+/** nearest scrolling ancestor (the modal's overlay, or the page) */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
 }

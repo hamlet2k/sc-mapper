@@ -1,4 +1,7 @@
+import { useState } from 'react';
+import { CHANNELS, DEFAULT_GAME_ROOT, normalizeGameRoot, saveGameFolder, useGameFolder, type Channel } from '../lib/gameFolder';
 import type { DefaultsMeta } from '../lib/types';
+import { GamePathHint } from './GameState';
 import { Ico } from './icons';
 import { useEscape } from './useEscape';
 
@@ -47,6 +50,7 @@ export function SettingsModal({ settings, onChange, onClose, meta, versionLabel 
                 hint="Also brings the first highlighted row, conflict group or device photo into view. Off: it lights up and the page stays put." />
             </div>
           </section>
+          <GameFolderSettings />
           <section>
             <h3 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-mod">Advanced</h3>
             <div className="mt-2">
@@ -78,5 +82,46 @@ function Switch({ on, set, label, hint, disabled, testid }: { on: boolean; set: 
         <span className="block text-[11px] text-slate-500">{hint}</span>
       </span>
     </button>
+  );
+}
+
+/** Star Citizen folder + channel: the mappings folder shown next to "Refresh game state" and the import entries */
+function GameFolderSettings() {
+  const folder = useGameFolder();
+  const [draft, setDraft] = useState(folder.root);
+  const commit = () => {
+    const n = normalizeGameRoot(draft);
+    const root = n.root || DEFAULT_GAME_ROOT;
+    setDraft(root);
+    if (root !== folder.root || (n.channel && n.channel !== folder.channel)) saveGameFolder({ root, channel: n.channel ?? folder.channel });
+  };
+  return (
+    <section data-testid="settings-game-folder">
+      <h3 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-mod">Star Citizen folder</h3>
+      <p className="mt-0.5 text-[11px] text-slate-500">Where the game is installed on your PC. The browser can&apos;t open it by itself: the folder below is shown with a copy button next to “Refresh game state” and import, to paste into the file picker.</p>
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-[11px] text-slate-400">
+          Game folder (Windows path)
+          <input value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+            spellCheck={false} placeholder={DEFAULT_GAME_ROOT} data-testid="setting-game-root"
+            className="w-full rounded border border-edge bg-panel2 px-2 py-1.5 font-mono text-xs text-slate-200 outline-none focus:border-hud" />
+        </label>
+        <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+          Channel
+          <select value={folder.channel} onChange={(e) => saveGameFolder({ root: folder.root, channel: e.target.value as Channel })} data-testid="setting-game-channel"
+            className="rounded border border-edge bg-panel2 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-hud">
+            {CHANNELS.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        {folder.root !== DEFAULT_GAME_ROOT && (
+          <button type="button" onClick={() => { setDraft(DEFAULT_GAME_ROOT); saveGameFolder({ root: DEFAULT_GAME_ROOT, channel: folder.channel }); }}
+            className="rounded border border-edge px-2 py-1.5 text-[11px] text-slate-400 hover:border-hud/60 hover:text-hud2">Default</button>
+        )}
+      </div>
+      <div className="mt-2 rounded border border-edge/70 bg-black/20 px-2.5 py-1.5 text-[11px] text-slate-400">
+        <div className="mb-0.5 text-[10px] uppercase tracking-widest text-slate-500">Exported layouts (mappings folder)</div>
+        <GamePathHint />
+      </div>
+    </section>
   );
 }

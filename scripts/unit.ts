@@ -1387,4 +1387,43 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
   });
 }
 
+{
+  const gf = await import('../src/lib/gameFolder');
+  const tf = await import('../src/lib/testerFollow');
+  t('settings: Star Citizen folder is normalised (backslashes, no trailing separator, channel folder cut back)', () => {
+    assert.equal(gf.normalizeGameRoot('  "D:/Games/StarCitizen/" ').root, 'D:\\Games\\StarCitizen');
+    assert.equal(gf.normalizeGameRoot('c:\\Program Files\\\\Roberts Space Industries\\StarCitizen\\\\').root, 'C:\\Program Files\\Roberts Space Industries\\StarCitizen');
+    assert.equal(gf.normalizeGameRoot('\\\\nas\\games\\StarCitizen\\').root, '\\\\nas\\games\\StarCitizen');
+    assert.deepEqual(gf.normalizeGameRoot('E:\\SC\\StarCitizen\\ptu\\user\\client\\0\\controls\\mappings\\'), { root: 'E:\\SC\\StarCitizen', channel: 'PTU' });
+    assert.deepEqual(gf.normalizeGameRoot('E:/SC/StarCitizen/TECH-PREVIEW'), { root: 'E:\\SC\\StarCitizen', channel: 'TECH-PREVIEW' });
+    assert.equal(gf.mappingsPath({ root: gf.DEFAULT_GAME_ROOT, channel: 'LIVE' }), 'C:\\Program Files\\Roberts Space Industries\\StarCitizen\\LIVE\\user\\client\\0\\controls\\mappings\\');
+    assert.equal(gf.mappingsPath({ root: 'D:\\SC', channel: 'EPTU' }), 'D:\\SC\\EPTU\\user\\client\\0\\controls\\mappings\\');
+    assert.equal(gf.mappingsPath({ root: '', channel: 'LIVE' }).startsWith(gf.DEFAULT_GAME_ROOT), true);
+  });
+  t('input tester follow: rising edges only (held button, axis noise and hysteresis, hats)', () => {
+    const f = new tf.TesterFollow();
+    const rest = [0, 0, 9 / 7];
+    assert.equal(f.update('a', [false, false], [0, 0, 9 / 7], rest), null); // first poll records only
+    assert.deepEqual(f.update('a', [false, true], [0, 0, 9 / 7], rest), { kind: 'button', index: 1 });
+    assert.equal(f.update('a', [false, true], [0, 0, 9 / 7], rest), null, 'held: no repeat');
+    assert.equal(f.update('a', [false, false], [0.3, 0, 9 / 7], rest), null, 'noise below the threshold');
+    assert.deepEqual(f.update('a', [false, false], [0.6, 0, 9 / 7], rest), { kind: 'axis', index: 0 });
+    assert.equal(f.update('a', [false, false], [0.35, 0, 9 / 7], rest), null, 'still out (hysteresis)');
+    assert.equal(f.update('a', [false, false], [0.55, 0, 9 / 7], rest), null, 'wobbling around the threshold does not refire');
+    assert.equal(f.update('a', [false, false], [0.1, 0, 9 / 7], rest), null, 're-armed');
+    assert.deepEqual(f.update('a', [false, false], [-0.7, 0, 9 / 7], rest), { kind: 'axis', index: 0 });
+    assert.deepEqual(f.update('a', [false, false], [-0.7, 0, -1], rest), { kind: 'hat', index: 2 });
+    assert.equal(f.update('a', [false, false], [-0.7, 0, -1], rest), null, 'hat held');
+    assert.deepEqual(f.update('a', [true, false], [-0.7, 0.9, -1], rest), { kind: 'button', index: 0 }, 'a button wins over an axis in the same poll');
+    assert.equal(f.update('b', [true], [], []), null, 'a newly seen device (woken by this press) does not fire');
+  });
+  t('input tester follow: scroll throttle', () => {
+    const base = { now: 10_000, visible: false, lastScrollAt: 0, userScrollAt: 0 };
+    assert.equal(tf.shouldFollowScroll(base), true);
+    assert.equal(tf.shouldFollowScroll({ ...base, visible: true }), false, 'already in sight: flash only');
+    assert.equal(tf.shouldFollowScroll({ ...base, lastScrollAt: 9_600 }), false, 'just scrolled to another device');
+    assert.equal(tf.shouldFollowScroll({ ...base, userScrollAt: 9_000 }), false, 'the user is scrolling');
+  });
+}
+
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);
