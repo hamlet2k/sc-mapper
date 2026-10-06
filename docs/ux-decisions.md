@@ -497,3 +497,47 @@ Judgment calls made while building round 1, where the decisions above didn't say
 - It opens the same confirm as ⋯ → "Delete page…", which stays. Undo brings the page back. Deleting a page other than the shown one keeps the shown page.
 - Works the same on a "Customize a copy" of a built-in photo template. The e2e deletes a page of the URSA copy this way.
 - Screenshots: `117-input-picker.png` (retaken, with the capped picture) and `117-page-tab-delete.png`.
+
+## Round 8
+
+### Prepare the picture: the canvas is a fixed frame
+
+- **Model.** The chosen canvas (Auto / Stick / Throttle / Square / Custom) is drawn as a fixed frame in the right pane. Zoom and pan move and scale the *product* inside it, like a profile-photo cropper. One transform maps the picture to the output (`output px = picture px × k + (x, y)`). The stored picture is exactly what is inside the frame, at the canvas's output resolution (e.g. Stick 627 × 674 for the fixture). Code: `planFrame` / `framePhoto` / `zoomFraming` / `clampFraming` / `productRect` in `photoFormat.ts`.
+- **Initial framing = Fit.** The round 6/7 automatic result is the starting point: product trimmed, built-in scale (≤ 900 px), centred with the 5 % margin. "Fit" and double-click return to it. Changing the canvas shape starts again from Fit. `formatPhoto` is now planFrame + Fit framing and gives byte-identical output (unit test).
+- **Controls (right pane).** Wheel resizes the product around the cursor. Drag moves it. −/+ step by 25 %. The % readout is the product size relative to Fit, from 25 % to 400 %. Panning is clamped so that some of the product always stays in the frame.
+- **Cropping.** Parts of the product outside the frame are cut off. While editing they stay visible but dimmed (a 72 % dark mask outside the frame). A dashed box shows the whole product. The caption says "cut off at the frame edge" instead of the margin.
+- **Rendering.** The live layer (the whole picture at the transform) follows every drag instantly. The real output (glow included) is rendered after 140 ms of rest and overlaid on the frame. "Use …" is disabled until the output matches the current framing, so what you see is what is stored.
+- **Glow after framing.** The built-in glow is baked onto the framed output. Its size follows the product's on-canvas size, so a zoomed product gets a proportionally bigger glow. Opaque pictures fill the canvas with their background colour.
+- **Inspection (my call).** The left pane is a separate **Inspect** view with its own zoom: −/+, Fit, 100 % (1:1 with the uploaded file), wheel at the cursor, drag to pan. After background removal it gets an Original / Cut-out toggle (the cut-out on a checkerboard). It never changes the output, so you can check edge quality at 600 % without disturbing the framing. The two panes are no longer synced: one is a magnifier and the other is the crop tool.
+- The caption reserves two lines, so the frame doesn't jump when the caption grows ("cut off …").
+- Screenshot: `118-prepare-framing-stick.png` (Stick, product at 195 %, moved, knob/shaft cut off at the bottom, the outside dimmed). `117-prepare-zoomed.png` now shows the Inspect pane zoomed.
+
+### Every path from Settings (one helper)
+
+- `gamePaths(folder)` in `lib/gameFolder.ts` is the single source: `root`, `channel`, `channelDir` (`<root>\<channel>`), `mappings` (`…\user\client\0\Controls\Mappings\`), `actionmaps` (`…\user\client\0\Profiles\default\actionmaps.xml`), `p4k` (`<root>\<channel>\Data.p4k`). The hook is `useGamePaths()`, and it updates live when Settings change. The casing is now the game's own (`Controls\Mappings`, was `controls\mappings`).
+- **Locations, all derived from Settings:**
+  - **Settings:** mappings folder, live actionmaps.xml, and Data.p4k (defaults source in the footer). Copy on each.
+  - **Profile card:** mappings folder next to Refresh game state (GamePathHint). Copy.
+  - **🕹 Controllers → Game slots strip:** mappings folder (GamePathHint). Copy.
+  - **Devices view, js9+ axis-locked note:** "Fresh export from <mappings folder>" (new; there was no path before). Copy.
+  - **Export modal:** the layout guide's mappings folder and the actionmaps guide's `actionmaps.xml` path, with a note saying they come from Settings → Star Citizen folder and naming the channel. Copy on each.
+  - **Help:** actionmaps.xml path, mappings folder (+ channel note), Data.p4k for the defaultProfile.xml / global.ini hint. Copy on each.
+  - **Sidebar footer:** "Defaults: … (inside <Data.p4k>)". Copy.
+  - **Drop overlay:** mappings folder. Derived, but no copy button, because the overlay exists only during a drag.
+  - **README:** static text. It now writes `<game folder>\<channel>\…`, names the default folder and says the app builds every path from Settings.
+- File-name-only mentions (empty state, conflicts, "Import your actionmaps.xml") have no folder and stay as they are.
+
+### Copy buttons (paths and console commands)
+
+- `CopyButton` / `CopyText` (`components/CopyButton.tsx`) are shared everywhere. The button uses the Clipboard API with an `execCommand` fallback. Its tooltip names what it copies ("Copy the folder path" / "Copy the path" / "Copy the command"). After a click it shows a check icon plus a "Copied" chip for 1.5 s (`role=status`); if the browser refuses, the tooltip says "Copy blocked…".
+- **Console commands with copy:**
+  - **Export modal:** `pp_RebindKeys layout_<name>_exported.xml`, the bare-name fallback `pp_RebindKeys <name>`, `pp_resortdevices joystick 1 2`.
+  - **Help:** `pp_RebindKeys layout_<name>_exported.xml`.
+  - **🕹 Controllers compact note:** `pp_resortdevices joystick 1 2`.
+- Screenshot: `118-console-command-copy.png` (export guide right after copying the pp_RebindKeys line).
+
+### Export modal overflow
+
+- Paths and commands are code boxes with `overflow-wrap:anywhere`, plus a `<wbr>` after every backslash, so they break at folder boundaries first. The file names in the format cards and the "→ file" line wrap the same way. The header keeps the close button at the top right, with the title and stats wrapping beside it.
+- Below `md`, the whole body scrolls as one column: options, guide, then a 288 px preview. Wide, the two columns scroll on their own as before.
+- e2e checks that no text box overflows the modal at 1680 px and at 420 px. Screenshots: `118-export-paths.png`, `118-export-paths-narrow.png`, `118-export-paths-narrow-guide.png`, `118-settings-paths.png`.

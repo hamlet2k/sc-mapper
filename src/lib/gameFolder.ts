@@ -27,10 +27,19 @@ export function normalizeGameRoot(input: string): { root: string; channel?: Chan
   return { root: s };
 }
 
-/** <root>\<channel>\user\client\0\controls\mappings\ */
-export function mappingsPath(f: GameFolder): string {
-  return `${f.root || DEFAULT_GAME_ROOT}\\${f.channel}\\user\\client\\0\\controls\\mappings\\`;
+/** every game path the app shows, from the Settings folder + channel (the one place they are built):
+ *  channel  <root>\<channel>
+ *  mappings <channel>\user\client\0\Controls\Mappings\      (exported layouts: layout_<name>_exported.xml)
+ *  actionmaps <channel>\user\client\0\Profiles\default\actionmaps.xml (the live bindings file) */
+export interface GamePaths { root: string; channel: Channel; channelDir: string; mappings: string; actionmaps: string; p4k: string }
+export function gamePaths(f: GameFolder): GamePaths {
+  const root = f.root || DEFAULT_GAME_ROOT, channelDir = `${root}\\${f.channel}`, client = `${channelDir}\\user\\client\\0`;
+  return { root, channel: f.channel, channelDir, mappings: `${client}\\Controls\\Mappings\\`, actionmaps: `${client}\\Profiles\\default\\actionmaps.xml`, p4k: `${channelDir}\\Data.p4k` };
 }
+/** the mappings folder (with a trailing backslash) */
+export const mappingsPath = (f: GameFolder): string => gamePaths(f).mappings;
+/** a file in the mappings folder (e.g. an exported layout) */
+export const layoutPath = (f: GameFolder, file: string): string => gamePaths(f).mappings + file;
 
 export function loadGameFolder(): GameFolder {
   try {
@@ -53,3 +62,5 @@ export function saveGameFolder(f: GameFolder) {
 export function useGameFolder(): GameFolder {
   return useSyncExternalStore((fn) => { subs.add(fn); return () => subs.delete(fn); }, snapshot, snapshot);
 }
+/** the game paths for the saved folder, live */
+export const useGamePaths = (): GamePaths => gamePaths(useGameFolder());

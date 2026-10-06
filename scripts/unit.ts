@@ -1396,8 +1396,10 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.equal(gf.normalizeGameRoot('\\\\nas\\games\\StarCitizen\\').root, '\\\\nas\\games\\StarCitizen');
     assert.deepEqual(gf.normalizeGameRoot('E:\\SC\\StarCitizen\\ptu\\user\\client\\0\\controls\\mappings\\'), { root: 'E:\\SC\\StarCitizen', channel: 'PTU' });
     assert.deepEqual(gf.normalizeGameRoot('E:/SC/StarCitizen/TECH-PREVIEW'), { root: 'E:\\SC\\StarCitizen', channel: 'TECH-PREVIEW' });
-    assert.equal(gf.mappingsPath({ root: gf.DEFAULT_GAME_ROOT, channel: 'LIVE' }), 'C:\\Program Files\\Roberts Space Industries\\StarCitizen\\LIVE\\user\\client\\0\\controls\\mappings\\');
-    assert.equal(gf.mappingsPath({ root: 'D:\\SC', channel: 'EPTU' }), 'D:\\SC\\EPTU\\user\\client\\0\\controls\\mappings\\');
+    assert.equal(gf.mappingsPath({ root: gf.DEFAULT_GAME_ROOT, channel: 'LIVE' }), 'C:\\Program Files\\Roberts Space Industries\\StarCitizen\\LIVE\\user\\client\\0\\Controls\\Mappings\\');
+    assert.equal(gf.mappingsPath({ root: 'D:\\SC', channel: 'EPTU' }), 'D:\\SC\\EPTU\\user\\client\\0\\Controls\\Mappings\\');
+    assert.deepEqual(gf.gamePaths({ root: 'D:\\SC', channel: 'PTU' }), { root: 'D:\\SC', channel: 'PTU', channelDir: 'D:\\SC\\PTU', mappings: 'D:\\SC\\PTU\\user\\client\\0\\Controls\\Mappings\\', actionmaps: 'D:\\SC\\PTU\\user\\client\\0\\Profiles\\default\\actionmaps.xml', p4k: 'D:\\SC\\PTU\\Data.p4k' }, 'every shown path comes from the folder + channel');
+    assert.equal(gf.layoutPath({ root: 'D:\\SC', channel: 'LIVE' }, 'layout_x_exported.xml'), 'D:\\SC\\LIVE\\user\\client\\0\\Controls\\Mappings\\layout_x_exported.xml');
     assert.equal(gf.mappingsPath({ root: '', channel: 'LIVE' }).startsWith(gf.DEFAULT_GAME_ROOT), true);
   });
   t('input tester follow: rising edges only (held button, axis noise and hysteresis, hats)', () => {
@@ -1566,6 +1568,40 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
       assert.ok(b.x >= f.pad && b.y >= f.pad, `${id}: at least the 5 % margin`);
       assert.deepEqual([f.padX, f.padY], [b.x, b.y]);
     }
+  });
+  t('photo framing: the canvas is a fixed frame, the product moves / scales inside it and is cut off at the edges', () => {
+    const px = readPng('scripts/fixtures/photos/cutout-offcentre.png');
+    const plan = pf.planFrame(px, 990 / 1064);
+    const r0 = pf.productRect(plan, plan.framing);
+    assert.deepEqual([r0.w, r0.h, r0.cropped], [272, 612, false], 'Fit = the built-in scale, product inside the frame');
+    assert.ok(Math.abs(r0.x - (plan.W - r0.x - r0.w)) <= 1 && Math.abs(r0.y - (plan.H - r0.y - r0.h)) <= 1, 'Fit centres the product');
+    const fit = pf.framePhoto(px, plan, plan.framing, { look: false });
+    assert.deepEqual(fit.data, pf.formatPhoto(px, { look: false, aspect: 990 / 1064 }).px.data, 'Fit renders exactly the formatted picture');
+    // move the product half out of the left edge: the output is the frame's content only (the left half is cut off)
+    const moved = { ...plan.framing, x: plan.framing.x - (r0.x + r0.w / 2) };
+    const rm = pf.productRect(plan, moved);
+    const out = pf.framePhoto(px, plan, moved, { look: false });
+    assert.deepEqual([out.width, out.height], [plan.W, plan.H], 'output = the canvas resolution');
+    const b = pf.alphaBox(out)!;
+    assert.ok(rm.cropped && b.x === 0 && Math.abs(b.w - (rm.x + rm.w)) <= 1 && b.h === rm.h, `cut off at the left edge (${JSON.stringify(b)})`);
+    // zoom around a point keeps that point; the range is limited to 0.25x..4x of Fit
+    const z = pf.zoomFraming(plan, plan.framing, 2, 100, 200);
+    const src = (f: { k: number; x: number; y: number }) => [(100 - f.x) / f.k, (200 - f.y) / f.k];
+    assert.ok(Math.abs(src(z)[0] - src(plan.framing)[0]) < 1e-9 && Math.abs(src(z)[1] - src(plan.framing)[1]) < 1e-9 && Math.abs(z.k / plan.framing.k - 2) < 1e-12);
+    assert.equal(pf.zoomFraming(plan, plan.framing, 100, 0, 0).k, plan.framing.k * pf.FRAME_MAX_REL);
+    assert.equal(pf.clampFraming(plan, { ...plan.framing, k: plan.framing.k / 100 }).k, plan.framing.k * pf.FRAME_MIN_REL);
+    const big = pf.zoomFraming(plan, plan.framing, 2, plan.W / 2, plan.H / 2);
+    const rb = pf.productRect(plan, big);
+    assert.ok(rb.cropped && rb.w === 544, 'zoomed past the frame: cropped');
+    // the glow is applied after framing (cut-out only): it reaches into the frame's margin, and stops at the frame
+    const g = pf.framePhoto(px, plan, plan.framing, { look: true });
+    assert.ok(g.data[((r0.y + 300) * plan.W + r0.x - 6) * 4 + 3] > 0 && fit.data[((r0.y + 300) * plan.W + r0.x - 6) * 4 + 3] === 0, 'glow added around the product after framing');
+    // opaque pictures: the canvas outside the product is the background colour
+    const op = solid(300, 200, [250, 250, 250, 255]);
+    for (let y = 50; y < 150; y++) for (let x = 20; x < 120; x++) op.data.set([20, 30, 40, 255], (y * 300 + x) * 4);
+    const opl = pf.planFrame(op, 1);
+    const oo = pf.framePhoto(op, opl, { ...opl.framing, x: opl.framing.x + 50 }, { look: true });
+    assert.deepEqual([...oo.data.subarray(0, 4)], [250, 250, 250, 255]);
   });
   t('zoom view: fit the union, zoom keeps the point under the cursor, pan, place', () => {
     const v = zv.fitView([{ x: 0, y: 0, w: 100, h: 50 }, { x: -20, y: -10, w: 60, h: 80 }], 400, 400, 1);

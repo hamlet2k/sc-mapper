@@ -10,6 +10,7 @@ import { coveredInputs, maxButton, templateGroups, useTemplates, type DeviceTemp
 import type { Group, Profile, ProfileDevice, Slot } from '../lib/types';
 import { ChromiumBanner } from './ChromiumBanner';
 import { GamePathHint, RefreshGameButton } from './GameState';
+import { CopyText } from './CopyButton';
 import { InputTester } from './InputTester';
 import { Ico } from './icons';
 import { useEscape } from './useEscape';
@@ -74,7 +75,7 @@ export function DeviceList({ pads, group, activity, onAssign, onReset, profileDe
       {compact && (
         <p className="text-[10px] leading-relaxed text-slate-500">
           The game numbers joysticks in Windows device order (js1, js2…), which may differ from the browser&apos;s. Pick the number the game uses for each stick
-          (in game: <code>pp_resortdevices joystick 1 2</code> swaps them). More in <b>Game slots &amp; controllers</b>.
+          (in game, the console command <CopyText text="pp_resortdevices joystick 1 2" kind="command" testid="controllers-cmd-resort" className="text-slate-400" /> swaps them). More in <b>Game slots &amp; controllers</b>.
         </p>
       )}
     </div>

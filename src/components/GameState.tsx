@@ -1,8 +1,7 @@
 // "Refresh game state": read the game's current device order from a fresh export and move the mappings to it.
-import { useState } from 'react';
-import { mappingsPath, useGameFolder } from '../lib/gameFolder';
+import { useGamePaths } from '../lib/gameFolder';
+import { CopyText } from './CopyButton';
 import { rematchParts, type Rematch } from '../lib/rematch';
-import { Tip } from './Tooltip';
 import { Ico } from './icons';
 import { useEscape } from './useEscape';
 
@@ -10,25 +9,12 @@ import { useEscape } from './useEscape';
 export const DROP_HINT = 'or drag the exported file anywhere onto the page';
 
 /** the mappings folder (Settings → Star Citizen folder + channel), with a copy button (browsers can't open a folder by path) */
-export function GamePathHint({ className = '' }: { className?: string }) {
-  const path = mappingsPath(useGameFolder());
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(path); } catch { /* clipboard blocked: the path is still selectable */ }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
-  };
+export function GamePathHint({ className = '', file }: { className?: string; file?: 'actionmaps' }) {
+  const p = useGamePaths();
+  const path = file === 'actionmaps' ? p.actionmaps : p.mappings;
   return (
-    <span className={`inline-flex min-w-0 items-center gap-1 ${className}`} data-testid="game-path">
-      <code className="min-w-0 select-all break-words font-mono text-[10px] text-slate-400" data-testid="game-path-text" title="Where the game saves exported layouts (Settings → Star Citizen folder). Paste it into the file picker's address bar.">
-        {path.split('\\').map((part, i, all) => <span key={i}>{part}{i < all.length - 1 ? '\\' : ''}<wbr /></span>)}
-      </code>
-      <Tip label={copied ? 'Copied' : 'Copy the folder path'}>
-        <button type="button" onClick={() => void copy()} data-testid="game-path-copy" aria-label="Copy the folder path"
-          className="shrink-0 rounded border border-edge p-0.5 text-slate-400 hover:border-hud/60 hover:text-hud2">
-          <Ico name={copied ? 'check' : 'copy'} className={`h-3 w-3 ${copied ? 'text-ok' : ''}`} />
-        </button>
-      </Tip>
+    <span className={`inline-flex min-w-0 text-[10px] text-slate-400 ${className}`} title={file === 'actionmaps' ? 'The live bindings file (Settings → Star Citizen folder)' : 'Where the game saves exported layouts (Settings → Star Citizen folder). Paste it into the file picker\'s address bar.'}>
+      <CopyText text={path} kind={file === 'actionmaps' ? 'path' : 'folder'} testid={file === 'actionmaps' ? 'game-actionmaps-path' : 'game-path'} />
     </span>
   );
 }
@@ -106,7 +92,7 @@ export function ImportShiftDialog({ file, r, onShift, onAsIs, onCancel }: { file
 export type DropZone = 'refresh' | 'import';
 /** full-page drop overlay: with a profile active, "Refresh game state" (default, large) vs "Import as profile" */
 export function DropOverlay({ withRefresh, zone }: { withRefresh: boolean; zone: DropZone }) {
-  const path = mappingsPath(useGameFolder());
+  const path = useGamePaths().mappings;
   const box = (on: boolean) => `hud-corners flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-8 py-10 text-center transition ${on ? 'border-hud bg-hud/10 ring-2 ring-hud/40 shadow-[0_0_40px_-10px_var(--color-hud)]' : 'border-edge bg-panel/80 opacity-60'}`;
   if (!withRefresh) return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm" data-testid="drop-overlay">

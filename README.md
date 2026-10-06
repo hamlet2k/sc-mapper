@@ -7,8 +7,10 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
 ## Features
 - **Built-in defaults** from the game's `Data/Libs/Config/defaultProfile.xml`, with English labels from
   `Data/Localization/english/global.ini`. Current data: **Star Citizen Alpha 4.10.0 LIVE, build 4.10.193.11644 (Sep 15 2026)**.
-- **Import** `actionmaps.xml` (`StarCitizen/LIVE/user/client/0/Profiles/default/actionmaps.xml`) or exported layouts
-  (`…/Controls/Mappings/layout_*_exported.xml`). You can drag and drop or use the file picker. Rebinds (`kb1_`, `mo1_`, `jsN_`, `gp1_`)
+- **Import** `actionmaps.xml` (`<game folder>\<channel>\user\client\0\Profiles\default\actionmaps.xml`) or exported layouts
+  (`…\user\client\0\Controls\Mappings\layout_*_exported.xml`). The game folder (default
+  `C:\Program Files\Roberts Space Industries\StarCitizen`) and channel (LIVE / PTU / EPTU / TECH-PREVIEW) are set in Settings, and every
+  path the app shows (Help, Export, Refresh game state, the profile card) is built from them, with a copy button. You can drag and drop or use the file picker. Rebinds (`kb1_`, `mo1_`, `jsN_`, `gp1_`)
   are merged over the defaults per device slot. Customized bindings are marked amber, and cleared defaults show as *cleared*.
   Activation modes and multi-tap are kept, and device names are read from `<options Product=…>`.
 - **Organized by category:** flight, combat/targeting, mining/salvage/scanning, turrets, on-foot, EVA, ground vehicles,
@@ -46,9 +48,10 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
   - Undo (Ctrl+Z, or per action), reset an action, reset all, revert to the imported file, new layout from the defaults, duplicate.
     Editing the defaults creates a "My layout" profile automatically.
 - **Export** (⇩ Export) writes what the game writes:
-  - `layout_<name>_exported.xml` for `StarCitizen/LIVE/user/client/0/Controls/Mappings/`, loaded via
-    *Options → Keybindings → Control Profiles* or the console (`pp_RebindKeys <file>`), or
-  - a full `actionmaps.xml` for `…/user/client/0/Profiles/default/` (game closed, back up the original).
+  - `layout_<name>_exported.xml` for `<game folder>\<channel>\user\client\0\Controls\Mappings\`, loaded via
+    *Options → Keybindings → Control Profiles* or the console (`pp_RebindKeys <file>`; the Export dialog has copy buttons for the
+    folder and the commands), or
+  - a full `actionmaps.xml` for `…\user\client\0\Profiles\default\` (game closed, back up the original).
   Only bindings that differ from the defaults are written. Cleared defaults become an empty input (`kb1_ `). Device `<options>` blocks
   from imported files (curves, inverts, deadzones) are kept, and joystick names and product GUIDs are added for controllers seen in the browser.
   Re-exporting a real game-written layout reproduces it byte for byte (see tests).

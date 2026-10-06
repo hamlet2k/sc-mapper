@@ -329,19 +329,63 @@ export function bakeLook(px: Px, productSide = Math.max(px.width, px.height) / (
   return out;
 }
 
+/** where the product goes on the output canvas (the framing tool): output px = picture px × k + (x, y) */
+export interface Framing { k: number; x: number; y: number }
+/** what the framing works with: the trimmed product (`box`, in picture px), the output canvas W × H (product + 5 % margin,
+ * grown to the chosen aspect), the initial framing (product centred at the built-in scale = "Fit") */
+export interface FramePlan { mode: 'alpha' | 'opaque'; bg: Rgb | null; box: Box; W: number; H: number; pad: number; padX: number; padY: number; framing: Framing }
+/** framing zoom range, relative to the initial (Fit) scale */
+export const FRAME_MIN_REL = 0.25, FRAME_MAX_REL = 4;
+export function planFrame(px: Px, aspect?: number): FramePlan {
+  const alpha = hasTransparency(px);
+  const bg = alpha ? null : borderColor(px);
+  const box = (alpha ? alphaBox(px) : colorBox(px, bg!)) ?? { x: 0, y: 0, w: px.width, h: px.height };
+  const f = formatSize(box.w, box.h, aspect);
+  return { mode: alpha ? 'alpha' : 'opaque', bg, box, W: f.W, H: f.H, pad: f.pad, padX: f.padX, padY: f.padY, framing: { k: f.k, x: f.padX - box.x * f.k, y: f.padY - box.y * f.k } };
+}
+/** the product's rect on the output canvas for a framing (whole px), and whether part of it is cut off by the canvas edges */
+export function productRect(plan: Pick<FramePlan, 'box' | 'W' | 'H'>, fr: Framing): Box & { cropped: boolean } {
+  const { box } = plan;
+  const x = Math.round(box.x * fr.k + fr.x), y = Math.round(box.y * fr.k + fr.y), w = Math.max(1, Math.round(box.w * fr.k)), h = Math.max(1, Math.round(box.h * fr.k));
+  return { x, y, w, h, cropped: x < 0 || y < 0 || x + w > plan.W || y + h > plan.H };
+}
+/** framing clamped to the zoom range (scale kept around the canvas centre) */
+export function clampFraming(plan: Pick<FramePlan, 'framing' | 'W' | 'H'>, fr: Framing): Framing {
+  const k = Math.min(plan.framing.k * FRAME_MAX_REL, Math.max(plan.framing.k * FRAME_MIN_REL, fr.k));
+  if (k === fr.k) return fr;
+  const cx = plan.W / 2, cy = plan.H / 2, r = k / fr.k;
+  return { k, x: cx - (cx - fr.x) * r, y: cy - (cy - fr.y) * r };
+}
+/** zoom the product by `factor` around the output point (ox, oy) (it stays under the cursor) */
+export function zoomFraming(plan: Pick<FramePlan, 'framing' | 'W' | 'H'>, fr: Framing, factor: number, ox: number, oy: number): Framing {
+  const k = Math.min(plan.framing.k * FRAME_MAX_REL, Math.max(plan.framing.k * FRAME_MIN_REL, fr.k * factor)), r = k / fr.k;
+  return { k, x: ox - (ox - fr.x) * r, y: oy - (oy - fr.y) * r };
+}
+/** render a framing: exactly what lies inside the W × H canvas (the product scaled and placed, cut off at the edges; the rest
+ * transparent, or the background colour of an opaque picture), then the built-in glow (cut-outs only) */
+export function framePhoto(px: Px, plan: FramePlan, fr: Framing, opts: { look: boolean; resize?: (p: Px, w: number, h: number) => Px }): Px {
+  const { box, W, H, bg } = plan;
+  const r = productRect(plan, fr);
+  const out = padPx(makePx(0, 0), 0, bg ? [bg[0], bg[1], bg[2], 255] : [0, 0, 0, 0], 0, W, H);
+  const x0 = Math.max(0, r.x), x1 = Math.min(W, r.x + r.w), y0 = Math.max(0, r.y), y1 = Math.min(H, r.y + r.h);
+  if (x1 > x0 && y1 > y0) {
+    const prod = cropPx(px, box);
+    const scaled = r.w === box.w && r.h === box.h ? prod : (opts.resize ?? resizePx)(prod, r.w, r.h);
+    for (let y = y0; y < y1; y++) {
+      const sy = y - r.y;
+      out.data.set(scaled.data.subarray((sy * r.w + (x0 - r.x)) * 4, (sy * r.w + (x1 - r.x)) * 4), (y * W + x0) * 4);
+    }
+  }
+  return plan.mode === 'alpha' && opts.look ? bakeLook(out, Math.max(r.w, r.h)) : out;
+}
 export interface FormatResult { px: Px; mode: 'alpha' | 'opaque'; box: Box; k: number; pad: number; padX: number; padY: number; product: { w: number; h: number } }
 /** format like the built-in photos: trim (transparent edges, or the plain background of an opaque picture), scale the product
  * (longest side 900-1300 px), add the 5 % margin (transparent, or the background colour), grow the canvas to the chosen
  * `aspect` (product centred) and optionally add the built-in glow (cut-outs only). `resize` scales the trimmed product (a
  * canvas in the browser, resizePx in Node). */
 export function formatPhoto(px: Px, opts: { look: boolean; aspect?: number; resize?: (p: Px, w: number, h: number) => Px }): FormatResult {
-  const alpha = hasTransparency(px);
-  const bg = alpha ? null : borderColor(px);
-  const box = (alpha ? alphaBox(px) : colorBox(px, bg!)) ?? { x: 0, y: 0, w: px.width, h: px.height };
-  const prod = cropPx(px, box);
-  const f = formatSize(box.w, box.h, opts.aspect);
-  const scaled = f.w === box.w && f.h === box.h ? prod : (opts.resize ?? resizePx)(prod, f.w, f.h);
-  let out = padPx(scaled, f.padX, bg ? [bg[0], bg[1], bg[2], 255] : [0, 0, 0, 0], f.padY, f.W, f.H);
-  if (alpha && opts.look) out = bakeLook(out, Math.max(f.w, f.h));
-  return { px: out, mode: alpha ? 'alpha' : 'opaque', box, k: f.k, pad: f.pad, padX: f.padX, padY: f.padY, product: { w: f.w, h: f.h } };
+  const plan = planFrame(px, opts.aspect);
+  const r = productRect(plan, plan.framing);
+  const out = framePhoto(px, plan, plan.framing, opts);
+  return { px: out, mode: plan.mode, box: plan.box, k: plan.framing.k, pad: plan.pad, padX: plan.padX, padY: plan.padY, product: { w: r.w, h: r.h } };
 }

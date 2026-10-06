@@ -13,6 +13,8 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 const log = (...a) => console.log('•', ...a);
 const check = (ok, msg) => { console.log(ok ? '  ✓' : '  ✗', msg); if (!ok) failures.push(msg); };
+/** the picture preparation's output is rendered for the current framing (no model / render in progress) */
+const prepSettled = (pg) => pg.waitForFunction(() => { const a = document.querySelector('[data-testid=photo-prep-after]'); return a && a.dataset.stale !== '1' && !document.querySelector('[data-testid=photo-prep-progress]') && !document.querySelector('[data-testid=photo-prep-rendering]'); }, null, { timeout: 90000 }).then(() => pg.waitForTimeout(100));
 
 // ---- Gamepad API mock, modelled on Chrome's real behaviour:
 //  * navigator.getGamepads() returns [null, null, null, null] until a button is pressed on some controller (user gesture);
@@ -1221,7 +1223,7 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   await rp.waitForTimeout(400);
   check(/Imported “round4-tuned/.test(await rtoast()) && await rp.getByTestId('drop-overlay').count() === 0, 'dropped file imported as a profile');
   check(await rp.getByTestId('profile-refresh').isVisible() && await rp.getByTestId('game-path').first().isVisible(), 'profile card: Refresh entry and the usual folder path with a copy button');
-  check(/StarCitizen\\LIVE\\user\\client\\0\\controls\\mappings\\/.test(await rp.getByTestId('game-path').first().innerText()), 'the path reads StarCitizen\\LIVE\\user\\client\\0\\controls\\mappings\\');
+  check(/StarCitizen\\LIVE\\user\\client\\0\\Controls\\Mappings\\/.test(await rp.getByTestId('game-path').first().innerText()), 'the path reads StarCitizen\\LIVE\\user\\client\\0\\Controls\\Mappings\\');
 
   // the overlay with a profile: Refresh game state (default) vs Import as profile
   await dragIn('round4-replugged.xml', replugged, 'refresh');
@@ -1300,11 +1302,11 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   await sm.getByTestId('setting-game-root').press('Enter');
   await sm.getByTestId('setting-game-channel').selectOption('PTU');
   await rp.waitForTimeout(150);
-  const want = 'D:\\Games\\StarCitizen\\PTU\\user\\client\\0\\controls\\mappings\\';
+  const want = 'D:\\Games\\StarCitizen\\PTU\\user\\client\\0\\Controls\\Mappings\\';
   check((await sm.getByTestId('setting-game-root').inputValue()) === 'D:\\Games\\StarCitizen' && (await sm.getByTestId('game-path-text').innerText()).trim() === want,
     `settings: folder normalised and the mappings folder derived (${(await sm.getByTestId('game-path-text').innerText()).trim()})`);
   await rp.screenshot({ path: shots + '114-settings-game-folder.png' });
-  await sm.getByTestId('setting-game-root').fill('E:\\SC\\StarCitizen\\EPTU\\user\\client\\0\\controls\\mappings\\');
+  await sm.getByTestId('setting-game-root').fill('E:\\SC\\StarCitizen\\EPTU\\user\\client\\0\\Controls\\Mappings\\');
   await sm.getByTestId('setting-game-root').press('Enter');
   await rp.waitForTimeout(150);
   check((await sm.getByTestId('setting-game-root').inputValue()) === 'E:\\SC\\StarCitizen' && (await sm.getByTestId('setting-game-channel').inputValue()) === 'EPTU', 'settings: a pasted mappings path is cut back to the game folder and its channel');
@@ -1693,18 +1695,20 @@ console.log('\nround 6: template pages, picture preparation');
   await p6.getByTestId('photo-prep-format').click();
   const after = p6.getByTestId('photo-prep-after');
   await after.waitFor({ timeout: 10000 });
+  await prepSettled(p6);
   // product 160 x 360 -> upscaled 1.7x (to at most 900 px, as the built-ins) = 272 x 612, 5 % margin = 31 px
   const dims = async () => [await after.getAttribute('data-w'), await after.getAttribute('data-h'), await after.getAttribute('data-mode')].join(' ');
   check((await dims()) === '334 674 alpha' && (await p6.getByTestId('photo-prep-use').innerText()) === 'Use formatted', `format only: trimmed to the product, scaled like the built-ins, 5 % margin (${await dims()})`);
   const glowAt = () => after.evaluate(async (img) => { await img.decode(); const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const g = c.getContext('2d'); g.drawImage(img, 0, 0); return [g.getImageData(0, 0, 1, 1).data[3], g.getImageData(Math.round(c.width / 2), 27, 1, 1).data[3]]; });
   const [corner, margin] = await glowAt();
   await p6.getByTestId('photo-prep-look').uncheck();
-  await p6.waitForTimeout(300);
-  await p6.waitForFunction(() => !document.querySelector('[data-testid=photo-prep-progress]'));
+  await p6.waitForTimeout(50);
+  await prepSettled(p6);
   const [, marginPlain] = await glowAt();
   check(corner === 0 && margin > 0 && marginPlain === 0 && (await dims()) === '334 674 alpha', `built-in glow baked into the margin, off when unticked (corner ${corner}, margin ${margin} -> ${marginPlain})`);
   await p6.getByTestId('photo-prep-look').check();
-  await p6.waitForFunction(() => !document.querySelector('[data-testid=photo-prep-progress]'));
+  await p6.waitForTimeout(50);
+  await prepSettled(p6);
   await p6.getByTestId('photo-prep-use').click();
   await p6.waitForTimeout(300);
   const pv2 = ed.getByTestId('device-canvas-view');
@@ -1750,10 +1754,17 @@ console.log('\nround 6: template pages, picture preparation');
   await p6.getByTestId('photo-prep-progress').waitFor({ timeout: 3000 });
   const progressTxt = await p6.getByTestId('photo-prep-progress').getAttribute('aria-label');
   await after.waitFor({ timeout: 90000 });
+  await prepSettled(p6);
   const cut = await after.evaluate(async (img) => { await img.decode(); const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const g = c.getContext('2d'); g.drawImage(img, 0, 0); const a = (x, y) => g.getImageData(Math.round(x * (c.width - 1)), Math.round(y * (c.height - 1)), 1, 1).data[3]; return { engine: img.dataset.engine, corners: [a(0, 0), a(1, 0), a(0, 1), a(1, 1)], centre: a(0.5, 0.55), w: c.width, h: c.height }; });
   check(cut.engine === 'model' && cut.corners.every((v) => v === 0) && cut.centre > 240 && (await p6.getByTestId('photo-prep-use').innerText()) === 'Use cut-out',
     `background removed in the browser by the model (${photo.split('/').pop()}: ${cut.w}×${cut.h}, corners ${cut.corners.join('/')}, centre ${cut.centre}; ${((Date.now() - t0) / 1000).toFixed(1)} s incl. download; progress "${progressTxt}")`);
+  // the inspect pane switches to the cut-out (checkerboard), with an Original / Cut-out toggle
+  const shown0 = await p6.getByTestId('photo-prep-before').getAttribute('data-shown');
   await prep.locator('.hud-panel').screenshot({ path: shots + '115-cutout-before-after.png' });
+  await p6.getByTestId('photo-prep-inspect-original').click();
+  const shown1 = await p6.getByTestId('photo-prep-before').getAttribute('data-shown');
+  await p6.getByTestId('photo-prep-inspect-cutout').click();
+  check(shown0 === 'cutout' && shown1 === 'original' && (await p6.getByTestId('photo-prep-before').getAttribute('data-shown')) === 'cutout', 'inspect pane: shows the cut-out after removal, Original / Cut-out toggle');
   await p6.getByTestId('photo-prep-use').click();
   await p6.waitForTimeout(300);
   const pb3 = await ed.getByTestId('device-canvas-view').boundingBox();
@@ -1808,7 +1819,7 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   const ed = p7.getByTestId('template-editor');
   const prep = p7.getByTestId('photo-prep'), after = p7.getByTestId('photo-prep-after'), before = p7.getByTestId('photo-prep-before');
   const openPrep = async () => { await ed.getByTestId('tpl-upload-file').setInputFiles('scripts/fixtures/photos/cutout-offcentre.png'); await before.waitFor({ timeout: 5000 }); };
-  const settle = () => p7.waitForFunction(() => !document.querySelector('[data-testid=photo-prep-progress]')).then(() => p7.waitForTimeout(150));
+  const settle = () => prepSettled(p7);
   await openPrep();
   check((await p7.getByTestId('photo-prep-aspect-auto').getAttribute('aria-checked')) === 'true', 'canvas aspect starts at Auto');
   await p7.getByTestId('photo-prep-format').click();
@@ -1816,7 +1827,7 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   await settle();
   const dims = async () => [Number(await after.getAttribute('data-w')), Number(await after.getAttribute('data-h'))];
   check(JSON.stringify(await dims()) === '[334,674]', `Auto = the round-6 format (${await dims()})`);
-  // zoom buttons, % readout, 100 %, fit
+  // inspect pane (left): its own zoom (buttons, %, 100 %, Fit), wheel around the cursor, drag to pan; it never changes the output
   const zoom = p7.getByTestId('photo-prep-zoom');
   const zf = async () => Number(await zoom.getAttribute('data-z'));
   const pct = async () => (await p7.getByTestId('photo-prep-zoom-pct').innerText()).trim();
@@ -1825,59 +1836,67 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   await p7.getByTestId('photo-prep-zoom-in').click();
   const z2 = await zf(), pct2 = await pct();
   await p7.getByTestId('photo-prep-zoom-out').click();
-  check(Math.abs(z2 / z0 - 1.5625) < 1e-6 && Math.abs((await zf()) / z0 - 1.25) < 1e-6 && pct2 !== pct0, `+ / − zoom by 25 % steps (${pct0} -> ${pct2})`);
+  check(Math.abs(z2 / z0 - 1.5625) < 1e-6 && Math.abs((await zf()) / z0 - 1.25) < 1e-6 && pct2 !== pct0, `inspect: + / − zoom by 25 % steps (${pct0} -> ${pct2})`);
   await p7.getByTestId('photo-prep-zoom-100').click();
-  const pct100 = await pct();
-  // at 100 % one result pixel is one screen pixel: the after image is drawn at its natural size
-  const ab = await after.boundingBox();
-  check(pct100 === '100%' && Math.abs(ab.width - 334) < 1.5 && Math.abs(ab.height - 674) < 1.5, `100% shows the result 1:1 (${pct100}, ${ab.width.toFixed(1)}×${ab.height.toFixed(1)})`);
+  const pct100 = await pct(), bb100 = await before.boundingBox();
+  check(pct100 === '100%' && Math.abs(bb100.width - 800) < 1.5 && Math.abs(bb100.height - 600) < 1.5, `inspect: 100% shows the uploaded picture 1:1 (${bb100.width.toFixed(1)}×${bb100.height.toFixed(1)})`);
   await p7.getByTestId('photo-prep-zoom-fit').click();
-  check(Math.abs((await zf()) - z0) < 1e-9 && (await pct()) === pct0, 'Fit returns to the whole picture');
-  // the two panes show the same spot: the product box sits at the same place in both panes at every zoom
-  const frames = async () => {
-    const [bp, apn, bi, ai] = await Promise.all([p7.getByTestId('photo-prep-before-pane').boundingBox(), p7.getByTestId('photo-prep-after-pane').boundingBox(), before.boundingBox(), after.boundingBox()]);
-    return { bp, apn, bi, ai };
-  };
-  const productIn = (f) => {
-    // the product (original box 470,140 160×360 in the 800×600 fixture) in pane coordinates, from each pane's image
-    const nb = { x: f.bi.x - f.bp.x + (470 / natural[0]) * f.bi.width, y: f.bi.y - f.bp.y + (140 / natural[1]) * f.bi.height, w: (160 / natural[0]) * f.bi.width };
-    const pad = (334 - 272) / 2;
-    const na = { x: f.ai.x - f.apn.x + (pad / 334) * f.ai.width, y: f.ai.y - f.apn.y + (31 / 674) * f.ai.height, w: (272 / 334) * f.ai.width };
-    return { nb, na };
-  };
-  const natural = await before.evaluate((img) => [img.naturalWidth, img.naturalHeight]);
-  const inSync = async () => { const { nb, na } = productIn(await frames()); return Math.abs(nb.x - na.x) < 2 && Math.abs(nb.y - na.y) < 2 && Math.abs(nb.w - na.w) < 2; };
-  const sync0 = await inSync();
-  // wheel zoom around the cursor (before pane): the picture point under the cursor stays put, both panes follow
-  const f0 = await frames();
-  const mx = f0.bp.x + f0.bp.width * 0.62, my = f0.bp.y + f0.bp.height * 0.35;
-  const at = (f) => [(mx - f.bi.x) / f.bi.width, (my - f.bi.y) / f.bi.height];
-  const u0 = at(f0);
+  check(Math.abs((await zf()) - z0) < 1e-9 && (await pct()) === pct0, 'inspect: Fit returns to the whole picture');
+  const outKey = async () => [await after.getAttribute('src'), await p7.getByTestId('photo-prep-canvas-frame').getAttribute('data-k')].join('|');
+  const key0 = await outKey();
+  const bp = await p7.getByTestId('photo-prep-before-pane').boundingBox();
+  const mx = bp.x + bp.width * 0.62, my = bp.y + bp.height * 0.35;
+  const b0 = await before.boundingBox(), u0 = [(mx - b0.x) / b0.width, (my - b0.y) / b0.height];
   await p7.mouse.move(mx, my);
   for (let i = 0; i < 4; i++) { await p7.mouse.wheel(0, -100); await p7.waitForTimeout(60); }
   await p7.waitForTimeout(150);
-  const f1 = await frames(), u1 = at(f1);
-  check(natural.join('x') === '800x600' && f1.bi.width > f0.bi.width * 2 && Math.abs(u0[0] - u1[0]) * f1.bi.width < 2 && Math.abs(u0[1] - u1[1]) * f1.bi.height < 2 && sync0 && await inSync(),
-    `mouse wheel zooms around the cursor (×${(f1.bi.width / f0.bi.width).toFixed(2)}, point under the cursor kept), before/after panes in sync`);
-  // drag to pan (in the after pane): both pictures move by the drag
-  const ax = f1.apn.x + f1.apn.width / 2, ay = f1.apn.y + f1.apn.height / 2;
-  await p7.mouse.move(ax, ay);
-  await p7.mouse.down();
-  await p7.mouse.move(ax + 30, ay + 20, { steps: 3 });
-  await p7.mouse.move(ax + 60, ay + 40, { steps: 3 });
-  await p7.mouse.up();
-  await p7.waitForTimeout(100);
-  const f2 = await frames();
-  check(Math.abs(f2.bi.x - f1.bi.x - 60) < 1.5 && Math.abs(f2.bi.y - f1.bi.y - 40) < 1.5 && Math.abs(f2.ai.x - f1.ai.x - 60) < 1.5 && Math.abs(f2.ai.y - f1.ai.y - 40) < 1.5 && await inSync(), 'drag pans both panes together');
-  // zoom into the edge of the knob for the screenshot
+  const b1 = await before.boundingBox(), u1 = [(mx - b1.x) / b1.width, (my - b1.y) / b1.height];
+  await p7.mouse.down(); await p7.mouse.move(mx + 30, my + 20, { steps: 3 }); await p7.mouse.move(mx + 60, my + 40, { steps: 3 }); await p7.mouse.up();
+  await p7.waitForTimeout(150);
+  const b2 = await before.boundingBox();
+  check(b1.width > b0.width * 2 && Math.abs(u0[0] - u1[0]) * b1.width < 2 && Math.abs(u0[1] - u1[1]) * b1.height < 2 && Math.abs(b2.x - b1.x - 60) < 1.5 && Math.abs(b2.y - b1.y - 40) < 1.5 && (await outKey()) === key0,
+    `inspect: wheel zooms around the cursor (×${(b1.width / b0.width).toFixed(2)}, point kept), drag pans; the output is unchanged`);
+  // zoom the inspect pane into the knob's edge (screenshot)
   await p7.getByTestId('photo-prep-zoom-fit').click();
-  const fz = await frames(), { nb } = productIn(fz);
-  await p7.mouse.move(fz.bp.x + nb.x + nb.w * 0.215, fz.bp.y + nb.y + nb.w * 0.3); // the left edge of the red knob
+  const bf = await before.boundingBox();
+  await p7.mouse.move(bf.x + bf.width * (470 + 160 * 0.215) / 800, bf.y + bf.height * (140 + 160 * 0.3) / 600);
   for (let i = 0; i < 10; i++) { await p7.mouse.wheel(0, -100); await p7.waitForTimeout(30); }
   await p7.waitForTimeout(200);
-  check(parseInt(await pct()) >= 300, `zoomed in on the cut-out edge (${await pct()})`);
+  check(parseInt(await pct()) >= 300, `inspect: zoomed in on the edge (${await pct()})`);
   await prep.locator('.hud-panel').screenshot({ path: shots + '117-prepare-zoomed.png' });
   await p7.getByTestId('photo-prep-zoom-fit').click();
+  // framing pane (right): the Stick canvas is a fixed frame; the wheel resizes the product around the cursor, a drag moves it;
+  // what leaves the frame is cut off (shown dimmed) and the output is exactly the frame's content at the canvas resolution
+  await p7.getByTestId('photo-prep-aspect-stick').click();
+  await settle();
+  const cframe = p7.getByTestId('photo-prep-canvas-frame'), pframe = p7.getByTestId('photo-prep-product-frame');
+  const [W, H] = await dims();
+  const cf0 = await cframe.boundingBox(), pf0 = await pframe.boundingBox();
+  const fx = cf0.x + cf0.width * 0.5, fy = cf0.y + cf0.height * 0.3;
+  const v0 = [(fx - pf0.x) / pf0.width, (fy - pf0.y) / pf0.height];
+  await p7.mouse.move(fx, fy);
+  for (let i = 0; i < 3; i++) { await p7.mouse.wheel(0, -100); await p7.waitForTimeout(60); }
+  await p7.waitForTimeout(100);
+  const cf1 = await cframe.boundingBox(), pf1 = await pframe.boundingBox(), v1 = [(fx - pf1.x) / pf1.width, (fy - pf1.y) / pf1.height];
+  check(JSON.stringify(cf1) === JSON.stringify(cf0) && Math.abs(pf1.width / pf0.width - 1.953125) < 0.01 && Math.abs(v0[0] - v1[0]) * pf1.width < 1.5 && Math.abs(v0[1] - v1[1]) * pf1.height < 1.5 && (await p7.getByTestId('photo-prep-frame-pct').innerText()).trim() === '195%',
+    `framing: the canvas frame stays put, the wheel scales the product around the cursor (×${(pf1.width / pf0.width).toFixed(3)}, ${(await p7.getByTestId('photo-prep-frame-pct').innerText()).trim()})`);
+  await p7.mouse.move(fx, fy); await p7.mouse.down(); await p7.mouse.move(fx + 40, fy + 30, { steps: 4 }); await p7.mouse.move(fx + 80, fy + 60, { steps: 4 }); await p7.mouse.up();
+  await p7.waitForTimeout(100);
+  const pf2 = await pframe.boundingBox();
+  check(Math.abs(pf2.x - pf1.x - 80) < 1.5 && Math.abs(pf2.y - pf1.y - 60) < 1.5 && JSON.stringify(await cframe.boundingBox()) === JSON.stringify(cf0), 'framing: a drag moves the product inside the fixed frame');
+  await settle();
+  const live = await p7.getByTestId('photo-prep-frame-live').boundingBox();
+  const fr = await cframe.evaluate((el) => ({ k: Number(el.dataset.k), x: Number(el.dataset.x), y: Number(el.dataset.y), cropped: el.dataset.cropped, shadow: getComputedStyle(el).boxShadow }));
+  const r = { x: Math.round(470 * fr.k + fr.x), y: Math.round(140 * fr.k + fr.y), w: Math.round(160 * fr.k), h: Math.round(360 * fr.k) };
+  const ob = await after.evaluate(async (img) => { await img.decode(); const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data; let y1 = -1; for (let y = c.height - 1; y >= 0 && y1 < 0; y--) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 200) { y1 = y; break; } return { w: c.width, h: c.height, bottomOpaque: y1 }; });
+  const outTxt = await p7.getByTestId('photo-prep-output').innerText();
+  check(ob.w === W && ob.h === H && r.y + r.h > H && ob.bottomOpaque === H - 1 && fr.cropped === '1' && /cut off at the frame edge/.test(outTxt) && live.y + live.height > cf0.y + cf0.height + 20 && /rgba?\(3, 6, 11/.test(fr.shadow),
+    `framing output = the frame's content at ${W}×${H}: the product (${r.w}×${r.h} at ${r.x},${r.y}) runs past the bottom edge and is cut off there; the part outside is shown dimmed`);
+  await prep.locator('.hud-panel').screenshot({ path: shots + '118-prepare-framing-stick.png' });
+  await p7.getByTestId('photo-prep-frame-fit').click();
+  await settle();
+  const pf3 = await pframe.boundingBox();
+  check((await p7.getByTestId('photo-prep-frame-pct').innerText()).trim() === '100%' && Math.abs(pf3.width - pf0.width) < 1 && Math.abs(pf3.x - pf0.x) < 1 && (await cframe.getAttribute('data-cropped')) === null, 'framing: Fit returns to the initial framing (product centred, built-in scale)');
   // canvas aspect: stick / throttle / square / custom; the product keeps its size, centred, with at least the 5 % margin
   const centred = async () => {
     const [c, p] = await Promise.all([p7.getByTestId('photo-prep-canvas-frame').boundingBox(), p7.getByTestId('photo-prep-product-frame').boundingBox()]);
@@ -2025,6 +2044,97 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   const dc = await dv7.getByTestId('device-canvas').evaluate((el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height }; });
   check(Math.abs(dc.h - cv.h) < 1 && Math.abs(dc.w - cv.w) < 1, `Devices view draws it at the same capped size (${Math.round(dc.w)}×${Math.round(dc.h)})`);
   await c7.close();
+}
+
+// ---- round 8: every exposed path comes from Settings (game folder + channel), paths and console commands have copy buttons,
+// the export modal wraps its paths at any width
+console.log('\nround 8: paths from Settings, copy buttons, export modal wrapping');
+{
+  const c8 = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1, permissions: ['clipboard-read', 'clipboard-write'] });
+  const p8 = await c8.newPage();
+  p8.on('pageerror', (e) => errors.push('[r8] ' + String(e)));
+  await p8.goto(url, { waitUntil: 'networkidle' });
+  await p8.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+  await p8.waitForTimeout(800);
+  const txt = async (id, root = p8) => (await root.getByTestId(id).innerText()).replace(/\s+/g, '').trim();
+  const L = 'C:\\Program Files\\Roberts Space Industries\\StarCitizen\\LIVE';
+  // export modal: mappings folder + actionmaps path from the default folder, three console commands with copy buttons
+  await p8.getByTestId('profile-export').click();
+  const ex = p8.getByTestId('export-dialog');
+  await ex.waitFor();
+  const name = await p8.getByTestId('export-name').inputValue();
+  check((await txt('export-path-mappings-text')) === (L + '\\user\\client\\0\\Controls\\Mappings\\').replace(/\s+/g, '') && await ex.getByTestId('export-path-mappings-copy').isVisible(),
+    'export: the mappings folder comes from Settings (default LIVE) and has a copy button');
+  const cmds = [];
+  for (const id of ['export-cmd-rebind', 'export-cmd-rebind-bare', 'export-cmd-resort']) {
+    cmds.push((await ex.getByTestId(id + '-text').innerText()).trim());
+    check(await ex.getByTestId(id + '-copy').isVisible() && (await ex.getByTestId(id).getAttribute('data-copy-kind')) === 'command', `export: console command "${cmds.at(-1)}" has a copy button`);
+  }
+  check(cmds[0] === `pp_RebindKeys layout_${name}_exported.xml` && cmds[2] === 'pp_resortdevices joystick 1 2', `export commands follow the file name (${cmds.join(' · ')})`);
+  await ex.getByTestId('export-cmd-rebind-copy').click();
+  await p8.waitForTimeout(120);
+  const clip = await p8.evaluate(() => navigator.clipboard.readText());
+  check(clip === cmds[0] && (await ex.getByTestId('export-cmd-rebind-copy').getAttribute('data-copied')) === '1' && /Copied/.test(await ex.getByTestId('export-cmd-rebind').innerText()), `copy puts the command on the clipboard and says "Copied" (${clip})`);
+  { const g = await ex.getByTestId('export-guide').boundingBox(); await p8.screenshot({ path: shots + '118-console-command-copy.png', clip: { x: g.x - 8, y: g.y - 8, width: g.width + 16, height: g.height + 16 } }); }
+  await ex.getByRole('button', { name: /Replace actionmaps\.xml/ }).click();
+  await p8.waitForTimeout(150);
+  check((await txt('export-path-actionmaps-text')) === (L + '\\user\\client\\0\\Profiles\\default\\actionmaps.xml').replace(/\s+/g, '') && await ex.getByTestId('export-path-actionmaps-copy').isVisible(), 'export: the actionmaps.xml path comes from Settings too, with a copy button');
+  await ex.getByRole('button', { name: /Control profile/ }).click();
+  await p8.waitForTimeout(150);
+  await p8.waitForTimeout(1600);
+  await p8.screenshot({ path: shots + '118-export-paths.png' });
+  // no horizontal overflow in the modal: wide and at 420 px
+  const overflow = () => p8.evaluate(() => {
+    const dlg = document.querySelector('[data-testid=export-dialog]');
+    const box = dlg.querySelector('.hud-panel') || dlg;
+    const r = box.getBoundingClientRect();
+    const bad = [...box.querySelectorAll('code, span, p, li, div')].filter((e) => { if (e.getAttribute('role') === 'status') return false; const b = e.getBoundingClientRect(); return b.width > 0 && (b.right > r.right + 1 || b.left < r.left - 1 || (getComputedStyle(e).overflowX === 'visible' && e.scrollWidth > e.clientWidth + 1 && e.clientWidth > 0)); });
+    return { w: Math.round(r.width), vw: window.innerWidth, bad: bad.slice(0, 5).map((e) => e.tagName + ' ' + (e.dataset.testid || '') + ' ' + e.textContent.slice(0, 40)) };
+  });
+  const ow = await overflow();
+  await p8.setViewportSize({ width: 420, height: 900 });
+  await p8.waitForTimeout(300);
+  const on = await overflow();
+  const pr = await ex.getByTestId('export-path-mappings-text').boundingBox();
+  check(ow.bad.length === 0 && on.bad.length === 0 && on.w <= 420 && pr.width < 400, `export modal: no path or command overflows its box (wide ${ow.w}px, narrow ${on.w}px of ${on.vw}${on.bad.length ? ': ' + on.bad.join(' | ') : ''})`);
+  await p8.screenshot({ path: shots + '118-export-paths-narrow.png' });
+  await ex.getByTestId('export-guide').scrollIntoViewIfNeeded();
+  await p8.waitForTimeout(150);
+  await p8.screenshot({ path: shots + '118-export-paths-narrow-guide.png' });
+  await p8.setViewportSize({ width: 1680, height: 1000 });
+  await p8.keyboard.press('Escape');
+  await p8.waitForTimeout(200);
+  // settings: change folder + channel -> settings, export and help paths all follow
+  await p8.getByTestId('open-settings').click();
+  const sm = p8.getByTestId('settings-modal');
+  await sm.getByTestId('setting-game-root').fill('D:\\Games\\StarCitizen');
+  await sm.getByTestId('setting-game-root').press('Enter');
+  await sm.getByTestId('setting-game-channel').selectOption('PTU');
+  await p8.waitForTimeout(150);
+  const P = 'D:\\Games\\StarCitizen\\PTU';
+  check((await txt('game-path-text', sm)) === P + '\\user\\client\\0\\Controls\\Mappings\\' && (await txt('game-actionmaps-path-text', sm)) === P + '\\user\\client\\0\\Profiles\\default\\actionmaps.xml' && (await txt('settings-path-p4k-text', sm)) === P + '\\Data.p4k'
+    && await sm.getByTestId('game-path-copy').isVisible() && await sm.getByTestId('game-actionmaps-path-copy').isVisible() && await sm.getByTestId('settings-path-p4k-copy').isVisible(),
+    'settings: mappings folder, actionmaps.xml and Data.p4k derived from the folder + channel, each with a copy button');
+  await sm.getByTestId('game-actionmaps-path-copy').click();
+  await p8.waitForTimeout(100);
+  check((await p8.evaluate(() => navigator.clipboard.readText())) === P + '\\user\\client\\0\\Profiles\\default\\actionmaps.xml', 'settings: copying a path puts exactly the path on the clipboard');
+  await p8.waitForTimeout(1600);
+  await p8.screenshot({ path: shots + '118-settings-paths.png' });
+  await p8.keyboard.press('Escape');
+  await p8.waitForTimeout(200);
+  check((await txt('sidebar-path-p4k-text')) === P + '\\Data.p4k', 'sidebar: defaults source points at the Settings Data.p4k');
+  await p8.getByTestId('profile-export').click();
+  await ex.waitFor();
+  check((await txt('export-path-mappings-text')) === P + '\\user\\client\\0\\Controls\\Mappings\\', 'export: follows the Settings change (PTU)');
+  await p8.keyboard.press('Escape');
+  await p8.waitForTimeout(200);
+  await p8.getByTestId('open-help').click();
+  await p8.waitForTimeout(200);
+  check((await txt('help-path-actionmaps-text')) === P + '\\user\\client\\0\\Profiles\\default\\actionmaps.xml' && (await txt('help-path-mappings-text')) === P + '\\user\\client\\0\\Controls\\Mappings\\' && (await txt('help-path-p4k-text')) === P + '\\Data.p4k'
+    && (await p8.getByTestId('help-cmd-rebind-text').innerText()).trim() === 'pp_RebindKeys layout_<name>_exported.xml' && await p8.getByTestId('help-cmd-rebind-copy').isVisible(),
+    'help: actionmaps, mappings and Data.p4k paths from Settings, pp_RebindKeys with a copy button');
+  await p8.keyboard.press('Escape');
+  await c8.close();
 }
 
 // ---- drag & drop in a real Firefox (Gecko): synthetic file drags exercise the page's handlers there (types list, text-node

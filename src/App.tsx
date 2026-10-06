@@ -32,6 +32,8 @@ import { bindKey, comboLabel, groupOfDevice, groupOfSlot, searchSpec } from './l
 import { parseActionMaps, parseDeviceList, readXmlFile } from './lib/importer';
 import { applyRematch, computeRematch, knownDevices, shiftToOrder, type Rematch } from './lib/rematch';
 import { DropOverlay, ImportShiftDialog, RematchBanner, type DropZone } from './components/GameState';
+import { CopyText } from './components/CopyButton';
+import { useGamePaths } from './lib/gameFolder';
 import { buildRows } from './lib/merge';
 import { parseQuery, scoreRow } from './lib/search';
 import { load, save, type Persisted } from './lib/storage';
@@ -729,7 +731,7 @@ export default function App() {
             </div>
           )}
           <p className="mt-4 px-1 text-[10px] leading-relaxed text-slate-600">
-            Defaults: {meta.source} from build {meta.version} ({meta.buildDate}). Unofficial fan tool; not affiliated with Cloud Imperium Games.
+            Defaults: {meta.source} (inside <SidebarP4k />) from build {meta.version} ({meta.buildDate}). Unofficial fan tool; not affiliated with Cloud Imperium Games.
           </p>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
@@ -950,8 +952,14 @@ function Toggle({ on, set, label, tone, disabled, testid }: { on: boolean; set: 
   );
 }
 
+/** the game archive the defaults come from (Settings folder + channel), with copy */
+function SidebarP4k() {
+  return <CopyText text={useGamePaths().p4k} kind="path" testid="sidebar-path-p4k" />;
+}
+
 function HelpModal({ onClose }: { onClose: () => void }) {
   useEscape(onClose);
+  const paths = useGamePaths();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="hud-panel hud-corners max-w-2xl rounded-xl p-6 text-sm text-slate-300" onClick={(e) => e.stopPropagation()}>
@@ -962,11 +970,12 @@ function HelpModal({ onClose }: { onClose: () => void }) {
         <ol className="mt-4 list-decimal space-y-3 pl-5">
           <li>
             <b className="text-slate-100">Your live bindings</b> — the game stores every change you make in
-            <code className="mt-1 block rounded bg-black/40 px-2 py-1 font-mono text-xs text-hud/90">…\StarCitizen\LIVE\user\client\0\Profiles\default\actionmaps.xml</code>
+            <CopyText text={paths.actionmaps} kind="path" testid="help-path-actionmaps" block className="mt-1 rounded bg-black/40 px-2 py-1 text-xs text-hud/90" />
           </li>
           <li>
             <b className="text-slate-100">An exported layout</b> — in game: Options → Keybindings → Advanced Controls Customization → Control Profiles → Save Control Settings. Files land in
-            <code className="mt-1 block rounded bg-black/40 px-2 py-1 font-mono text-xs text-hud/90">…\StarCitizen\LIVE\user\client\0\Controls\Mappings\layout_&lt;name&gt;_exported.xml</code>
+            <CopyText text={paths.mappings} kind="folder" testid="help-path-mappings" block className="mt-1 rounded bg-black/40 px-2 py-1 text-xs text-hud/90" />
+            <span className="text-xs text-slate-500">as <code>layout_&lt;name&gt;_exported.xml</code>. Paths use your folder and channel ({paths.channel}) from Settings → Star Citizen folder.</span>
           </li>
           <li>Drag the file onto this page (or use <b>Import XML</b>). It is parsed locally in your browser and saved in localStorage — nothing is uploaded.</li>
         </ol>
@@ -976,7 +985,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
           <li>Keyboard, mouse, gamepads and joysticks/HOTAS are captured live. Controllers use the browser&apos;s Gamepad API; press a button first so the browser reveals them. <b className="text-slate-200">Game slots &amp; controllers</b> (in the profile panel) lists the game slots (kb1, mo1, js1, js2…, gp1) with the hardware and template for each, and has a live input tester.</li>
           <li><b className="text-slate-200">Find by pressing</b> (the target icon inside the search box): press a controller button, hat or axis, or a key, and the current view narrows to that exact input (on Devices it jumps to that control). With <b>Highlight on press</b> on (Settings), pressing an input while you&apos;re not searching or editing briefly highlights its bindings, keys, conflict groups or device callouts.</li>
           <li><b className="text-slate-200">Axis settings &amp; curves</b> (the button on each joystick / gamepad slot in the Devices view): invert, exponent and custom response curves per control, and deadzone / saturation per axis, read from and written back to your file.</li>
-          <li><b className="text-slate-200">Export</b> (profile panel) writes <code>layout_&lt;name&gt;_exported.xml</code> for <code>…\user\client\0\Controls\Mappings</code> (load via Options → Keybindings → Control Profiles, or <code>pp_RebindKeys</code>) or a full <code>actionmaps.xml</code>. Only changes from the defaults are written.</li>
+          <li><b className="text-slate-200">Export</b> (profile panel) writes <code>layout_&lt;name&gt;_exported.xml</code> for the mappings folder above (load via Options → Keybindings → Control Profiles, or the console: <CopyText text="pp_RebindKeys layout_<name>_exported.xml" kind="command" testid="help-cmd-rebind" className="rounded bg-black/40 px-1 text-hud/90" />, with your file name) or a full <code>actionmaps.xml</code>. Only changes from the defaults are written.</li>
         </ul>
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-xs text-slate-400">
           <span><span className="text-hud2">quantum</span> fuzzy search names</span>
@@ -987,7 +996,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
           <span><span className="text-hud2">js1_button5 · js2 btn5</span> exact joystick input</span>
         </div>
         <p className="mt-5 text-xs text-slate-500">
-          Default bindings come from the game's own <code>defaultProfile.xml</code> ({DEFAULTS.meta.branch}, build {DEFAULTS.meta.version}, {DEFAULTS.meta.buildDate}) with English labels from <code>global.ini</code>.
+          Default bindings come from the game's own <code>defaultProfile.xml</code> ({DEFAULTS.meta.branch}, build {DEFAULTS.meta.version}, {DEFAULTS.meta.buildDate}) with English labels from <code>global.ini</code>, both inside the game archive <CopyText text={paths.p4k} kind="path" testid="help-path-p4k" className="text-slate-400" />.
         </p>
         <div className="mt-2 text-xs text-slate-500">Example match: {comboLabel('lalt+n', 'kb')}</div>
       </div>

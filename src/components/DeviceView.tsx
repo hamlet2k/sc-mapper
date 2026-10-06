@@ -14,7 +14,7 @@ import {
 } from '../lib/templates';
 import type { Binding, Row, Slot } from '../lib/types';
 import { CalloutBody, DeviceCanvas, MULTI_VIEW_MIN_W, TONE_STROKE, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
-import { DROP_HINT } from './GameState';
+import { DROP_HINT, GamePathHint } from './GameState';
 import { Ico } from './icons';
 import { Tip } from './Tooltip';
 import { TemplateEditor } from './TemplateEditor';
@@ -348,6 +348,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
               <span className="self-center text-[10px] text-slate-500" data-testid="axis-drop-hint">{DROP_HINT}</span>
               <button type="button" onClick={onOpenControllers} data-testid="axis-reorder" className="flex items-center gap-1 rounded border border-edge px-2 py-0.5 text-slate-300 hover:border-mod/60 hover:text-mod"><Ico name="slots" className="h-3 w-3" /> Game slots &amp; controllers</button>
             </span>
+            <span className="flex basis-full items-center gap-1.5 text-[10px] text-slate-500" data-testid="axis-path">Fresh export from <GamePathHint /></span>
           </div>
         )}
       </section>

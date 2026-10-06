@@ -1,6 +1,6 @@
 /* Browser side of the picture preparation (PhotoPrep dialog): decode an uploaded file into pixels, run the background removal
  * (lazy-loaded model, corner-colour flood fill as fallback) and the built-in photo format, encode the result for the template. */
-import { applyMask, floodFillMask, formatPhoto, makePx, resizeMask, type FormatResult, type Px } from './photoFormat';
+import { applyMask, floodFillMask, formatPhoto, framePhoto, makePx, resizeMask, type FormatResult, type FramePlan, type Framing, type Px } from './photoFormat';
 import { MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, dataUrlBytes, fitWithin } from './templates';
 import type { ModelProgress } from './bgModel';
 
@@ -85,3 +85,7 @@ export async function removeBackground(px: Px, onProgress: (p: PrepProgress) => 
 
 /** built-in photo format, scaled with the canvas */
 export const formatForTemplate = (px: Px, look: boolean, aspect?: number): FormatResult => formatPhoto(px, { look, aspect, resize: canvasResize });
+/** render a framing of the picture (framing tool), scaled with the canvas */
+export const frameForTemplate = (px: Px, plan: FramePlan, fr: Framing, look: boolean): Px => framePhoto(px, plan, fr, { look, resize: canvasResize });
+/** object URL of a pixel buffer (PNG), for showing a cut-out */
+export const pxUrl = (px: Px): Promise<string> => new Promise((res, rej) => pxToCanvas(px).toBlob((b) => (b ? res(URL.createObjectURL(b)) : rej(new Error('Could not show the cut-out'))), 'image/png'));

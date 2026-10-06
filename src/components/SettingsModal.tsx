@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { CHANNELS, DEFAULT_GAME_ROOT, normalizeGameRoot, saveGameFolder, useGameFolder, type Channel } from '../lib/gameFolder';
+import { CHANNELS, DEFAULT_GAME_ROOT, normalizeGameRoot, saveGameFolder, useGameFolder, useGamePaths, type Channel } from '../lib/gameFolder';
+import { CopyText } from './CopyButton';
 import type { DefaultsMeta } from '../lib/types';
 import { GamePathHint } from './GameState';
 import { Ico } from './icons';
@@ -62,7 +63,7 @@ export function SettingsModal({ settings, onChange, onClose, meta, versionLabel 
             <a href={meta.sourceUrl} target="_blank" rel="noreferrer" className="rounded border border-hud/30 bg-hud/5 px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-hud/80 hover:border-hud/60">
               Defaults · {versionLabel} · {meta.version}
             </a>
-            <p className="mt-2">Default bindings from {meta.source}, build {meta.version} ({meta.buildDate}). Settings are stored in this browser only.</p>
+            <p className="mt-2">Default bindings from {meta.source}, build {meta.version} ({meta.buildDate}), files inside the game archive <DefaultsArchive />. Settings are stored in this browser only.</p>
           </section>
         </div>
       </div>
@@ -98,7 +99,7 @@ function GameFolderSettings() {
   return (
     <section data-testid="settings-game-folder">
       <h3 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-mod">Star Citizen folder</h3>
-      <p className="mt-0.5 text-[11px] text-slate-500">Where the game is installed on your PC. The browser can&apos;t open it by itself: the folder below is shown with a copy button next to “Refresh game state” and import, to paste into the file picker.</p>
+      <p className="mt-0.5 text-[11px] text-slate-500">Where the game is installed on your PC. The browser can&apos;t open it by itself: the paths below are shown with a copy button next to “Refresh game state”, import and Export, to paste into the file picker or Explorer.</p>
       <div className="mt-2 flex flex-wrap items-end gap-2">
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-[11px] text-slate-400">
           Game folder (Windows path)
@@ -118,10 +119,22 @@ function GameFolderSettings() {
             className="rounded border border-edge px-2 py-1.5 text-[11px] text-slate-400 hover:border-hud/60 hover:text-hud2">Default</button>
         )}
       </div>
-      <div className="mt-2 rounded border border-edge/70 bg-black/20 px-2.5 py-1.5 text-[11px] text-slate-400">
-        <div className="mb-0.5 text-[10px] uppercase tracking-widest text-slate-500">Exported layouts (mappings folder)</div>
-        <GamePathHint />
+      <div className="mt-2 space-y-1.5 rounded border border-edge/70 bg-black/20 px-2.5 py-1.5 text-[11px] text-slate-400" data-testid="settings-game-paths">
+        <div>
+          <div className="mb-0.5 text-[10px] uppercase tracking-widest text-slate-500">Exported layouts (mappings folder)</div>
+          <GamePathHint />
+        </div>
+        <div>
+          <div className="mb-0.5 text-[10px] uppercase tracking-widest text-slate-500">Live bindings file</div>
+          <GamePathHint file="actionmaps" />
+        </div>
+        <p className="text-[10px] text-slate-500">Every path in the app (Export, Help, Refresh game state, the profile card) is built from this folder and channel.</p>
       </div>
     </section>
   );
+}
+
+/** the game archive the defaults come from (Data.p4k in the Settings folder + channel), with copy */
+function DefaultsArchive() {
+  return <CopyText text={useGamePaths().p4k} kind="path" testid="settings-path-p4k" className="text-slate-400" />;
 }
