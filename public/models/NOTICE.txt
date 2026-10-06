@@ -1,0 +1,9 @@
+u2netp.onnx: U^2-Net (small, "u2netp") salient object detection model, used in the browser to remove picture backgrounds
+in the template editor (src/lib/bgModel.ts).
+
+  U^2-Net: Going Deeper with Nested U-Structure for Salient Object Detection
+  Xuebin Qin, Zichen Zhang, Chenyang Huang, Masood Dehghan, Osmar R. Zaiane, Martin Jagersand (2020)
+  https://github.com/xuebinqin/U-2-Net  (Apache License 2.0, http://www.apache.org/licenses/LICENSE-2.0)
+
+ONNX export as distributed by rembg (https://github.com/danielgatis/rembg, MIT): releases/download/v0.0.0/u2netp.onnx
+sha256 309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8 (unmodified).

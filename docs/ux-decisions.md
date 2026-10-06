@@ -341,3 +341,78 @@ Judgment calls made while building round 1, where the decisions above didn't say
   - The editor draws each picture at the width the Devices view last showed it, keyed by view id + aspect ratio, which a customized copy keeps.
   - Result: the e2e measures every URSA MINOR Combat label box in both modes and finds a max difference < 0.75 px. Screenshot `114-ursa-view-vs-editor.png`.
   - Trade-off: in the editor, a box dragged onto another is pushed aside, exactly as the view will show it.
+
+## Round 6
+
+### Template pages
+
+- **Model.** A page is a template view (`views[]`: id, label, picture, canvas size); nothing new in the file format.
+  - A classic single-picture template shows its one implicit page as a tab ("Page 1").
+  - The first page operation turns it into an explicit `views` list (`ensurePages`). The picture, aspect ratio, callout spots and glow outlines are kept, and every callout is pinned to its page, so nothing moves. Pure functions in `src/lib/templatePages.ts` (unit-tested).
+- **Tabs.** The page tabs are always shown, followed by a ⋯ page menu and a dashed **＋ Page** tab.
+  - ＋ Page adds a blank 16:10 page called "Page n", shows it, and opens its name for typing (selected), so naming is one step.
+  - Rename: double-click the tab, or ⋯ → Rename. Enter or blur saves, Escape cancels. A blank name becomes "Page n". Names are trimmed and capped at 40 characters.
+  - Reorder: ⋯ → Move left / Move right.
+  - Up to **12 pages** (`MAX_VIEWS`, was a 6-view import cap).
+- **Delete removes the page's callouts**, rather than moving them.
+  - Callout spots are fractions of that picture, so on another picture they would point at random places, and a pile of misplaced callouts is worse than none.
+  - The confirm names the page and the callout count ("Delete the page “Grip top” and its 1 callout? (Undo brings it back.)"). Undo (Ctrl+Z) restores the page and its callouts.
+  - The last page can't be deleted.
+- **Pictures per page.** Upload or Replace applies to the shown page. The canvas gets label columns on both sides (`width = w + 0.68 h`, as before for photo templates), and *Blank page* clears it. The callout panel's selector is now called "Page".
+- **Devices view.** Already renders multi-view templates as one photo section per view, with the view label as caption (`data-view-caption`). Custom pages use the same path:
+  - a page with a picture renders in photo mode (object-contain, the CSS glow / shadow, vignette);
+  - a blank page renders as the grid canvas.
+
+  The e2e checks the captions "Page 1 | Grip top | Cut-out".
+- **JSON.**
+  - Export already wrote `views`. Import keeps up to 12, and a callout's `view` only when it names a kept page.
+  - Old files import unchanged: classic files without `views`, and ≤ 6-view files (unit-tested).
+  - A file with more than 6 pages imported into an older build keeps its first 6 pages and drops the view of callouts on the others (they fall back to the first page).
+
+### Picture preparation (upload → before / after)
+
+- **Every raster upload or replace opens "Prepare the picture"** (SVGs are stored as before). It shows the original and the result side by side on the Devices-view background, with:
+  - *Remove background*;
+  - *Format only (trim + margin)*;
+  - a *built-in glow* checkbox (on by default);
+  - **Use cut-out / Use formatted**;
+  - **Keep original** (the previous behaviour);
+  - Cancel / Escape.
+
+  A progress bar shows the model download (MB loaded / total, with percent) and then indeterminate steps: "Starting the model…", "Finding the device…", "Cleaning the edges…".
+- **Library: not `@imgly/background-removal`.**
+  - Licence: AGPL-3.0 (checked in the 1.7.0 package's LICENSE.md). This app is closed source (`"private": true`, no licence) and served to the public, so AGPL would oblige us to publish the whole app's source under AGPL, or buy img.ly's commercial licence. That is Federico's call, not a dependency to slip in.
+  - Size: its assets on staticimgly.com are 44 MB (isnet_quint8), 88 MB (fp16, the default) or 176 MB, plus the 11.8–23 MB onnxruntime wasm.
+- **Chosen: U²-Net-p + onnxruntime-web.**
+  - U²-Net-p (`u2netp.onnx`, Apache-2.0, 4.57 MB, the ONNX export distributed by rembg; NOTICE in `public/models/`).
+  - onnxruntime-web 1.30 (MIT), WASM backend, single thread (no COOP/COEP headers needed).
+  - This is the same model family as `rembg`, and our built-in photos were cut with rembg's IS-Net, offline.
+  - Pre-processing: the input is fed exactly as rembg does (320², max-scaled, ImageNet-normalised). Post-processing is ported from `scripts/device-photos/cutout.py`:
+    - normalise and upsample the mask;
+    - keep the largest parts (≥ 3 % of the biggest, dilated 6 px), which drops logos and specks;
+    - crisp edge `(a − 0.1)/0.8`;
+    - un-mix the studio colour from edge pixels;
+    - pull the outermost edge toward the eroded interior (no white fringe).
+- **Hosting: self-hosted, same origin, works on Vercel static hosting.** No CDN, no server, no AI call.
+  - The model is in `public/models/u2netp.onnx`.
+  - The 14.2 MB `ort-wasm-simd-threaded.wasm` is emitted by Vite from node_modules into `dist/assets/` (hashed, so it caches immutably).
+  - Both are fetched by our code with streamed progress. The wasm is handed to onnxruntime as `wasmBinary`.
+- **Download, first use only:** 18.8 MB uncompressed (wasm 14.24 MB + model 4.57 MB); about 7.9 MB with gzip (3.66 + 4.24) if the host compresses them. Afterwards the files come from the HTTP cache. The picture never leaves the browser.
+- **Bundle impact.**
+  - Main chunk: 1,129.8 → 1,135.6 kB minified, +5.8 kB (gzip 336.5 → 338.4 kB, +1.9 kB): page tabs and the lazy hooks.
+  - The dialog is a lazy chunk (`PhotoPrep-*.js`, 16.5 kB / 6.6 kB gzip), loaded on the first upload.
+  - onnxruntime's JS is another lazy chunk (`bgModel-*.js`, 71.9 kB / 23.7 kB gzip), loaded only on *Remove background*, together with the wasm and the model.
+  - Speed: in headless Chrome on the box, about 6 s for download plus inference on a 2182×2362 vendor photo.
+- **Fallback.** If the model can't load (offline, blocked), the same button uses a **corner-colour flood fill**: the background is everything connected to the border within 30 of the border's median colour, with a 1 px soft edge. The dialog says so. It works for plain studio backgrounds; the model handles shadows and gradients.
+- **Format = the built-in photos' recipe** (`cutout.py`, ported to `src/lib/photoFormat.ts`, pure and running in Node too):
+  - Trim: transparent edges, or for an opaque picture its plain border colour (median of a 4 px band, tolerance 24).
+  - Scale the product so its longest side is 900–1300 px (upscale at most 1.7×).
+  - Margin: 5 % of the product's longest side on each side. Transparent for cut-outs; the background colour for opaque pictures, which get no glow.
+  - Optionally bake the built-in look: soft blue haze behind, cyan outer glow (blurred silhouette × 1.4, 30 %), a faint cyan rim inside the edge, and blacks lifted (×0.93 + 12).
+  - The CSS rim / glow / drop shadow of photo mode then applies on top, exactly as for the built-ins.
+  - The result is stored as WebP 0.85 (alpha kept). The output is at most 1430 px, within the 1600 px / 2.5 MB limits.
+- **Tests.**
+  - `npm run test:unit` now also runs `scripts/bg-removal.ts`: the real model file and onnxruntime-web, in Node, on a fixture product photo (made from our own T.16000M photo on a studio gradient, `scripts/fixtures/photos/make.py`) with its true mask. Results: model IoU 0.994; flood-fill IoU 0.995 on this plain background. Corners are transparent, and the format size and glow are checked.
+  - Unit tests cover the pages functions, JSON round trips (12 pages, old files), trim / scale / margin, the opaque trim, the flood fill and the mask helpers.
+  - The e2e covers adding and renaming a page (and Escape cancelling a rename), Format only on `cutout-offcentre.png` (160×360 → 334×674, glow on/off), the picture landing on the page, callouts on the new page, move left / right, delete with confirm and undo, Remove background on a real vendor photo (Warthog throttle from the user uploads when present, else the fixture), the Devices view captions, and the export JSON.
+  - Screenshots: `115-editor-new-page.png`, `115-cutout-before-after.png`, `115-devices-custom-page.png`.

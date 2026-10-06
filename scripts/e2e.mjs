@@ -1,7 +1,7 @@
 // End-to-end test + screenshots. Usage: node scripts/e2e.mjs [url]
 // Controllers are simulated by replacing navigator.getGamepads() (a headless browser has no real HID devices).
 import { chromium, firefox } from 'playwright';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 const url = process.argv[2] ?? 'http://localhost:4173/';
 const shots = new URL('../screenshots/', import.meta.url).pathname;
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
@@ -873,6 +873,10 @@ check((await tplCount()) === 4, 'Ctrl+Z brings it back');
     return c.toDataURL('image/png').split(',')[1];
   });
   await te.getByTestId('tpl-upload-file').setInputFiles({ name: 'my-stick.png', mimeType: 'image/png', buffer: Buffer.from(b64, 'base64') });
+  // an upload opens the picture preparation (remove background / format); "Keep original" stores it as uploaded
+  await page.getByTestId('photo-prep-before').waitFor({ timeout: 5000 });
+  check(await page.getByTestId('photo-prep-remove').isVisible() && await page.getByTestId('photo-prep-format').isVisible() && await page.getByTestId('photo-prep-use').isDisabled(), 'upload opens the picture preparation (Remove background / Format only; nothing to use yet)');
+  await page.getByTestId('photo-prep-keep').click();
   await page.waitForTimeout(800);
   const toastTxt = await page.locator('.fixed.bottom-5.right-5').innerText().catch(() => '');
   const src = await te.locator('[data-testid=device-canvas] img').getAttribute('src').catch(() => '');
@@ -1552,6 +1556,151 @@ log('photo template (test-only layout via __SC_TEST_PHOTO_LAYOUTS)');
   check((await ed.getByTestId('device-canvas-view').getAttribute('data-view')) === 'front' && (await ed.locator('[data-anchor]').count()) === nFront + 1, 'editor: moving a callout to another view follows it there');
   await ed.getByRole('button', { name: 'Cancel', exact: true }).click();
   await pctx.close();
+}
+
+// ---- round 6: template pages (add, rename, move, delete), picture preparation (format only, background removal in the
+// browser), custom pages as captioned sections in the Devices view, pages in the exported JSON
+console.log('\nround 6: template pages, picture preparation');
+{
+  const c6 = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1, acceptDownloads: true });
+  const p6 = await c6.newPage();
+  p6.on('pageerror', (e) => errors.push('[r6] ' + String(e)));
+  p6.on('console', (m) => m.type() === 'error' && errors.push('[r6] ' + m.text()));
+  await p6.addInitScript(() => {
+    const pads = [{ index: 0, id: 'VKBsim Gladiator EVO R (Vendor: 231d Product: 0200)', mapping: '', connected: true, buttons: Array.from({ length: 32 }, () => ({ pressed: false, touched: false, value: 0 })), axes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 9 / 7], timestamp: 0 }];
+    let revealed = false;
+    window.__btn = (i, b, on) => { pads[i].buttons[b] = { pressed: on, touched: on, value: on ? 1 : 0 }; pads[i].timestamp++; if (on) revealed = true; };
+    navigator.getGamepads = () => pads.map((p) => (revealed ? Object.freeze({ ...p, axes: Object.freeze([...p.axes]), buttons: Object.freeze(p.buttons.map((x) => Object.freeze({ ...x }))) }) : null));
+  });
+  await p6.goto(url, { waitUntil: 'networkidle' });
+  await p6.evaluate(() => window.__btn(0, 2, true));
+  await p6.waitForTimeout(120);
+  await p6.evaluate(() => window.__btn(0, 2, false));
+  await p6.getByTestId('open-slots').click();
+  await p6.getByTestId('hw-row').first().getByRole('button', { name: /as js\d+/ }).click();
+  await p6.keyboard.press('Escape');
+  await p6.locator('[data-view-tab=devices]').click();
+  await p6.waitForTimeout(800);
+  const dv6 = p6.getByTestId('device-view');
+  await dv6.locator('[data-slot-chip]').filter({ hasText: /^\s*JS/ }).first().click();
+  await p6.waitForTimeout(500);
+  await dv6.getByTestId('template-new').click();
+  const ed = p6.getByTestId('template-editor');
+  const tabs = ed.getByTestId('tpl-views').locator('[data-view-tab]');
+  const tabTexts = () => tabs.evaluateAll((els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()));
+  check((await tabs.count()) === 1 && (await tabs.first().innerText()).startsWith('Page 1') && await ed.getByTestId('tpl-page-add').isVisible(), 'a new template shows its one page as a tab, with "+ Page" next to it');
+  await ed.getByTestId('device-canvas').click({ position: { x: 300, y: 200 } });
+  await p6.waitForTimeout(150);
+  // + Page: a blank page, shown, its name ready to type
+  await ed.getByTestId('tpl-page-add').click();
+  await p6.waitForTimeout(150);
+  const ren = ed.getByTestId('tpl-page-rename');
+  check(await ren.isVisible() && await ren.evaluate((el) => el === document.activeElement && el.selectionStart === 0 && el.selectionEnd === el.value.length) && (await ren.inputValue()) === 'Page 2', '"+ Page" adds "Page 2" and opens its name for typing (selected)');
+  await p6.keyboard.type('Throttle grip');
+  await p6.keyboard.press('Enter');
+  await p6.waitForTimeout(150);
+  check(JSON.stringify(await tabTexts()) === JSON.stringify(['Page 1 (1)', 'Throttle grip (0)']) && (await tabs.nth(1).getAttribute('aria-selected')) === 'true' && (await ed.getByTestId('device-canvas-view').getAttribute('data-view')) === 'p2', `new page named and shown (${(await tabTexts()).join(' | ')})`);
+  await tabs.nth(1).dblclick();
+  await ren.fill('Grip top');
+  await p6.keyboard.press('Enter');
+  await p6.waitForTimeout(100);
+  await tabs.nth(1).dblclick();
+  await ren.fill('not this');
+  await p6.keyboard.press('Escape');
+  await p6.waitForTimeout(100);
+  check((await tabTexts())[1] === 'Grip top (0)' && (await ed.count()) === 1, 'double-click renames a page; Escape cancels a rename (editor stays open)');
+  // format only on a fixture: a transparent picture with the product off-centre (box 160 x 360 px)
+  await ed.getByTestId('tpl-upload-file').setInputFiles('scripts/fixtures/photos/cutout-offcentre.png');
+  const prep = p6.getByTestId('photo-prep');
+  await p6.getByTestId('photo-prep-before').waitFor({ timeout: 5000 });
+  check((await prep.innerText()).includes('page “Grip top”'), 'picture preparation names the page it is for');
+  await p6.getByTestId('photo-prep-format').click();
+  const after = p6.getByTestId('photo-prep-after');
+  await after.waitFor({ timeout: 10000 });
+  // product 160 x 360 -> upscaled 1.7x (to at most 900 px, as the built-ins) = 272 x 612, 5 % margin = 31 px
+  const dims = async () => [await after.getAttribute('data-w'), await after.getAttribute('data-h'), await after.getAttribute('data-mode')].join(' ');
+  check((await dims()) === '334 674 alpha' && (await p6.getByTestId('photo-prep-use').innerText()) === 'Use formatted', `format only: trimmed to the product, scaled like the built-ins, 5 % margin (${await dims()})`);
+  const glowAt = () => after.evaluate(async (img) => { await img.decode(); const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const g = c.getContext('2d'); g.drawImage(img, 0, 0); return [g.getImageData(0, 0, 1, 1).data[3], g.getImageData(Math.round(c.width / 2), 27, 1, 1).data[3]]; });
+  const [corner, margin] = await glowAt();
+  await p6.getByTestId('photo-prep-look').uncheck();
+  await p6.waitForTimeout(300);
+  await p6.waitForFunction(() => !document.querySelector('[data-testid=photo-prep-progress]'));
+  const [, marginPlain] = await glowAt();
+  check(corner === 0 && margin > 0 && marginPlain === 0 && (await dims()) === '334 674 alpha', `built-in glow baked into the margin, off when unticked (corner ${corner}, margin ${margin} -> ${marginPlain})`);
+  await p6.getByTestId('photo-prep-look').check();
+  await p6.waitForFunction(() => !document.querySelector('[data-testid=photo-prep-progress]'));
+  await p6.getByTestId('photo-prep-use').click();
+  await p6.waitForTimeout(300);
+  const pv2 = ed.getByTestId('device-canvas-view');
+  const img2 = await pv2.evaluate((el) => ({ src: el.querySelector('img')?.getAttribute('src')?.slice(0, 15), ar: el.style.aspectRatio, photo: el.getAttribute('data-photo') }));
+  check((await prep.count()) === 0 && img2.src === 'data:image/webp' && Math.abs(img2.ar.split('/').map(Number).reduce((a, b) => a / b) - Math.round(334 + 0.68 * 674) / 674) < 0.01 && img2.photo === '1', `"Use formatted" puts the picture on the page (photo, canvas widened for labels: ${img2.ar})`);
+  const pb = await pv2.boundingBox();
+  await p6.mouse.click(pb.x + pb.width * 0.5, pb.y + pb.height * 0.5);
+  await p6.waitForTimeout(150);
+  check((await tabTexts())[1] === 'Grip top (1)', 'callouts can be placed on the new page');
+  // page menu: move left / right; delete asks first (callouts go with the page), undo brings it back
+  await ed.getByTestId('tpl-page-menu').click();
+  await ed.getByRole('menuitem', { name: 'Move left' }).click();
+  await p6.waitForTimeout(100);
+  const moved = await tabTexts();
+  await ed.getByTestId('tpl-page-menu').click();
+  await ed.getByRole('menuitem', { name: 'Move right' }).click();
+  await p6.waitForTimeout(100);
+  check(moved[0] === 'Grip top (1)' && (await tabTexts())[1] === 'Grip top (1)', `pages reorder from the page menu (${moved.join(' | ')})`);
+  let asked = '';
+  p6.once('dialog', (d) => { asked = d.message(); void d.dismiss(); });
+  await ed.getByTestId('tpl-page-menu').click();
+  await ed.getByTestId('tpl-page-menu-delete').click();
+  await p6.waitForTimeout(150);
+  check(/Delete the page “Grip top” and its 1 callout\?/.test(asked) && (await tabs.count()) === 2, `delete asks first ("${asked}"), cancel keeps the page`);
+  p6.once('dialog', (d) => void d.accept());
+  await ed.getByTestId('tpl-page-menu').click();
+  await ed.getByTestId('tpl-page-menu-delete').click();
+  await p6.waitForTimeout(150);
+  const afterDel = await tabTexts();
+  await ed.getByTestId('tpl-undo').click();
+  await p6.waitForTimeout(150);
+  check(JSON.stringify(afterDel) === JSON.stringify(['Page 1 (1)']) && JSON.stringify(await tabTexts()) === JSON.stringify(['Page 1 (1)', 'Grip top (1)']), 'deleting removes the page and its callouts; undo restores both');
+  // background removal in the browser, on a real vendor photo when available (else the fixture product photo)
+  const real = '/workspace/uploads/sc-templates/templates/throttles/thrustmaster/wathhog/81bPEW3rCdL.jpg';
+  const photo = existsSync(real) ? real : 'scripts/fixtures/photos/stick-on-white.png';
+  await ed.getByTestId('tpl-page-add').click();
+  await p6.keyboard.type('Cut-out');
+  await p6.keyboard.press('Enter');
+  await ed.getByTestId('tpl-upload-file').setInputFiles(photo);
+  await p6.getByTestId('photo-prep-before').waitFor({ timeout: 5000 });
+  const t0 = Date.now();
+  await p6.getByTestId('photo-prep-remove').click();
+  await p6.getByTestId('photo-prep-progress').waitFor({ timeout: 3000 });
+  const progressTxt = await p6.getByTestId('photo-prep-progress').getAttribute('aria-label');
+  await after.waitFor({ timeout: 90000 });
+  const cut = await after.evaluate(async (img) => { await img.decode(); const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const g = c.getContext('2d'); g.drawImage(img, 0, 0); const a = (x, y) => g.getImageData(Math.round(x * (c.width - 1)), Math.round(y * (c.height - 1)), 1, 1).data[3]; return { engine: img.dataset.engine, corners: [a(0, 0), a(1, 0), a(0, 1), a(1, 1)], centre: a(0.5, 0.55), w: c.width, h: c.height }; });
+  check(cut.engine === 'model' && cut.corners.every((v) => v === 0) && cut.centre > 240 && (await p6.getByTestId('photo-prep-use').innerText()) === 'Use cut-out',
+    `background removed in the browser by the model (${photo.split('/').pop()}: ${cut.w}×${cut.h}, corners ${cut.corners.join('/')}, centre ${cut.centre}; ${((Date.now() - t0) / 1000).toFixed(1)} s incl. download; progress "${progressTxt}")`);
+  await prep.locator('.hud-panel').screenshot({ path: shots + '115-cutout-before-after.png' });
+  await p6.getByTestId('photo-prep-use').click();
+  await p6.waitForTimeout(300);
+  const pb3 = await ed.getByTestId('device-canvas-view').boundingBox();
+  await p6.mouse.click(pb3.x + pb3.width * 0.5, pb3.y + pb3.height * 0.3);
+  await p6.waitForTimeout(150);
+  await ed.getByLabel('Template name').fill('Round 6 pages');
+  check((await tabTexts())[2] === 'Cut-out (1)', 'the cut-out page takes callouts too');
+  await p6.screenshot({ path: shots + '115-editor-new-page.png' });
+  await ed.getByTestId('tpl-save').click();
+  await p6.waitForTimeout(800);
+  // Devices view: every page a captioned section, like the built-in photo templates
+  const caps = await dv6.locator('[data-view-caption]').evaluateAll((els) => els.map((e) => e.textContent));
+  check(JSON.stringify(caps) === JSON.stringify(['Page 1', 'Grip top', 'Cut-out']) && (await dv6.getByTestId('device-canvas').getAttribute('data-views')) === '3', `Devices view shows the custom pages with their names as section headers (${caps.join(' | ')})`);
+  await p6.setViewportSize({ width: 1680, height: 2900 });
+  await p6.waitForTimeout(400);
+  await p6.screenshot({ path: shots + '115-devices-custom-page.png' });
+  await p6.setViewportSize({ width: 1680, height: 1000 });
+  const [d6] = await Promise.all([p6.waitForEvent('download'), dv6.getByTestId('template-export').click()]);
+  const f6 = '/tmp/r6-' + d6.suggestedFilename();
+  await d6.saveAs(f6);
+  const x6 = JSON.parse(readFileSync(f6, 'utf8')).templates[0];
+  check(x6.views.map((v) => v.label).join('|') === 'Page 1|Grip top|Cut-out' && x6.views.slice(1).every((v) => /^data:image\/webp/.test(v.image)) && x6.callouts.filter((c) => c.view === 'p2').length === 1, `pages exported in the template JSON (${x6.views.map((v) => `${v.id}:${v.label}`).join(', ')})`);
+  await c6.close();
 }
 
 // ---- drag & drop in a real Firefox (Gecko): synthetic file drags exercise the page's handlers there (types list, text-node

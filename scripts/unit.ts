@@ -738,12 +738,12 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       { id: 'bad id!', label: '  Front  ', width: 'x', height: 990 },
       { id: 'dup', label: 'A', width: 100, height: 100 },
       { id: 'dup', label: 'B', width: 100, height: 100 },
-      ...Array.from({ length: 6 }, (_, k) => ({ id: `x${k}`, label: '', width: 10, height: 10 })),
+      ...Array.from({ length: 12 }, (_, k) => ({ id: `x${k}`, label: '', width: 10, height: 10 })),
     ], callouts: [{ ...src.callouts[0], view: 'bad id!' }, { ...src.callouts[1], view: 'dup' }] }))[0];
-    assert.equal(bad.views!.length, 6, 'at most 6 views');
+    assert.equal(bad.views!.length, tp.MAX_VIEWS, `at most ${tp.MAX_VIEWS} views`);
     assert.equal(bad.views![0].id, 'v1', 'invalid id replaced'); assert.equal(bad.views![0].label, 'Front');
     assert.deepEqual([bad.views![0].width, bad.views![0].height], [1000 * tp.BLANK_ASPECT, 1000], 'bad size -> default canvas');
-    assert.equal(new Set(bad.views!.map((v) => v.id)).size, 6, 'duplicate ids made unique');
+    assert.equal(new Set(bad.views!.map((v) => v.id)).size, tp.MAX_VIEWS, 'duplicate ids made unique');
     assert.deepEqual(bad.callouts.map((c) => c.view), [undefined, 'dup'], 'callout on an unknown view: view dropped');
     assert.throws(() => tp.parseTemplates(JSON.stringify({ ...src, views: [{ ...src.views[0], image: 'https://example.com/x.webp' }] })), /data:image/);
     assert.throws(() => tp.parseTemplates(JSON.stringify({ ...src, views: [{ ...src.views[0], image: '/device-photos/../../etc.webp' }] })), /data:image/);
@@ -1423,6 +1423,127 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.equal(tf.shouldFollowScroll({ ...base, visible: true }), false, 'already in sight: flash only');
     assert.equal(tf.shouldFollowScroll({ ...base, lastScrollAt: 9_600 }), false, 'just scrolled to another device');
     assert.equal(tf.shouldFollowScroll({ ...base, userScrollAt: 9_000 }), false, 'the user is scrolling');
+  });
+}
+
+// ---- round 6: template pages, picture format
+{
+  const tp = await import('../src/lib/templates');
+  const pg = await import('../src/lib/templatePages');
+  const pf = await import('../src/lib/photoFormat');
+  const { readPng } = await import('./png');
+  const classic = (): any => ({ version: 1, id: 'c1', name: 'Classic', slot: 'js', image: 'data:image/png;base64,AAAA', aspect: 1.25, match: [],
+    callouts: [{ id: 'a', kind: 'button', inputs: ['button1'], anchor: { x: 0.2, y: 0.3 }, box: { x: 0.1, y: 0.1 }, region: 'M0 0L1 1Z' }] });
+  t('pages: a classic template becomes page 1 with its picture, shape and callouts (nothing moves)', () => {
+    const t1 = pg.ensurePages(classic());
+    assert.equal(t1.image, undefined);
+    assert.deepEqual(t1.views, [{ id: 'main', label: 'Page 1', image: 'data:image/png;base64,AAAA', width: 1250, height: 1000 }]);
+    assert.equal(t1.aspect, 1.25);
+    assert.deepEqual(t1.callouts[0], { ...classic().callouts[0], view: 'main' }, 'spots and region kept, pinned to the page');
+    assert.equal(pg.ensurePages(t1), t1, 'idempotent');
+  });
+  t('pages: add, rename, move, delete (callouts on a deleted page go with it; the last page stays)', () => {
+    let { template: t1, id } = pg.addPage(classic());
+    assert.equal(id, 'p2');
+    assert.deepEqual(t1.views!.map((v) => [v.id, v.label, v.width, v.height, v.image]), [['main', 'Page 1', 1250, 1000, 'data:image/png;base64,AAAA'], ['p2', 'Page 2', 1600, 1000, undefined]]);
+    t1 = pg.renamePage(t1, 'p2', '  Grip   top view  ');
+    assert.equal(t1.views![1].label, 'Grip top view');
+    assert.equal(pg.renamePage(t1, 'p2', '   ').views![1].label, 'Page 2', 'blank name = Page n');
+    assert.equal(pg.renamePage(t1, 'p2', 'x'.repeat(60)).views![1].label.length, pg.PAGE_LABEL_MAX);
+    t1 = { ...t1, callouts: [...t1.callouts, { id: 'b', kind: 'button', inputs: ['button2'], anchor: { x: 0.5, y: 0.5 }, box: { x: 0.6, y: 0.5 }, view: 'p2' }] };
+    const moved = pg.movePage(t1, 'p2', -1);
+    assert.deepEqual(moved.views!.map((v) => v.id), ['p2', 'main']);
+    assert.equal(moved.aspect, 1.6, 'aspect follows the first page');
+    assert.deepEqual(moved.callouts.map((c) => [c.id, tp.calloutView(moved, c)]), [['a', 'main'], ['b', 'p2']], 'callouts keep their page');
+    assert.equal(pg.movePage(t1, 'p2', 1), t1, 'cannot move past the end');
+    const del = pg.deletePage(moved, 'p2');
+    assert.deepEqual(del.views!.map((v) => v.id), ['main']);
+    assert.deepEqual(del.callouts.map((c) => c.id), ['a']);
+    assert.equal(del.aspect, 1.25);
+    assert.equal(pg.deletePage(del, 'main'), del, 'the last page cannot be deleted');
+    assert.equal(pg.pageCallouts(moved, 'p2').length, 1);
+    // ids stay unique after deletes
+    let t2 = pg.addPage(pg.addPage(classic()).template).template;
+    t2 = pg.deletePage(t2, 'p2');
+    assert.equal(pg.addPage(t2).id, 'p4');
+    let full = classic();
+    for (let i = 0; i < 20; i++) full = pg.addPage(full).template;
+    assert.equal(full.views.length, pg.MAX_PAGES);
+    assert.equal(pg.addPage(full).id, null);
+  });
+  t('pages: picture set / cleared, and they survive export -> import (12 pages, labels, images); old files still import', () => {
+    let t1 = pg.addPage(classic(), 'Throttle top').template;
+    t1 = pg.setPageImage(t1, 'p2', { dataUrl: 'data:image/webp;base64,BBBB', w: 990, h: 1064 });
+    assert.deepEqual([t1.views![1].width, t1.views![1].height, t1.views![1].image], [Math.round(990 + 0.68 * 1064), 1064, 'data:image/webp;base64,BBBB'], 'label columns on both sides, as the built-ins');
+    assert.equal(pg.setPageImage(t1, 'p2', null).views![1].image, undefined);
+    for (let i = 0; i < 10; i++) t1 = pg.addPage(t1, `Extra ${i + 1}`).template;
+    t1 = { ...t1, callouts: [...t1.callouts, { id: 'z', kind: 'button', inputs: ['button9'], anchor: { x: 0.5, y: 0.5 }, box: { x: 0.5, y: 0.5 }, view: 'p12' }] };
+    const back = tp.parseTemplates(tp.exportTemplates([t1]))[0];
+    assert.equal(back.views!.length, 12, 'all 12 pages (the old cap was 6)');
+    assert.deepEqual(back.views!.map((v) => v.label).slice(0, 3), ['Page 1', 'Throttle top', 'Extra 1']);
+    assert.equal(back.views![1].image, 'data:image/webp;base64,BBBB');
+    assert.equal(back.callouts.find((c) => c.id === 'z')!.view, 'p12');
+    // a file exported before pages existed (classic single picture, no views) imports unchanged
+    const old = tp.parseTemplates(JSON.stringify({ format: 'sc-mapper-device-templates', version: 1, templates: [classic()] }))[0];
+    assert.equal(old.views, undefined);
+    assert.equal(old.image, 'data:image/png;base64,AAAA');
+    assert.equal(old.callouts[0].region, 'M0 0L1 1Z');
+  });
+  const solid = (w: number, h: number, rgba: number[]) => { const p = pf.makePx(w, h); for (let i = 0; i < p.data.length; i += 4) p.data.set(rgba, i); return p; };
+  t('photo format: trim transparent edges, built-in scale and 5 % margin', () => {
+    const px = readPng('scripts/fixtures/photos/cutout-offcentre.png');
+    assert.equal(pf.hasTransparency(px), true);
+    assert.deepEqual(pf.alphaBox(px), { x: 470, y: 140, w: 160, h: 360 });
+    const f = pf.formatPhoto(px, { look: false });
+    const k = 900 / 360 > 1.7 ? 1.7 : 900 / 360;
+    const pw = Math.round(160 * k), ph = Math.round(360 * k), pad = Math.round(0.05 * ph);
+    assert.deepEqual([f.mode, f.px.width, f.px.height, f.pad], ['alpha', pw + 2 * pad, ph + 2 * pad, pad]);
+    assert.deepEqual(pf.alphaBox(f.px), { x: pad, y: pad, w: pw, h: ph }, 'product centred in its margin');
+    assert.deepEqual(pf.formatSize(2600, 1300), { k: 0.5, w: 1300, h: 650, pad: 65, W: 1430, H: 780 }, 'big products shrink to 1300 px');
+    assert.equal(pf.formatSize(1000, 500).k, 1, '900-1300 px products keep their size');
+    // the glow: the margin gets a faint cyan haze, the product stays opaque
+    const g = pf.formatPhoto(px, { look: true });
+    const a = (x: number, y: number) => g.px.data[(y * g.px.width + x) * 4 + 3];
+    assert.ok(a(Math.round(g.px.width / 2), Math.round(g.px.height * 0.9)) > 250, 'product opaque');
+    const edge = g.px.data.subarray(((pad - 4) * g.px.width + Math.round(g.px.width / 2)) * 4, ((pad - 4) * g.px.width + Math.round(g.px.width / 2)) * 4 + 4);
+    assert.ok(edge[3] > 10 && edge[3] < 120 && edge[2] > edge[0], `faint cyan glow just outside the product (${[...edge]})`);
+  });
+  t('photo format: opaque pictures are trimmed by their plain background and padded with it', () => {
+    const px = solid(300, 200, [250, 250, 250, 255]);
+    for (let y = 50; y < 150; y++) for (let x = 20; x < 120; x++) px.data.set([20, 30, 40, 255], (y * 300 + x) * 4);
+    assert.equal(pf.hasTransparency(px), false);
+    const f = pf.formatPhoto(px, { look: true });
+    assert.equal(f.mode, 'opaque');
+    assert.deepEqual(f.box, { x: 20, y: 50, w: 100, h: 100 });
+    assert.deepEqual([...f.px.data.subarray(0, 4)], [250, 250, 250, 255], 'margin in the background colour, no glow');
+    assert.equal(f.px.width, Math.round(100 * 1.7) + 2 * Math.round(0.05 * 170));
+  });
+  t('photo format: flood fill removes a plain background, keeps holes that do not touch the border, drops specks', () => {
+    const px = solid(120, 100, [240, 240, 240, 255]);
+    for (let y = 20; y < 80; y++) for (let x = 20; x < 100; x++) px.data.set([30, 30, 30, 255], (y * 120 + x) * 4);
+    for (let y = 40; y < 60; y++) for (let x = 50; x < 70; x++) px.data.set([240, 240, 240, 255], (y * 120 + x) * 4); // enclosed light patch
+    px.data.set([0, 0, 0, 255], (5 * 120 + 5) * 4); // speck
+    const m = pf.floodFillMask(px);
+    assert.equal(m[0], 0);
+    assert.equal(m[50 * 120 + 60], 1, 'enclosed patch is not background (no path from the border)');
+    const cut = pf.applyMask(px, m, { crisp: false });
+    assert.equal(cut.data[(5 * 120 + 5) * 4 + 3], 0, 'speck dropped (main parts only)');
+    assert.equal(cut.data[(30 * 120 + 30) * 4 + 3], 255);
+    assert.deepEqual(pf.alphaBox(cut), { x: 20, y: 20, w: 80, h: 60 });
+    const ea = cut.data[(40 * 120 + 20) * 4 + 3];
+    assert.ok(ea > 150 && ea < 255, `soft 1 px edge (${ea})`);
+  });
+  t('photo format: mask helpers (resize, normalise, blur keeps the sum, model input layout)', () => {
+    const m = pf.resizeMask(new Float32Array([0, 1, 1, 0]), 2, 2, 4, 4);
+    assert.equal(m.length, 16);
+    assert.ok(m[0] === 0 && m[3] === 1);
+    assert.deepEqual([...pf.normalizeMask(new Float32Array([2, 4, 6]))], [0, 0.5, 1]);
+    const a = new Float32Array(41 * 41); a[20 * 41 + 20] = 1;
+    const b = pf.gaussBlur(a, 41, 41, 3);
+    assert.ok(Math.abs(b.reduce((s, v) => s + v, 0) - 1) < 1e-4 && b[20 * 41 + 20] < 0.1);
+    const inp = pf.modelInput(solid(50, 30, [255, 0, 0, 255]));
+    assert.equal(inp.length, 3 * 320 * 320);
+    assert.ok(Math.abs(inp[0] - (1 - 0.485) / 0.229) < 1e-4 && Math.abs(inp[320 * 320] - (0 - 0.456) / 0.224) < 1e-4, 'CHW, scaled by the max, ImageNet-normalised');
   });
 }
 

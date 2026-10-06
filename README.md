@@ -79,6 +79,11 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
   duplicate, delete, undo (Ctrl+Z). A template applies automatically to devices matching its rules: USB vendor/product id, name, and optionally
   the exact button count, which tells apart devices sharing a USB id (e.g. the two MOZA AB6 bases with 128 and 133 buttons). You can also pick a
   template by hand per device. Templates export/import as JSON with the image embedded, for sharing.
+  **Pages**: ＋ *Page* adds another picture of the device (up to 12; double-click a tab or use the ⋯ menu to rename, move or delete a page,
+  its callouts go with it); the Devices view shows every page as a captioned section. **Picture preparation** on every upload: *Remove
+  background* runs U²-Net-p in the browser (onnxruntime-web WASM, ~19 MB downloaded once from this site, nothing uploaded; a corner-colour flood
+  fill if the model cannot load), *Format only* trims and pads the picture like the built-in photos (product 900–1300 px, 5 % margin, optional
+  baked cyan glow), with a before/after preview; *Keep original* stores it as uploaded.
 - **🕹 Controllers & input tester** (header button): the devices declared in the active profile (`<options type="joystick"
   instance=… Product=…>`), the devices the browser detects (index, id, mapping, button/axis counts, USB ids), and which game instance
   (js1…jsN / gp1) each browser device is. Devices are prefilled by matching the profile's USB vendor/product ids, then names, then

@@ -94,6 +94,8 @@ export interface DeviceIdentity {
 export const MAX_IMAGE_BYTES = 2_500_000;
 export const MAX_IMAGE_SIDE = 1600;
 export const BLANK_ASPECT = 1.6;
+/** most views (pages) a template can have; older files had at most 6, so every exported template still imports */
+export const MAX_VIEWS = 12;
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
@@ -322,11 +324,11 @@ function cleanTemplate(o: unknown, i: number): DeviceTemplate {
     if (v.length > MAX_IMAGE_BYTES * 1.4) throw new Error(`Template “${t.name}”: ${what} is too large (max ${(MAX_IMAGE_BYTES / 1e6).toFixed(1)} MB)`);
     return v;
   };
-  // multi-view templates: up to 6 pictures, each with a unique id, a label and a canvas size
+  // multi-view templates: up to MAX_VIEWS pictures (pages), each with a unique id, a label and a canvas size
   let views: TemplateView[] | undefined;
   if (Array.isArray(t.views) && t.views.length) {
     const ids = new Set<string>();
-    views = t.views.slice(0, 6).map((x, k) => {
+    views = t.views.slice(0, MAX_VIEWS).map((x, k) => {
       const q = (x ?? {}) as Record<string, unknown>;
       let id = typeof q.id === 'string' && VIEW_ID_RE.test(q.id) ? q.id : `v${k + 1}`;
       while (ids.has(id)) id = `${id.slice(0, 20)}-${k + 1}`;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { GP_AXES, GP_BUTTONS, JS_AXES } from '../lib/capture';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { usePadHits, type PressHit } from '../lib/listen';
@@ -6,6 +6,7 @@ import {
   BLANK_ASPECT, CALLOUT_KINDS, HAT_DIRS, calloutFor, calloutTitle, coveredInputs, exportTemplates, freeBoxSpot, hatInputs, inputRole, inputsForKind,
   calloutView, loadImageFile, matchFor, matchScore, shortInput, templateViews, uid, usedInputs, viewTemplate, type Callout, type CalloutKind, type DeviceIdentity, type DeviceTemplate, type Pt,
 } from '../lib/templates';
+import { MAX_PAGES, addPage, deletePage, movePage, pageCallouts, pageLabel, renamePage, setPageImage } from '../lib/templatePages';
 import { CalloutBody, DeviceCanvas, useLiveInputs, type CalloutState, type Entry } from './DeviceCanvas';
 import { Ico } from './icons';
 
@@ -21,6 +22,8 @@ interface Props {
   onDelete?: () => void;
   notify: (kind: 'ok' | 'err', text: string) => void;
 }
+// the picture dialog (background removal, format) loads on the first upload; its model loads only on "Remove background"
+const PhotoPrep = lazy(() => import('./PhotoPrep').then((m) => ({ default: m.PhotoPrep })));
 const INPUT_RE = /^[a-z][a-z0-9_]{0,24}$/;
 /** typed input name: a bare number means that button ("7" -> button7) */
 const numIn = (v: string) => { const t = v.trim().toLowerCase(); return /^\d{1,3}$/.test(t) && Number(t) > 0 ? `button${Number(t)}` : t; };
@@ -37,6 +40,10 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   const [pressPlace, setPressPlace] = useState(false);
   const [pressTarget, setPressTarget] = useState<{ id: string; idx: number } | null>(null);
   const [busy, setBusy] = useState(false);
+  const prepOpen = useRef(false), renamingRef = useRef<string | null>(null), renameCancel = useRef(false);
+  // page being renamed (its tab is an input)
+  const [renaming, setRenaming] = useState<string | null>(null);
+  useEffect(() => { renamingRef.current = renaming; if (renaming) renameCancel.current = false; }, [renaming]);
   const fileRef = useRef<HTMLInputElement>(null);
   const tRef = useRef(t);
   useEffect(() => { tRef.current = t; }, [t]);
@@ -73,6 +80,8 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   // keyboard: Ctrl+Z undo, Delete removes the selected callout (captured before the app's own shortcuts)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (prepOpen.current) return; // the picture dialog handles its own keys
+      if (e.key === 'Escape' && renamingRef.current) { e.stopImmediatePropagation(); renameCancel.current = true; setRenaming(null); return; }
       const tag = (e.target as HTMLElement)?.tagName;
       const typing = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
       if (e.key.toLowerCase() === 'z' && (e.ctrlKey || e.metaKey) && !typing) { e.preventDefault(); e.stopImmediatePropagation(); undo(); }
@@ -106,23 +115,45 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   }, [device.pad, slotInstance, pressTarget, notify, addCallout]); // eslint-disable-line react-hooks/exhaustive-deps
   usePadHits(pressPlace || !!pressTarget, describe, onHit);
 
-  const setImage = async (f: File) => {
+  /** store a picture on the shown page (pages: canvas widened for the label columns, as the built-ins; classic single picture:
+   * the canvas takes its shape, outlines are dropped) */
+  const applyImage = (img: { dataUrl: string; w: number; h: number }, how?: 'cutout' | 'format') => {
+    const cur = tRef.current;
+    if (cur.views?.length) commit(setPageImage(cur, viewRef.current, img));
+    else commit({ ...cur, image: img.dataUrl, aspect: img.w / img.h, callouts: cur.callouts.map(({ region: _r, inputRegions: _ir, ...c }) => c) });
+    notify('ok', `${how === 'cutout' ? 'Cut-out' : how === 'format' ? 'Formatted picture' : 'Image'} loaded (${img.w}×${img.h}, ${(img.dataUrl.length / 1024).toFixed(0)} KB stored)`);
+  };
+  const keepOriginal = async (f: File) => {
     setBusy(true);
-    try {
-      const img = await loadImageFile(f);
-      const cur = tRef.current;
-      if (cur.views?.length) { // multi-view: replaces the picture of the shown view (canvas widened for the label columns, as the built-ins)
-        const views = cur.views.map((v) => (v.id === viewRef.current ? { ...v, image: img.dataUrl, width: Math.round(img.w + 0.68 * img.h), height: img.h } : v));
-        commit({ ...cur, views, aspect: views[0].width / views[0].height });
-        notify('ok', `Image loaded (${img.w}×${img.h}, ${(img.dataUrl.length / 1024).toFixed(0)} KB stored)`);
-        setBusy(false);
-        return;
-      }
-      commit({ ...tRef.current, image: img.dataUrl, aspect: img.w / img.h, callouts: tRef.current.callouts.map(({ region: _r, inputRegions: _ir, ...c }) => c) });
-      notify('ok', `Image loaded (${img.w}×${img.h}, ${(img.dataUrl.length / 1024).toFixed(0)} KB stored)`);
-    } catch (e) { notify('err', (e as Error).message); }
+    try { applyImage(await loadImageFile(f)); } catch (e) { notify('err', (e as Error).message); }
     setBusy(false);
   };
+  // uploads go through the picture preparation (remove background / format like the built-ins); vector pictures are kept as is
+  const [prep, setPrep] = useState<File | null>(null);
+  useEffect(() => { prepOpen.current = !!prep; }, [prep]);
+  const setImage = (f: File) => {
+    if (!f.type.startsWith('image/')) { notify('err', 'Pick an image file (PNG, JPEG, WebP, SVG)'); return; }
+    if (f.type === 'image/svg+xml') void keepOriginal(f); else setPrep(f);
+  };
+  // pages: tabs with "+ Page", rename (double-click or the page menu), move, delete
+  const pages = templateViews(t);
+  const [pageMenu, setPageMenu] = useState(false);
+  const showPage = (id: string) => { setViewSel(id); viewRef.current = id; const s0 = tRef.current.callouts.find((c) => c.id === sel); if (s0 && calloutView(tRef.current, s0) !== id) setSel(null); };
+  const onAddPage = () => {
+    const r = addPage(tRef.current);
+    if (!r.id) { notify('err', `A template can have up to ${MAX_PAGES} pages.`); return; }
+    commit(r.template); showPage(r.id); setRenaming(r.id); setPageMenu(false);
+  };
+  const onRename = (id: string, label: string) => { setRenaming(null); if (renameCancel.current) { renameCancel.current = false; return; } const cur = tRef.current; const i = templateViews(cur).findIndex((v) => v.id === id); if (i < 0 || label.trim() === pageLabel(templateViews(cur)[i], i)) return; commit(renamePage(cur, id, label)); };
+  const onDeletePage = (id: string) => {
+    setPageMenu(false);
+    const cur = tRef.current, vs = templateViews(cur), i = vs.findIndex((v) => v.id === id);
+    if (vs.length <= 1 || i < 0) return;
+    const n = pageCallouts(cur, id).length;
+    if (!confirm(`Delete the page “${pageLabel(vs[i], i)}”${n ? ` and its ${n} callout${n === 1 ? '' : 's'}` : ''}? (Undo brings it back.)`)) return;
+    commit(deletePage(cur, id)); showPage(vs[i === 0 ? 1 : i - 1].id);
+  };
+  const onMovePage = (id: string, dir: -1 | 1) => { setPageMenu(false); const next = movePage(tRef.current, id, dir); if (next !== tRef.current) commit(next); };
   const selC = t.callouts.find((c) => c.id === sel);
   const selView = selC && multi ? calloutView(t, selC) : null;
   // selecting a callout (e.g. by pressing its control) shows its view (state adjusted while rendering, not in an effect)
@@ -140,7 +171,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-void/95 backdrop-blur" data-testid="template-editor"
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files?.[0]; if (f) void setImage(f); }}>
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files?.[0]; if (f && !prep) setImage(f); }}>
       <div className="flex flex-wrap items-center gap-2 border-b border-edge bg-panel/90 px-4 py-2">
         <span className="font-display text-sm font-bold uppercase tracking-[0.2em] text-mod"><Ico name="edit" /> Device template</span>
         <input value={t.name} onChange={(e) => { const next = { ...tRef.current, name: e.target.value }; tRef.current = next; setT(next); }} aria-label="Template name" className={`${field} w-56`} />
@@ -148,6 +179,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
           <option value="js">Joystick / HOTAS</option><option value="gp">Gamepad</option>
         </select>
         <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="tpl-upload" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60"><Ico name="image" /> {t.image || t.views?.find((v) => v.id === activeView)?.image ? 'Replace image' : 'Upload image'}</button>
+        {multi && t.views!.find((v) => v.id === activeView)?.image && <button type="button" onClick={() => commit(setPageImage(t, activeView, null))} data-testid="tpl-page-blank" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Blank page</button>}
         {t.image && !multi && <button type="button" onClick={() => commit({ ...t, image: undefined, aspect: BLANK_ASPECT, callouts: t.callouts.map(({ region: _r, inputRegions: _ir, ...c }) => c) })} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Blank canvas</button>}
         {!t.image && !multi && (
           <label className="flex items-center gap-1 text-[11px] text-slate-400">Canvas
@@ -157,7 +189,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
           </label>
         )}
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" className="hidden" data-testid="tpl-upload-file"
-          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void setImage(f); }} />
+          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setImage(f); }} />
         <span className="ml-auto flex flex-wrap items-center gap-1.5">
           <button type="button" onClick={undo} disabled={!histLen} title="Undo (Ctrl+Z)" data-testid="tpl-undo" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60 disabled:opacity-40"><Ico name="undo" /> Undo{histLen ? ` (${histLen})` : ''}</button>
           <button type="button" onClick={() => { const a = document.createElement('a'); a.href = `data:application/json;charset=utf-8,${encodeURIComponent(exportTemplates([t]))}`; a.download = `${t.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'device'}.sc-template.json`; document.body.appendChild(a); a.click(); a.remove(); }}
@@ -181,16 +213,39 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
       </div>
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-auto p-4 scrollbar-thin">
-          {multi && (
-            <div role="tablist" aria-label="Views" data-testid="tpl-views" className="mb-2 flex flex-wrap gap-1">
-              {t.views!.map((v) => (
-                <button key={v.id} type="button" role="tab" aria-selected={v.id === activeView} data-view-tab={v.id} onClick={() => { setViewSel(v.id); if (selC && calloutView(t, selC) !== v.id) setSel(null); }}
-                  className={`rounded border px-2.5 py-1 text-xs ${v.id === activeView ? 'border-hud/60 bg-hud/10 text-hud2' : 'border-edge text-slate-400 hover:border-hud/40'}`}>
-                  {v.label || v.id} <span className="text-slate-500">({t.callouts.filter((c) => calloutView(t, c) === v.id).length})</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <div role="tablist" aria-label="Pages" data-testid="tpl-views" className="mb-2 flex flex-wrap items-center gap-1">
+            {pages.map((v, i) => (renaming === v.id ? (
+              <input key={v.id} autoFocus defaultValue={pageLabel(v, i)} maxLength={40} aria-label="Page name" data-testid="tpl-page-rename"
+                onFocus={(e) => e.target.select()} onBlur={(e) => onRename(v.id, e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                className={`${field} w-40 border-hud/60`} />
+            ) : (
+              <button key={v.id} type="button" role="tab" aria-selected={v.id === activeView} data-view-tab={v.id} title="Double-click to rename"
+                onClick={() => showPage(v.id)} onDoubleClick={() => { showPage(v.id); setRenaming(v.id); }}
+                className={`rounded border px-2.5 py-1 text-xs ${v.id === activeView ? 'border-hud/60 bg-hud/10 text-hud2' : 'border-edge text-slate-400 hover:border-hud/40'}`}>
+                {pageLabel(v, i)} <span className="text-slate-500">({t.callouts.filter((c) => calloutView(t, c) === v.id).length})</span>
+              </button>
+            )))}
+            <span className="relative">
+              <button type="button" onClick={() => setPageMenu((o) => !o)} aria-haspopup="menu" aria-expanded={pageMenu} aria-label="Page menu" data-testid="tpl-page-menu"
+                className="rounded border border-edge px-1.5 py-1 text-xs text-slate-400 hover:border-hud/40"><Ico name="more" /></button>
+              {pageMenu && (() => {
+                const i = pages.findIndex((v) => v.id === activeView);
+                const item = 'block w-full px-3 py-1.5 text-left text-xs text-slate-200 hover:bg-white/5 disabled:opacity-40';
+                return (<>
+                  <div className="fixed inset-0 z-20" aria-hidden onClick={() => setPageMenu(false)} />
+                  <div role="menu" className="absolute left-0 top-full z-30 mt-1 w-48 rounded border border-edge bg-panel py-1 shadow-xl" onMouseLeave={() => setPageMenu(false)}>
+                    <button type="button" role="menuitem" className={item} data-testid="tpl-page-menu-rename" onClick={() => { setPageMenu(false); setRenaming(activeView); }}>Rename “{pageLabel(pages[i], i)}”</button>
+                    <button type="button" role="menuitem" className={item} disabled={i <= 0} onClick={() => onMovePage(activeView, -1)}>Move left</button>
+                    <button type="button" role="menuitem" className={item} disabled={i >= pages.length - 1} onClick={() => onMovePage(activeView, 1)}>Move right</button>
+                    <button type="button" role="menuitem" className={`${item} hover:text-alert`} disabled={pages.length <= 1} data-testid="tpl-page-menu-delete" onClick={() => onDeletePage(activeView)}>Delete page…</button>
+                  </div>
+                </>);
+              })()}
+            </span>
+            <button type="button" onClick={onAddPage} disabled={pages.length >= MAX_PAGES} data-testid="tpl-page-add" title="Add a page (another picture of the device)"
+              className="rounded border border-dashed border-edge px-2.5 py-1 text-xs text-slate-300 hover:border-hud/60 disabled:opacity-40"><Ico name="plus" /> Page</button>
+          </div>
           <DeviceCanvas template={t} view={multi ? activeView : undefined} editable stateOf={stateOf} selected={sel} onSelect={setSel}
             onDragStart={pushHist}
             onMove={(id, part, p) => {
@@ -218,9 +273,9 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
                 </select>
               </label>
               {multi && (
-                <label className="flex items-center gap-2">View
+                <label className="flex items-center gap-2">Page
                   <select value={calloutView(t, selC)} onChange={(e) => patchCallout(selC.id, { view: e.target.value })} aria-label="Callout view" className={field}>
-                    {t.views!.map((v) => <option key={v.id} value={v.id}>{v.label || v.id}</option>)}
+                    {t.views!.map((v, i) => <option key={v.id} value={v.id}>{pageLabel(v, i)}</option>)}
                   </select>
                 </label>
               )}
@@ -272,6 +327,8 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
           </section>
         </aside>
       </div>
+      {prep && <Suspense fallback={null}><PhotoPrep file={prep} target={multi || pages.length > 1 ? `page “${pageLabel(pages.find((v) => v.id === activeView) ?? pages[0], Math.max(0, pages.findIndex((v) => v.id === activeView)))}”` : 'the template picture'}
+        onCancel={() => setPrep(null)} onKeep={() => { const f = prep; setPrep(null); void keepOriginal(f); }} onUse={(img, how) => { setPrep(null); applyImage(img, how); }} /></Suspense>}
     </div>
   );
 }
