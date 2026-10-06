@@ -77,6 +77,13 @@ interface Props {
  * purpose: in a usual window two views do not fit side by side at that height, so they stack and each photo gets the full width
  * (the device is the hero, the labels sit around it); very wide windows show them side by side. */
 const VIEW_MIN_H = 440, VIEW_MAX_H = 720;
+/** uploaded raster pictures on a classic single-picture canvas: never drawn taller than the built-in photos (VIEW_MAX_H), so a
+ * portrait picture does not fill the column width and run off the screen. Same rule in the Devices view and the editor (the
+ * editor also reuses the width the Devices view showed), so label boxes sit in the same place. Built-in drawings (SVG) and
+ * blank canvases keep filling the width. */
+const UPLOADED_RASTER_RE = /^data:image\/(png|jpeg|webp|gif)[;,]/;
+export const cappedWidth = (t: Pick<DeviceTemplate, 'image' | 'aspect' | 'builtin' | 'views'>): number | undefined =>
+  !t.views?.length && !t.builtin && t.image && UPLOADED_RASTER_RE.test(t.image) ? Math.round(t.aspect * VIEW_MAX_H) : undefined;
 /** narrowest a multi-view canvas gets (narrower containers scroll it horizontally) */
 export const MULTI_VIEW_MIN_W = 420;
 /** label-box layout, the same in the Devices view and the template editor (so a box sits exactly where it will be shown):
@@ -219,10 +226,11 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
   const by = (c: { id: string; box: Pt }) => c.box.y + (nudge[c.id] ?? 0);
   const bx = (c: { id: string; box: Pt }) => c.box.x + (nudge[`x:${c.id}`] ?? 0);
   const focused = !!viewId && pulse?.view === viewId;
+  const capW = viewId ? undefined : cappedWidth(t);
   return (
     <div ref={ref} data-testid={viewId ? 'device-canvas-view' : 'device-canvas'} data-view={viewId} data-photo={photo ? '1' : undefined} data-focused={focused ? '1' : undefined}
       className={`relative w-full select-none overflow-hidden rounded-lg border border-edge/70 ${photo ? '' : t.image ? 'bg-black/30' : 'bg-[length:24px_24px] bg-[linear-gradient(rgba(79,216,255,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(79,216,255,.06)_1px,transparent_1px)]'} ${editable ? 'cursor-crosshair' : ''}`}
-      style={{ aspectRatio: String(t.aspect), minWidth, ...(editable && !viewId && shownWidth.get(widthKey(t)) ? { width: shownWidth.get(widthKey(t)), minWidth: 0 } : {}), ...(photo ? { backgroundImage: PHOTO_BG } : {}) }}
+      style={{ aspectRatio: String(t.aspect), minWidth, ...(capW ? { maxWidth: capW, minWidth: Math.min(minWidth, capW), marginInline: 'auto' } : {}), ...(editable && !viewId && shownWidth.get(widthKey(t)) ? { width: shownWidth.get(widthKey(t)), minWidth: 0 } : {}), ...(photo ? { backgroundImage: PHOTO_BG } : {}) }}
       onClick={(e) => {
         if (!editable || !onCanvasClick) return;
         if (e.target === e.currentTarget || (e.target as Element).getAttribute?.('data-bg') === '1') onCanvasClick(at(e));

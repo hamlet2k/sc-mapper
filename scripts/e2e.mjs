@@ -1446,6 +1446,26 @@ console.log('\nrefresh game state (drop a reshuffled export)');
     <figure style="margin:0"><figcaption>Template editor</figcaption><img src="data:image/png;base64,${b64('/tmp/ursa-editor.png')}"></figure></body>`);
   await sbs.screenshot({ path: shots + '114-ursa-view-vs-editor.png' });
   await sbs.close();
+  { // page tabs carry a × (Delete page): on the active tab and on hover; a customized copy of a built-in can delete its pages
+    const edu = rp.getByTestId('template-editor');
+    const xs = edu.getByTestId('tpl-page-delete'), tabsU = edu.locator('[data-view-tab]');
+    const vis = () => xs.evaluateAll((els) => els.map((e) => getComputedStyle(e).opacity));
+    const n0 = await tabsU.count(), active0 = await edu.locator('[data-view-tab][aria-selected=true]').getAttribute('data-view-tab');
+    const ops = await vis();
+    const other = await tabsU.evaluateAll((els) => els.find((e) => e.getAttribute('aria-selected') !== 'true').dataset.viewTab);
+    await tabsU.and(rp.locator(`[data-view-tab="${other}"]`)).hover();
+    await rp.waitForTimeout(100);
+    const hovered = await xs.and(rp.locator(`[data-page="${other}"]`)).evaluate((e) => getComputedStyle(e).opacity);
+    check(n0 === 3 && (await xs.count()) === 3 && ops.filter((o) => o === '1').length === 1 && hovered === '1' && (await xs.first().getAttribute('title')) === 'Delete page',
+      `each page tab has a × "Delete page" (shown on the active tab ${ops.join('/')}, and on hover: ${hovered})`);
+    let msg = '';
+    rp.once('dialog', (d) => { msg = d.message(); void d.accept(); });
+    await xs.and(rp.locator(`[data-page="${other}"]`)).click();
+    await rp.waitForTimeout(200);
+    check(/^Delete the page “.+”/.test(msg) && (await tabsU.count()) === 2 && (await edu.locator('[data-view-tab][aria-selected=true]').getAttribute('data-view-tab')) === active0,
+      `Customize a copy (URSA): the tab × asks first ("${msg.slice(0, 60)}…"), deletes that page, keeps the shown one`);
+    await rp.screenshot({ path: shots + '117-page-tab-delete.png' });
+  }
   await rp.getByRole('button', { name: 'Cancel' }).click();
   await rp.waitForTimeout(300);
   await rc.close();
@@ -1892,10 +1912,14 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   check(JSON.stringify(await dims()) === '[334,674]', 'back to Auto');
   await p7.getByTestId('photo-prep-use').click();
   await p7.waitForTimeout(300);
+  // a prepared portrait picture on a single-page template: drawn like the built-in photos (label columns, at most 720 px tall),
+  // not stretched to the column width
+  const ev = await ed.getByTestId('device-canvas-view').evaluate((el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, photo: el.dataset.photo, col: el.closest('[data-testid=device-canvas]').getBoundingClientRect().width }; });
+  check(ev.photo === '1' && ev.h <= 722 && Math.abs(ev.w / ev.h - Math.round(334 + 0.68 * 674) / 674) < 0.01 && ev.w < ev.col - 100, `editor: prepared portrait picture capped like the built-in photos (${Math.round(ev.w)}×${Math.round(ev.h)} in a ${Math.round(ev.col)} px column, label columns)`);
 
   // input picker: the template is linked to the connected Gladiator (32 buttons, POV hat on axis 9, 8 axes)
-  const pv = ed.getByTestId('device-canvas');
-  const place = async (fx, fy) => { const b = await pv.boundingBox(); await p7.mouse.click(b.x + b.width * fx, b.y + Math.min(b.height, 1000 - b.y - 20) * fy); await p7.waitForTimeout(150); };
+  const pv = ed.getByTestId('device-canvas-view');
+  const place = async (fx, fy) => { const b = await pv.boundingBox(); await p7.mouse.click(b.x + b.width * fx, b.y + b.height * fy); await p7.waitForTimeout(150); };
   await place(0.3, 0.2);
   const props = ed.getByTestId('callout-props');
   const firstIn = await props.getByLabel('Input input').inputValue();
@@ -1961,6 +1985,45 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   await link.getByLabel('Rule 1 buttons').fill('');
   await p7.waitForTimeout(100);
   check((await props.getByTestId('input-picker-btn').count()) === 0 && await props.getByLabel('Input input').isVisible(), 'no device and no button count: free typing only');
+  check((await ed.getByTestId('tpl-page-delete').count()) === 0, 'single page: no × on its tab');
+  await link.getByLabel('Rule 1 product id').fill('0200');
+  await ed.getByLabel('Template name').fill('Round 7 grip');
+  const boxesOf = (root) => p7.evaluate((root) => {
+    const r0 = document.querySelector(root), v = r0.querySelector('[data-testid=device-canvas-view]') ?? r0.querySelector('[data-testid=device-canvas]');
+    const vr = v.getBoundingClientRect();
+    return { w: vr.width, h: vr.height, boxes: Object.fromEntries([...v.querySelectorAll('[data-callout]')].map((c) => { const r = c.getBoundingClientRect(); return [c.dataset.callout, [r.left - vr.left, r.top - vr.top]]; })) };
+  }, root);
+  await ed.getByTestId('tpl-save').click();
+  await p7.waitForTimeout(800);
+  await p7.evaluate(() => document.getElementById('main').scrollTo(0, 0));
+  await p7.waitForTimeout(200);
+  const inV = await boxesOf('[data-testid=device-view]');
+  await dv7.getByTestId('template-edit').click();
+  await p7.waitForTimeout(800);
+  const inE = await boxesOf('[data-testid=template-editor]');
+  const dd = Object.entries(inV.boxes).map(([id, b]) => (inE.boxes[id] ? Math.max(Math.abs(b[0] - inE.boxes[id][0]), Math.abs(b[1] - inE.boxes[id][1])) : 99));
+  check(inV.h <= 722 && Math.abs(inE.w - inV.w) < 0.5 && Math.abs(inE.h - inV.h) < 0.5 && dd.length >= 3 && Math.max(...dd) < 0.75,
+    `Devices view draws the custom portrait page capped too (${Math.round(inV.w)}×${Math.round(inV.h)}), and the editor at the same size with the label boxes in the same place (max Δ ${Math.max(...dd).toFixed(2)} px over ${dd.length})`);
+  await ed.getByRole('button', { name: 'Cancel' }).click();
+  await p7.waitForTimeout(300);
+  // "Keep original" on a classic single-picture template: the canvas takes the picture's shape but is not drawn taller than 720 px
+  await dv7.getByTestId('template-new').click();
+  await ed.getByTestId('tpl-upload-file').setInputFiles('scripts/fixtures/photos/stick-on-white.png');
+  await before.waitFor({ timeout: 5000 });
+  await p7.getByTestId('photo-prep-keep').click();
+  await p7.waitForTimeout(500);
+  const cv = await ed.getByTestId('device-canvas').evaluate((el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, photo: el.dataset.photo, views: el.dataset.views }; });
+  check(!cv.views && Math.abs(cv.h - 720) < 2 && Math.abs(cv.w / cv.h - 346 / 420) < 0.01, `classic canvas with a portrait upload (Keep original): ${Math.round(cv.w)}×${Math.round(cv.h)}, height capped at 720 px, shape kept`);
+  await ed.getByTestId('device-canvas').click({ position: { x: cv.w * 0.5, y: cv.h * 0.3 } });
+  await p7.waitForTimeout(150);
+  await ed.getByLabel('Template name').fill('Round 7 classic');
+  await ed.getByTestId('tpl-save').click();
+  await p7.waitForTimeout(800);
+  const tsel = dv7.getByTestId('template-select');
+  await tsel.selectOption(await tsel.locator('option', { hasText: 'Round 7 classic' }).first().getAttribute('value'));
+  await p7.waitForTimeout(500);
+  const dc = await dv7.getByTestId('device-canvas').evaluate((el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height }; });
+  check(Math.abs(dc.h - cv.h) < 1 && Math.abs(dc.w - cv.w) < 1, `Devices view draws it at the same capped size (${Math.round(dc.w)}×${Math.round(dc.h)})`);
   await c7.close();
 }
 

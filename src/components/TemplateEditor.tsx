@@ -117,10 +117,12 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   usePadHits(pressPlace || !!pressTarget, describe, onHit);
 
   /** store a picture on the shown page (pages: canvas widened for the label columns, as the built-ins; classic single picture:
-   * the canvas takes its shape, outlines are dropped) */
+   * the canvas takes its shape, outlines are dropped). A prepared picture (formatted / cut-out, i.e. trimmed to the product)
+   * always goes on a page, also on a single-picture template, so it gets the label columns and is drawn like the built-in
+   * photos (at most VIEW_MAX_H tall) instead of filling the width with the labels on top of the product. */
   const applyImage = (img: { dataUrl: string; w: number; h: number }, how?: 'cutout' | 'format') => {
     const cur = tRef.current;
-    if (cur.views?.length) commit(setPageImage(cur, viewRef.current, img));
+    if (cur.views?.length || how) commit(setPageImage(cur, viewRef.current, img));
     else commit({ ...cur, image: img.dataUrl, aspect: img.w / img.h, callouts: cur.callouts.map(({ region: _r, inputRegions: _ir, ...c }) => c) });
     notify('ok', `${how === 'cutout' ? 'Cut-out' : how === 'format' ? 'Formatted picture' : 'Image'} loaded (${img.w}×${img.h}, ${(img.dataUrl.length / 1024).toFixed(0)} KB stored)`);
   };
@@ -152,7 +154,8 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
     if (vs.length <= 1 || i < 0) return;
     const n = pageCallouts(cur, id).length;
     if (!confirm(`Delete the page “${pageLabel(vs[i], i)}”${n ? ` and its ${n} callout${n === 1 ? '' : 's'}` : ''}? (Undo brings it back.)`)) return;
-    commit(deletePage(cur, id)); showPage(vs[i === 0 ? 1 : i - 1].id);
+    commit(deletePage(cur, id));
+    if (id === viewRef.current) showPage(vs[i === 0 ? 1 : i - 1].id); // deleting another page (its tab ×) keeps the shown one
   };
   const onMovePage = (id: string, dir: -1 | 1) => { setPageMenu(false); const next = movePage(tRef.current, id, dir); if (next !== tRef.current) commit(next); };
   const selC = t.callouts.find((c) => c.id === sel);
@@ -224,11 +227,21 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
                 onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                 className={`${field} w-40 border-hud/60`} />
             ) : (
-              <button key={v.id} type="button" role="tab" aria-selected={v.id === activeView} data-view-tab={v.id} title="Double-click to rename"
-                onClick={() => showPage(v.id)} onDoubleClick={() => { showPage(v.id); setRenaming(v.id); }}
-                className={`rounded border px-2.5 py-1 text-xs ${v.id === activeView ? 'border-hud/60 bg-hud/10 text-hud2' : 'border-edge text-slate-400 hover:border-hud/40'}`}>
-                {pageLabel(v, i)} <span className="text-slate-500">({t.callouts.filter((c) => calloutView(t, c) === v.id).length})</span>
-              </button>
+              // a page tab with its own × (Delete page, the same confirm as the ⋯ menu): shown on the active tab and on hover / focus,
+              // not when it is the only page. The × is a sibling of the tab button (no button inside a button).
+              <span key={v.id} className="group relative inline-flex">
+                <button type="button" role="tab" aria-selected={v.id === activeView} data-view-tab={v.id} title="Double-click to rename"
+                  onClick={() => showPage(v.id)} onDoubleClick={() => { showPage(v.id); setRenaming(v.id); }}
+                  className={`rounded border py-1 pl-2.5 text-xs ${pages.length > 1 ? 'pr-6' : 'pr-2.5'} ${v.id === activeView ? 'border-hud/60 bg-hud/10 text-hud2' : 'border-edge text-slate-400 hover:border-hud/40'}`}>
+                  {pageLabel(v, i)} <span className="text-slate-500">({t.callouts.filter((c) => calloutView(t, c) === v.id).length})</span>
+                </button>
+                {pages.length > 1 && (
+                  <button type="button" onClick={() => onDeletePage(v.id)} title="Delete page" aria-label={`Delete page “${pageLabel(v, i)}”`} data-testid="tpl-page-delete" data-page={v.id}
+                    className={`absolute right-1 top-1/2 -translate-y-1/2 rounded px-0.5 text-[10px] leading-none text-slate-500 hover:bg-alert/15 hover:text-alert focus-visible:opacity-100 ${v.id === activeView ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    <Ico name="close" />
+                  </button>
+                )}
+              </span>
             )))}
             <span className="relative">
               <button type="button" onClick={() => setPageMenu((o) => !o)} aria-haspopup="menu" aria-expanded={pageMenu} aria-label="Page menu" data-testid="tpl-page-menu"

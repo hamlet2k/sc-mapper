@@ -482,3 +482,18 @@ Judgment calls made while building round 1, where the decisions above didn't say
   - Unit: the aspect presets (ratios, custom clamp, product size kept and centred), the zoom maths (union fit, zoom keeps the point under the cursor, pan, place) and the picker sources (device / rule / none, hat-axis detection, used-by, multi-pick kinds).
   - e2e: the ± / 100% / Fit buttons; the wheel keeping the cursor point, with the panes in sync; drag panning both panes; Stick / Throttle / Square / Custom results (ratio, centred); the choice remembered on the next upload; the picker on the connected Gladiator (32 buttons + hat 1 directions, used-by); picking and typing; the 8 axes; multi-pick for a 4-button hat and a switch; the link-rule fallback (24 buttons); and free text only without a count.
   - Screenshots: `117-prepare-zoomed.png`, `117-prepare-aspect.png`, `117-input-picker.png`.
+
+### Picture size in the editor and the Devices view (round 7 follow-up)
+
+- **Problem.** A newly uploaded portrait picture on a single-page template filled the full column width, e.g. 1300 × 2600 px, in both the editor and the Devices view. Labels sat on top of the product.
+- **Prepared pictures go on a page.** "Use formatted" / "Use cut-out" now always stores the picture as a page (`setPageImage`), also on a single-page template. It gets the label columns (`w + 0.68 h`) and is drawn like the built-in photos: at most `VIEW_MAX_H` = 720 px tall (the same constant the built-in photo views use), centred, filling the width only up to that. A portrait product 334×674 now shows at 846×720 instead of filling the column.
+- **Classic single-picture canvases** (Keep original, old templates) keep the picture's shape. An uploaded raster picture is no longer drawn taller than 720 px (`cappedWidth` = aspect × 720, centred). Built-in drawings (SVG), their customized copies and blank canvases keep filling the width as before.
+- **Same in both places.** Both views use the one constant in `DeviceCanvas`, and the editor still reuses the width the Devices view showed. So the editor and the Devices view draw a picture at the same size with the label boxes in the same place. The e2e checks this for a custom portrait page (Δ 0 px) and for the URSA built-in (unchanged).
+- The viewport-height alternative ("fit below the sticky lines") was not used. It would differ between the editor (no sticky lines) and the Devices view, which breaks the shared coordinates.
+
+### Page tabs: delete with ×
+
+- Each page tab now has a small × ("Delete page"). It shows on the active tab, and on hover or keyboard focus for the others. There is none when the template has only one page.
+- It opens the same confirm as ⋯ → "Delete page…", which stays. Undo brings the page back. Deleting a page other than the shown one keeps the shown page.
+- Works the same on a "Customize a copy" of a built-in photo template. The e2e deletes a page of the URSA copy this way.
+- Screenshots: `117-input-picker.png` (retaken, with the capped picture) and `117-page-tab-delete.png`.
