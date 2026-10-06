@@ -46,7 +46,7 @@ log('title:', await page.title());
 log('header stats:', (await page.locator('header').first().innerText()).split('\n').slice(0, 12).join(' | '));
 await page.screenshot({ path: shots + '01-defaults-list.png' });
 
-const search = page.getByPlaceholder(/Search actions|refine:/);
+const search = page.getByTestId('search');
 const rows = page.locator('#main .row-cv');
 for (const q of ['quantum', 'mining', 'lalt+n', 'key:f', 'mouse2', 'qntm']) {
   await search.fill(q);
@@ -62,27 +62,32 @@ await search.fill('');
 await page.locator('input[type=file]').setInputFiles('public/samples/actionmaps.xml');
 await page.waitForTimeout(500);
 log('toast:', await page.locator('.fixed.bottom-5').innerText().catch(() => 'none'));
-log('stats after import:', (await page.locator('header button:has-text("customized"), header button:has-text("conflicts")').allInnerTexts()).join(' | '));
+log('stats after import:', await page.getByTestId('list-stats').innerText());
+check(await page.getByTestId('app-title').isVisible() && await page.locator('[data-view-tab]').count() === 4, 'title row with the four view tabs under it');
+check(await page.getByTestId('section-view').isVisible() && await page.getByTestId('section-filters').isVisible(), 'List toolbar has labelled View and Filters sections');
+check(await page.getByTestId('section-view').locator('[data-device-filter]').count() === 4, 'four input-type icon toggles in the View section');
+check(await page.getByTestId('section-filters').getByTestId('filter-unbound').isVisible() && await page.getByTestId('section-filters').getByTestId('filter-custom').isVisible() && await page.getByTestId('section-filters').getByTestId('filter-conflicts').isVisible(), 'Show unbound / Customized only / Conflicts only in the Filters section');
+check(await page.locator('body').evaluate((b) => !/[\u{1F300}-\u{1FAFF}\u2328\u26A0\u2699\u270E\u21E7\u21E9]/u.test(b.innerText)), 'no emoji icons on the page');
 await page.screenshot({ path: shots + '03-imported-profile.png' });
 await page.getByRole('button', { name: 'Customized only' }).click();
 await page.waitForTimeout(250);
 log('customized-only rows:', await rows.count());
 await page.screenshot({ path: shots + '04-customized-only.png' });
 await page.getByRole('button', { name: 'Customized only' }).click();
-await page.getByRole('button', { name: /Joystick/ }).first().dblclick();
+await page.locator('[data-device-filter=joystick]').dblclick();
 await page.waitForTimeout(250);
 log('joystick-only rows:', await rows.count());
-await page.getByRole('button', { name: /Joystick/ }).first().dblclick();
-await page.getByRole('button', { name: /Keyboard$/ }).last().click();
+await page.locator('[data-device-filter=joystick]').dblclick();
+await page.locator('[data-view-tab=keyboard]').click();
 await page.waitForTimeout(300);
 await page.locator('button[title^="V:"]').first().hover();
 await page.waitForTimeout(200);
 await page.screenshot({ path: shots + '05-keyboard-view.png' });
-await page.getByRole('button', { name: /^⚠ Conflicts/ }).click();
+await page.locator('[data-view-tab=conflicts]').click();
 await page.waitForTimeout(300);
 log('conflict cards:', await page.locator('#main .hud-panel.border-l-2').count());
 await page.screenshot({ path: shots + '06-conflicts.png' });
-await page.getByRole('button', { name: /☰ List/ }).click();
+await page.locator('[data-view-tab=list]').click();
 
 // ===================== exact-input search from a binding chip =====================
 console.log('\nexact input search');
@@ -100,27 +105,25 @@ texts = await rows.allInnerTexts();
 check(texts.length > 0 && texts.every((x) => /JS1\s*Btn 4(?!\d)/.test(x)), `typed "js1 btn4" is exact (${texts.length} rows)`);
 await search.fill('');
 
-// ===================== controllers panel + live input tester =====================
-console.log('\ncontrollers & input tester');
-await page.getByRole('button', { name: /🕹 Controllers/ }).first().click();
+// ===================== game slots & controllers modal + live input tester =====================
+console.log('\ngame slots & controllers');
+check(await page.getByTestId('edit-toggle').isVisible() && await page.locator('header').getByText(/Controllers/).count() === 0, 'no Controllers button in the header; Edit lives in the List toolbar');
+await page.getByTestId('open-slots').click();
 const panel = page.getByTestId('controllers-panel');
-check(await panel.isVisible(), 'controllers panel opens from the header');
+check(await panel.isVisible(), 'controllers modal opens from the sidebar "Game slots & controllers" button');
+const slotRow = (id) => panel.locator(`[data-testid=slot-row][data-slot="${id}"]`);
+check((await slotRow('js2').innerText()).includes('VKBsim Gladiator EVO L'), 'slots declared in the imported profile are listed (js2 = EVO L)');
+await panel.getByTestId('tab-tester').click();
 check(await page.getByTestId('tester-empty').isVisible(), 'no devices yet: "Press any button on your controller to wake it up"');
-check((await page.getByTestId('profile-devices').innerText()).includes('VKBsim Gladiator EVO L'), 'devices declared in the imported profile are listed');
 await page.screenshot({ path: shots + '13-controllers-wake-prompt.png' });
 await page.evaluate(() => window.__btn(1, 2, true)); // the waking press
 await page.waitForTimeout(120);
 await page.evaluate(() => window.__btn(1, 2, false));
 await page.waitForTimeout(500);
-check(await page.getByTestId('device-row').count() === 3, 'all three controllers appear after one button press (no gamepadconnected event)');
-check(await panel.getByTestId('chromium-banner').isVisible(), 'Chromium banner in the Controllers panel (headless Chrome)');
+check(await page.getByTestId('tester-device').count() === 3, 'all three controllers appear after one button press (no gamepadconnected event)');
+check(await panel.getByTestId('chromium-banner').isVisible(), 'Chromium banner in the controllers modal (headless Chrome)');
 check(/at most 4 controllers/i.test(await panel.getByTestId('chromium-banner').innerText()) && /32 buttons \/ 16 axes/.test(await panel.getByTestId('chromium-banner').innerText()), 'banner explains the 4-device / 32-button / 16-axis limits and recommends Firefox');
-await panel.evaluate((el) => el.scrollTo(0, 0));
 await page.screenshot({ path: shots + '19-chromium-banner.png' });
-const srcs = await page.getByTestId('device-source').allInnerTexts();
-log('   sources:', srcs.join(' | '));
-check(srcs.filter((x) => x.includes('USB id')).length === 2, 'both VKB sticks matched to the profile by USB id');
-check((await page.getByTestId('profile-devices').innerText()).includes('↔ VKBsim Gladiator EVO R'), 'profile js1 shows the browser device mapped to it');
 const rCard = page.getByTestId('tester-device').filter({ hasText: 'EVO R' });
 await page.evaluate(() => window.__btn(1, 11, true));
 await page.waitForTimeout(250);
@@ -133,20 +136,42 @@ await page.evaluate(() => { window.__btn(1, 11, false); window.__axis(1, 0, 0); 
 await page.waitForTimeout(150);
 check((await rCard.getByTestId('tester-last').innerText()).includes('js1_hat1_up'), 'tester shows hat input (js1_hat1_up)');
 await page.evaluate(() => { window.__axis(1, 9, 9 / 7); window.__axis(2, 2, -1); });
-const lRow = page.locator('[data-testid=device-row][data-device$="EVO L"]');
-await lRow.getByLabel('Game instance').selectOption('3');
-await page.waitForTimeout(400);
-check((await lRow.getByTestId('device-source').innerText()).includes('set by you'), 'instance can be overridden (js3, "set by you")');
+await panel.getByTestId('tab-slots').click();
+await page.waitForTimeout(300);
+check(await panel.getByTestId('hw-row').count() === 3, 'detected-by-this-browser lists the three controllers');
+check((await slotRow('js1').innerText()).includes('matched on import (USB id)') && (await slotRow('js2').innerText()).includes('matched on import (USB id)'), 'both VKB sticks matched to their slots by USB id');
+check(await slotRow('js1').getByTestId('slot-connected').isVisible(), 'js1 shows connected');
+const hwText = async (id) => slotRow(id).getByTestId('slot-hw').evaluate((s) => s.options[s.selectedIndex]?.text ?? '');
+// pick by pressing: arm, press a button on another controller, the slot takes that hardware
+await slotRow('js1').getByTestId('slot-pick-press').click();
+check(await slotRow('js1').getByTestId('slot-pick-armed').isVisible(), 'pick by pressing arms the js1 row');
+await page.screenshot({ path: shots + '15-pick-by-pressing.png' });
+await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
+check(await slotRow('js1').getByTestId('slot-pick-armed').count() === 0 && await panel.isVisible(), 'Esc cancels listening and keeps the modal open');
+await slotRow('js1').getByTestId('slot-pick-press').click();
+await page.evaluate(() => window.__btn(2, 5, true));
+await page.waitForTimeout(200);
+await page.evaluate(() => window.__btn(2, 5, false));
+await page.waitForTimeout(300);
+check((await hwText('js1')).includes('EVO L') && await slotRow('js1').getByTestId('slot-pick-armed').count() === 0, `pressing a button on EVO L assigns it to js1 (${await hwText('js1')})`);
+for (const [id, pad] of [['js1', 1], ['js2', 2]]) { // put both back by pressing
+  await slotRow(id).getByTestId('slot-pick-press').click();
+  await page.evaluate((i) => window.__btn(i, 5, true), pad);
+  await page.waitForTimeout(200);
+  await page.evaluate((i) => window.__btn(i, 5, false), pad);
+  await page.waitForTimeout(300);
+}
+check((await hwText('js1')).includes('EVO R') && (await hwText('js2')).includes('EVO L'), `picked back by pressing: js1 ${await hwText('js1')} · js2 ${await hwText('js2')}`);
 await panel.evaluate((el) => el.scrollTo(0, 0));
 await page.screenshot({ path: shots + '15-controllers-panel.png' });
-await lRow.getByRole('button', { name: /automatic/ }).click();
-await page.waitForTimeout(400);
-check((await lRow.getByLabel('Game instance').inputValue()) === '2', 'reset to automatic restores the profile match (js2)');
-await panel.getByRole('button', { name: '✕' }).first().click();
+await page.keyboard.press('Escape');
+await page.waitForTimeout(200);
+check(await panel.count() === 0, 'Esc closes the controllers modal');
 
 // ===================== device settings: invert / exponent / curve / deadzone =====================
 console.log('\ndevice settings & curve editor');
-await page.getByRole('button', { name: /🕹 Controllers/ }).first().click();
+await page.getByTestId('open-slots').click();
 await panel.getByTestId('tab-settings').click();
 const ds = page.getByTestId('device-settings');
 check(await ds.isVisible(), 'settings tab opens');
@@ -219,8 +244,8 @@ await page.waitForTimeout(150);
 await ds.locator('tr[data-axis="x"]').scrollIntoViewIfNeeded();
 await ds.screenshot({ path: shots + '23-axis-sliders.png' });
 await page.evaluate(() => window.__axis(1, 0, 0));
-await panel.getByRole('button', { name: '✕' }).first().click();
-await page.getByRole('button', { name: /⇩ Export/ }).click();
+await panel.getByRole('button', { name: 'Close' }).first().click();
+await page.getByTestId('profile-export').click();
 {
   const [d] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-download').click()]);
   const f = '/tmp/settings-' + d.suggestedFilename();
@@ -300,13 +325,13 @@ await page.waitForTimeout(500);
 await page.screenshot({ path: shots + '17-highlight.png' });
 await page.waitForTimeout(2800);
 check(!(await badge.isVisible()), 'highlight fades after a moment');
-await page.getByRole('button', { name: /Keyboard$/ }).last().click();
+await page.locator('[data-view-tab=keyboard]').click();
 await page.waitForTimeout(300);
 await page.keyboard.press('KeyN');
 await page.waitForTimeout(300);
 check(await page.locator('#main [data-flash="1"]').count() > 0, 'keyboard view: pressing N lights the key');
 await page.screenshot({ path: shots + '18-highlight-keyboard.png' });
-await page.getByRole('button', { name: /☰ List/ }).click();
+await page.locator('[data-view-tab=list]').click();
 await page.waitForTimeout(2800);
 await search.focus();
 await page.keyboard.press('ArrowDown');
@@ -321,17 +346,24 @@ await page.evaluate(() => window.__btn(2, 3, false));
 await page.waitForTimeout(300);
 check(!(await badge.isVisible()), 'no highlight while a search is active');
 await search.fill('');
-await page.getByRole('button', { name: /Highlight on press/ }).click();
+const toggleHighlight = async () => {
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('setting-highlight').click();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  check(await page.getByTestId('settings-modal').count() === 0, 'Esc closes Settings');
+};
+await toggleHighlight();
 await page.evaluate(() => document.activeElement?.blur());
 await page.keyboard.press('KeyN');
 await page.waitForTimeout(300);
 check(!(await badge.isVisible()), 'toggle turns highlighting off');
-await page.getByRole('button', { name: /Highlight on press/ }).click();
+await toggleHighlight();
 
 // ===================== editing (starting from the game defaults) =====================
 console.log('\nbinding editor');
 await page.locator('#profile').selectOption('');
-await page.getByRole('button', { name: /✎ Edit/ }).click();
+await page.getByTestId('edit-toggle').click();
 check(await page.getByTestId('edit-bar').isVisible(), 'edit mode bar visible');
 await page.evaluate(() => document.activeElement?.blur());
 await page.keyboard.press('KeyN');
@@ -435,6 +467,7 @@ check(/JS2\s*Btn 8/.test(await row.innerText()), 'the press that woke the stick 
 // 5. joystick: axis on the second stick, hat on the first
 row = await rowFor('yaw', 'Yaw');
 await addIn(row, 'joystick');
+
 await page.waitForTimeout(500);
 const devs = await page.getByTestId('device-list').innerText();
 check(devs.includes('VKBsim Gladiator EVO R') && devs.includes('VKBsim Gladiator EVO L'), 'both sticks listed with names');
@@ -482,11 +515,11 @@ check(!(await editor.innerText()).includes('overridden'), 'reset action restores
 await editor.getByRole('button', { name: /Undo last change/ }).click();
 await page.waitForTimeout(200);
 check((await editor.innerText()).includes('js1_button12'), 'per-action undo brings the edits back');
-await editor.getByRole('button', { name: '✕' }).first().click();
+await editor.getByRole('button', { name: 'Close' }).first().click();
 
 // 8. export, download, re-import
 await search.fill('');
-await page.getByRole('button', { name: /⇩ Export/ }).click();
+await page.getByTestId('profile-export').click();
 const exp = page.getByTestId('export-dialog');
 check(await exp.isVisible(), 'export dialog opens');
 await page.getByTestId('export-name').fill('e2e-hosas');
@@ -511,6 +544,77 @@ log('re-imported:', after, '| edited:', before);
 check(after.split('—')[1]?.trim() === before.split('—')[1]?.trim(), 're-imported export has the same number of rebinds');
 
 
+// ===================== second keyboard slot (kb2), copy count, Escape on dialogs, profile delete =====================
+console.log('\nkb2 slot & profile actions');
+await search.fill('');
+await page.getByTestId('open-slots').click();
+await page.getByTestId('controllers-panel').locator('[data-add-slot=kb]').click();
+await page.waitForTimeout(200);
+check(await page.locator('[data-testid=slot-row][data-slot=kb2]').count() === 1, 'kb2 slot added from the modal');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(150);
+if (!(await page.getByTestId('edit-bar').isVisible())) await page.getByTestId('edit-toggle').click();
+row = await rowFor('self destruct', 'Self Destruct');
+await addIn(row, 'keyboard');
+check(await page.getByTestId('capture-km-slot').isVisible(), 'capture dialog offers kb1 / kb2 when there are two keyboard slots');
+await page.locator('[data-capture-slot=kb2]').click();
+await page.evaluate(() => document.activeElement?.blur());
+await page.keyboard.press('KeyJ');
+await settle();
+row = await rowFor('self destruct', 'Self Destruct');
+check(/KB2[\s\S]*J/.test(await row.innerText()), `the capture went to kb2 (${(await row.innerText()).replace(/\s+/g, ' ').slice(0, 90)})`);
+await search.fill('');
+await page.getByTestId('edit-toggle').click();
+await page.locator('[data-view-tab=keyboard]').click();
+await page.waitForTimeout(300);
+check(await page.getByTestId('km-slot-kb').isVisible(), 'Keyboard view gets a kb1 / kb2 picker in its View section');
+await page.locator('[data-km-slot=kb2]').click();
+await page.waitForTimeout(250);
+const boundKeys = async () => page.locator('#main button[title]').evaluateAll((bs) => bs.filter((b) => /: [1-9]\d* actions?$/.test(b.title)).map((b) => b.title));
+const kb2Keys = (await boundKeys()).filter((t) => !/^(LMB|MMB|RMB|Wheel|Mouse|M\d)/.test(t)); // the mouse block follows the mouse slot (mo1)
+check(kb2Keys.length === 1 && /^J:/.test(kb2Keys[0]), `kb2 keyboard shows only kb2 bindings (${kb2Keys.join(', ')})`);
+await page.locator('[data-km-slot=kb1]').click();
+await page.waitForTimeout(250);
+check((await boundKeys()).length > 50, 'kb1 keyboard shows the kb1 bindings');
+await page.locator('[data-view-tab=list]').click();
+await page.getByTestId('open-slots').click();
+const kb2Row = page.locator('[data-testid=slot-row][data-slot=kb2]');
+check(/1 yours/.test(await kb2Row.getByTestId('slot-count').innerText()), `copy count shows your own bindings (${await kb2Row.getByTestId('slot-count').innerText()})`);
+await kb2Row.getByTestId('slot-copy').click();
+check(await page.getByTestId('copy-bindings').isVisible() && /1 yours/.test(await page.getByTestId('copy-bindings').innerText()), 'copy dialog splits yours vs game defaults');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(150);
+check(await page.getByTestId('copy-bindings').count() === 0 && await page.getByTestId('controllers-panel').isVisible(), 'Esc closes the Copy dialog only');
+await kb2Row.getByTestId('slot-remove').click();
+check(await page.getByTestId('remove-slot-warning').isVisible(), 'removing kb2 (with a binding) asks first');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(150);
+check(await page.getByTestId('remove-slot-warning').count() === 0 && await page.getByTestId('controllers-panel').isVisible(), 'Esc closes the Remove dialog only');
+await kb2Row.getByTestId('slot-remove').click();
+await page.getByTestId('remove-confirm').click();
+await page.waitForTimeout(200);
+check(await page.locator('[data-testid=slot-row][data-slot=kb2]').count() === 0, 'kb2 removed');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(150);
+// profile delete: warns with the name and what is lost; the defaults can't be deleted
+{
+  const name = await page.locator('#profile option:checked').innerText();
+  await page.getByTestId('profile-delete').click();
+  const w = page.getByTestId('profile-delete-warning');
+  check(await w.isVisible() && (await w.innerText()).includes(name.split(' — ')[0]) && /can't be undone|cannot be undone/i.test(await w.innerText()), `delete asks first, naming the profile (${name})`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  check(await w.count() === 0 && (await page.locator('#profile option:checked').innerText()) === name, 'Esc cancels: profile kept');
+  const n0 = await page.locator('#profile option').count();
+  await page.getByTestId('profile-delete').click();
+  await page.getByTestId('profile-delete-confirm').click();
+  await page.waitForTimeout(300);
+  check((await page.locator('#profile option').count()) === n0 - 1 && !(await page.locator('#profile option').allInnerTexts()).includes(name), 'confirmed: the profile is gone');
+  await page.locator('#profile').selectOption('');
+  await page.waitForTimeout(200);
+  check(await page.getByTestId('profile-delete').isDisabled(), 'the game defaults cannot be deleted');
+}
+
 // ===================== devices view =====================
 console.log('\ndevices view');
 await search.fill('');
@@ -519,15 +623,17 @@ await search.fill('');
   await page.locator('#profile').selectOption({ label: o });
   await page.waitForTimeout(300);
 }
-await page.getByRole('button', { name: /🕹 Devices/ }).click();
+await page.locator('[data-view-tab=devices]').click();
 const dv = page.getByTestId('device-view');
 let gladIds = []; // callout ids of the VKB Gladiator template (for the test-only photo layout below)
 await page.waitForTimeout(600);
 check(await dv.isVisible(), 'devices view opens');
-const dsel = dv.getByTestId('device-select');
-const dopts = await dsel.locator('option').allInnerTexts();
-check(dopts.some((o) => /^JS1 · VKBsim Gladiator EVO R/.test(o)) && dopts.some((o) => /^JS2 · VKBsim Gladiator EVO L/.test(o)) && dopts.some((o) => /^GP1/.test(o)), `device picker lists the connected devices with their game numbers (${dopts.join(' | ')})`);
-await dsel.selectOption({ label: dopts.find((o) => /^JS1 · /.test(o)) });
+const slotChip = async (id) => { await page.getByTestId('device-slot-strip').locator(`[data-slot-chip="${id}"]`).click(); await page.waitForTimeout(200); };
+const dopts = (await page.getByTestId('device-slot-strip').locator('[data-slot-chip]').allInnerTexts()).map((x) => x.replace(/\s+/g, ' ').trim());
+check(dopts.some((o) => /^JS1 VKBsim Gladiator EVO R/.test(o)) && dopts.some((o) => /^JS2 VKBsim Gladiator EVO L/.test(o)) && dopts.some((o) => /^GP1/.test(o)) && dopts.some((o) => /^KB1/.test(o)), `inline slot strip lists kb/mo/js/gp slots with their hardware (${dopts.join(' | ')})`);
+check(await page.getByTestId('device-slot-bar').getByTestId('device-manage-slots').isVisible(), 'slot bar links to the full Game slots & controllers modal');
+await slotChip('js1');
+check(/VKBsim Gladiator EVO R/.test(await page.getByTestId('device-hardware').innerText()), 'slot bar shows the hardware assigned to js1');
 await page.waitForTimeout(300);
 { // the EVO R is a VKB Gladiator: its own drawing loads on demand; VKB numbering is configurable, so the callouts start unassigned
   await page.waitForTimeout(500);
@@ -578,7 +684,7 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
   await page.waitForTimeout(250);
 }
 { // the default holographic gamepad: 15 callouts; pressing D-pad up lights only that arm, A / LT / the left stick glow
-  await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^GP1/.test(o)) });
+  await slotChip('gp1');
   await page.waitForTimeout(300);
   check(/Gamepad/.test(await dv.getByTestId('device-status').innerText()) && (await dv.locator('[data-callout]').count()) === 15 && (await dv.getByTestId('template-select').locator('option:checked').innerText()).startsWith('Automatic'),
     'gamepad: default holographic gamepad template applies automatically (15 callouts)');
@@ -593,7 +699,7 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
   await page.setViewportSize({ width: 1680, height: 1000 });
   await page.evaluate(() => { window.__btn(0, 12, false); window.__btn(0, 0, false); window.__btn(0, 6, false); window.__axis(0, 0, 0); });
   await page.waitForTimeout(200);
-  await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS1 · /.test(o)) });
+  await slotChip('js1');
   await page.waitForTimeout(300);
 }
 await b1.click();
@@ -601,13 +707,31 @@ const ip = dv.getByTestId('input-panel');
 check(await ip.isVisible() && (await ip.innerText()).includes('js1_button1'), 'clicking a callout opens the binding panel for js1_button1');
 await ip.getByRole('button', { name: 'Edit' }).first().click();
 check(await page.getByTestId('action-editor').isVisible(), 'Edit opens the action editor');
-await page.getByTestId('action-editor').getByRole('button', { name: '✕' }).first().click();
+await page.getByTestId('action-editor').getByRole('button', { name: 'Close' }).first().click();
 await page.waitForTimeout(150);
 await dv.locator('[data-callout="b6"]').click();
 await ip.getByLabel('Search actions to bind').fill('landing system');
 await ip.getByTestId('bind-results').locator('button').first().click();
 await page.waitForTimeout(300);
 check((await dv.locator('[data-callout="b6"]').innerText()).includes('Landing System') && (await dv.locator('[data-callout="b6"]').getAttribute('data-tone')) === 'custom', 'binding an action from the panel puts it on js1_button6');
+// search and find-by-press stay on the Devices view: they filter / select within it
+await search.fill('landing system');
+await page.waitForTimeout(400);
+check(await dv.isVisible() && await rows.count() === 0, 'typing in the search on Devices stays on Devices (no jump to the List)');
+check((await dv.locator('[data-callout="b6"]').getAttribute('data-dim')) === null && (await dv.locator('[data-callout="trig"]').getAttribute('data-dim')) === '1' && /match “landing system”/.test(await dv.getByTestId('device-search-status').innerText()),
+  `search dims the callouts that don't match (${await dv.getByTestId('device-search-status').innerText().catch(() => '')})`);
+await search.fill('');
+await slotChip('js2');
+await page.getByTestId('press-search').click();
+await page.waitForTimeout(300);
+await page.evaluate(() => window.__btn(1, 4, true));
+await page.waitForTimeout(150);
+await page.evaluate(() => window.__btn(1, 4, false));
+await page.waitForTimeout(500);
+check(await dv.isVisible() && await rows.count() === 0 && (await page.getByTestId('device-slot-view').getAttribute('data-slot')) === 'js1', 'find-by-press on Devices stays there and switches to the pressed device (js1)');
+check((await dv.locator('[data-callout="b5"]').getAttribute('data-dim')) === null && (await dv.locator('[data-callout="trig"]').getAttribute('data-dim')) === '1' && /Pressed js1_button5/.test(await dv.getByTestId('device-search-status').innerText()), 'the pressed control is picked out, the rest dimmed');
+await page.getByTestId('press-chip').getByRole('button', { name: 'Remove input filter' }).click();
+await page.waitForTimeout(200);
 {
   const [d] = await Promise.all([page.waitForEvent('download'), dv.getByTestId('device-png').click()]);
   const f = '/tmp/' + d.suggestedFilename();
@@ -714,36 +838,37 @@ let exported;
 writeFileSync('/tmp/shared-template.json', JSON.stringify({ ...exported, templates: [{ ...exported.templates[0], id: 'shared-1', name: 'Shared stick', match: [{ name: 'Gladiator EVO L' }] }] }));
 await dv.getByTestId('template-import-file').setInputFiles('/tmp/shared-template.json');
 await page.waitForTimeout(500);
-await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS2 · /.test(o)) });
+await slotChip('js2');
 await page.waitForTimeout(300);
 check(/Shared stick/.test(await dv.getByTestId('device-status').innerText()) && /name “Gladiator EVO L”/.test(await dv.getByTestId('device-status').innerText()), 'imported template auto-applies to the EVO L by name');
 { // a pick of a removed classic template saved by an earlier version: pick the throttle for JS2, then rewrite it to the old classic id
   await dv.getByTestId('template-select').selectOption('builtin-throttle');
   await page.waitForTimeout(200);
   await page.evaluate(() => {
-    const p = JSON.parse(localStorage.getItem('sc-mapper:template-picks') ?? '{}');
-    for (const k of Object.keys(p)) if (p[k] === 'builtin-throttle') p[k] = 'builtin-throttle-classic';
-    localStorage.setItem('sc-mapper:template-picks', JSON.stringify(p));
+    // template picks live in the profile's slot map (per hardware) since the game-slots rework
+    const st = JSON.parse(localStorage.getItem('sc-mapper:slots:v1') ?? '{}');
+    for (const m of Object.values(st.maps ?? st)) for (const k of Object.keys(m?.hwTemplates ?? {})) if (m.hwTemplates[k] === 'builtin-throttle') m.hwTemplates[k] = 'builtin-throttle-classic';
+    localStorage.setItem('sc-mapper:slots:v1', JSON.stringify(st));
   });
 }
 await page.reload({ waitUntil: 'networkidle' });
-await page.getByRole('button', { name: /🕹 Devices/ }).click();
+await page.locator('[data-view-tab=devices]').click();
 await page.waitForTimeout(500);
 { // after the reload the old classic pick is moved to the default throttle and saved back (wake the pads first: the pick is keyed by the connected device)
   await page.evaluate(() => window.__btn(0, 0, true));
   await page.waitForTimeout(120);
   await page.evaluate(() => window.__btn(0, 0, false));
   await page.waitForTimeout(400);
-  await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS2 · /.test(o)) });
+  await slotChip('js2');
   await page.waitForTimeout(300);
-  const saved = await page.evaluate(() => localStorage.getItem('sc-mapper:template-picks') ?? '');
+  const saved = await page.evaluate(() => localStorage.getItem('sc-mapper:slots:v1') ?? '');
   const st = await dv.getByTestId('device-status').innerText();
-  check((await dv.getByTestId('template-select').inputValue()) === 'builtin-throttle' && /Generic throttle/.test(st) && /picked by you/.test(st) && (await dv.locator('[data-callout]').count()) === 21 && !saved.includes('classic') && saved.includes('builtin-throttle'),
+  check(saved.includes('builtin-throttle-classic') && (await dv.getByTestId('template-select').inputValue()) === 'builtin-throttle' && /Generic throttle/.test(st) && /picked by you/.test(st) && (await dv.locator('[data-callout]').count()) === 21,
     `saved pick of the removed classic throttle migrated to the default throttle (${st.split('\n')[0]})`);
   await dv.getByTestId('template-select').selectOption('');
   await page.waitForTimeout(200);
 }
-await dsel.selectOption({ label: (await dsel.locator('option').allInnerTexts()).find((o) => /^JS1 · /.test(o)) });
+await slotChip('js1');
 await page.waitForTimeout(300);
 check(/linked to this device/.test(await dv.getByTestId('device-status').innerText()) && (await dv.locator('[data-callout]').count()) === 4, 'templates survive a reload (IndexedDB) and still match the profile device');
 { // device templates: a >32-button device warns in Chrome; numbers can be assigned on a copy of an unassigned built-in
@@ -774,7 +899,7 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   check(/^data:image\/svg\+xml|\/device-photos\/vkb-gladiator-scg-[a-z]+\.webp$/.test(src ?? ''), `the copy keeps the device drawing / photos (${(src ?? '').slice(0, 60)})`);
   await dv.getByTestId('device-canvas').screenshot({ path: shots + '32-device-view-gladiator-copy.png' });
 }
-await page.getByRole('button', { name: /☰ List/ }).click();
+await page.locator('[data-view-tab=list]').click();
 
 // ===================== Firefox: 15 controllers, identical MOZA bases, >128 buttons =====================
 // Firefox exposes every device and all buttons; ids look like "346e-1002-MOZA AB6 FFB Base". Device list from a real Firefox setup.
@@ -800,29 +925,35 @@ await fp.addInitScript(() => {
 await fp.goto(url, { waitUntil: 'networkidle' });
 await fp.evaluate(() => localStorage.clear());
 await fp.reload({ waitUntil: 'networkidle' });
-await fp.getByRole('button', { name: /🕹 Controllers/ }).first().click();
+await fp.getByTestId('open-slots').click();
 const fpanel = fp.getByTestId('controllers-panel');
 await fp.evaluate(() => window.__btn(0, 0, true));
 await fp.waitForTimeout(120);
 await fp.evaluate(() => window.__btn(0, 0, false));
 await fp.waitForTimeout(600);
 check(await fpanel.getByTestId('chromium-banner').count() === 0, 'Firefox: no Chromium banner');
-check(await fpanel.getByTestId('device-row').count() === 15, `Firefox: all 15 controllers listed (${await fpanel.getByTestId('device-row').count()})`);
-check(await fpanel.getByTestId('no-profile-hint').isVisible(), 'no profile: hint that numbering is the browser order (guess)');
-check(await fpanel.getByTestId('dup-hint').isVisible() && await fpanel.getByTestId('device-ambiguous').count() === 2, 'identical MOZA bases flagged (same USB id 346E:1002)');
-const mozaRows = await fpanel.locator('[data-testid=device-row][data-device="MOZA AB6 FFB Base"]').allInnerTexts();
+check(await fpanel.getByTestId('hw-row').count() === 15, `Firefox: all 15 controllers listed under "Detected by this browser" (${await fpanel.getByTestId('hw-row').count()})`);
+check(await fpanel.getByTestId('slots-empty').isVisible(), 'no profile: no game slots yet, with a hint to add them or import a profile');
+check(await fpanel.getByTestId('dup-hint').isVisible(), 'identical MOZA bases flagged (same USB id 346E:1002)');
+const mozaHw = fpanel.locator('[data-testid=hw-row][data-hw="MOZA AB6 FFB Base"]');
+const mozaRows = await mozaHw.allInnerTexts();
 check(mozaRows.length === 2 && mozaRows.some((x) => x.includes('1 of 2') && x.includes('128 buttons')) && mozaRows.some((x) => x.includes('2 of 2') && x.includes('133 buttons')), 'MOZA entries told apart: "1 of 2 · 128 buttons" / "2 of 2 · 133 buttons"');
-const mozaInst = await fpanel.locator('[data-testid=device-row][data-device="MOZA AB6 FFB Base"]').nth(1).getByLabel('Game instance').inputValue();
+await fpanel.evaluate((el) => el.scrollTo(0, 0));
+await fp.screenshot({ path: shots + '21-firefox-15-controllers.png', fullPage: false });
+// both MOZA bases get slots of their own (the "+ as jsN" button of each detected device)
+for (let k = 0; k < 2; k++) { await mozaHw.nth(k).getByRole('button', { name: /as js\d+/ }).click(); await fp.waitForTimeout(200); }
+const mozaSlots = await fpanel.locator('[data-testid=slot-row]').evaluateAll((rs) => rs.map((r) => [r.dataset.slot, r.querySelector('[data-testid=slot-hw]')?.selectedOptions[0]?.text ?? '']));
+check(mozaSlots.length === 2 && mozaSlots.every(([, t]) => /MOZA AB6/.test(t)), `MOZA bases added as slots (${mozaSlots.map((x) => x.join('=')).join(', ')})`);
+const moza133 = mozaSlots.find(([, t]) => /133 buttons/.test(t))?.[0];
+await fpanel.getByTestId('tab-tester').click();
 await fp.evaluate(() => window.__btn(13, 132, true));
 await fp.waitForTimeout(300);
 check(await fpanel.getByTestId('tester-over-cap').first().isVisible(), 'input tester marks buttons above 128');
-await fpanel.evaluate((el) => el.scrollTo(0, 0));
-await fp.screenshot({ path: shots + '21-firefox-15-controllers.png', fullPage: false });
-await fpanel.locator('[data-testid=device-row][data-device="MOZA AB6 FFB Base"]').first().scrollIntoViewIfNeeded();
 await fpanel.getByTestId('tester-over-cap').first().scrollIntoViewIfNeeded();
 await fp.screenshot({ path: shots + '22-firefox-moza-over-128.png', fullPage: false });
 await fp.evaluate(() => window.__btn(13, 132, false));
-await fpanel.getByRole('button', { name: '✕' }).first().click();
+await fp.keyboard.press('Escape');
+await fp.waitForTimeout(200);
 await fp.getByTestId('press-search').click();
 await fp.waitForTimeout(400);
 check(await fp.getByTestId('press-bar').getByTestId('chromium-banner').count() === 0, 'Firefox: no banner in the press bar');
@@ -831,21 +962,34 @@ await fp.waitForTimeout(150);
 await fp.evaluate(() => window.__btn(13, 132, false));
 await fp.waitForTimeout(300);
 const fchip = await fp.getByTestId('press-chip').innerText().catch(() => '');
-check(fchip.includes(`js${mozaInst}_button133`), `press-to-search: second MOZA button 133 -> js${mozaInst}_button133 (${fchip})`);
+check(fchip.includes(`${moza133}_button133`), `press-to-search: second MOZA button 133 -> ${moza133}_button133 (${fchip})`);
 check(/128/.test(await fp.getByTestId('press-chip').getAttribute('title')), 'chip warns that the game may not see buttons above 128');
+await fp.getByTestId('press-chip').getByRole('button', { name: 'Remove input filter' }).click();
 // devices view: a template linked to the 133-button MOZA base only
-await fp.getByRole('button', { name: /🕹 Devices/ }).click();
+await fp.locator('[data-view-tab=devices]').click();
 await fp.waitForTimeout(400);
 writeFileSync('/tmp/moza133.json', JSON.stringify({ format: 'sc-mapper-device-templates', version: 1, templates: [{ id: 'moza-133', name: 'MOZA base (133)', slot: 'js', aspect: 1.6, match: [{ vendor: '346E', product: '1002', buttons: 133 }], callouts: [{ id: 'c', kind: 'button', inputs: ['button133'], anchor: { x: 0.5, y: 0.5 }, box: { x: 0.8, y: 0.2 } }] }] }));
 await fp.getByTestId('template-import-file').setInputFiles('/tmp/moza133.json');
 await fp.waitForTimeout(400);
 {
-  const fsel = fp.getByTestId('device-select');
-  const fopts = await fsel.locator('option').allInnerTexts();
-  const st = async (label) => { await fsel.selectOption({ label }); await fp.waitForTimeout(250); return fp.getByTestId('device-status').innerText(); };
-  const s133 = await st(fopts.find((o) => o.includes('MOZA') && o.includes('133 buttons')));
-  const s128 = await st(fopts.find((o) => o.includes('MOZA') && o.includes('128 buttons')));
+  const st = async (id) => { await fp.locator(`[data-slot-chip="${id}"]`).click(); await fp.waitForTimeout(250); return fp.getByTestId('device-status').innerText(); };
+  const s133 = await st(moza133);
+  const s128 = await st(mozaSlots.find(([id]) => id !== moza133)[0]);
   check(/MOZA base \(133\)/.test(s133) && /133 buttons/.test(s133) && !/MOZA base \(133\)/.test(s128), 'Firefox: template linked by USB id + 133 buttons applies to the second MOZA base only');
+  // the other base shows the MTQ throttle (grip photos per grip): they switch on a press even with "Highlight on press" off
+  check(/MTQ/.test(s128), `first MOZA base drawn as the MTQ throttle quadrant (${s128.split('\n')[0]})`);
+  await fp.getByTestId('open-settings').click();
+  await fp.getByTestId('setting-highlight').click();
+  await fp.keyboard.press('Escape');
+  const grip = () => fp.locator('[data-testid=swap-views] [aria-pressed=true]').allInnerTexts();
+  const g0 = (await grip()).join();
+  await fp.evaluate(() => window.__btn(12, 65, true));
+  await fp.waitForTimeout(400);
+  const g1 = (await grip()).join();
+  const lit = await fp.locator('[data-callout][data-active="1"]').count();
+  await fp.screenshot({ path: shots + '26-grip-swap-highlight-off.png', fullPage: false });
+  await fp.evaluate(() => window.__btn(12, 65, false));
+  check(/Combat/.test(g0) && /Airbus/.test(g1) && lit === 0, `highlight off: pressing Airbus grip button 66 still swaps the photo (${g0} -> ${g1}), nothing lights up`);
 }
 await ff.close();
 
@@ -874,12 +1018,14 @@ log('photo template (test-only layout via __SC_TEST_PHOTO_LAYOUTS)');
   await pp.evaluate(() => window.__btn(0, 2, true));
   await pp.waitForTimeout(120);
   await pp.evaluate(() => window.__btn(0, 2, false));
-  await pp.getByRole('button', { name: /🕹 Devices/ }).click();
+  // no profile: give the stick a slot first (the Devices view shows game slots)
+  await pp.getByTestId('open-slots').click();
+  await pp.getByTestId('hw-row').first().getByRole('button', { name: /as js\d+/ }).click();
+  await pp.keyboard.press('Escape');
+  await pp.locator('[data-view-tab=devices]').click();
   await pp.waitForTimeout(800);
   const pv = pp.getByTestId('device-view');
-  const psel = pv.getByTestId('device-select');
-  const popts = await psel.locator('option').allInnerTexts();
-  await psel.selectOption({ label: popts.find((o) => /^JS1 · /.test(o)) });
+  await pv.locator('[data-slot-chip]').filter({ hasText: /^\s*JS/ }).first().click();
   await pp.waitForTimeout(800);
   const canvas = pv.getByTestId('device-canvas');
   const views = canvas.getByTestId('device-canvas-view');

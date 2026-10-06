@@ -1185,6 +1185,32 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.deepEqual(m!.hwTemplates, { k: 'builtin-stick' });
     assert.equal(sl.cleanSlotMap('nope'), null);
   });
+  t('slots: an open gamepad slot takes the remaining gamepad in order (XInput names differ between Windows and the browser)', () => {
+    const seeded = sl.seedSlots(prof([{ slot: 'gp', instance: 1, product: 'Controller (Xbox One For Windows)' }]));
+    const XB = { ...pad('xb|17b4a#1', 'Xbox Wireless Controller', '045E', '0B13', 17), kind: 'gp' as const };
+    const g = sl.autoMatchHardware(seeded, [MTQ, XB]).slots.find((s) => s.slot === 'gp')!;
+    assert.equal(g.hw!.key, XB.key); assert.equal(g.hwMatch, 'order');
+    assert.equal(sl.autoMatchHardware(seeded, [MTQ]).slots.find((s) => s.slot === 'gp')!.hw, undefined, 'a joystick is not taken for a gamepad slot by order');
+  });
+  t('slots: copy plan counts your own bindings apart from the game defaults', () => {
+    const rb = { spaceship_movement: { v_roll: [{ slot: 'js', instance: 1, input: 'rotz' }] }, seat_general: { v_eject: [{ slot: 'kb', instance: 2, input: 'j' }] } } as any;
+    const p1 = sl.planCopy(rb, idx, S('js', 1), S('js', 2));
+    assert.equal(p1.yours, 1); assert.ok(p1.count > p1.yours, 'the js1 defaults come along too');
+    const p2 = sl.planCopy(rb, idx, S('kb', 2), S('kb', 3));
+    assert.equal(p2.yours, 1); assert.equal(p2.count, 1, 'kb2 has no game defaults');
+  });
+}
+{
+  const inp = await import('../src/lib/inputs');
+  t('inputs: kb / mo instances are real (kb2 binds, conflicts and formats apart from kb1)', () => {
+    assert.notEqual(inp.bindKey('kb', 1, 'lalt+n'), inp.bindKey('kb', 2, 'lalt+n'));
+    assert.equal(inp.bindKey('kb', 1, 'lalt+n'), inp.bindKey('kb', 1, 'lalt+n'));
+    assert.notEqual(inp.physOf('kb', 1, 'n'), inp.physOf('kb', 2, 'n'));
+    assert.notEqual(inp.physOf('mo', 1, 'mouse1'), inp.physOf('mo', 2, 'mouse1'));
+    assert.equal(inp.formatInput('kb', 2, 'j'), 'kb2_j');
+    assert.equal(inp.formatInput('mo', 2, 'mouse3'), 'mo2_mouse3');
+    assert.equal(inp.formatInput('kb', 1, 'j'), 'kb1_j');
+  });
 }
 
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);

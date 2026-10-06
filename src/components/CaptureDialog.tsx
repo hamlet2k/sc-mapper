@@ -10,6 +10,8 @@ import type { Group, ProfileDevice, Rebind, Row, Slot } from '../lib/types';
 import { ChromiumBanner } from './ChromiumBanner';
 import { DeviceList } from './ControllersPanel';
 import { InputTester } from './InputTester';
+import { Ico } from './icons';
+import { useEscape } from './useEscape';
 
 export const ACTIVATION_MODES = [
   'press', 'tap', 'hold', 'double_tap', 'double_tap_nonblocking', 'delayed_press', 'delayed_press_medium', 'delayed_press_long',
@@ -27,11 +29,21 @@ interface Props extends CaptureRequest {
   onCommit: (r: Rebind, removeFrom: CaptureConflict[]) => void;
   onClear?: () => void;
   onCancel: () => void;
+  /** the profile's keyboard / mouse slots (kb1, kb2… / mo1, mo2…): with several, the capture lets you pick which one */
+  kmSlots?: { kb: number[]; mo: number[] };
+  /** the slot picked by default (the one the Keyboard view shows) */
+  kmDefault?: { kb: number; mo: number };
 }
 
 interface Pending { rebind: Rebind; alt?: Candidate['alt']; warning?: string }
 
-export function CaptureDialog({ row, group, replace, focus, rows, pads, describe, profileDevices, onAssign, onCommit, onClear, onCancel }: Props) {
+export function CaptureDialog({ row, group, replace, focus, rows, pads, describe, profileDevices, onAssign, onCommit, onClear, onCancel, kmSlots, kmDefault }: Props) {
+  const kbList = kmSlots?.kb.length ? kmSlots.kb : [1], moList = kmSlots?.mo.length ? kmSlots.mo : [1];
+  const [kbInst, setKbInst] = useState(() => (replace?.slot === 'kb' ? replace.instance : kmDefault?.kb) || 1);
+  const [moInst, setMoInst] = useState(() => (replace?.slot === 'mo' ? replace.instance : kmDefault?.mo) || 1);
+  useEscape(onCancel);
+  const km = useRef({ kb: kbInst, mo: moInst });
+  useEffect(() => { km.current = { kb: kbInst, mo: moInst }; }, [kbInst, moInst]);
   const [mode, setMode] = useState<string>(replace?.mode ?? '');
   const [multiTap, setMultiTap] = useState<number>(replace?.multiTap ?? 1);
   const [held, setHeld] = useState<string[]>([]);
@@ -73,15 +85,15 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
         return;
       }
       usedMain.current = true;
-      finish({ slot: 'kb', instance: 1, input: comboFrom(heldRef.current, name) });
+      finish({ slot: 'kb', instance: km.current.kb, input: comboFrom(heldRef.current, name) });
     };
     const up = (e: KeyboardEvent) => {
       if (isField(e)) return;
       e.preventDefault(); e.stopImmediatePropagation();
       const name = scKeyFromCode(e.code);
-      if (name === 'print' && !usedMain.current) { finish({ slot: 'kb', instance: 1, input: comboFrom(heldRef.current, 'print') }); return; }
+      if (name === 'print' && !usedMain.current) { finish({ slot: 'kb', instance: km.current.kb, input: comboFrom(heldRef.current, 'print') }); return; }
       if (name && isModifier(name) && heldRef.current.includes(name)) {
-        if (!usedMain.current) { finish({ slot: 'kb', instance: 1, input: comboFrom(heldRef.current) }); }
+        if (!usedMain.current) { finish({ slot: 'kb', instance: km.current.kb, input: comboFrom(heldRef.current) }); }
         heldRef.current = heldRef.current.filter((m) => m !== name);
         setHeld(heldRef.current);
         if (!heldRef.current.length) usedMain.current = false;
@@ -100,7 +112,7 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
       const n = scWheel(e.deltaY);
-      if (n) finish({ slot: heldRef.current.length ? 'kb' : 'mo', instance: 1, input: comboFrom(heldRef.current, n) });
+      if (n) finish(heldRef.current.length ? { slot: 'kb', instance: km.current.kb, input: comboFrom(heldRef.current, n) } : { slot: 'mo', instance: km.current.mo, input: n });
     };
     const stop = (e: Event) => e.preventDefault();
     el.addEventListener('wheel', wheel, { passive: false });
@@ -113,7 +125,7 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
   const onPadMouse = (e: React.MouseEvent) => {
     e.preventDefault();
     const n = scMouseButton(e.button);
-    if (n) finish({ slot: heldRef.current.length ? 'kb' : 'mo', instance: 1, input: comboFrom(heldRef.current, n) });
+    if (n) finish(heldRef.current.length ? { slot: 'kb', instance: km.current.kb, input: comboFrom(heldRef.current, n) } : { slot: 'mo', instance: km.current.mo, input: n });
   };
 
   // ---------------- gamepad / joystick polling
@@ -181,15 +193,17 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
   }, [group, listening]);
 
   const submitManual = () => {
-    const inst = group === 'km' ? 1 : relevant[0]?.instance ?? 1;
+    const inst = group === 'km' ? kbInst : relevant[0]?.instance ?? 1;
     const res = parseManual(manual, group, inst);
+    // a bare mouse input typed while several mice exist goes to the picked mouse slot
+    if (group === 'km' && res.rebind?.slot === 'mo' && !/^mo\d/i.test(manual.trim())) res.rebind = { ...res.rebind, instance: moInst };
     if (res.error || !res.rebind) { setNote(res.error ?? 'Invalid input'); return; }
     finish(res.rebind, res.warning ? { warning: res.warning } : undefined);
   };
 
   const current = pending?.rebind;
   const conflicts = useMemo(() => (current ? conflictsFor(rows, row, current, current.mode || row.mode) : []), [current, rows, row]);
-  const deviceTag = (r: Rebind) => (r.slot === 'js' ? `JS${r.instance}` : r.slot === 'gp' ? `GP${r.instance}` : r.slot === 'mo' ? 'MOUSE' : 'KB');
+  const deviceTag = (r: Rebind) => (r.slot === 'js' ? `JS${r.instance}` : r.slot === 'gp' ? `GP${r.instance}` : r.slot === 'mo' ? `MOUSE${r.instance > 1 ? ` ${r.instance}` : ''}` : `KB${r.instance > 1 ? r.instance : ''}`);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-void/75 p-4 backdrop-blur-[2px]" data-testid="capture-dialog">
@@ -203,14 +217,29 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
             <h2 className="mt-1 truncate font-display text-2xl font-bold uppercase tracking-wider text-hud2">{row.label}</h2>
             <div className="font-mono text-[10px] text-slate-500">{row.mapLabel} · {row.action}{replace ? ` · was ${formatInput(replace.slot, replace.instance, replace.input)}` : ''}</div>
           </div>
-          <button type="button" onClick={onCancel} className="rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:border-hud/60 hover:text-hud2" title="Cancel (Esc)">✕ Esc</button>
+          <button type="button" onClick={onCancel} className="rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:border-hud/60 hover:text-hud2" title="Cancel (Esc)"><span className="flex items-center gap-1"><Ico name="close" className="h-3 w-3" /> Esc</span></button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 scrollbar-thin">
+          {listening && group === 'km' && (kbList.length > 1 || moList.length > 1) && (
+            <div className="mb-3 flex flex-wrap items-center gap-3 rounded border border-hud/30 bg-hud/5 px-3 py-2 text-xs text-slate-300" data-testid="capture-km-slot">
+              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Capture to</span>
+              {([['kb', kbList, kbInst, setKbInst], ['mo', moList, moInst, setMoInst]] as const).map(([slot, list, val, set]) => list.length > 1 && (
+                <span key={slot} className="flex items-center gap-0.5 rounded-md border border-edge p-0.5">
+                  <Ico name={slot === 'kb' ? 'keyboard' : 'mouse'} className="mx-1 h-4 w-4 text-slate-500" />
+                  {list.map((n) => (
+                    <button key={n} type="button" onClick={() => set(n)} aria-pressed={val === n} data-capture-slot={`${slot}${n}`}
+                      className={`rounded px-1.5 py-0.5 font-mono text-[11px] ${val === n ? 'bg-hud/15 text-hud2' : 'text-slate-500 hover:text-slate-200'}`}>{slot}{n}</button>
+                  ))}
+                </span>
+              ))}
+              <span className="text-[11px] text-slate-500">which keyboard / mouse slot of the game this binding goes to</span>
+            </div>
+          )}
           {listening && group === 'km' && (
             <div className="grid gap-3 md:grid-cols-2">
               <div className={`rounded-lg border-2 border-dashed p-4 text-center ${focus !== 'mouse' ? 'border-mod/60 bg-mod/5' : 'border-edge'}`}>
-                <div className="font-display text-sm font-semibold uppercase tracking-widest text-mod">⌨ Press a key</div>
+                <div className="font-display text-sm font-semibold uppercase tracking-widest text-mod flex items-center justify-center gap-2"><Ico name="keyboard" className="h-4 w-4" /> Press a key{kbList.length > 1 ? ` · kb${kbInst}` : ''}</div>
                 <p className="mt-1 text-xs text-slate-400">Hold modifiers first (L/R Alt, Ctrl, Shift) for combos. Release a modifier on its own to bind just the modifier. <b>Esc</b> cancels.</p>
                 <div className="mt-3 flex min-h-[2.5rem] flex-wrap items-center justify-center gap-1" data-testid="held-keys">
                   {held.length ? held.map((m, i) => <span key={m} className="flex items-center gap-1">{i > 0 && <span className="text-slate-500">+</span>}<kbd className="keycap !text-base">{keyLabel(m, 'kb')}</kbd></span>) : <span className="font-mono text-xs text-slate-600">waiting for input…</span>}
@@ -219,11 +248,11 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
               </div>
               <div ref={padRef} onMouseDown={onPadMouse} data-testid="mouse-pad"
                 className={`cursor-crosshair select-none rounded-lg border-2 border-dashed p-4 text-center ${focus === 'mouse' ? 'border-mod/60 bg-mod/5' : 'border-edge hover:border-hud/50'}`}>
-                <div className="font-display text-sm font-semibold uppercase tracking-widest text-hud2">🖱 Click or scroll here</div>
+                <div className="font-display text-sm font-semibold uppercase tracking-widest text-hud2 flex items-center justify-center gap-2"><Ico name="mouse" className="h-4 w-4" /> Click or scroll here{moList.length > 1 ? ` · mo${moInst}` : ''}</div>
                 <p className="mt-1 text-xs text-slate-400">Any mouse button (1–5) or the wheel. Hold a keyboard modifier for combos like R-Alt + RMB.</p>
                 <div className="mt-3 flex flex-wrap justify-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
                   {MOUSE_AXES.map((a) => (
-                    <button key={a.input} type="button" onClick={() => finish({ slot: 'mo', instance: 1, input: a.input })}
+                    <button key={a.input} type="button" onClick={() => finish({ slot: 'mo', instance: moInst, input: a.input })}
                       className="rounded border border-edge px-2 py-0.5 font-mono text-[10px] text-slate-400 hover:border-hud/60 hover:text-hud2">{a.label}</button>
                   ))}
                 </div>
@@ -233,8 +262,9 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
 
           {listening && group !== 'km' && (
             <div className="rounded-lg border-2 border-dashed border-mod/60 bg-mod/5 p-4 text-center">
-              <div className="font-display text-sm font-semibold uppercase tracking-widest text-mod">
-                {group === 'gp' ? '🎮 Press a button, pull a trigger or move a stick' : '🕹 Press a button, push a hat or move an axis'}
+              <div className="flex items-center justify-center gap-2 font-display text-sm font-semibold uppercase tracking-widest text-mod">
+                <Ico name={group === 'gp' ? 'gamepad' : 'joystick'} className="h-4 w-4" />
+                {group === 'gp' ? 'Press a button, pull a trigger or move a stick' : 'Press a button, push a hat or move an axis'}
               </div>
               <p className="mt-1 text-xs text-slate-400">
                 {group === 'gp' ? 'Hold one button and press another for a combo (e.g. LB + A). ' : 'Axes are detected when they move well away from where they rest, so throttles parked at one end work. '}
@@ -253,7 +283,7 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
               <div className="mt-3">
                 <button type="button" onClick={() => setShowTester((v) => !v)} data-testid="toggle-tester"
                   className="rounded border border-edge px-2 py-1 font-mono text-[11px] text-slate-300 hover:border-hud/60 hover:text-hud2">
-                  {showTester ? '▾ Hide' : '▸ Show'} live input tester
+                  <span className="flex items-center gap-1"><Ico name={showTester ? 'chevronDown' : 'chevronRight'} className="h-3 w-3" /> {showTester ? 'Hide' : 'Show'} live input tester</span>
                 </button>
                 {showTester && <div className="mt-2"><InputTester describe={describe} compact /></div>}
               </div>
@@ -279,10 +309,10 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
                   ))}
                 </div>
               )}
-              {pending.warning && <p className="rounded border border-mod/40 bg-mod/5 px-3 py-2 text-xs text-mod">⚠ {pending.warning}</p>}
+              {pending.warning && <p className="rounded border border-mod/40 bg-mod/5 px-3 py-2 text-xs flex items-start gap-1.5 text-mod"><Ico name="alert" className="mt-0.5 h-3.5 w-3.5" /> {pending.warning}</p>}
               {conflicts.length > 0 ? (
                 <div className="rounded-lg border border-alert/60 bg-alert/5 p-3" data-testid="capture-conflict">
-                  <div className="font-display text-sm font-semibold uppercase tracking-widest text-alert">⚠ Already in use in an overlapping context</div>
+                  <div className="font-display text-sm font-semibold uppercase tracking-widest text-alert flex items-center gap-1.5"><Ico name="alert" className="h-4 w-4" /> Already in use in an overlapping context</div>
                   <ul className="mt-2 space-y-1 text-sm">
                     {conflicts.map((c, i) => (
                       <li key={i} className="flex items-baseline gap-2"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-alert" /><span className="text-slate-100">{c.row.label}</span><span className="font-mono text-[10px] text-slate-500">{c.row.mapLabel}{c.binding.mode ? ` · ${prettyMode(c.binding.mode)}` : ''}</span></li>
@@ -334,7 +364,7 @@ export function CaptureDialog({ row, group, replace, focus, rows, pads, describe
             </form>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {onClear && <button type="button" onClick={onClear} className="rounded border border-edge px-3 py-1.5 text-xs text-slate-300 hover:border-alert hover:text-alert">⌫ Unbind this input</button>}
+            {onClear && <button type="button" onClick={onClear} className="rounded border border-edge px-3 py-1.5 text-xs text-slate-300 hover:border-alert hover:text-alert"><span className="flex items-center gap-1.5"><Ico name="backspace" className="h-3.5 w-3.5" /> Unbind this input</span></button>}
             <span className="text-[11px] text-slate-500">
               {group === 'km' ? 'Some browser shortcuts (Ctrl+W, Ctrl+T, Ctrl+N…) can\'t be captured. Type those in manual entry.' : 'Button and axis numbers come from the browser and can differ from the game\'s DirectInput order. Check in game, and use manual entry to correct.'}
             </span>

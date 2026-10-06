@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { buildExport, exportFileName, safeName, usedInstances, type ExportDevice, type ExportFormat } from '../lib/exporter';
 import type { DefaultsData, Profile } from '../lib/types';
+import { Ico } from './icons';
+import { useEscape } from './useEscape';
 
 /** a game slot as listed in the export (slots.ts): "js2", device name */
 export interface ExportSlot { id: string; name?: string }
@@ -16,6 +18,7 @@ export function ExportDialog({ defaults, profile, devices, slots, onClose }: Pro
   const [format, setFormat] = useState<ExportFormat>('layout');
   const [name, setName] = useState(() => safeName(profile.name.replace(/\(actionmaps\.xml\)/i, '').replace(/^layout_|_exported$/g, '')));
   const [copied, setCopied] = useState(false);
+  useEscape(onClose);
   const used = useMemo(() => usedInstances(profile), [profile]);
   const opts = { format, name, devices };
   const xml = useMemo(() => buildExport(defaults, profile, opts), [defaults, profile, format, name, devices]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -39,7 +42,7 @@ export function ExportDialog({ defaults, profile, devices, slots, onClose }: Pro
         <div className="flex items-center gap-3 border-b border-edge px-5 py-3">
           <h2 className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">Export for Star Citizen</h2>
           <span className="font-mono text-[11px] text-slate-500">{profile.name} · {actions} actions changed · {profile.rebindCount} rebinds</span>
-          <button type="button" onClick={onClose} className="ml-auto rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2">✕</button>
+          <button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)" className="ml-auto rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2"><Ico name="close" /></button>
         </div>
         <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <div className="min-h-0 space-y-4 overflow-y-auto border-edge p-5 scrollbar-thin md:border-r">
@@ -84,8 +87,8 @@ export function ExportDialog({ defaults, profile, devices, slots, onClose }: Pro
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={download} data-testid="export-download" className="rounded border border-hud/60 bg-hud/15 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wider text-hud2 shadow-[0_0_18px_-6px_var(--color-hud)] hover:bg-hud/25">⇩ Download {file}</button>
-              <button type="button" onClick={copy} className="rounded border border-edge px-3 py-2 font-display text-sm font-semibold uppercase tracking-wider text-slate-300 hover:border-hud/60">{copied ? '✓ Copied' : 'Copy XML'}</button>
+              <button type="button" onClick={download} data-testid="export-download" className="rounded border border-hud/60 bg-hud/15 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wider text-hud2 shadow-[0_0_18px_-6px_var(--color-hud)] hover:bg-hud/25"><Ico name="export" /> Download {file}</button>
+              <button type="button" onClick={copy} className="rounded border border-edge px-3 py-2 font-display text-sm font-semibold uppercase tracking-wider text-slate-300 hover:border-hud/60">{copied ? <><Ico name="check" /> Copied</> : <><Ico name="copy" /> Copy XML</>}</button>
             </div>
           </div>
           <div className="flex min-h-0 flex-col bg-black/40">

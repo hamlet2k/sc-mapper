@@ -4,6 +4,7 @@ import { comboLabel, prettyMode } from '../lib/inputs';
 import { groupLabel } from '../lib/groups';
 import type { Binding, Device, Row } from '../lib/types';
 import { BindingChip } from './BindingChip';
+import { Ico } from './icons';
 
 export interface ListProps {
   rows: Row[];
@@ -136,7 +137,7 @@ const ActionRow = memo(function ActionRow({ row, cols, template, showMap, confli
             </span>
             {row.unlisted && <span className="text-mod">Not present in the bundled defaults (renamed or new action?)</span>}
           </div>
-          <button type="button" onClick={() => onEdit(row)} className="mt-2 rounded border border-hud/50 bg-hud/10 px-2 py-0.5 text-[11px] text-hud2 hover:bg-hud/20">✎ Edit bindings</button>
+          <button type="button" onClick={() => onEdit(row)} className="mt-2 rounded border border-hud/50 bg-hud/10 px-2 py-0.5 text-[11px] text-hud2 hover:bg-hud/20"><Ico name="edit" /> Edit bindings</button>
         </div>
       )}
     </div>

@@ -2,6 +2,8 @@ import { effectiveGroup } from '../lib/edit';
 import { bindKey, comboLabel, formatInput, GROUP_LABEL, keyLabel, normalizeCombo, prettyMode, tokens } from '../lib/inputs';
 import type { DefaultAction, Group, Rebind, Row } from '../lib/types';
 import { ACTIVATION_MODES } from './CaptureDialog';
+import { Ico, type IconName } from './icons';
+import { useEscape } from './useEscape';
 
 interface Props {
   row: Row;
@@ -15,10 +17,11 @@ interface Props {
   onClose: () => void;
 }
 
-const GROUPS: { g: Group; icon: string }[] = [{ g: 'km', icon: '⌨' }, { g: 'js', icon: '🕹' }, { g: 'gp', icon: '🎮' }];
+const GROUPS: { g: Group; icon: IconName }[] = [{ g: 'km', icon: 'keyboard' }, { g: 'js', icon: 'joystick' }, { g: 'gp', icon: 'gamepad' }];
 
 export function ActionEditor({ row, action, rebinds, canUndo, onSetGroup, onCapture, onUndo, onReset, onClose }: Props) {
   const customized = !!rebinds?.length;
+  useEscape(onClose);
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-void/60 backdrop-blur-[2px]" onClick={onClose} data-testid="action-editor">
       <aside className="hud-panel flex h-full w-full max-w-xl flex-col border-l-2 border-l-hud/60" onClick={(e) => e.stopPropagation()}>
@@ -30,10 +33,10 @@ export function ActionEditor({ row, action, rebinds, canUndo, onSetGroup, onCapt
               <div className="mt-1 font-mono text-[10px] text-slate-500">{row.mapLabel} · {row.map}/{row.action}{row.mode ? ` · ${prettyMode(row.mode)}` : ''}</div>
               {row.desc && <p className="mt-2 text-xs text-slate-400">{row.desc}</p>}
             </div>
-            <button type="button" onClick={onClose} className="rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2">✕</button>
+            <button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)" className="rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2"><Ico name="close" /></button>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" disabled={!canUndo} onClick={onUndo} className="rounded border border-edge px-2.5 py-1 text-xs text-slate-300 hover:border-hud/60 disabled:opacity-40">↶ Undo last change</button>
+            <button type="button" disabled={!canUndo} onClick={onUndo} className="rounded border border-edge px-2.5 py-1 text-xs text-slate-300 hover:border-hud/60 disabled:opacity-40"><Ico name="undo" /> Undo last change</button>
             <button type="button" disabled={!customized} onClick={onReset} className="rounded border border-edge px-2.5 py-1 text-xs text-slate-300 hover:border-mod hover:text-mod disabled:opacity-40">⟲ Reset to game default</button>
             {customized && <span className="self-center rounded bg-mod/15 px-1.5 font-mono text-[10px] uppercase text-mod">customized</span>}
           </div>
@@ -47,7 +50,7 @@ export function ActionEditor({ row, action, rebinds, canUndo, onSetGroup, onCapt
             return (
               <section key={g} className="rounded-lg border border-edge/70 bg-black/20 p-3" data-testid={`editor-${g}`}>
                 <div className="flex items-center gap-2">
-                  <span>{icon}</span>
+                  <Ico name={icon} className="h-4 w-4" />
                   <h3 className="font-display text-sm font-bold uppercase tracking-widest text-hud2">{GROUP_LABEL[g]}</h3>
                   {own && <span className="font-mono text-[9px] uppercase text-mod">overridden</span>}
                   <button type="button" onClick={() => onCapture(g)} className="ml-auto rounded border border-hud/50 bg-hud/10 px-2 py-0.5 text-xs text-hud2 hover:bg-hud/20">+ Add binding</button>
@@ -71,7 +74,7 @@ export function ActionEditor({ row, action, rebinds, canUndo, onSetGroup, onCapt
                           <option value={1}>1×</option><option value={2}>2× tap</option><option value={3}>3× tap</option>
                         </select>
                         <button type="button" onClick={() => onCapture(g, r)} className="rounded border border-edge px-1.5 py-0.5 text-[11px] text-slate-300 hover:border-hud/60 hover:text-hud2">Rebind</button>
-                        <button type="button" onClick={() => onSetGroup(g, list.filter((_, j) => j !== i))} title="Unbind" className="rounded border border-edge px-1.5 py-0.5 text-[11px] text-slate-400 hover:border-alert hover:text-alert">✕</button>
+                        <button type="button" onClick={() => onSetGroup(g, list.filter((_, j) => j !== i))} title="Unbind" className="rounded border border-edge px-1.5 py-0.5 text-[11px] text-slate-400 hover:border-alert hover:text-alert"><Ico name="close" /></button>
                       </li>
                     ))}
                   </ul>

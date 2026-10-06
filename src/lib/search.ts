@@ -48,7 +48,7 @@ function scopedScore(ix: Indexed, term: string): number | null {
   const m = SCOPED.exec(term);
   if (!m) return null;
   const g = groupOfSlot(m[1] as Slot);
-  const inst = g === 'km' || !m[2] ? undefined : Number(m[2]);
+  const inst = !m[2] ? undefined : Number(m[2]);
   const parts = m[3].split('+').map((p) => p.trim()).filter(Boolean);
   for (const b of ix.binds) {
     if (b.group !== g || (inst !== undefined && b.inst !== inst) || !b.tokens.length) continue;

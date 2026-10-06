@@ -1,10 +1,12 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChromiumBanner, ChromiumButtonNotice } from './ChromiumBanner';
 import { createPortal } from 'react-dom';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
-import { slotDeviceName, slotId, type GameSlot, type SlotMap } from '../lib/slots';
+import { isController, slotDeviceName, slotId, type GameSlot, type SlotMap } from '../lib/slots';
 import { AUTO_TEMPLATE, autoSlotTemplate, resolveSlotTemplate } from '../lib/slotTemplates';
 import { formatInput, searchSpec } from '../lib/inputs';
+import type { PressHit } from '../lib/listen';
+import { parseQuery, scoreRow } from '../lib/search';
 import {
   DUP_ORDER_GUESSES, calloutFor, calloutTitle, cloneTemplate, coveredInputs, exportTemplates, identityKey, inputRole, matchFor, matchScore, maxButton, newTemplate,
   calloutView, imageSrc, parseTemplates, resolveTemplateImage, templateViews, shortInput, splitCombo, templateGroups, unassignedCount, useTemplateImage, useTemplates,
@@ -12,20 +14,22 @@ import {
 } from '../lib/templates';
 import type { Binding, Row, Slot } from '../lib/types';
 import { CalloutBody, DeviceCanvas, TONE_STROKE, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
+import { Ico } from './icons';
+import { KeyboardView } from './KeyboardView';
 import { TemplateEditor } from './TemplateEditor';
 import { useFocusPressedView } from './useFocusPressedView';
 import { useSwapViews } from './useSwapViews';
 
-/** a joystick / gamepad game slot of the active profile (slots.ts) with the connected controller filling it, if any */
+/** a game slot of the active profile (slots.ts) with the connected controller filling it, if any */
 export interface SlotOption { gs: GameSlot; pad?: PadInfo }
-interface DevOption { key: string; slot: 'js' | 'gp'; instance: number; label: string; pad?: PadInfo; gs: GameSlot }
+interface DevOption { key: string; slot: Slot; instance: number; label: string; name?: string; pad?: PadInfo; gs: GameSlot }
 interface Props {
   rows: Row[];
   conflictRows: Map<string, Set<string>>;
-  /** every detected controller (only for the Chromium notice; the device picker lists the game slots) */
+  /** every detected controller (only for the Chromium notice; the slot picker lists the game slots) */
   pads: PadInfo[];
   describe: (l: readonly PadLike[]) => PadInfo[];
-  /** the profile's joystick / gamepad slots: what the export will contain */
+  /** the profile's game slots (kb, mo, js, gp): what the export will contain */
   slots: SlotOption[];
   slotMap: SlotMap;
   /** remember a template for a slot (null = automatic) */
@@ -34,6 +38,12 @@ interface Props {
   /** Settings → Highlight on press / Scroll to it */
   highlight: boolean;
   scroll: boolean;
+  /** the search box, applied to this view: dims the controls whose actions don't match */
+  query: string;
+  /** find by pressing: selects that slot and the control */
+  chip: PressHit | null;
+  /** open the List on one exact input (keyboard / mouse slots) */
+  onPickKey: (spec: string) => void;
   onEdit: (row: Row) => void;
   onRemove: (row: Row, b: Binding) => void;
   onBind: (row: Row, slot: Slot, instance: number, input: string) => void;
@@ -44,55 +54,127 @@ interface Props {
 const SEL_KEY = 'sc-mapper:device-view';
 const download = (name: string, href: string) => { const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'device';
+const BTN = 'flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60 hover:text-hud2';
 
 const NO_ACTIVE: Live = { active: new Set<string>(), values: {} };
 
-/** visual view of one device: its picture with every control's bindings, live highlight, click to edit */
-export function DeviceView({ rows, conflictRows, pads, describe, slots, slotMap, onPickTemplate, onOpenControllers, highlight, scroll, onEdit, onRemove, onBind, onShowInList, notify }: Props) {
+/** visual view of one game slot: a controller's picture with every control's bindings (live highlight, click to edit), or the keyboard */
+export function DeviceView(props: Props) {
+  const { slots, slotMap, chip, onOpenControllers, onPickTemplate } = props;
   const T = useTemplates();
-  // devices: the profile's joystick / gamepad slots (what goes into the export), not every controller the browser sees
+  // the profile's game slots (what goes into the export), not every controller the browser sees
   const options = useMemo(() => slots.map(({ gs, pad }): DevOption => {
-    const name = pad ? padLabel(pad) : slotDeviceName(gs);
-    const slot = gs.slot as 'js' | 'gp';
-    return { key: `slot:${slotId(gs)}`, slot, instance: gs.instance, gs, pad, label: `${slotId(gs).toUpperCase()} · ${name ?? 'no device assigned'}${pad ? '' : gs.hw || gs.gameProduct ? ' (not connected)' : ''}` };
+    const name = pad ? padLabel(pad) : slotDeviceName(gs) ?? (gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : undefined);
+    return { key: `slot:${slotId(gs)}`, slot: gs.slot, instance: gs.instance, gs, pad, name, label: `${slotId(gs).toUpperCase()} · ${name ?? 'no device assigned'}` };
   }), [slots]);
+  const [selKey, setSelKey] = useState<string>(() => localStorage.getItem(SEL_KEY) ?? '');
+  const pick = (k: string) => { setSelKey(k); localStorage.setItem(SEL_KEY, k); };
+  // find by pressing on this view: the pressed device's slot comes up (and the control gets selected below)
+  useEffect(() => {
+    if (!chip) return;
+    const o = options.find((x) => x.slot === chip.slot && x.instance === chip.instance);
+    if (o) { setSelKey(o.key); localStorage.setItem(SEL_KEY, o.key); }
+  }, [chip]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!options.length) return <NoSlots onOpenControllers={onOpenControllers} />;
-  return <SlotDeviceView {...{ options, onOpenControllers, rows, conflictRows, pads, describe, slotMap, onPickTemplate, highlight, scroll, onEdit, onRemove, onBind, onShowInList, notify, T }} />;
+  const opt = options.find((o) => o.key === selKey) ?? options.find((o) => o.pad && o.slot === 'js') ?? options.find((o) => isController(o.gs)) ?? options[0];
+  const chosen = isController(opt.gs) ? resolveSlotTemplate(T.templates, slotMap, opt.gs, opt.pad, T.picks) : null;
+  return (
+    <div className="flex min-h-full flex-col gap-3" data-testid="device-view">
+      {/* ---- inline slot / hardware / template selection ---- */}
+      <section className="hud-panel rounded-lg px-3 py-2.5 print:hidden" data-testid="device-slot-bar">
+        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Game slot" data-testid="device-slot-strip">
+          <span className="mr-1 font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Game slot</span>
+          {options.map((o) => {
+            const on = o.key === opt.key;
+            const ctl = isController(o.gs);
+            return (
+              <button key={o.key} type="button" role="tab" aria-selected={on} onClick={() => pick(o.key)} data-slot-chip={slotId(o.gs)} title={o.label}
+                className={`flex max-w-[15rem] items-center gap-1.5 rounded border px-2 py-1 text-xs transition ${on ? 'border-hud/70 bg-hud/15 text-hud2 shadow-[0_0_14px_-6px_var(--color-hud)]' : 'border-edge text-slate-400 hover:border-hud/40 hover:text-slate-200'}`}>
+                <Ico name={o.slot === 'kb' ? 'keyboard' : o.slot === 'mo' ? 'mouse' : o.slot === 'gp' ? 'gamepad' : 'joystick'} className="h-3.5 w-3.5" />
+                <span className="font-mono font-bold">{slotId(o.gs).toUpperCase()}</span>
+                <span className="min-w-0 truncate">{o.name ?? 'no device'}</span>
+                {ctl && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${o.pad ? 'bg-ok shadow-[0_0_6px_var(--color-ok)]' : 'bg-slate-600'}`} />}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-edge/50 pt-2 text-xs">
+          <span className="flex min-w-0 items-center gap-1.5 text-slate-400" data-testid="device-hardware">
+            <span className="font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Hardware</span>
+            {!isController(opt.gs) ? <span className="text-slate-300">{opt.slot === 'kb' ? 'Your keyboard' : 'Your mouse'}</span>
+              : opt.gs.hw ? <span className="truncate text-slate-200">{opt.pad ? padLabel(opt.pad) : opt.gs.hw.name}</span> : <span className="text-slate-500">none assigned</span>}
+            {isController(opt.gs) && opt.gs.hw && (opt.pad
+              ? <span className="rounded border border-ok/40 px-1 font-mono text-[10px] text-ok">connected</span>
+              : <span className="rounded border border-edge px-1 font-mono text-[10px] text-slate-500">not connected</span>)}
+          </span>
+          {chosen && (
+            <label className="flex items-center gap-1.5 text-slate-400">
+              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Template</span>
+              <select value={chosen.pick} onChange={(e) => onPickTemplate(opt.gs, e.target.value || (chosen.legacy ? AUTO_TEMPLATE : null))} data-testid="template-select"
+                className="max-w-[20rem] rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200 outline-none focus:border-hud">
+                <option value="">Automatic ({autoSlotTemplate(T.templates, opt.gs, opt.pad).name})</option>
+                {templateGroups(T.templates).map((g) => (
+                  <optgroup key={g.label} label={g.label} data-group={g.label}>
+                    {g.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.slot !== opt.slot ? ` · ${t.slot}` : ''}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+          )}
+          <button type="button" onClick={onOpenControllers} title="Map game slots to your controllers and pick their templates" data-testid="device-manage-slots"
+            className="ml-auto flex items-center gap-1.5 text-[11px] text-hud hover:underline"><Ico name="slots" className="h-3.5 w-3.5" /> Game slots &amp; controllers…</button>
+        </div>
+      </section>
+      {isController(opt.gs) && chosen
+        ? <SlotDeviceView key={opt.key} {...props} opt={opt} chosen={chosen} T={T} />
+        : <KmSlotView gs={opt.gs} rows={props.rows} conflictRows={props.conflictRows} onPickKey={props.onPickKey} />}
+    </div>
+  );
+}
+
+/** a keyboard or mouse slot: its keyboard (kb2 / mo2 show only their own bindings) */
+function KmSlotView({ gs, rows, conflictRows, onPickKey }: { gs: GameSlot; rows: Row[]; conflictRows: Map<string, Set<string>>; onPickKey: (spec: string) => void }) {
+  const shown = useMemo(() => rows.filter((r) => !r.hidden), [rows]);
+  const kb = gs.slot === 'kb' ? gs.instance : 1, mo = gs.slot === 'mo' ? gs.instance : 1;
+  return <KeyboardView rows={shown} conflictRows={conflictRows} kb={kb} mo={mo} onPick={(combo) => onPickKey(searchSpec(gs.slot, gs.instance, combo))} />;
 }
 
 function NoSlots({ onOpenControllers }: { onOpenControllers: () => void }) {
   return (
     <div className="hud-panel hud-corners mx-auto mt-8 max-w-xl rounded-lg p-8 text-center" data-testid="device-view-empty">
-      <div className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">No controllers mapped</div>
-      <p className="mt-2 text-sm text-slate-400">This view shows the joysticks and gamepads that go into your export. Map them to game slots (js1, js2, gp1…) first: import your <code>actionmaps.xml</code> to have them matched for you, or add slots by hand.</p>
-      <button type="button" onClick={onOpenControllers} data-testid="open-controllers" className="mt-4 rounded border border-hud/60 bg-hud/15 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wider text-hud2 hover:bg-hud/25">🕹 Open Controllers</button>
+      <div className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">No game slots yet</div>
+      <p className="mt-2 text-sm text-slate-400">This view shows the devices that go into your export: keyboard, mouse, joysticks and gamepads. Map them to game slots (kb1, js1, js2, gp1…) first: import your <code>actionmaps.xml</code> to have them matched for you, or add slots by hand.</p>
+      <button type="button" onClick={onOpenControllers} data-testid="open-controllers" className="mt-4 inline-flex items-center gap-2 rounded border border-hud/60 bg-hud/15 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wider text-hud2 hover:bg-hud/25"><Ico name="slots" className="h-4 w-4" /> Game slots &amp; controllers</button>
     </div>
   );
 }
 
-function SlotDeviceView({ options, onOpenControllers, rows, conflictRows, pads, describe, slotMap, onPickTemplate, highlight, scroll, onEdit, onRemove, onBind, onShowInList, notify, T }:
-  Omit<Props, 'slots'> & { options: DevOption[]; T: ReturnType<typeof useTemplates> }) {
-  const [selKey, setSelKey] = useState<string>(() => localStorage.getItem(SEL_KEY) ?? '');
+type Chosen = ReturnType<typeof resolveSlotTemplate>;
+function SlotDeviceView({ opt, chosen, T, rows, conflictRows, pads, describe, onPickTemplate, highlight, scroll, query, chip, onEdit, onRemove, onBind, onShowInList, notify }:
+  Props & { opt: DevOption; chosen: Chosen; T: ReturnType<typeof useTemplates> }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
   const [editing, setEditing] = useState<DeviceTemplate | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
-  const opt = options.find((o) => o.key === selKey) ?? options.find((o) => o.pad && o.slot === 'js') ?? options[0];
-  const { slot, instance } = opt;
-  const chosen = resolveSlotTemplate(T.templates, slotMap, opt.gs, opt.pad, T.picks);
+  const slot = opt.slot as 'js' | 'gp';
+  const { instance } = opt;
   const ident = chosen.ident;
   const idKey = identityKey(ident);
   const tpl = useTemplateImage(chosen.template); // built-in device templates: the picture arrives on demand
   const tplMax = maxButton(tpl);
   const unassigned = tpl.callouts.reduce((n, c) => n + unassignedCount(c), 0);
   const rawLive = useLiveInputs(opt.pad);
-  // Settings → Highlight on press off: presses don't light callouts, switch grips or move the panel (the editor has its own capture)
+  // Settings → Highlight on press off: presses don't light callouts or move the panel (the editor has its own capture)
   const live = highlight ? rawLive : NO_ACTIVE;
+  // find by pressing aimed at this slot: the pressed input(s)
+  const chipInputs = useMemo(() => (chip && chip.slot === slot && chip.instance === instance ? chip.inputs.map((i) => splitCombo(i).main) : []), [chip, slot, instance]);
   // multi-view photo templates: a pressed control brings the photo with its marker into sight (not while the editor is open)
   const canvasRef = useRef<HTMLDivElement>(null);
   const pulse = useFocusPressedView(tpl, live.active, canvasRef, !editing, scroll);
-  // swappable views (e.g. the MTQ's grips): only the one in use shows; a press on another one's control switches to it
-  const swap = useSwapViews(tpl, live.active, idKey);
+  // swappable views (e.g. the MTQ's grips): only the one in use shows; a press on another one's control switches to it, always
+  // (whatever the highlight setting), and so does a find-by-pressing hit
+  const swapActive = useMemo(() => (chipInputs.length ? new Set([...rawLive.active, ...chipInputs]) : rawLive.active), [rawLive.active, chipInputs]);
+  const swap = useSwapViews(tpl, swapActive, idKey);
   const shownTpl = swap.shown;
 
   // bindings of this device by physical input
@@ -114,17 +196,36 @@ function SlotDeviceView({ options, onOpenControllers, rows, conflictRows, pads, 
   const groups = [...new Set(shownTpl.callouts.map((c) => c.group).filter((g): g is string => !!g))];
 
   const entriesOf = (inputs: string[]) => inputs.flatMap((i) => index.get(i) ?? []);
+  // the search box on this view: controls whose title or bound actions match stay lit, the others dim
+  const q = useMemo(() => parseQuery(query), [query]);
+  const searching = q.terms.length + q.keyTerms.length > 0;
+  const matches = (c: Callout) => {
+    if (chipInputs.length) return coveredInputs(c).some((i) => chipInputs.includes(i));
+    if (!searching) return true;
+    const title = calloutTitle(c).toLowerCase();
+    return q.terms.every((t) => title.includes(t)) || entriesOf(coveredInputs(c)).some((e) => scoreRow(e.row, q) > 0);
+  };
+  const filtering = searching || chipInputs.length > 0;
+  const matchCount = filtering ? shownTpl.callouts.filter(matches).length : 0;
   const stateOf = (c: Callout): CalloutState => {
     const cov = coveredInputs(c);
     const es = entriesOf(cov);
     const tone: Tone = es.some((e) => e.conflict) ? 'conflict' : es.some((e) => e.b.custom) ? 'custom' : es.length ? 'bound' : 'unbound';
-    return { tone, active: cov.some((i) => live.active.has(i)), dim: !!group && c.group !== group, ...(c.inputRegions ? { inputActive: c.inputs.map((i) => live.active.has(i)) } : {}) };
+    return { tone, active: cov.some((i) => live.active.has(i)), dim: (!!group && c.group !== group) || (filtering && !matches(c)), ...(c.inputRegions ? { inputActive: c.inputs.map((i) => live.active.has(i)) } : {}) };
   };
+  // find by pressing: select the pressed control and bring it into view (or its entry in "not on the picture")
+  useEffect(() => {
+    if (!chipInputs.length) return;
+    const c = tpl.callouts.find((x) => coveredInputs(x).some((i) => chipInputs.includes(i)));
+    setSelected(c ? c.id : `input:${chipInputs[0]}`);
+    if (!c) return;
+    const t = window.setTimeout(() => document.querySelector(`[data-callout="${CSS.escape(c.id)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120);
+    return () => window.clearTimeout(t);
+  }, [chipInputs, tpl]);
   const selCallout: Callout | undefined = selected?.startsWith('input:')
     ? { id: selected, ...calloutFor(selected.slice(6)), inputs: [selected.slice(6)], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } }
     : tpl.callouts.find((c) => c.id === selected);
 
-  const pickDevice = (k: string) => { setSelKey(k); localStorage.setItem(SEL_KEY, k); setSelected(null); setGroup(null); };
   const withLink = (t: DeviceTemplate): DeviceTemplate => (ident.vendor || ident.name ? { ...t, slot, match: [matchFor(ident, !!opt.pad?.dup)] } : { ...t, slot });
   const saveTemplate = async (t: DeviceTemplate) => {
     try {
@@ -164,36 +265,18 @@ function SlotDeviceView({ options, onOpenControllers, rows, conflictRows, pads, 
   };
 
   return (
-    <div className="flex min-h-full flex-col gap-3" data-testid="device-view">
-      <div className="flex flex-wrap items-center gap-2 print:hidden">
-        <label className="flex items-center gap-1.5 text-xs text-slate-400">Device
-          <select value={opt.key} onChange={(e) => pickDevice(e.target.value)} data-testid="device-select"
-            className="max-w-[22rem] rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200">
-            {options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-          </select>
-        </label>
-        <button type="button" onClick={onOpenControllers} title="Map game slots to your controllers and pick their templates" data-testid="device-manage-slots"
-          className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">🕹 Slots…</button>
-        <label className="flex items-center gap-1.5 text-xs text-slate-400">Template
-          <select value={chosen.pick} onChange={(e) => onPickTemplate(opt.gs, e.target.value || (chosen.legacy ? AUTO_TEMPLATE : null))} data-testid="template-select"
-            className="max-w-[20rem] rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200">
-            <option value="">Automatic ({autoSlotTemplate(T.templates, opt.gs, opt.pad).name})</option>
-            {templateGroups(T.templates).map((g) => (
-              <optgroup key={g.label} label={g.label} data-group={g.label}>
-                {g.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.slot !== slot ? ` · ${t.slot}` : ''}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
-              </optgroup>
-            ))}
-          </select>
-        </label>
+    <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="device-slot-view" data-slot={`${slot}${instance}`}>
+      <div className="flex flex-wrap items-center gap-2 print:hidden" data-testid="template-tools">
+        <span className="font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Template</span>
         {tpl.builtin
-          ? <button type="button" onClick={() => void customize()} data-testid="template-customize" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">✎ Customize a copy</button>
-          : <button type="button" onClick={() => setEditing(structuredClone(tpl))} data-testid="template-edit" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">✎ Edit template</button>}
-        <button type="button" onClick={() => setEditing(withLink(newTemplate(slot, ident.name ?? 'My device')))} data-testid="template-new" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">＋ New template</button>
+          ? <button type="button" onClick={() => void customize()} data-testid="template-customize" className={BTN}><Ico name="edit" className="h-3.5 w-3.5" /> Customize a copy</button>
+          : <button type="button" onClick={() => setEditing(structuredClone(tpl))} data-testid="template-edit" className={BTN}><Ico name="edit" className="h-3.5 w-3.5" /> Edit template</button>}
+        <button type="button" onClick={() => setEditing(withLink(newTemplate(slot, ident.name ?? 'My device')))} data-testid="template-new" className={BTN}><Ico name="plus" className="h-3.5 w-3.5" /> New</button>
+        <button type="button" onClick={() => importRef.current?.click()} data-testid="template-import" className={BTN}><Ico name="import" className="h-3.5 w-3.5" /> Import</button>
+        <button type="button" onClick={() => void exportJson()} data-testid="template-export" className={BTN}><Ico name="export" className="h-3.5 w-3.5" /> Export</button>
         <span className="ml-auto flex flex-wrap gap-1.5">
-          <button type="button" onClick={() => importRef.current?.click()} data-testid="template-import" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">⇪ Import template</button>
-          <button type="button" onClick={() => void exportJson()} data-testid="template-export" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">⇩ Export template</button>
-          <button type="button" onClick={exportPng} data-testid="device-png" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">🖼 PNG</button>
-          <button type="button" onClick={() => window.print()} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">🖨 Print</button>
+          <button type="button" onClick={exportPng} data-testid="device-png" className={BTN}><Ico name="image" className="h-3.5 w-3.5" /> PNG</button>
+          <button type="button" onClick={() => window.print()} className={BTN}><Ico name="print" className="h-3.5 w-3.5" /> Print</button>
         </span>
         <input ref={importRef} type="file" accept=".json,application/json" className="hidden" data-testid="template-import-file"
           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
@@ -203,16 +286,17 @@ function SlotDeviceView({ options, onOpenControllers, rows, conflictRows, pads, 
       {unassigned > 0 && (
         <div data-testid="template-unassigned" className="flex flex-wrap items-center gap-2 rounded border border-mod/50 bg-mod/10 px-3 py-1.5 text-[11px] text-slate-200 print:hidden">
           <span><b className="text-mod">{unassigned} input{unassigned === 1 ? '' : 's'} on this picture have no number yet</b> (marked “?”): this device numbers its buttons the way you configured it.
-            {tpl.builtin ? <> Customize a copy, select a callout and type its number or press ⦿ and then the control.</> : <> Edit the template, select a callout and type its number or press ⦿ and then the control.</>}</span>
+            {tpl.builtin ? <> Customize a copy, select a callout and type its number or use “pick by pressing” and then press the control.</> : <> Edit the template, select a callout and type its number or use “pick by pressing” and then press the control.</>}</span>
           {tpl.builtin
-            ? <button type="button" onClick={() => void customize()} className="rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20">✎ Assign numbers</button>
-            : <button type="button" onClick={() => setEditing(structuredClone(tpl))} className="rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20">✎ Assign numbers</button>}
+            ? <button type="button" onClick={() => void customize()} className="flex items-center gap-1 rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20"><Ico name="edit" className="h-3 w-3" /> Assign numbers</button>
+            : <button type="button" onClick={() => setEditing(structuredClone(tpl))} className="flex items-center gap-1 rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20"><Ico name="edit" className="h-3 w-3" /> Assign numbers</button>}
         </div>
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 print:hidden" data-testid="device-status">
         <span>Template <b className="text-slate-300">{tpl.name}</b>: {chosen.how === 'chosen' ? `picked by you for ${opt.gs.hw ? 'this device' : `${slot}${instance}`}` : chosen.how === 'guessed' ? `guessed: device ${ident.dup!.n} of ${ident.dup!.of} identical ${guessLabel(ident)} (the last is taken as the stick, the others as the throttle plugged into the base; pick another template if it is not)` : chosen.how === 'matched' ? `linked to this device (${describeMatch(tpl, ident)})` : 'generic (no template linked to this device yet: customize a copy to place the callouts on your own device)'}</span>
-        {tpl.notes && <span className="text-slate-400" data-testid="template-notes">ⓘ {tpl.notes}</span>}
-        <span>{!opt.pad ? 'Connect the device (and press a button) for live highlight.' : highlight ? <span className="text-ok">● live: press or move a control and it lights up</span> : <span>● connected · highlight on press is off (⚙ Settings)</span>}</span>
+        {tpl.notes && <span className="flex items-center gap-1 text-slate-400" data-testid="template-notes"><Ico name="info" className="h-3 w-3" /> {tpl.notes}</span>}
+        <span className="flex items-center gap-1.5">{!opt.pad ? 'Connect the device (and press a button) for live highlight.' : highlight ? <><span className="h-1.5 w-1.5 rounded-full bg-ok" /><span className="text-ok">live: press or move a control and it lights up</span></> : <><span className="h-1.5 w-1.5 rounded-full bg-slate-500" />connected · highlight on press is off (Settings); grips still switch</>}</span>
+        {filtering && <span className="text-mod" data-testid="device-search-status">{chipInputs.length ? `Pressed ${formatInput(slot, instance, chipInputs[0])}: ${matchCount ? 'selected below' : 'not on this picture (see the list on the right)'}` : `${matchCount} control${matchCount === 1 ? '' : 's'} match “${query.trim()}”`}</span>}
         <Legend />
       </div>
       {groups.length > 0 && (
@@ -308,7 +392,7 @@ function InputPanel({ c, slot, instance, index, rows, live, onEdit, onRemove, on
       <div className="flex items-baseline gap-2">
         <h4 className="font-display text-sm font-bold uppercase tracking-wider text-hud2">{calloutTitle(c)}</h4>
         <span className="font-mono text-[10px] text-slate-500">{slot.toUpperCase()}{instance} · {c.kind}</span>
-        <button type="button" onClick={onClose} className="ml-auto text-slate-500 hover:text-slate-200" aria-label="Close">✕</button>
+        <button type="button" onClick={onClose} className="ml-auto text-slate-500 hover:text-slate-200" aria-label="Close"><Ico name="close" /></button>
       </div>
       {missing > 0 && <p className="mt-1 text-[11px] text-mod" data-testid="input-panel-unassigned">{missing === c.inputs.length ? 'This control has' : `${missing} of its inputs have`} no button number yet: customize a copy of the template to set {missing === 1 ? 'it' : 'them'}.</p>}
       <ul className="mt-2 space-y-2">
@@ -325,11 +409,11 @@ function InputPanel({ c, slot, instance, index, rows, live, onEdit, onRemove, on
                   {es.map((e, k) => (
                     <li key={k} className="flex items-center gap-1.5 rounded bg-white/[0.03] px-1.5 py-1">
                       <span className="min-w-0 flex-1">
-                        <span className={`block truncate ${e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-200'}`}>{e.conflict && '⚠ '}{e.prefix && <span className="font-mono text-[10px] text-hud/70">{e.prefix}+ </span>}{e.row.label}</span>
+                        <span className={`block truncate ${e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-200'}`}>{e.conflict && <Ico name="alert" className="mr-0.5" />}{e.prefix && <span className="font-mono text-[10px] text-hud/70">{e.prefix}+ </span>}{e.row.label}</span>
                         <span className="block truncate text-[10px] text-slate-500">{e.row.mapLabel}{e.b.mode ? ` · ${e.b.mode}` : ''}{e.b.custom ? ' · customized' : ''}</span>
                       </span>
                       <button type="button" onClick={() => onEdit(e.row)} className="rounded border border-edge px-1.5 text-[10px] text-slate-300 hover:border-hud/60">Edit</button>
-                      <button type="button" onClick={() => onRemove(e.row, e.b)} title="Unbind" aria-label={`Unbind ${e.row.label}`} className="rounded border border-edge px-1.5 text-[10px] text-slate-400 hover:border-alert hover:text-alert">✕</button>
+                      <button type="button" onClick={() => onRemove(e.row, e.b)} title="Unbind" aria-label={`Unbind ${e.row.label}`} className="rounded border border-edge px-1.5 text-[10px] text-slate-400 hover:border-alert hover:text-alert"><Ico name="close" /></button>
                     </li>
                   ))}
                 </ul>

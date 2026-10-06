@@ -1,16 +1,17 @@
 /** Curated top-level grouping of Star Citizen action maps */
+/** `icon`: name in the shared line-icon set (components/icons.tsx) */
 export const GROUPS: { id: string; label: string; icon: string; maps: string[] }[] = [
-  { id: 'flight', label: 'Flight & Ship Systems', icon: '✈', maps: ['spaceship_movement', 'spaceship_quantum', 'spaceship_docking', 'spaceship_general', 'spaceship_view', 'spaceship_power', 'spaceship_hud', 'spaceship_radar', 'seat_general', 'vehicle_mfd', 'lights_controller', 'vehicle_mobiglas', 'stopwatch'] },
-  { id: 'combat', label: 'Targeting & Combat', icon: '⌖', maps: ['spaceship_targeting', 'spaceship_targeting_advanced', 'spaceship_target_hailing', 'spaceship_weapons', 'spaceship_missiles', 'spaceship_defensive', 'spaceship_auto_weapons'] },
-  { id: 'industry', label: 'Mining, Salvage & Scanning', icon: '⛏', maps: ['spaceship_mining', 'spaceship_salvage', 'spaceship_scanning'] },
-  { id: 'turret', label: 'Turrets', icon: '◎', maps: ['turret_movement', 'turret_advanced'] },
-  { id: 'fps', label: 'On Foot (FPS)', icon: '⛹', maps: ['player', 'prone', 'incapacitated', 'tractor_beam', 'mining', 'hacking', 'player_emotes'] },
-  { id: 'eva', label: 'EVA / Zero-G', icon: '☄', maps: ['zero_gravity_eva', 'zero_gravity_traversal'] },
-  { id: 'vehicle', label: 'Ground Vehicles', icon: '⛟', maps: ['vehicle_general', 'vehicle_driver'] },
-  { id: 'social', label: 'Social, UI & Interaction', icon: '☰', maps: ['default', 'ui_notification', 'player_choice', 'player_input_optical_tracking', 'mapui', 'ui_textfield'] },
-  { id: 'camera', label: 'Camera & Spectator', icon: '◉', maps: ['view_director_mode', 'spectator', 'flycam'] },
-  { id: 'internal', label: 'Internal / Dev', icon: '⚙', maps: ['debug', 'IFCS_controls', 'character_customizer', 'RemoteRigidEntityController', 'server_renderer'] },
-  { id: 'unlisted', label: 'Unlisted (from import)', icon: '?', maps: [] },
+  { id: 'flight', label: 'Flight & Ship Systems', icon: 'flight', maps: ['spaceship_movement', 'spaceship_quantum', 'spaceship_docking', 'spaceship_general', 'spaceship_view', 'spaceship_power', 'spaceship_hud', 'spaceship_radar', 'seat_general', 'vehicle_mfd', 'lights_controller', 'vehicle_mobiglas', 'stopwatch'] },
+  { id: 'combat', label: 'Targeting & Combat', icon: 'combat', maps: ['spaceship_targeting', 'spaceship_targeting_advanced', 'spaceship_target_hailing', 'spaceship_weapons', 'spaceship_missiles', 'spaceship_defensive', 'spaceship_auto_weapons'] },
+  { id: 'industry', label: 'Mining, Salvage & Scanning', icon: 'industry', maps: ['spaceship_mining', 'spaceship_salvage', 'spaceship_scanning'] },
+  { id: 'turret', label: 'Turrets', icon: 'turret', maps: ['turret_movement', 'turret_advanced'] },
+  { id: 'fps', label: 'On Foot (FPS)', icon: 'fps', maps: ['player', 'prone', 'incapacitated', 'tractor_beam', 'mining', 'hacking', 'player_emotes'] },
+  { id: 'eva', label: 'EVA / Zero-G', icon: 'eva', maps: ['zero_gravity_eva', 'zero_gravity_traversal'] },
+  { id: 'vehicle', label: 'Ground Vehicles', icon: 'vehicle', maps: ['vehicle_general', 'vehicle_driver'] },
+  { id: 'social', label: 'Social, UI & Interaction', icon: 'social', maps: ['default', 'ui_notification', 'player_choice', 'player_input_optical_tracking', 'mapui', 'ui_textfield'] },
+  { id: 'camera', label: 'Camera & Spectator', icon: 'camera', maps: ['view_director_mode', 'spectator', 'flycam'] },
+  { id: 'internal', label: 'Internal / Dev', icon: 'internal', maps: ['debug', 'IFCS_controls', 'character_customizer', 'RemoteRigidEntityController', 'server_renderer'] },
+  { id: 'unlisted', label: 'Unlisted (from import)', icon: 'unlisted', maps: [] },
 ];
 
 const MAP_GROUP = new Map<string, string>();

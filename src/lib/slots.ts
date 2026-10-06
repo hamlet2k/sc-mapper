@@ -33,7 +33,7 @@ export interface GameSlot {
   /** hardware picked by the user: auto-matching never replaces it */
   hwPinned?: boolean;
   /** how the hardware got here when not pinned */
-  hwMatch?: 'usb' | 'name' | 'legacy';
+  hwMatch?: 'usb' | 'name' | 'legacy' | 'order';
   /** template picked for this slot while it has no hardware (with hardware the pick lives in SlotMap.hwTemplates) */
   template?: string;
 }
@@ -132,6 +132,14 @@ export function autoMatchHardware(map: SlotMap, pads: readonly PadIdentity[], le
   };
   claim((p, pp) => !!pp.vendor && hex(p.vendor) === pp.vendor && hex(p.productId) === pp.productId, 'usb');
   claim((p, pp) => !!pp.name && sameName(p.name, pp.name), 'name');
+  // gamepads: Windows (XInput) and the browser name them differently ("Controller (Xbox One For Windows)" vs "Xbox Wireless
+  // Controller"), so gamepad slots still open take the remaining standard-mapping gamepads in order
+  const pads2 = pads.filter((p) => p.kind === 'gp' && !taken.has(p.key));
+  for (const s of open().filter((x) => x.slot === 'gp')) {
+    const p = pads2.shift();
+    if (!p) break;
+    s.hw = hardwareOf(p); s.hwMatch = 'order'; taken.add(p.key);
+  }
   return { ...map, slots, pendingMatch: false };
 }
 
@@ -257,6 +265,8 @@ export function dropSlotBindings(rebinds: RebindMap, idx: DefaultsIndex, t: Targ
 export interface CopyPlan {
   /** bindings that would be copied (effective ones: the profile's plus the game defaults it keeps) */
   count: number;
+  /** how many of those are the profile's own bindings (the rest are game defaults it keeps on that slot) */
+  yours: number;
   actions: number;
   /** distinct inputs copied (e.g. button5, hat1_up, x) */
   inputs: string[];
@@ -285,7 +295,7 @@ export function planCopy(rebinds: RebindMap, idx: DefaultsIndex, from: Target, t
   let clashes = 0;
   for (const l of lists) clashes += l.eff.filter((r) => onSlot(r, to) && combos.has(normalizeCombo(r.input))).length;
   return {
-    count: src.reduce((n, l) => n + l.src.length, 0), actions: src.length,
+    count: src.reduce((n, l) => n + l.src.length, 0), yours: Math.min(src.reduce((n, l) => n + l.src.length, 0), slotBindingCount(rebinds, from)), actions: src.length,
     inputs: [...new Set(src.flatMap((l) => l.src.map((r) => mainOf(r.input))))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
     clashes,
   };

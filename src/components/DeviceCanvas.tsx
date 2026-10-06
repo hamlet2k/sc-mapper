@@ -3,6 +3,7 @@ import { isHatRest, snapshot } from '../lib/capture';
 import { getPads, type PadInfo } from '../lib/devices';
 import { BUILTIN_PHOTO_RE, calloutTitle, coveredInputs, imageSrc, inputRole, liveInputs, shortInput, viewTemplate, type Callout, type DeviceTemplate, type Pt } from '../lib/templates';
 import type { Binding, Row } from '../lib/types';
+import { Ico } from './icons';
 
 export interface Entry { row: Row; b: Binding; prefix: string; conflict: boolean }
 
@@ -244,7 +245,7 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
       {t.callouts.map((c) => {
         const s = stateOf(c);
         return (
-          <div key={c.id} data-callout={c.id} data-active={s.active ? '1' : undefined} data-tone={s.tone}
+          <div key={c.id} data-callout={c.id} data-active={s.active ? '1' : undefined} data-dim={s.dim ? '1' : undefined} data-tone={s.tone}
             onPointerDown={start(c.id, 'box')} onClick={(e) => e.stopPropagation()}
             className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 ${editable ? 'cursor-move' : 'cursor-pointer'} ${s.dim ? 'opacity-30' : ''}`}
             style={{ left: `${bx(c) * 100}%`, top: `${by(c) * 100}%` }}>
@@ -263,7 +264,7 @@ function ActionLine({ e, role }: { e: Entry; role?: string }) {
     <div className={`max-w-[180px] truncate ${e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-300'}`} title={`${e.row.label} · ${e.row.mapLabel}${e.prefix ? ` · with ${e.prefix}` : ''}${e.b.mode ? ` · ${e.b.mode}` : ''}${e.conflict ? ' · conflict' : ''}`}>
       {role && <span className="mr-1 font-mono text-slate-500">{role}</span>}
       {e.prefix && <span className="mr-0.5 font-mono text-[9px] text-hud/70">{e.prefix}+</span>}
-      {e.conflict && '⚠ '}{e.row.label}
+      {e.conflict && <Ico name="alert" className="mr-0.5 h-[1em] w-[1em]" />}{e.row.label}
     </div>
   );
 }
@@ -294,7 +295,7 @@ export function CalloutBody({ c, s, entriesFor, live }: { c: Callout; s: Callout
         {head}
         <div className="mt-0.5 grid grid-cols-3 gap-0.5 text-[9px]">
           <span />{cell(0)}<span />
-          {cell(3)}{c.inputs[4] ? cell(4) : <span className="text-center text-slate-600">●</span>}{cell(1)}
+          {cell(3)}{c.inputs[4] ? cell(4) : <span className="text-center text-slate-600"><Ico name="dot" className="h-2 w-2" /></span>}{cell(1)}
           <span />{cell(2)}<span />
         </div>
       </div>

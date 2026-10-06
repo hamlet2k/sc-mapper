@@ -40,11 +40,14 @@ interface Props {
   onPick: (combo: string) => void;
   /** a keyboard/mouse combo just pressed (live highlight) */
   flash?: { combo: string; at: number } | null;
+  /** which keyboard / mouse slot to show (kb1 / mo1 unless several exist) */
+  kb?: number;
+  mo?: number;
 }
 
 const U = 40; // px per key unit
 
-export function KeyboardView({ rows, conflictRows, onPick, flash }: Props) {
+export function KeyboardView({ rows, conflictRows, onPick, flash, kb = 1, mo = 1 }: Props) {
   const [mod, setMod] = useState('');
   const [focus, setFocus] = useState<string | null>(null);
   // a pressed combo shows up in the inspector, with its modifier held
@@ -64,6 +67,7 @@ export function KeyboardView({ rows, conflictRows, onPick, flash }: Props) {
     for (const row of rows) {
       for (const b of row.bindings) {
         if (b.slot !== 'kb' && b.slot !== 'mo') continue;
+        if ((b.instance || 1) !== (b.slot === 'kb' ? kb : mo)) continue;
         const c = normalizeCombo(b.input);
         const l = m.get(c) ?? [];
         l.push({ row, b });
@@ -71,7 +75,7 @@ export function KeyboardView({ rows, conflictRows, onPick, flash }: Props) {
       }
     }
     return m;
-  }, [rows]);
+  }, [rows, kb, mo]);
 
   const modCounts = useMemo(() => {
     const out: Record<string, number> = {};
@@ -134,6 +138,7 @@ export function KeyboardView({ rows, conflictRows, onPick, flash }: Props) {
     <div className="flex flex-col gap-4 xl:flex-row">
       <div className="hud-panel hud-corners min-w-0 flex-1 overflow-x-auto rounded-lg p-4 scrollbar-thin">
         <div className="mb-4 flex flex-wrap items-center gap-2">
+          {kb > 1 && <span className="rounded border border-hud/40 px-1.5 font-mono text-[11px] text-hud2" data-testid="kb-instance">kb{kb}</span>}
           <span className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-hud/70">Modifier</span>
           {MODS.map((m) => (
             <button key={m || 'none'} type="button" onClick={() => setMod(m)}
@@ -151,7 +156,7 @@ export function KeyboardView({ rows, conflictRows, onPick, flash }: Props) {
               renderKey(k, 1, undefined, { gridColumn: `${c} / span ${cs}`, gridRow: `${r} / span ${rs}`, width: '100%', height: '100%' }))}
           </div>
           <div className="flex flex-col gap-1">
-            <div className="mb-2 font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-hud/60" style={{ height: U - 4 }}>Mouse</div>
+            <div className="mb-2 font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-hud/60" style={{ height: U - 4 }}>Mouse{mo > 1 ? ` · mo${mo}` : ''}</div>
             {MOUSE.map((k) => <div key={k}>{renderKey(k, 2)}</div>)}
           </div>
         </div>
@@ -177,7 +182,7 @@ export function KeyboardView({ rows, conflictRows, onPick, flash }: Props) {
                 return (
                   <li key={i} className={`rounded border px-2 py-1.5 ${c ? 'border-alert/60 bg-alert/5' : h.b.custom ? 'border-mod/40 bg-mod/5' : 'border-edge/60 bg-black/20'}`}>
                     <div className="text-sm text-slate-100">{h.row.label}</div>
-                    <div className="font-mono text-[10px] text-slate-500">{h.row.mapLabel}{h.b.mode ? ` · ${h.b.mode}` : ''}{c ? ' · ⚠ conflict' : ''}</div>
+                    <div className="font-mono text-[10px] text-slate-500">{h.row.mapLabel}{h.b.mode ? ` · ${h.b.mode}` : ''}{c ? ' · conflict' : ''}</div>
                   </li>
                 );
               })}

@@ -12,7 +12,7 @@ import { DeviceView, type SlotOption } from './components/DeviceView';
 import { Sidebar, type MapCount } from './components/Sidebar';
 import { findConflicts } from './lib/conflicts';
 import { GROUPS } from './lib/groups';
-import { loadAssign, usePads, type PadKind } from './lib/devices';
+import { getPads, loadAssign, usePads, type PadKind } from './lib/devices';
 import { blockInstance, blockType, settingsOf, type DeviceSettings } from './lib/devopts';
 import type { ExportDevice } from './lib/exporter';
 import {
@@ -23,6 +23,9 @@ import {
 import { hitKeys, hitLabel, hitSpecs, useKeyHits, usePadHits, type PressHit } from './lib/listen';
 import { comboFrom, scMouseButton, scWheel } from './lib/capture';
 import { ChromiumBanner } from './components/ChromiumBanner';
+import { Ico, type IconName } from './components/icons';
+import { DeleteProfileDialog, ProfilePanel } from './components/ProfilePanel';
+import { useEscape } from './components/useEscape';
 import { effectiveGroup, indexDefaults, newProfile, setAction, setGroup, withRebinds, type CaptureConflict } from './lib/edit';
 import { bindKey, comboLabel, groupOfDevice, groupOfSlot, searchSpec } from './lib/inputs';
 import { parseActionMaps, readXmlFile } from './lib/importer';
@@ -37,28 +40,57 @@ interface UndoEntry { profileId: string; label: string; before: { map: string; a
 const keyOf = (r: { slot: Rebind['slot']; instance: number; input: string }) => bindKey(r.slot, r.instance, r.input);
 const uniqueName = (names: string[], base: string) => { let n = base, i = 2; while (names.includes(n)) n = `${base} ${i++}`; return n; };
 const ALL_DEVICES: Device[] = ['keyboard', 'mouse', 'joystick', 'gamepad'];
-const DEVICE_META: Record<Device, { label: string; icon: string }> = {
-  keyboard: { label: 'Keyboard', icon: '⌨' },
-  mouse: { label: 'Mouse', icon: '🖱' },
-  joystick: { label: 'Joystick / HOTAS', icon: '🕹' },
-  gamepad: { label: 'Gamepad', icon: '🎮' },
+const DEVICE_META: Record<Device, { label: string; icon: IconName }> = {
+  keyboard: { label: 'Keyboard', icon: 'keyboard' },
+  mouse: { label: 'Mouse', icon: 'mouse' },
+  joystick: { label: 'Joystick / HOTAS', icon: 'joystick' },
+  gamepad: { label: 'Gamepad', icon: 'gamepad' },
 };
 type View = 'list' | 'keyboard' | 'conflicts' | 'devices';
 const VIEWS: View[] = ['list', 'keyboard', 'devices', 'conflicts'];
+const VIEW_META: Record<View, { label: string; icon: IconName }> = {
+  list: { label: 'List', icon: 'list' }, keyboard: { label: 'Keyboard', icon: 'keyboard' }, devices: { label: 'Devices', icon: 'joystick' }, conflicts: { label: 'Conflicts', icon: 'alert' },
+};
+/** the search box works on the current view: what it searches there */
+const SEARCH_HINT: Record<View, string> = {
+  list: 'Search actions, categories or inputs…  (quantum, lalt+n, js1_button5)',
+  keyboard: 'Search: the keyboard shows only matching actions…',
+  devices: "Search this device's controls and their actions…",
+  conflicts: 'Search conflicts by action or input…',
+};
+const PRESS_HINT: Record<View, string> = {
+  list: 'the list shows every action bound to that exact input',
+  keyboard: 'the keyboard shows only what is bound to that exact input',
+  devices: 'the view jumps to that control on its device and selects it',
+  conflicts: 'only the conflicts on that exact input stay',
+};
 /**
  * Which filters each view shows (and applies): views are first class, a filter only appears where it changes the result.
  * Devices has none of these (its own device / template / group controls); search and find-by-pressing are global.
  */
-const VIEW_FILTERS: Record<View, { input: boolean; unbound: boolean; custom: boolean; conflictOnly: boolean; categories: boolean; defaultOverlaps: boolean }> = {
-  list: { input: true, unbound: true, custom: true, conflictOnly: true, categories: true, defaultOverlaps: false },
-  keyboard: { input: false, unbound: false, custom: true, conflictOnly: true, categories: true, defaultOverlaps: false },
-  conflicts: { input: true, unbound: false, custom: true, conflictOnly: false, categories: true, defaultOverlaps: true },
-  devices: { input: false, unbound: false, custom: false, conflictOnly: false, categories: false, defaultOverlaps: false },
+const VIEW_FILTERS: Record<View, { input: boolean; unbound: boolean; custom: boolean; conflictOnly: boolean; categories: boolean; defaultOverlaps: boolean; edit: boolean }> = {
+  list: { input: true, unbound: true, custom: true, conflictOnly: true, categories: true, defaultOverlaps: false, edit: true },
+  keyboard: { input: false, unbound: false, custom: true, conflictOnly: true, categories: true, defaultOverlaps: false, edit: false },
+  conflicts: { input: true, unbound: false, custom: true, conflictOnly: false, categories: true, defaultOverlaps: true, edit: false },
+  devices: { input: false, unbound: false, custom: false, conflictOnly: false, categories: false, defaultOverlaps: false, edit: false },
 };
 const NO_FILTERS = new Set<Device>(ALL_DEVICES);
 const EXPORT_TYPE: Record<GameSlot['slot'], ExportDevice['type']> = { kb: 'keyboard', mo: 'mouse', js: 'joystick', gp: 'gamepad' };
 
+/** md breakpoint: the profile panel renders once, in the sidebar (wide) or atop the content (narrow) */
+function useWide() {
+  const q = '(min-width: 768px)';
+  const [wide, setWide] = useState(() => typeof window === 'undefined' || !window.matchMedia || window.matchMedia(q).matches);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const m = window.matchMedia(q), on = () => setWide(m.matches);
+    m.addEventListener('change', on); return () => m.removeEventListener('change', on);
+  }, []);
+  return wide;
+}
+
 export default function App() {
+  const wide = useWide();
   const [store, setStore] = useState<Persisted>(() => load());
   useEffect(() => save(store), [store]);
   const profile = store.profiles.find((p) => p.id === store.activeId) ?? null;
@@ -88,6 +120,10 @@ export default function App() {
   const [editorId, setEditorId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [devicesOpen, setDevicesOpen] = useState<false | 'slots' | 'settings'>(false);
+  const [deleting, setDeleting] = useState(false);
+  // which keyboard / mouse slot (kb1, kb2… / mo1, mo2…) the Keyboard view shows and captures go to, when there are several
+  const [kbInst, setKbInst] = useState(1);
+  const [moInst, setMoInst] = useState(1);
   const [undo, setUndo] = useState<UndoEntry[]>([]);
   // ---- press-to-search and live highlight
   const [pressMode, setPressMode] = useState(false);
@@ -109,6 +145,10 @@ export default function App() {
     const next = fn(cur);
     return next === cur && s[key] ? s : { ...s, [key]: next };
   }), []);
+  useEffect(() => {
+    if (kbInst > 1 && !slotMap.slots.some((s) => s.slot === 'kb' && s.instance === kbInst)) setKbInst(1);
+    if (moInst > 1 && !slotMap.slots.some((s) => s.slot === 'mo' && s.instance === moInst)) setMoInst(1);
+  }, [slotMap, kbInst, moInst]);
   const slotPads = useMemo(() => ({ assign: padAssign(slotMap), reserved: reservedJs(slotMap) }), [slotMap]);
   const { pads, describe: describePads } = usePads(!!capture || exportOpen || !!devicesOpen || pressMode || view === 'devices' || !!slotMap.pendingMatch, profile?.devices, slotPads);
   const storeRef = useRef(store);
@@ -325,6 +365,16 @@ export default function App() {
       }
       return out;
     });
+    // captured from a controller that sits in no slot yet: that controller becomes the slot's hardware, so the numbering stays put
+    if (r.slot === 'js' || r.slot === 'gp') {
+      // read the controllers fresh: the press that was just captured may have been the one that revealed them
+      const pad = describePads(getPads()).find((p) => p.kind === r.slot && p.instance === r.instance && !slotMap.slots.some((s) => s.hw?.key === p.key));
+      if (pad) updateSlots((m) => {
+        const gs = m.slots.find((s) => s.slot === r.slot && s.instance === r.instance);
+        if (gs?.hw || m.slots.some((s) => s.hw?.key === pad.key)) return m;
+        return gs ? assignHardware(m, gs, hardwareOf(pad), true) : addSlot(m, r.slot, r.instance, hardwareOf(pad));
+      });
+    }
     if (removeFrom.length) setToast({ kind: 'ok', text: `Bound ${comboLabel(r.input, r.slot)} and removed it from ${removeFrom.length} other action${removeFrom.length === 1 ? '' : 's'}` });
     setCapture(null);
   };
@@ -368,7 +418,7 @@ export default function App() {
         applySettings(`Remove ${slotId(gs)}`, (st) => ({ ...st, blocks: st.blocks.filter((b) => !(b.tag === 'options' && blockType(b) === type && blockInstance(b) === gs.instance)) }));
     }
     updateSlots((m) => removeSlot(m, gs));
-    setToast({ kind: 'ok', text: `Removed ${slotId(gs)}${dropped ? ` and dropped ${dropped} binding${dropped === 1 ? '' : 's'} (↶ Undo restores them)` : ''}` });
+    setToast({ kind: 'ok', text: `Removed ${slotId(gs)}${dropped ? ` and dropped ${dropped} binding${dropped === 1 ? '' : 's'} (Undo restores them)` : ''}` });
   }, [applyEdit, applySettings, updateSlots]);
   const copySlotNow = useCallback((from: GameSlot, to: GameSlot, o: { clash: 'replace' | 'keep'; move: boolean; skip: Set<string> }) => {
     const prof = storeRef.current.profiles.find((p) => p.id === storeRef.current.activeId) ?? null;
@@ -402,7 +452,7 @@ export default function App() {
   /** slots as the capture dialog's device list labels them */
   const slotDevices = useMemo(() => slotMap.slots.filter(isController).map((s) => ({ slot: s.slot, instance: s.instance, product: slotDeviceName(s) ?? '' })), [slotMap]);
   /** the joystick / gamepad slots the main page shows (what the export will contain), with the controller filling each */
-  const slotOptions: SlotOption[] = useMemo(() => slotMap.slots.filter(isController).map((gs) => ({ gs, ...(gs.hw ? { pad: pads.find((p) => p.key === gs.hw!.key) } : {}) })), [slotMap, pads]);
+  const deviceSlots: SlotOption[] = useMemo(() => slotMap.slots.map((gs) => ({ gs, ...(gs.hw ? { pad: pads.find((p) => p.key === gs.hw!.key) } : {}) })), [slotMap, pads]);
   const exportDevices: ExportDevice[] = useMemo(() => slotMap.slots
     .filter((s) => isController(s) || s.instance > 1)
     .map((s) => ({ type: EXPORT_TYPE[s.slot], instance: s.instance, product: slotProduct(s, s.hw ? pads.find((p) => p.key === s.hw!.key) : undefined) })), [slotMap, pads]);
@@ -415,14 +465,13 @@ export default function App() {
   // ---- press-to-search: the next controller input / key / mouse button becomes an exact input filter
   const onPressHit = useCallback((h: PressHit) => {
     setChip(h);
-    setPressMode(false);
-    setView((v) => (v === 'devices' ? 'list' : v)); // search doesn't apply to Devices: show the matches in the List
+    setPressMode(false); // stays on the current view: each view applies the pressed input its own way
   }, []);
   const stopPress = useCallback(() => setPressMode(false), []);
   usePadHits(pressMode, describePads, onPressHit);
   useKeyHits(pressMode, 'capture', onPressHit, stopPress);
   // ---- live highlight: when nothing else is listening, pressing an input flashes its bindings
-  const passiveOn = view !== 'devices' && highlightOn && !query && !chip && !pressMode && !editMode && !capture && !editorId && !exportOpen && !devicesOpen && !settingsOpen && !help;
+  const passiveOn = view !== 'devices' && highlightOn && !query && !chip && !pressMode && !(editMode && vf.edit) && !capture && !editorId && !exportOpen && !devicesOpen && !settingsOpen && !help;
   const onFlash = useCallback((h: PressHit) => {
     setFlash(null);
     requestAnimationFrame(() => setFlash({ hit: h, keys: hitKeys(h), at: Date.now() }));
@@ -485,7 +534,7 @@ export default function App() {
     setView('list');
   }, []);
   const onBindingClick = useCallback((b: Binding) => pickInput(searchSpec(b.slot, b.instance, b.input)), [pickInput]);
-  const pickKey = useCallback((combo: string) => pickInput(searchSpec('kb', 1, combo)), [pickInput]);
+  const pickKey = useCallback((combo: string) => pickInput(searchSpec('kb', kbInst, combo)), [pickInput, kbInst]);
 
   const toggleDevice = (d: Device) => setDevices((s) => {
     const n = new Set(s);
@@ -506,180 +555,162 @@ export default function App() {
   const meta = DEFAULTS.meta;
   const versionLabel = `${meta.branch?.replace('sc-alpha-', 'Alpha ') ?? 'Star Citizen'} ${meta.channel ?? ''}`.trim();
 
+  const kmSlots = { kb: slotMap.slots.filter((s) => s.slot === 'kb').map((s) => s.instance), mo: slotMap.slots.filter((s) => s.slot === 'mo').map((s) => s.instance) };
+  const profilePanel = (
+    <ProfilePanel profiles={store.profiles} profile={profile} versionLabel={versionLabel} slots={slotMap.slots}
+      connected={(gs) => !!gs.hw && pads.some((p) => p.key === gs.hw!.key)}
+      onSelect={(id) => setStore((s) => ({ ...s, activeId: id }))} onImport={() => fileRef.current?.click()} onExport={() => setExportOpen(true)}
+      onDelete={() => setDeleting(true)} onNew={() => createLayout(false)} onDuplicate={() => createLayout(true)} onRevert={profile?.original ? revertImported : undefined}
+      onResetAll={resetAll} onOpenSlots={() => setDevicesOpen('slots')} onOpenCurves={() => setDevicesOpen('settings')} />
+  );
+
   return (
     <div className="relative flex h-full flex-col">
       <div className="scanline" />
-      {/* ---------------- header: brand, views (first class), global profile actions ---------------- */}
+      {/* ---------------- header: title, then the views (first class) ---------------- */}
       <header className="relative z-30 border-b border-edge bg-panel/80 backdrop-blur">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5">
-          <div className="flex items-center gap-2.5" title="Star Citizen binding console">
-            <svg viewBox="0 0 40 40" className="h-8 w-8 text-hud drop-shadow-[0_0_8px_rgba(79,216,255,.6)]" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <path d="M20 2 36 11v18L20 38 4 29V11z" />
-              <path d="M20 9l9 5v12l-9 5-9-5V14z" opacity=".5" />
-              <path d="M14 20h12M20 14v12" />
-            </svg>
-            <h1 className="glow-text font-display text-xl font-bold uppercase leading-none tracking-[0.25em] text-hud2 max-2xl:sr-only">SC Keymap</h1>
-          </div>
-          <nav className="flex rounded-md border border-edge p-0.5" aria-label="Views" data-testid="view-tabs">
-            {VIEWS.map((v) => (
-              <button key={v} type="button" onClick={() => setView(v)} aria-current={view === v ? 'page' : undefined} data-view-tab={v}
-                className={`rounded px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-wider transition ${view === v ? 'bg-hud/20 text-hud2 shadow-[0_0_14px_-6px_var(--color-hud)]' : 'text-slate-400 hover:text-slate-200'}`}>
-                {v === 'list' ? '☰ List' : v === 'keyboard' ? '⌨ Keyboard' : v === 'devices' ? '🕹 Devices' : <>⚠ Conflicts{stats.conflicts ? <span className="ml-1.5 rounded bg-alert/20 px-1 font-mono text-[11px] text-alert">{stats.conflicts}</span> : null}</>}
-              </button>
-            ))}
-          </nav>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <label className="sr-only" htmlFor="profile">Profile</label>
-            <select id="profile" value={store.activeId ?? ''} onChange={(e) => setStore((s) => ({ ...s, activeId: e.target.value || null }))} title="Active profile"
-              className="max-w-48 rounded border border-edge bg-panel2 px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-hud">
-              <option value="">Game defaults ({versionLabel})</option>
-              {store.profiles.map((p) => <option key={p.id} value={p.id}>{p.name} — {p.rebindCount} binds</option>)}
-            </select>
-            {profile && (
-              <button type="button" onClick={() => removeProfile(profile.id)} title="Remove this profile from the app"
-                className="rounded border border-edge px-2 py-1.5 text-xs text-slate-400 hover:border-alert hover:text-alert">✕</button>
-            )}
-            <button type="button" onClick={() => fileRef.current?.click()} title="Import actionmaps.xml or an exported layout"
-              className="rounded border border-hud/60 bg-hud/15 px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-wider text-hud2 shadow-[0_0_18px_-6px_var(--color-hud)] hover:bg-hud/25">
-              ⇪ Import
-            </button>
-            <button type="button" onClick={() => setExportOpen(true)} disabled={!profile} title={profile ? 'Export a file Star Citizen can load' : 'Import or edit bindings first'}
-              className="rounded border border-ok/50 px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-wider text-ok hover:bg-ok/10 disabled:opacity-40">
-              ⇩ Export
-            </button>
-            <button type="button" onClick={() => setEditMode((v) => !v)} aria-pressed={editMode} title="Edit bindings: click any binding to rebind it"
-              className={`rounded border px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-wider transition ${editMode ? 'border-mod bg-mod/20 text-mod shadow-[0_0_18px_-6px_var(--color-mod)]' : 'border-mod/50 text-mod/90 hover:bg-mod/10'}`}>
-              ✎ {editMode ? 'Editing' : 'Edit'}
-            </button>
-            <button type="button" onClick={() => setDevicesOpen('slots')} data-testid="open-controllers-header" title="Controllers: which device is kb1, js1, js2, gp1… in the game, the hardware for each and its template"
-              className="rounded border border-edge px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-wider text-slate-300 hover:border-hud/60 hover:text-hud2">
-              🕹 Controllers{slotMap.slots.length ? <span className="ml-1.5 font-mono text-[11px] text-slate-500">{slotMap.slots.length}</span> : null}
-            </button>
+        <div className="flex items-center gap-3 px-5 pb-1.5 pt-2.5">
+          <svg viewBox="0 0 40 40" className="h-7 w-7 text-hud drop-shadow-[0_0_8px_rgba(79,216,255,.6)]" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+            <path d="M20 2 36 11v18L20 38 4 29V11z" />
+            <path d="M20 9l9 5v12l-9 5-9-5V14z" opacity=".5" />
+            <path d="M14 20h12M20 14v12" />
+          </svg>
+          <h1 className="glow-text font-display text-xl font-bold uppercase leading-none tracking-[0.25em] text-hud2" data-testid="app-title">SC Keymap</h1>
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500 sm:inline">Star Citizen binding console · {versionLabel}</span>
+          <div className="ml-auto flex items-center gap-1.5">
             <button type="button" onClick={() => setSettingsOpen(true)} data-testid="open-settings" title="Settings" aria-label="Settings"
-              className="rounded border border-edge px-2.5 py-1.5 font-display text-sm text-slate-300 hover:border-hud/60 hover:text-hud2">⚙</button>
-            <button type="button" onClick={() => setHelp(true)} className="rounded border border-edge px-2.5 py-1.5 font-display text-sm font-bold text-slate-300 hover:border-hud/60 hover:text-hud2" title="Where are my keybind files?">?</button>
+              className="flex h-8 w-8 items-center justify-center rounded border border-edge text-slate-300 hover:border-hud/60 hover:text-hud2"><Ico name="settings" className="h-4 w-4" /></button>
+            <button type="button" onClick={() => setHelp(true)} data-testid="open-help" title="Help: where are my keybind files?" aria-label="Help"
+              className="flex h-8 w-8 items-center justify-center rounded border border-edge text-slate-300 hover:border-hud/60 hover:text-hud2"><Ico name="help" className="h-4 w-4" /></button>
             <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" multiple hidden
               onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
           </div>
         </div>
-        {/* ---------------- search (global) + the current view's own filters ---------------- */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-edge/60 px-5 py-2" data-testid="filter-bar" data-view={view}>
-          <div className="relative flex min-w-[min(100%,380px)] flex-1 items-center gap-1.5 rounded-md border border-edge2 bg-black/40 pl-3 pr-1 focus-within:border-hud focus-within:shadow-[0_0_0_3px_rgba(79,216,255,.15)] lg:max-w-xl">
-            <span className="pointer-events-none text-hud/70">⌕</span>
-            {chip && (
-              <span data-testid="press-chip" title={`Exact input${chip.inputs.length > 1 ? 's' : ''}: ${hitSpecs(chip).join(' or ')}${chip.device ? `\n${chip.device}` : ''}${chip.note ? `\n⚠ ${chip.note}` : ''}`}
-                className="flex shrink-0 items-center gap-1 rounded border border-mod/60 bg-mod/15 px-1.5 py-0.5 font-mono text-[11px] text-mod">
-                🎯 {hitSpecs(chip)[0]}{chip.inputs.length > 1 ? ` +${chip.inputs.length - 1}` : ''}
-                {chip.device && <span className="max-w-[9rem] truncate font-sans text-[10px] text-mod/70">· {chip.device}</span>}
-                <button type="button" aria-label="Remove input filter" onClick={() => setChip(null)} className="ml-0.5 text-mod/80 hover:text-white">✕</button>
-              </span>
-            )}
-            <input ref={searchRef} value={query} onChange={(e) => { setQuery(e.target.value); if (view === 'devices' && e.target.value) setView('list'); }}
-              onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setChip(null); } else if (e.key === 'Backspace' && !query && chip) setChip(null); }}
-              placeholder={chip ? 'refine: type to search within these…' : 'Search actions, categories or inputs…  (quantum, lalt+n, js1_button5)'}
-              className="min-w-[7rem] flex-1 bg-transparent py-1.5 text-sm text-slate-100 outline-none placeholder:text-slate-500" />
-            {query || chip ? (
-              <button type="button" onClick={() => { setQuery(''); setChip(null); }} className="rounded px-1.5 text-xs text-slate-400 hover:text-hud2">clear</button>
-            ) : (
-              <kbd className="keycap !min-w-0 opacity-60">/</kbd>
-            )}
-            <button type="button" onClick={() => setPressMode((v) => !v)} aria-pressed={pressMode} data-testid="press-search" aria-label="Find by pressing"
-              title="Find by pressing: press a controller button, hat or axis (or a key / mouse button) to list every action bound to that exact input"
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded border text-sm transition ${pressMode ? 'animate-pulse border-mod bg-mod/25 text-mod' : 'border-transparent text-slate-400 hover:border-mod/50 hover:text-mod'}`}>
-              🎯
+        <nav className="flex gap-1 px-4" aria-label="Views" data-testid="view-tabs">
+          {VIEWS.map((v) => (
+            <button key={v} type="button" onClick={() => setView(v)} aria-current={view === v ? 'page' : undefined} data-view-tab={v}
+              className={`-mb-px flex items-center gap-2 border-b-2 px-3 py-2 font-display text-sm font-semibold uppercase tracking-wider transition ${view === v ? 'border-hud text-hud2 [text-shadow:0_0_12px_rgba(79,216,255,.45)]' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Ico name={VIEW_META[v].icon} className="h-4 w-4" />{VIEW_META[v].label}
+              {v === 'conflicts' && stats.conflicts ? <span className="rounded bg-alert/20 px-1 font-mono text-[11px] text-alert">{stats.conflicts}</span> : null}
             </button>
-          </div>
-          {vf.input && (
-            <div className="flex items-center gap-1" role="group" aria-label="Input types" data-filter="input">
-              {ALL_DEVICES.map((d) => (
-                <button key={d} type="button" onClick={() => toggleDevice(d)} onDoubleClick={() => soloDevice(d)} aria-pressed={devices.has(d)}
-                  title={`${DEVICE_META[d].label}: click to toggle · double-click to show only this one`}
-                  className={`flex items-center gap-1.5 rounded border px-2 py-1 text-xs transition ${devices.has(d) ? 'border-hud/60 bg-hud/10 text-hud2' : 'border-edge text-slate-500 hover:text-slate-300'}`}>
-                  <span>{DEVICE_META[d].icon}</span><span className="hidden xl:inline">{DEVICE_META[d].label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-1">
-            {vf.unbound && <Toggle on={showUnbound} set={setShowUnbound} label="Show unbound" testid="filter-unbound" />}
-            {vf.custom && <Toggle on={customOnly} set={setCustomOnly} label="Customized only" tone="mod" disabled={!profile} testid="filter-custom" />}
-            {vf.conflictOnly && <Toggle on={conflictOnly} set={setConflictOnly} label="Conflicts only" tone="alert" testid="filter-conflicts" />}
-            {vf.defaultOverlaps && <span title="Also list overlaps between two game-default bindings (not only ones involving your changes)"><Toggle on={includeDefaultOverlaps} set={setIncludeDefaultOverlaps} label="Default overlaps" testid="filter-default-overlaps" /></span>}
-            {vf.categories && (selGroup || selMap) && (
-              <button type="button" onClick={() => { setSelGroup(null); setSelMap(null); }} className="flex items-center gap-1 rounded border border-hud/50 bg-hud/10 px-2 py-1 text-xs text-hud2" title="Category filter (sidebar): click to clear">
-                ▤ {selMap ? counts.find((c) => c.map === selMap)?.label : GROUPS.find((g) => g.id === selGroup)?.label} ✕
-              </button>
-            )}
-            {view === 'devices' && <span className="text-[11px] text-slate-500">Devices shows every binding of the selected game slot; pick the slot, its template and control groups below.</span>}
-          </div>
-          {view === 'list' && (
-            <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-slate-500" data-testid="list-stats">
-              <span className="text-hud2">{stats.actions}</span> actions · <span className="text-hud2">{stats.bound}</span> bound · <span className="text-mod">{stats.custom}</span> customized
-            </span>
-          )}
-        </div>
-        {editMode && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-mod/40 bg-mod/[0.06] px-5 py-2 text-xs" data-testid="edit-bar">
-            <span className="font-display text-sm font-bold uppercase tracking-[0.2em] text-mod">✎ Edit mode</span>
-            <span className="text-slate-400">
-              Click a binding to rebind it, <b className="text-slate-200">+</b> to add one, hover ✕ to unbind, or click an action name for the full editor.
-              Saved to <b className="text-mod">{profile ? profile.name : 'a new profile (created on first edit)'}</b>.
-            </span>
-            <span className="ml-auto flex flex-wrap items-center gap-1.5">
-              <button type="button" onClick={() => undoLast()} disabled={!undoCount} title="Undo (Ctrl+Z)" className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60 disabled:opacity-40">↶ Undo{undoCount ? ` (${undoCount})` : ''}</button>
-              <button type="button" onClick={() => setDevicesOpen('slots')} className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60">🕹 Controllers</button>
-              <button type="button" onClick={() => setDevicesOpen('settings')} data-testid="open-curves" className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60">📈 Axis settings &amp; curves</button>
-              <button type="button" onClick={() => createLayout(false)} className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60">New from defaults</button>
-              {profile && <button type="button" onClick={() => createLayout(true)} className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60">Duplicate</button>}
-              {profile?.original && <button type="button" onClick={revertImported} className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-mod hover:text-mod">Revert to imported</button>}
-              <button type="button" onClick={resetAll} disabled={!profile?.rebindCount} className="rounded border border-edge px-2 py-1 text-slate-300 hover:border-alert hover:text-alert disabled:opacity-40">Reset all</button>
-            </span>
-          </div>
-        )}
-        {pressMode && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-mod/50 bg-mod/[0.08] px-5 py-2 text-xs" data-testid="press-bar">
-            <span className="font-display text-sm font-bold uppercase tracking-[0.2em] text-mod">🎯 Find by pressing</span>
-            <span className="text-slate-300">
-              Press a <b>controller button</b>, push a <b>hat</b>, move an <b>axis</b>, or press a <b>key</b>: the list shows every action bound to that exact input
-              (device number included, using your <button type="button" onClick={() => setDevicesOpen('slots')} className="text-hud underline-offset-2 hover:underline">controller numbering</button>). <b>Esc</b> cancels.
-              {!pads.length && <span className="text-mod"> No controller visible yet: the first press wakes it up and already counts.</span>}
-            </span>
-            <span data-testid="press-mouse-pad" role="button" tabIndex={-1}
-              onMouseDown={(e) => { e.preventDefault(); const n = scMouseButton(e.button); if (n) onPressHit({ slot: 'mo', instance: 1, inputs: [comboFrom([], n)] }); }}
-              onWheel={(e) => { const n = scWheel(e.deltaY); if (n) onPressHit({ slot: 'mo', instance: 1, inputs: [n] }); }}
-              onContextMenu={(e) => e.preventDefault()}
-              className="cursor-crosshair rounded border border-dashed border-mod/60 px-3 py-1 font-mono text-[11px] text-mod hover:bg-mod/10">🖱 click / scroll here for a mouse input</span>
-            <button type="button" onClick={stopPress} className="ml-auto rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60">Cancel</button>
-            <div className="w-full"><ChromiumBanner detected={pads.length} compact /></div>
-          </div>
-        )}
+          ))}
+        </nav>
       </header>
 
       {/* ---------------- body ---------------- */}
       <div className="relative z-10 flex min-h-0 flex-1">
-        {vf.categories && (
         <aside className="hidden w-72 shrink-0 overflow-y-auto border-r border-edge bg-panel/60 p-3 scrollbar-thin md:block" data-testid="sidebar">
-          <Sidebar counts={counts} total={counts.reduce((n, c) => n + c.count, 0)} selGroup={selGroup} selMap={selMap} onSelect={(g, m) => { setSelGroup(g); setSelMap(m); }} />
-          {profile && (
-            <div className="mt-4 rounded border border-edge/70 bg-black/20 p-3 text-xs text-slate-400">
-              <div className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-mod">Active profile</div>
-              <div className="mt-1 truncate text-slate-200" title={profile.fileName}>{profile.name}</div>
-              <div className="font-mono text-[10px] text-slate-500">{profile.fileName} · {new Date(profile.importedAt).toLocaleString()}</div>
-              {slotMap.slots.length > 0 && (
-                <ul className="mt-2 space-y-0.5" data-testid="sidebar-slots">
-                  {slotMap.slots.map((gs) => (
-                    <li key={slotId(gs)} className="flex gap-2 font-mono text-[10px]"><span className="w-8 text-hud/70">{slotId(gs).toUpperCase()}</span><span className="truncate">{slotDeviceName(gs) ?? (gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : '—')}</span></li>
-                  ))}
-                </ul>
-              )}
-              <button type="button" onClick={() => setDevicesOpen('slots')} className="mt-2 text-[10px] text-hud hover:underline">Edit game slots…</button>
+          {wide && profilePanel}
+          {vf.categories && (
+            <div className="mt-4" data-testid="categories">
+              <Sidebar counts={counts} total={counts.reduce((n, c) => n + c.count, 0)} selGroup={selGroup} selMap={selMap} onSelect={(g, m) => { setSelGroup(g); setSelMap(m); }} />
             </div>
           )}
           <p className="mt-4 px-1 text-[10px] leading-relaxed text-slate-600">
             Defaults: {meta.source} from build {meta.version} ({meta.buildDate}). Unofficial fan tool; not affiliated with Cloud Imperium Games.
           </p>
         </aside>
-        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {!wide && <div className="border-b border-edge/60 p-3 md:hidden">{profilePanel}</div>}
+          {/* ---------------- the view's own toolbar: search (contextual), what to show, filters, actions ---------------- */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-edge/60 bg-panel/40 px-4 py-2" data-testid="filter-bar" data-view={view}>
+            <div className="relative flex min-w-[min(100%,340px)] flex-1 items-center gap-1.5 rounded-md border border-edge2 bg-black/40 pl-2.5 pr-1 focus-within:border-hud focus-within:shadow-[0_0_0_3px_rgba(79,216,255,.15)] lg:max-w-lg">
+              <Ico name="search" className="pointer-events-none h-4 w-4 text-hud/70" />
+              {chip && (
+                <span data-testid="press-chip" title={`Exact input${chip.inputs.length > 1 ? 's' : ''}: ${hitSpecs(chip).join(' or ')}${chip.device ? `\n${chip.device}` : ''}${chip.note ? `\n${chip.note}` : ''}`}
+                  className="flex shrink-0 items-center gap-1 rounded border border-mod/60 bg-mod/15 px-1.5 py-0.5 font-mono text-[11px] text-mod">
+                  <Ico name="target" className="h-3 w-3" /> {hitSpecs(chip)[0]}{chip.inputs.length > 1 ? ` +${chip.inputs.length - 1}` : ''}
+                  {chip.device && <span className="max-w-[9rem] truncate font-sans text-[10px] text-mod/70">· {chip.device}</span>}
+                  <button type="button" aria-label="Remove input filter" onClick={() => setChip(null)} className="ml-0.5 text-mod/80 hover:text-white"><Ico name="close" className="h-3 w-3" /></button>
+                </span>
+              )}
+              <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} data-testid="search"
+                onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setChip(null); } else if (e.key === 'Backspace' && !query && chip) setChip(null); }}
+                placeholder={chip ? 'refine: type to search within these…' : SEARCH_HINT[view]}
+                className="min-w-[7rem] flex-1 bg-transparent py-1.5 text-sm text-slate-100 outline-none placeholder:text-slate-500" />
+              {query || chip ? (
+                <button type="button" onClick={() => { setQuery(''); setChip(null); }} className="rounded px-1.5 text-xs text-slate-400 hover:text-hud2">clear</button>
+              ) : (
+                <kbd className="keycap !min-w-0 opacity-60">/</kbd>
+              )}
+              <button type="button" onClick={() => setPressMode((v) => !v)} aria-pressed={pressMode} data-testid="press-search" aria-label="Find by pressing"
+                title={`Find by pressing: press a controller button, hat or axis (or a key / mouse button) to ${view === 'devices' ? 'jump to that control on its device' : view === 'conflicts' ? 'list the conflicts on that exact input' : view === 'keyboard' ? 'show only what is bound to that exact input' : 'list every action bound to that exact input'}`}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded border transition ${pressMode ? 'animate-pulse border-mod bg-mod/25 text-mod' : 'border-transparent text-slate-400 hover:border-mod/50 hover:text-mod'}`}>
+                <Ico name="target" className="h-4 w-4" />
+              </button>
+            </div>
+            {(vf.input || (view === 'keyboard' && (kmSlots.kb.length > 1 || kmSlots.mo.length > 1))) && (
+              <FilterGroup label="View" testid="section-view">
+                {vf.input && (
+                  <div className="flex items-center gap-0.5 rounded-md border border-edge p-0.5" role="group" aria-label="Input types" data-filter="input">
+                    {ALL_DEVICES.map((d) => (
+                      <button key={d} type="button" onClick={() => toggleDevice(d)} onDoubleClick={() => soloDevice(d)} aria-pressed={devices.has(d)} aria-label={DEVICE_META[d].label} data-device-filter={d}
+                        title={`${DEVICE_META[d].label}: click to show or hide · double-click to show only this one`}
+                        className={`flex h-7 w-8 items-center justify-center rounded transition ${devices.has(d) ? 'bg-hud/15 text-hud2 shadow-[inset_0_0_0_1px_rgba(79,216,255,.45)]' : 'text-slate-600 hover:text-slate-300'}`}>
+                        <Ico name={DEVICE_META[d].icon} className="h-[18px] w-[18px]" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {view === 'keyboard' && kmSlots.kb.length > 1 && <SlotPick label="Keyboard" slot="kb" list={kmSlots.kb} value={kbInst} set={setKbInst} />}
+                {view === 'keyboard' && kmSlots.mo.length > 1 && <SlotPick label="Mouse" slot="mo" list={kmSlots.mo} value={moInst} set={setMoInst} />}
+              </FilterGroup>
+            )}
+            {(vf.unbound || vf.custom || vf.conflictOnly || vf.defaultOverlaps || (vf.categories && (selGroup || selMap))) && (
+              <FilterGroup label="Filters" testid="section-filters">
+                {vf.unbound && <Toggle on={showUnbound} set={setShowUnbound} label="Show unbound" testid="filter-unbound" />}
+                {vf.custom && <Toggle on={customOnly} set={setCustomOnly} label="Customized only" tone="mod" disabled={!profile} testid="filter-custom" />}
+                {vf.conflictOnly && <Toggle on={conflictOnly} set={setConflictOnly} label="Conflicts only" tone="alert" testid="filter-conflicts" />}
+                {vf.defaultOverlaps && <span title="Also list overlaps between two game-default bindings (not only ones involving your changes)"><Toggle on={includeDefaultOverlaps} set={setIncludeDefaultOverlaps} label="Default overlaps" testid="filter-default-overlaps" /></span>}
+                {vf.categories && (selGroup || selMap) && (
+                  <button type="button" onClick={() => { setSelGroup(null); setSelMap(null); }} className="flex items-center gap-1 rounded border border-hud/50 bg-hud/10 px-2 py-1 text-xs text-hud2" title="Category (sidebar): click to clear">
+                    <Ico name="layers" className="h-3.5 w-3.5" /> {selMap ? counts.find((c) => c.map === selMap)?.label : GROUPS.find((g) => g.id === selGroup)?.label} <Ico name="close" className="h-3 w-3" />
+                  </button>
+                )}
+              </FilterGroup>
+            )}
+            <div className="ml-auto flex items-center gap-3">
+              {view === 'list' && (
+                <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500" data-testid="list-stats">
+                  <span className="text-hud2">{stats.actions}</span> actions · <span className="text-hud2">{stats.bound}</span> bound · <span className="text-mod">{stats.custom}</span> customized
+                </span>
+              )}
+              {vf.edit && (
+                <button type="button" onClick={() => setEditMode((v) => !v)} aria-pressed={editMode} data-testid="edit-toggle" title="Edit these bindings: click any binding to rebind it"
+                  className={`flex items-center gap-1.5 rounded border px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-wider transition ${editMode ? 'border-mod bg-mod/20 text-mod shadow-[0_0_18px_-6px_var(--color-mod)]' : 'border-mod/50 text-mod/90 hover:bg-mod/10'}`}>
+                  <Ico name="edit" className="h-4 w-4" /> {editMode ? 'Done' : 'Edit'}
+                </button>
+              )}
+            </div>
+          </div>
+          {editMode && vf.edit && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-mod/40 bg-mod/[0.06] px-4 py-2 text-xs" data-testid="edit-bar">
+              <span className="flex items-center gap-1.5 font-display text-sm font-bold uppercase tracking-[0.2em] text-mod"><Ico name="edit" className="h-4 w-4" /> Editing</span>
+              <span className="text-slate-400">
+                Click a binding to rebind it, <b className="text-slate-200">+</b> to add one, hover <Ico name="close" className="h-3 w-3" /> to unbind, or click an action name for the full editor.
+                Saved to <b className="text-mod">{profile ? profile.name : 'a new profile (created on first edit)'}</b>.
+              </span>
+              <button type="button" onClick={() => undoLast()} disabled={!undoCount} title="Undo (Ctrl+Z)" data-testid="undo"
+                className="ml-auto flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60 disabled:opacity-40"><Ico name="undo" /> Undo{undoCount ? ` (${undoCount})` : ''}</button>
+            </div>
+          )}
+          {pressMode && (
+            <div className="flex flex-wrap items-center gap-3 border-b border-mod/50 bg-mod/[0.08] px-4 py-2 text-xs" data-testid="press-bar">
+              <span className="flex items-center gap-1.5 font-display text-sm font-bold uppercase tracking-[0.2em] text-mod"><Ico name="target" className="h-4 w-4" /> Find by pressing</span>
+              <span className="text-slate-300">
+                Press a <b>controller button</b>, push a <b>hat</b>, move an <b>axis</b>, or press a <b>key</b>: {PRESS_HINT[view]}
+                {' '}(device number included, using your <button type="button" onClick={() => setDevicesOpen('slots')} className="text-hud underline-offset-2 hover:underline">game slots</button>). <b>Esc</b> cancels.
+                {!pads.length && <span className="text-mod"> No controller visible yet: the first press wakes it up and already counts.</span>}
+              </span>
+              <span data-testid="press-mouse-pad" role="button" tabIndex={-1}
+                onMouseDown={(e) => { e.preventDefault(); const n = scMouseButton(e.button); if (n) onPressHit({ slot: 'mo', instance: moInst, inputs: [comboFrom([], n)] }); }}
+                onWheel={(e) => { const n = scWheel(e.deltaY); if (n) onPressHit({ slot: 'mo', instance: moInst, inputs: [n] }); }}
+                onContextMenu={(e) => e.preventDefault()}
+                className="flex cursor-crosshair items-center gap-1.5 rounded border border-dashed border-mod/60 px-3 py-1 font-mono text-[11px] text-mod hover:bg-mod/10"><Ico name="mouse" className="h-3.5 w-3.5" /> click / scroll here for a mouse input</span>
+              <button type="button" onClick={stopPress} className="ml-auto rounded border border-edge px-2 py-1 text-slate-300 hover:border-hud/60">Cancel</button>
+              <div className="w-full"><ChromiumBanner detected={pads.length} compact /></div>
+            </div>
+          )}
         <main className="min-w-0 flex-1 overflow-y-auto p-4 scrollbar-thin" id="main">
           {!profile && !filtered.hasQuery && view === 'list' && (
             <div className="hud-panel hud-corners mb-4 flex flex-wrap items-center gap-4 rounded-lg px-4 py-3">
@@ -687,7 +718,7 @@ export default function App() {
                 <span className="font-display font-semibold uppercase tracking-wider text-hud2">Showing game defaults.</span>{' '}
                 Drop your <code className="text-hud/90">actionmaps.xml</code> or an exported <code className="text-hud/90">layout_*_exported.xml</code> anywhere on this page to overlay your own bindings.
               </div>
-              <button type="button" onClick={loadSample} className="rounded border border-edge px-2.5 py-1 font-display text-xs font-semibold uppercase tracking-wider text-slate-300 hover:border-hud/60 hover:text-hud2">Try a sample</button>
+              <button type="button" onClick={loadSample} data-testid="try-sample" className="rounded border border-edge px-2.5 py-1 font-display text-xs font-semibold uppercase tracking-wider text-slate-300 hover:border-hud/60 hover:text-hud2">Try a sample</button>
               <button type="button" onClick={() => setHelp(true)} className="text-xs text-hud underline-offset-2 hover:underline">Where do I find these files?</button>
             </div>
           )}
@@ -701,13 +732,15 @@ export default function App() {
             <ActionList rows={visible} grouped={!filtered.hasQuery} devices={devices} conflictsOf={conflictsOf} onBindingClick={onBindingClick}
               editMode={editMode} onCapture={onCaptureCell} onRemove={onRemoveCell} onEdit={onEditRow} flash={flash?.keys} />
           )}
-          {view === 'keyboard' && <KeyboardView rows={visible} conflictRows={conflicts.byRow} onPick={pickKey}
+          {view === 'keyboard' && <KeyboardView rows={visible} conflictRows={conflicts.byRow} onPick={pickKey} kb={kbInst} mo={moInst}
             flash={flash && (flash.hit.slot === 'kb' || flash.hit.slot === 'mo') ? { combo: flash.hit.inputs[0], at: flash.at } : null} />}
           {view === 'devices' && <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads}
-            slots={slotOptions} slotMap={slotMap} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => setDevicesOpen('slots')} highlight={highlightOn} scroll={highlightOn && scrollOn}
+            slots={deviceSlots} slotMap={slotMap} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => setDevicesOpen('slots')} highlight={highlightOn} scroll={highlightOn && scrollOn}
+            query={dq} chip={chip} onPickKey={pickInput}
             onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })} />}
           {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} hasProfile={!!profile} flash={flash?.keys} />}
         </main>
+        </div>
       </div>
 
       {dragging && (
@@ -724,7 +757,7 @@ export default function App() {
           <span className="ml-2 text-slate-300">{hitLabel(flash.hit)}</span>
           {flash.hit.device && <span className="ml-2 text-slate-500">{flash.hit.device}</span>}
           <span className="ml-2 text-slate-200">→ {flashCount ? (view === 'conflicts' ? `${flashCount} conflict group${flashCount === 1 ? '' : 's'}` : `${flashCount} action${flashCount === 1 ? '' : 's'}`) : view === 'conflicts' ? 'no conflict on this input' : 'not bound in this view'}</span>
-          {flash.hit.note && <div className="mt-1 text-[10px] text-alert">⚠ {flash.hit.note}</div>}
+          {flash.hit.note && <div className="mt-1 flex items-center gap-1 text-[10px] text-alert"><Ico name="alert" className="h-3 w-3" /> {flash.hit.note}</div>}
         </div>
       )}
       {toast && (
@@ -741,7 +774,7 @@ export default function App() {
       )}
       {capture && (
         <CaptureDialog key={`${capture.row.id}:${capture.group}:${capture.replace?.input ?? '+'}`} {...capture} rows={rows} pads={pads} onAssign={assignPad}
-          describe={describePads} profileDevices={slotDevices}
+          describe={describePads} profileDevices={slotDevices} kmSlots={kmSlots} kmDefault={{ kb: kbInst, mo: moInst }}
           onCommit={commitCapture} onClear={capture.replace ? clearCapture : undefined} onCancel={() => setCapture(null)} />
       )}
       {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} devices={exportDevices} slots={exportSlots} onClose={() => setExportOpen(false)} />}
@@ -749,7 +782,34 @@ export default function App() {
         <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(false)}
           settings={settingsOf(profile)} tree={DEFAULTS.optionTrees?.joystick} onSettings={applySettings} initialTab={devicesOpen === 'settings' ? 'settings' : 'slots'} />
       )}
+      {deleting && profile && (
+        <DeleteProfileDialog profile={profile} slotCount={slotMap.slots.length} onCancel={() => setDeleting(false)} onExport={() => { setDeleting(false); setExportOpen(true); }}
+          onConfirm={() => { const name = profile.name; removeProfile(profile.id); setDeleting(false); setToast({ kind: 'ok', text: `Deleted “${name}”` }); }} />
+      )}
       {settingsOpen && <SettingsModal settings={appSettings} onChange={setAppSettings} onClose={() => setSettingsOpen(false)} meta={meta} versionLabel={versionLabel} />}
+    </div>
+  );
+}
+
+/** a labelled section of the view toolbar ("View", "Filters") */
+function FilterGroup({ label, testid, children }: { label: string; testid: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2" data-testid={testid} role="group" aria-label={label}>
+      <span className="font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">{label}</span>
+      <div className="flex flex-wrap items-center gap-1">{children}</div>
+    </div>
+  );
+}
+
+/** keyboard / mouse slot picker (kb1 · kb2…) for the Keyboard view */
+function SlotPick({ label, slot, list, value, set }: { label: string; slot: 'kb' | 'mo'; list: number[]; value: number; set: (n: number) => void }) {
+  return (
+    <div className="flex items-center gap-0.5 rounded-md border border-edge p-0.5" role="group" aria-label={`${label} slot`} data-testid={`km-slot-${slot}`}>
+      <Ico name={slot === 'kb' ? 'keyboard' : 'mouse'} className="mx-1 h-4 w-4 text-slate-500" />
+      {list.map((n) => (
+        <button key={n} type="button" onClick={() => set(n)} aria-pressed={value === n} data-km-slot={`${slot}${n}`}
+          className={`rounded px-1.5 py-0.5 font-mono text-[11px] ${value === n ? 'bg-hud/15 text-hud2' : 'text-slate-500 hover:text-slate-200'}`}>{slot}{n}</button>
+      ))}
     </div>
   );
 }
@@ -766,12 +826,13 @@ function Toggle({ on, set, label, tone, disabled, testid }: { on: boolean; set: 
 }
 
 function HelpModal({ onClose }: { onClose: () => void }) {
+  useEscape(onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="hud-panel hud-corners max-w-2xl rounded-xl p-6 text-sm text-slate-300" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">Importing your keybinds</h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-hud2">✕</button>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-hud2" aria-label="Close"><Ico name="close" className="h-4 w-4" /></button>
         </div>
         <ol className="mt-4 list-decimal space-y-3 pl-5">
           <li>
@@ -786,11 +847,11 @@ function HelpModal({ onClose }: { onClose: () => void }) {
         </ol>
         <h3 className="mt-5 font-display text-sm font-bold uppercase tracking-[0.2em] text-mod">Editing &amp; exporting</h3>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-400">
-          <li><b className="text-slate-200">✎ Edit</b>: click any binding to rebind it, <b>+</b> to add one, ✕ to unbind, or an action name for the full editor (activation mode, taps, reset). Ctrl+Z undoes.</li>
-          <li>Keyboard, mouse, gamepads and joysticks/HOTAS are captured live. Controllers use the browser&apos;s Gamepad API; press a button first so the browser reveals them. <b className="text-slate-200">🕹 Controllers</b> lists the game slots (kb1, mo1, js1, js2…, gp1) with the hardware and template for each, and has a live input tester.</li>
-          <li><b className="text-slate-200">🎯 Find by pressing</b> (the icon inside the search box): press a controller button, hat or axis, or a key, and the list shows everything bound to that exact input. With <b>Highlight on press</b> on (⚙ Settings), pressing an input while you&apos;re not searching or editing briefly highlights its bindings, keys, conflict groups or device callouts.</li>
-          <li><b className="text-slate-200">📈 Axis settings &amp; curves</b> (🕹 Controllers → second tab): invert, exponent and custom response curves per control, and deadzone / saturation per axis, read from and written back to your file.</li>
-          <li><b className="text-slate-200">⇩ Export</b> writes <code>layout_&lt;name&gt;_exported.xml</code> for <code>…\user\client\0\Controls\Mappings</code> (load via Options → Keybindings → Control Profiles, or <code>pp_RebindKeys</code>) or a full <code>actionmaps.xml</code>. Only changes from the defaults are written.</li>
+          <li><b className="text-slate-200">Edit</b> (List view toolbar): click any binding to rebind it, <b>+</b> to add one, the cross to unbind, or an action name for the full editor (activation mode, taps, reset). Ctrl+Z undoes.</li>
+          <li>Keyboard, mouse, gamepads and joysticks/HOTAS are captured live. Controllers use the browser&apos;s Gamepad API; press a button first so the browser reveals them. <b className="text-slate-200">Game slots &amp; controllers</b> (in the profile panel) lists the game slots (kb1, mo1, js1, js2…, gp1) with the hardware and template for each, and has a live input tester.</li>
+          <li><b className="text-slate-200">Find by pressing</b> (the target icon inside the search box): press a controller button, hat or axis, or a key, and the current view narrows to that exact input (on Devices it jumps to that control). With <b>Highlight on press</b> on (Settings), pressing an input while you&apos;re not searching or editing briefly highlights its bindings, keys, conflict groups or device callouts.</li>
+          <li><b className="text-slate-200">Axis settings &amp; curves</b> (profile panel, or the Controllers modal&apos;s second tab): invert, exponent and custom response curves per control, and deadzone / saturation per axis, read from and written back to your file.</li>
+          <li><b className="text-slate-200">Export</b> (profile panel) writes <code>layout_&lt;name&gt;_exported.xml</code> for <code>…\user\client\0\Controls\Mappings</code> (load via Options → Keybindings → Control Profiles, or <code>pp_RebindKeys</code>) or a full <code>actionmaps.xml</code>. Only changes from the defaults are written.</li>
         </ul>
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-xs text-slate-400">
           <span><span className="text-hud2">quantum</span> fuzzy search names</span>

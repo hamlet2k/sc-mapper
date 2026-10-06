@@ -48,25 +48,24 @@ export const groupOfSlot = (s: Slot): Group => (s === 'js' ? 'js' : s === 'gp' ?
 export const GROUP_LABEL: Record<Group, string> = { km: 'Keyboard & Mouse', js: 'Joystick / HOTAS', gp: 'Gamepad' };
 export const groupOfDevice = (d: Device): Group => (d === 'joystick' ? 'js' : d === 'gamepad' ? 'gp' : 'km');
 
-/** Identity of an input within its rebind group (kb1_x and mo1_x are the same KeyboardMouse input) */
+/** Identity of an input within its rebind group (kb1_x and mo1_x are the same KeyboardMouse input; kb2 / mo2 are a second set) */
 export function bindKey(slot: Slot, instance: number, input: string): string {
-  const g = groupOfSlot(slot);
-  return `${g}${g === 'km' ? 1 : instance}:${normalizeCombo(input)}`;
+  return `${groupOfSlot(slot)}${instance || 1}:${normalizeCombo(input)}`;
 }
 
 /** Format a rebind input attribute value, e.g. kb1_lalt+n, js2_button3, gp1_ (cleared) */
 export function formatInput(slot: Slot, instance: number, input: string): string {
-  return `${slot}${slot === 'kb' || slot === 'mo' ? 1 : instance}_${input || ' '}`;
+  return `${slot}${instance || 1}_${input || ' '}`;
 }
 
 /** Exact search term for a binding: device prefix + instance + input ("js1_button5", "kb1_lalt+n", "mo1_mouse2") */
 export function searchSpec(slot: Slot, instance: number, input: string): string {
-  return `${slot}${slot === 'kb' || slot === 'mo' ? 1 : instance}_${normalizeCombo(input)}`;
+  return `${slot}${instance || 1}_${normalizeCombo(input)}`;
 }
 
 export function physOf(slot: Slot, instance: number, input: string): string {
   const n = normalizeCombo(input);
-  if (slot === 'kb' || slot === 'mo') return `km:${n}`;
+  if (slot === 'kb' || slot === 'mo') return (instance || 1) > 1 ? `km${instance}:${n}` : `km:${n}`;
   if (slot === 'js') return `js${instance}:${n}`;
   return `gp${instance}:${n}`;
 }

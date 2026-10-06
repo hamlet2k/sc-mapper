@@ -1,4 +1,6 @@
 import type { DefaultsMeta } from '../lib/types';
+import { Ico } from './icons';
+import { useEscape } from './useEscape';
 
 export interface AppSettings {
   /** pressing an input (while not searching / editing) briefly highlights its bindings: List, Keyboard, Conflicts and Devices */
@@ -21,17 +23,18 @@ export function saveAppSettings(s: AppSettings) {
   } catch { /* ignore */ }
 }
 
-/** ⚙ Settings: behaviour preferences that aren't filters (remembered in this browser) */
+/** Settings: behaviour preferences that aren't filters (remembered in this browser) */
 export function SettingsModal({ settings, onChange, onClose, meta, versionLabel }: {
   settings: AppSettings; onChange: (s: AppSettings) => void; onClose: () => void; meta: DefaultsMeta; versionLabel: string;
 }) {
   const set = (patch: Partial<AppSettings>) => onChange({ ...settings, ...patch });
+  useEscape(onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-void/85 p-4 backdrop-blur-sm" onClick={onClose} data-testid="settings-modal">
       <div className="hud-panel hud-corners my-10 w-full max-w-xl rounded-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 border-b border-edge px-5 py-3">
-          <h2 className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">⚙ Settings</h2>
-          <button type="button" onClick={onClose} className="ml-auto rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2" aria-label="Close">✕</button>
+          <h2 className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2 flex items-center gap-2"><Ico name="settings" className="h-5 w-5" /> Settings</h2>
+          <button type="button" onClick={onClose} className="ml-auto rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2" aria-label="Close"><Ico name="close" /></button>
         </div>
         <div className="space-y-5 p-5 text-sm">
           <section>
@@ -39,7 +42,7 @@ export function SettingsModal({ settings, onChange, onClose, meta, versionLabel 
             <p className="mt-0.5 text-[11px] text-slate-500">Applies to the List, Keyboard, Conflicts and Devices views. List, Keyboard and Conflicts pause it while you search, find by pressing or edit.</p>
             <div className="mt-2 space-y-2">
               <Switch on={settings.highlight} set={(v) => set({ highlight: v })} testid="setting-highlight" label="Highlight on press"
-                hint="Briefly lights up the bindings, keys, conflict groups or device callouts of the input you press." />
+                hint="Briefly lights up the bindings, keys, conflict groups or device callouts of the input you press. Grip photos on the Devices view switch either way." />
               <Switch on={settings.highlight && settings.scroll} set={(v) => set({ scroll: v })} disabled={!settings.highlight} testid="setting-scroll" label="Scroll to it"
                 hint="Also brings the first highlighted row, conflict group or device photo into view. Off: it lights up and the page stays put." />
             </div>

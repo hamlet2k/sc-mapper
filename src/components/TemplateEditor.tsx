@@ -7,6 +7,7 @@ import {
   calloutView, loadImageFile, matchFor, matchScore, shortInput, templateViews, uid, usedInputs, viewTemplate, type Callout, type CalloutKind, type DeviceIdentity, type DeviceTemplate, type Pt,
 } from '../lib/templates';
 import { CalloutBody, DeviceCanvas, useLiveInputs, type CalloutState, type Entry } from './DeviceCanvas';
+import { Ico } from './icons';
 
 interface Props {
   initial: DeviceTemplate;
@@ -141,12 +142,12 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files?.[0]; if (f) void setImage(f); }}>
       <div className="flex flex-wrap items-center gap-2 border-b border-edge bg-panel/90 px-4 py-2">
-        <span className="font-display text-sm font-bold uppercase tracking-[0.2em] text-mod">✎ Device template</span>
+        <span className="font-display text-sm font-bold uppercase tracking-[0.2em] text-mod"><Ico name="edit" /> Device template</span>
         <input value={t.name} onChange={(e) => { const next = { ...tRef.current, name: e.target.value }; tRef.current = next; setT(next); }} aria-label="Template name" className={`${field} w-56`} />
         <select value={t.slot} onChange={(e) => commit({ ...t, slot: e.target.value as 'js' | 'gp' })} aria-label="Device type" className={field}>
           <option value="js">Joystick / HOTAS</option><option value="gp">Gamepad</option>
         </select>
-        <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="tpl-upload" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">🖼 {t.image || t.views?.find((v) => v.id === activeView)?.image ? 'Replace image' : 'Upload image'}</button>
+        <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="tpl-upload" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60"><Ico name="image" /> {t.image || t.views?.find((v) => v.id === activeView)?.image ? 'Replace image' : 'Upload image'}</button>
         {t.image && !multi && <button type="button" onClick={() => commit({ ...t, image: undefined, aspect: BLANK_ASPECT, callouts: t.callouts.map(({ region: _r, inputRegions: _ir, ...c }) => c) })} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Blank canvas</button>}
         {!t.image && !multi && (
           <label className="flex items-center gap-1 text-[11px] text-slate-400">Canvas
@@ -158,9 +159,9 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
         <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" className="hidden" data-testid="tpl-upload-file"
           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void setImage(f); }} />
         <span className="ml-auto flex flex-wrap items-center gap-1.5">
-          <button type="button" onClick={undo} disabled={!histLen} title="Undo (Ctrl+Z)" data-testid="tpl-undo" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60 disabled:opacity-40">↶ Undo{histLen ? ` (${histLen})` : ''}</button>
+          <button type="button" onClick={undo} disabled={!histLen} title="Undo (Ctrl+Z)" data-testid="tpl-undo" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60 disabled:opacity-40"><Ico name="undo" /> Undo{histLen ? ` (${histLen})` : ''}</button>
           <button type="button" onClick={() => { const a = document.createElement('a'); a.href = `data:application/json;charset=utf-8,${encodeURIComponent(exportTemplates([t]))}`; a.download = `${t.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'device'}.sc-template.json`; document.body.appendChild(a); a.click(); a.remove(); }}
-            className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">⇩ Export JSON</button>
+            className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60"><Ico name="export" /> Export JSON</button>
           {onDelete && <button type="button" onClick={() => { if (confirm(`Delete the template “${t.name}”?`)) onDelete(); }} className="rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:border-alert hover:text-alert">Delete template</button>}
           <button type="button" onClick={onCancel} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Cancel</button>
           <button type="button" disabled={!canSave} onClick={() => onSave({ ...t, name: t.name.trim() })} data-testid="tpl-save" className="rounded border border-ok/60 bg-ok/10 px-3 py-1 text-xs font-semibold text-ok hover:bg-ok/20 disabled:opacity-40">Save</button>
@@ -173,9 +174,9 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
         </select>
         <button type="button" onClick={() => { setPressPlace((v) => !v); setPressTarget(null); }} aria-pressed={pressPlace} data-testid="tpl-press"
           className={`rounded border px-2 py-1 ${pressPlace ? 'border-mod bg-mod/15 text-mod' : 'border-edge text-slate-300 hover:border-hud/60'}`}>
-          {pressPlace ? `🎯 Listening on ${slotInstance.slot.toUpperCase()}${slotInstance.instance}: press controls to add them (Esc stops)` : '🎯 Press to place'}
+          <Ico name="target" /> {pressPlace ? `Listening on ${slotInstance.slot.toUpperCase()}${slotInstance.instance}: press controls to add them (Esc stops)` : 'Press to place'}
         </button>
-        <span className="text-slate-500">Drag a ◯ anchor onto the control and the label where it should go · Delete removes · Ctrl+Z undoes</span>
+        <span className="text-slate-500">Drag an anchor dot onto the control and the label where it should go · Delete removes · Ctrl+Z undoes</span>
         {!device.pad && <span className="text-mod">Connect the device for press-to-place and live highlight.</span>}
       </div>
       <div className="flex min-h-0 flex-1">
@@ -242,7 +243,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
               <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-1 rounded bg-white/[0.03] p-1.5">
                 <input value={m.vendor ?? ''} placeholder="vendor id" aria-label={`Rule ${i + 1} vendor id`} onChange={(e) => commit({ ...t, match: t.match.map((x, j) => (j === i ? { ...x, vendor: e.target.value.trim() || undefined } : x)) })} className={`${field} font-mono`} />
                 <input value={m.product ?? ''} placeholder="product id" aria-label={`Rule ${i + 1} product id`} onChange={(e) => commit({ ...t, match: t.match.map((x, j) => (j === i ? { ...x, product: e.target.value.trim() || undefined } : x)) })} className={`${field} font-mono`} />
-                <button type="button" onClick={() => commit({ ...t, match: t.match.filter((_, j) => j !== i) })} aria-label={`Remove rule ${i + 1}`} className="px-1 text-slate-500 hover:text-alert">✕</button>
+                <button type="button" onClick={() => commit({ ...t, match: t.match.filter((_, j) => j !== i) })} aria-label={`Remove rule ${i + 1}`} className="px-1 text-slate-500 hover:text-alert"><Ico name="close" /></button>
                 <input value={m.name ?? ''} placeholder="name contains" aria-label={`Rule ${i + 1} name`} onChange={(e) => commit({ ...t, match: t.match.map((x, j) => (j === i ? { ...x, name: e.target.value || undefined } : x)) })} className={`${field} col-span-2`} />
                 <span />
                 <input value={m.buttons ?? ''} placeholder="button count (optional)" inputMode="numeric" aria-label={`Rule ${i + 1} buttons`} onChange={(e) => commit({ ...t, match: t.match.map((x, j) => (j === i ? { ...x, buttons: Number(e.target.value) || undefined } : x)) })} className={`${field} col-span-2`} />
@@ -250,11 +251,11 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
             ))}
             {(device.ident.vendor || device.ident.name) && (
               <div className="flex flex-wrap gap-1">
-                <button type="button" onClick={() => commit({ ...t, slot: slotInstance.slot, match: [...t.match, matchFor(device.ident, false)] })} data-testid="tpl-link-device" className="rounded border border-edge px-1.5 py-0.5 text-[11px] text-slate-300 hover:border-hud/60">＋ Link to {devName}</button>
-                {device.ident.buttons && <button type="button" onClick={() => commit({ ...t, slot: slotInstance.slot, match: [...t.match, matchFor(device.ident, true)] })} title="Use this when several devices share one USB id (e.g. two MOZA bases with 128 and 133 buttons)" className="rounded border border-edge px-1.5 py-0.5 text-[11px] text-slate-300 hover:border-hud/60">＋ only with {device.ident.buttons} buttons</button>}
+                <button type="button" onClick={() => commit({ ...t, slot: slotInstance.slot, match: [...t.match, matchFor(device.ident, false)] })} data-testid="tpl-link-device" className="rounded border border-edge px-1.5 py-0.5 text-[11px] text-slate-300 hover:border-hud/60"><Ico name="plus" /> Link to {devName}</button>
+                {device.ident.buttons && <button type="button" onClick={() => commit({ ...t, slot: slotInstance.slot, match: [...t.match, matchFor(device.ident, true)] })} title="Use this when several devices share one USB id (e.g. two MOZA bases with 128 and 133 buttons)" className="rounded border border-edge px-1.5 py-0.5 text-[11px] text-slate-300 hover:border-hud/60"><Ico name="plus" /> only with {device.ident.buttons} buttons</button>}
               </div>
             )}
-            <p className={`text-[10px] ${linked ? 'text-ok' : 'text-slate-500'}`}>{linked ? `✓ matches ${devName ?? 'the selected device'}` : `does not match ${devName ?? 'the selected device'}${device.ident.vendor ? ` (USB ${device.ident.vendor}:${device.ident.productId}${device.ident.buttons ? `, ${device.ident.buttons} buttons` : ''})` : ''}`}</p>
+            <p className={`text-[10px] ${linked ? 'text-ok' : 'text-slate-500'}`}>{linked ? `matches ${devName ?? 'the selected device'}` : `does not match ${devName ?? 'the selected device'}${device.ident.vendor ? ` (USB ${device.ident.vendor}:${device.ident.productId}${device.ident.buttons ? `, ${device.ident.buttons} buttons` : ''})` : ''}`}</p>
           </section>
           <section className="rounded border border-edge/60 bg-black/20 p-2.5">
             <h4 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Callouts ({t.callouts.length})</h4>
@@ -284,7 +285,7 @@ function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange
   const pressBtn = (i: number) => canPress && (
     <button type="button" onClick={() => setPressTarget(pressTarget?.id === c.id && pressTarget.idx === i ? null : { id: c.id, idx: i })} title="Press the control on the device to set this input"
       className={`rounded border px-1 text-[10px] ${pressTarget?.id === c.id && pressTarget.idx === i ? 'border-mod bg-mod/20 text-mod' : 'border-edge text-slate-400 hover:border-hud/60'}`}>
-      {pressTarget?.id === c.id && pressTarget.idx === i ? 'press…' : '⦿'}
+      {pressTarget?.id === c.id && pressTarget.idx === i ? 'press…' : <Ico name="press" />}
     </button>
   );
   if (c.kind === 'hat') {
@@ -330,10 +331,10 @@ function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange
               {[...new Set([a, ...axes])].map((x) => <option key={x} value={x}>{x || '— not set —'}</option>)}
             </select>
             {pressBtn(i)}
-            {i > 0 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 1))} className="text-slate-500 hover:text-alert" aria-label="Remove second axis">✕</button>}
+            {i > 0 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 1))} className="text-slate-500 hover:text-alert" aria-label="Remove second axis"><Ico name="close" /></button>}
           </label>
         ))}
-        {c.inputs.length < 2 && <button type="button" onClick={() => onChange([...c.inputs, axes.find((x) => !c.inputs.includes(x)) ?? axes[0]])} className="text-[11px] text-hud hover:underline">＋ second axis (mini-stick)</button>}
+        {c.inputs.length < 2 && <button type="button" onClick={() => onChange([...c.inputs, axes.find((x) => !c.inputs.includes(x)) ?? axes[0]])} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> second axis (mini-stick)</button>}
       </div>
     );
   }
@@ -346,12 +347,12 @@ function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange
             onBlur={(e) => { const v = numIn(e.target.value); if (v !== x && (v === '' || INPUT_RE.test(v))) set(i, v); else e.target.value = x; }}
             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
           {pressBtn(i)}
-          {c.kind === 'encoder' && i === 2 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 2))} className="text-slate-500 hover:text-alert" aria-label="Remove push">✕</button>}
-          {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length > 2 && <button type="button" onClick={() => onChange(c.inputs.filter((_, j) => j !== i))} className="text-slate-500 hover:text-alert" aria-label={`Remove ${c.kind === 'buttons' ? 'button' : 'position'} ${i + 1}`}>✕</button>}
+          {c.kind === 'encoder' && i === 2 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 2))} className="text-slate-500 hover:text-alert" aria-label="Remove push"><Ico name="close" /></button>}
+          {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length > 2 && <button type="button" onClick={() => onChange(c.inputs.filter((_, j) => j !== i))} className="text-slate-500 hover:text-alert" aria-label={`Remove ${c.kind === 'buttons' ? 'button' : 'position'} ${i + 1}`}><Ico name="close" /></button>}
         </label>
       ))}
-      {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length < 8 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline">＋ {c.kind === 'buttons' ? 'button' : 'position'}</button>}
-      {c.kind === 'encoder' && c.inputs.length === 2 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline">＋ push</button>}
+      {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length < 8 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> {c.kind === 'buttons' ? 'button' : 'position'}</button>}
+      {c.kind === 'encoder' && c.inputs.length === 2 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> push</button>}
       {slot === 'gp' && <datalist id="tpl-gp-buttons">{GP_BUTTONS.map((b) => <option key={b} value={b} />)}</datalist>}
     </div>
   );

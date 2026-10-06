@@ -108,3 +108,62 @@ Judgment calls made while building round 1, where the decisions above didn't say
 - The Devices view's device picker lists only js/gp slots, shown as "jsN · hardware". A "Slots…" button opens the modal.
 - The sidebar's profile card lists the slots (kb1, mo1, js1…) with their names and an "Edit game slots…" link.
 
+
+## Round 1 review feedback (Federico, Oct 5, 2026)
+- Input types (keyboard/mouse/joystick/gamepad) become icons, grouped under a "View" section.
+- Show unbound / Customized only / Conflicts only grouped under a "Filters" section.
+- Remove the top Controllers button; move/rename it in place of the sidebar "Edit game slots…" link.
+- Show the slot/template selection inside the Devices (joystick) view.
+- One consistent icon palette, futuristic (line icons), no cartoon emoji.
+- Bring back the app title; view tabs underneath it.
+- Profile unified into one section with icon actions: delete (with warning) / import / export.
+- "Edit" is an action on the current view's bindings: move it out of the header into the view.
+- Search / find-by-press stays contextual to the current view (Devices no longer jumps to List).
+- Grip photo switching on press always happens, regardless of highlight setting.
+- Copy only between same-kind slots: confirmed.
+- Added kb/mo/gp slots get a selector like device selection (pick which slot to bind/show).
+- Add "select hardware by pressing a button" next to the hardware dropdown in each slot row.
+
+## Implementation calls (round 2)
+
+### Layout
+- Three rows, top to bottom. First the title row: logo, "SC Keymap", the console subtitle with the game version, and Settings / Help icon buttons on the right. Then the view tabs (List / Keyboard / Devices / Conflicts, the conflict count on its tab). Then the current view's toolbar.
+- The toolbar sits in the content column, above the view, not in the header, so the sidebar stays full height. It holds the search with find-by-press, a labelled **View** section (input-type icon toggles, plus slot pickers where they apply), a labelled **Filters** section, and on the right the view's own actions.
+- The Controllers header button is gone. The entry point is the **Game slots & controllers** button in the sidebar's profile card, which replaces the "Edit game slots…" link. The "Axis settings & curves" link sits under it.
+- **Edit** is a List-toolbar action ("Edit" / "Done"), since only the List edits bindings. Undo stays in the edit bar under the toolbar while editing. Behaviour is unchanged.
+
+### Filters per view
+- **List:** View has the four input toggles (click shows/hides, double-click shows only that one). Filters has Show unbound, Customized only, Conflicts only, and the category chip.
+- **Keyboard:** no input toggles (the view is keyboard + mouse by definition). View holds the kb / mo slot pickers, only when there is more than one keyboard or mouse slot. Filters has Customized only and Conflicts only.
+- **Conflicts:** View has the input toggles. Filters has Customized only and Default overlaps.
+- **Devices:** no View/Filters sections. The slot strip at the top of the view is the selector, and only the search and find-by-press apply.
+
+### Profile section
+- The profile has a single home: the sidebar "Active profile" card, shown on every view. On narrow screens the same card sits at the top of the content, and it is rendered only once.
+- The card holds the selector, then icon actions Import / Export / Delete, then a "more" menu with New from defaults, Duplicate, Revert to imported and Reset all.
+- Delete opens a warning that names the profile and its binding count and lists what goes with it: slots, hardware and template picks, axis settings, undo history. It says the file on disk isn't touched and that this can't be undone. "Export first" is offered. The game defaults can't be deleted (the button is disabled).
+
+### Devices view
+- A slot bar at the top lists every slot, kb/mo included (icon, id, hardware name, connection dot). Under it are the selected slot's hardware ("connected" / "not connected"), the template dropdown (js/gp only) and a "Game slots & controllers…" link to the full modal.
+- Selecting a kb/mo slot shows the keyboard for that instance. Template tools (Customize / New / Import / Export, PNG, Print) moved to a row of their own above the picture.
+- **Search on Devices stays on Devices.** Text search dims the callouts whose control or bound actions don't match, and a status line gives the match count. Find-by-press switches to the slot of the pressed device, picks out that control (or its "not on the picture" entry), scrolls it into view and dims the rest; for a key or mouse button it selects that keyboard slot.
+- No view switches on its own any more: typing and find-by-press never change the view. Clicking a key in the Keyboard view or a conflict still opens the List, because that is explicit navigation.
+- **Grip photos switch on every press**, whatever the "Highlight on press" setting. Only the glow and scroll follow that setting. A find-by-press hit also switches the grip, and the status line says "grips still switch" while highlight is off. The Settings hint says so too.
+
+### Extra kb / mo / gp slots
+- kb/mo instances are real everywhere: binding keys, physical keys, input names, search. kb2_j is a different input from kb1_j and never conflicts with it.
+- The Keyboard view shows one keyboard and one mouse instance at a time, chosen in the View section.
+- The capture dialog shows kb / mo pickers when there are several slots of that kind. It defaults to the instance the Keyboard view shows, or to the replaced binding's instance. Captures, manual entry and mouse clicks all go to the picked instance (KB2 / MOUSE 2 in the dialog header).
+- Binding chips tag non-1 instances (KB2, MO2, GP2).
+- gp2 needs no picker: whichever controller sits in the gp2 slot captures as gp2.
+- A capture from a controller that is in no slot yet makes that controller the slot's hardware. Without this, its numbering moved after the capture (found by the e2e).
+- On import, a gamepad slot still unmatched takes the remaining gamepad in order ("matched on import (gamepad order)"). Windows and browsers name XInput pads differently, so name matching never worked for gamepads.
+
+### Game slots & controllers modal
+- **Pick by pressing:** a "Press" button next to each slot's hardware dropdown. It listens to every controller: the next newly pressed button picks that controller, including one the browser only reveals because of that press. Axes are ignored, so drift or a resting throttle can't pick. Any controller kind goes into the slot that is listening (the slot decides). Esc or Cancel stops listening. The device leaves any other slot it was in, as with the dropdown.
+- Copy is offered on kb/mo slots too (to another slot of the same kind). The count chip shows "N yours", meaning your own bindings on that slot. The Copy dialog splits "X yours and Y game defaults", because the copy brings the effective bindings, defaults included.
+- **Escape:** dialogs stack, and Escape closes only the topmost one: pick-by-pressing, then Copy / Remove, then the modal. Settings, Help, Export, the action editor, the capture dialog and the profile delete warning work the same way.
+
+### Icons
+- One line-icon set lives in `src/components/icons.tsx`: 24px grid, 1.5 stroke, round caps, `currentColor`, sized to the text unless a size is given. It replaces every emoji / pictograph in the header, tabs, filters, buttons, modals, chips and the category list.
+- "×" multipliers and "→" arrows inside sentences are kept as typography.

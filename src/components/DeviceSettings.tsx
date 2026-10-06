@@ -7,6 +7,7 @@ import {
   resetGroup, response, setAxis, setGroup, type DeviceSettings, type OptionsBlock, type AxisBlock,
 } from '../lib/devopts';
 import type { OptionTree, OptionTreeGroup, Profile } from '../lib/types';
+import { Ico } from './icons';
 
 type Change = (label: string, fn: (s: DeviceSettings) => DeviceSettings) => void;
 interface Pt { x: number; y: number }
@@ -179,7 +180,7 @@ function AxisTable({ product, axes, pad, selected, onSelect, onSet }: {
               return (
                 <tr key={a} data-axis={a} onClick={(e) => { if (!(e.target as HTMLElement).closest('input,button')) onSelect(a); }}
                   className={`cursor-pointer border-t border-edge/40 ${selected === a ? 'bg-hud/10' : 'hover:bg-white/[0.03]'}`}>
-                  <td className="py-1 font-mono text-slate-300">{a}{selected === a && <span className="ml-1 text-[9px] text-hud">◉ preview</span>}</td>
+                  <td className="py-1 font-mono text-slate-300">{a}{selected === a && <span className="ml-1 text-[9px] text-hud"><Ico name="eye" /> preview</span>}</td>
                   {(['deadzone', 'saturation'] as const).map((k) => (
                     <td key={k} className="pr-3">
                       <SliderField key={product} range={RANGES[k]} value={v[k]} label={`${k} ${a}`} sliderLabel={`${a} ${k} slider`}
@@ -293,7 +294,7 @@ function NumField({ value, min, max, step, label, onSet }: { value?: number; min
       <input aria-label={label} value={text} inputMode="decimal" placeholder="default" onChange={(e) => setText(e.target.value)} onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
         className="w-20 rounded border border-edge bg-black/40 px-1.5 py-0.5 font-mono text-[11px] text-slate-100 outline-none placeholder:text-slate-600 focus:border-hud" />
-      {value !== undefined && <button type="button" title="Back to game default" onClick={() => onSet(null)} className="text-[10px] text-slate-500 hover:text-alert">✕</button>}
+      {value !== undefined && <button type="button" title="Back to game default" onClick={() => onSet(null)} className="text-[10px] text-slate-500 hover:text-alert"><Ico name="close" /></button>}
       <span className="sr-only">{step}</span>
     </span>
   );
@@ -327,7 +328,7 @@ function GroupEditor({ g, path, vals, axes, pad, axis, setAxis: setAxisSel, onPa
         <code className="font-mono text-[10px] text-slate-500">{g.name}</code>
         {path && <span className="text-[10px] text-slate-500">{path}</span>}
         {(vals?.invert !== undefined || vals?.exponent !== undefined || vals?.curve || vals?.emptyCurve) && (
-          <button type="button" onClick={onReset} className="ml-auto rounded border border-edge px-2 py-0.5 text-[10px] text-slate-400 hover:border-alert hover:text-alert">↺ game default</button>
+          <button type="button" onClick={onReset} className="ml-auto rounded border border-edge px-2 py-0.5 text-[10px] text-slate-400 hover:border-alert hover:text-alert"><Ico name="reset" /> game default</button>
         )}
       </div>
       {(g.showCurve === -1 || g.showInvert === -1) && <p className="text-[10px] text-slate-500">Group heading: in game this setting is shown for the whole group; whether it overrides the controls below it is not documented.</p>}
@@ -400,7 +401,7 @@ function GroupEditor({ g, path, vals, axes, pad, axis, setAxis: setAxisSel, onPa
                     <PtField v={p.y} label={`point ${i + 1} out`} onSet={(y) => onPatch(`Curve ${g.name}`, { curve: points.map((q, j) => (j === i ? { ...q, y } : q)) })} />
                     <input type="range" min={0} max={1} step={RANGES.point.step} value={p.y} aria-label={`point ${i + 1} out slider`} className="w-24 accent-[var(--color-mod)]"
                       onChange={(e) => onPatch(`Curve ${g.name}`, { curve: points.map((q, j) => (j === i ? { ...q, y: Number(e.target.value) } : q)) })} />
-                    {points.length > 1 && <button type="button" title="Remove point" onClick={() => onPatch(`Curve ${g.name}`, { curve: points.filter((_, j) => j !== i) })} className="text-[10px] text-slate-500 hover:text-alert">✕</button>}
+                    {points.length > 1 && <button type="button" title="Remove point" onClick={() => onPatch(`Curve ${g.name}`, { curve: points.filter((_, j) => j !== i) })} className="text-[10px] text-slate-500 hover:text-alert"><Ico name="close" /></button>}
                   </li>
                 ))}
               </ul>
@@ -509,7 +510,7 @@ function CurveChart({ shape, defaultShape, invert, editable, points, live, onDra
       <div className="mt-1 flex gap-3 font-mono text-[9px] text-slate-500">
         <span><span className="mr-1 inline-block h-0.5 w-3 bg-hud align-middle" />this setting</span>
         <span><span className="mr-1 inline-block h-0.5 w-3 bg-slate-500 align-middle" />game default</span>
-        {lx !== undefined && <span className="text-ok">● live {live!.toFixed(3)}</span>}
+        {lx !== undefined && <span className="text-ok"><span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-ok align-middle" />live {live!.toFixed(3)}</span>}
       </div>
     </div>
   );

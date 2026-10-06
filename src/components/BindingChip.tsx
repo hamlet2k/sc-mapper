@@ -1,5 +1,6 @@
 import { keyLabel, normalizeCombo, prettyMode, SLOT_TAG, tokens } from '../lib/inputs';
 import type { Binding } from '../lib/types';
+import { Ico } from './icons';
 
 interface Props {
   b: Binding;
@@ -12,7 +13,7 @@ interface Props {
 }
 
 export function BindingChip({ b, conflict, onClick, onRemove, showTag, flash }: Props) {
-  const tag = b.slot === 'js' ? `JS${b.instance}` : b.slot === 'gp' && b.instance > 1 ? `GP${b.instance}` : showTag ? SLOT_TAG[b.slot] : null;
+  const tag = b.slot === 'js' ? `JS${b.instance}` : b.instance > 1 ? `${b.slot.toUpperCase()}${b.instance}` : showTag ? SLOT_TAG[b.slot] : null;
   const mode = prettyMode(b.mode);
   const showMode = mode && !['Press', 'Press/Hold'].includes(mode);
   const cls = conflict?.length
@@ -24,7 +25,7 @@ export function BindingChip({ b, conflict, onClick, onRemove, showTag, flash }: 
     b.custom ? 'Customized binding' : 'Default binding',
     b.mode ? `Activation: ${b.mode}` : '',
     b.multiTap ? `Multi-tap: ${b.multiTap}` : '',
-    conflict?.length ? `⚠ Possible conflict with: ${conflict.join(', ')}` : '',
+    conflict?.length ? `Possible conflict with: ${conflict.join(', ')}` : '',
     onRemove ? 'Click to rebind' : 'Click to find everything on this input',
   ].filter(Boolean).join('\n');
   const chip = (
@@ -35,7 +36,7 @@ export function BindingChip({ b, conflict, onClick, onRemove, showTag, flash }: 
       data-flash={flash ? '1' : undefined}
       className={`group inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-left transition ${cls} ${flash ? 'flash-chip' : ''}`}
     >
-      {conflict?.length ? <span className="text-[10px] text-alert">⚠</span> : b.custom ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-mod" /> : null}
+      {conflict?.length ? <Ico name="alert" className="h-3 w-3 text-alert" /> : b.custom ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-mod" /> : null}
       {tag && <span className="font-mono text-[9px] font-bold tracking-wider text-hud/70">{tag}</span>}
       <span className="flex flex-wrap items-center gap-0.5">
         {tokens(normalizeCombo(b.input)).map((t, i) => (
@@ -57,7 +58,7 @@ export function BindingChip({ b, conflict, onClick, onRemove, showTag, flash }: 
     <span className="group/chip relative inline-flex max-w-full">
       {chip}
       <button type="button" title="Unbind" aria-label="Unbind" onClick={() => onRemove(b)}
-        className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full border border-alert/70 bg-panel text-[9px] leading-none text-alert group-hover/chip:flex">✕</button>
+        className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full border border-alert/70 bg-panel text-[9px] leading-none text-alert group-hover/chip:flex"><Ico name="close" className="h-2.5 w-2.5" strokeWidth={2} /></button>
     </span>
   );
 }
