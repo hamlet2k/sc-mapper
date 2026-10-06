@@ -1055,4 +1055,136 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.equal(bad.views![0].swap, undefined, 'odd swap keys dropped');
   });
 }
+// ---------------------------------------------------------------- game slots (Controllers modal): seeding, matching, pinning, bindings
+{
+  const sl = await import('../src/lib/slots');
+  const st = await import('../src/lib/slotTemplates');
+  const tpl = await import('../src/lib/templates');
+  const { DEVICE_TEMPLATES } = await import('../src/lib/deviceTemplates');
+  const { BUILTIN_TEMPLATES } = await import('../src/lib/builtinTemplates');
+  const ALL = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+  const AB6_RAW = ' MOZA AB6 FFB Base    {1002346E-0000-0000-0000-504944564944}';
+  const pad = (key: string, name: string, vendor: string, productId: string, buttons: number, dup?: { n: number; of: number }) =>
+    ({ key, name, vendor, productId, buttons, axes: 8, kind: 'js' as const, ...(dup ? { dup } : {}) });
+  const MTQ = pad('mtq|80b8a#1', 'MOZA MTQ Throttle', '346E', '1007', 80);
+  const AB1 = pad('ab6|128b8a#1', 'MOZA AB6 FFB Base', '346E', '1002', 128, { n: 1, of: 2 });
+  const AB2 = pad('ab6|128b8a#2', 'MOZA AB6 FFB Base', '346E', '1002', 128, { n: 2, of: 2 });
+  const prof = (devices: any[], rebinds: any = {}) => ({ devices, rebinds });
+  const S = (slot: any, instance: number) => ({ slot, instance });
+
+  t('slots: no profile = no slots; an import seeds kb1/mo1 (fixed), its <options> devices and the js/gp numbers its bindings use', () => {
+    assert.deepEqual(sl.seedSlots(null).slots, []);
+    const m = sl.seedSlots(prof([{ slot: 'gp', instance: 1, product: 'Xbox' }, { slot: 'js', instance: 2, product: 'MOZA AB6 FFB Base', rawProduct: AB6_RAW }],
+      { spaceship_movement: { v_pitch: [{ slot: 'js', instance: 4, input: 'y' }, { slot: 'js', instance: 1, input: '' }] } }));
+    assert.deepEqual(m.slots.map(sl.slotId), ['kb1', 'mo1', 'js2', 'js4', 'gp1'], 'cleared js1_ (empty input) adds no slot');
+    assert.equal(m.slots.find((s) => s.instance === 2 && s.slot === 'js')!.gameRawProduct, AB6_RAW);
+    assert.equal(m.pendingMatch, true);
+    assert.ok(sl.isFixed(S('kb', 1)) && sl.isFixed(S('mo', 1)) && !sl.isFixed(S('kb', 2)));
+  });
+  t('slots: hardware auto-match by USB id, then name; identical devices go in browser order; legacy numbers win; pinned slots untouched', () => {
+    const seeded = sl.seedSlots(prof([
+      { slot: 'js', instance: 1, product: 'MOZA AB6 FFB Base', rawProduct: AB6_RAW },
+      { slot: 'js', instance: 2, product: 'MOZA AB6 FFB Base', rawProduct: AB6_RAW },
+      { slot: 'js', instance: 3, product: 'MOZA MTQ Throttle' },
+    ]));
+    const m = sl.autoMatchHardware(seeded, [MTQ, AB1, AB2]);
+    const hw = (i: number) => m.slots.find((s) => s.slot === 'js' && s.instance === i)!;
+    assert.equal(hw(1).hw!.key, AB1.key); assert.equal(hw(1).hwMatch, 'usb');
+    assert.equal(hw(2).hw!.key, AB2.key);
+    assert.equal(hw(3).hw!.key, MTQ.key); assert.equal(hw(3).hwMatch, 'name');
+    assert.equal(m.pendingMatch, false);
+    const legacy = sl.autoMatchHardware(seeded, [MTQ, AB1, AB2], { [AB2.key]: { kind: 'js', instance: 1 } });
+    assert.equal(legacy.slots.find((s) => s.instance === 1 && s.slot === 'js')!.hw!.key, AB2.key, 'the number set by hand before slots existed');
+    assert.equal(legacy.slots.find((s) => s.instance === 2 && s.slot === 'js')!.hw!.key, AB1.key);
+    const pinned = sl.assignHardware(seeded, S('js', 1), null, true);
+    assert.equal(sl.autoMatchHardware(pinned, [AB1, AB2]).slots.find((s) => s.instance === 1 && s.slot === 'js')!.hw, undefined, 'a slot the user emptied stays empty');
+  });
+  t('slots: assigning hardware takes it out of its old slot and pins it; padAssign / reservedJs feed the game numbers', () => {
+    let m = sl.addSlot(sl.addSlot(sl.emptySlotMap(), 'js'), 'js');
+    m = sl.assignHardware(m, S('js', 1), sl.hardwareOf(AB1));
+    m = sl.assignHardware(m, S('js', 2), sl.hardwareOf(AB1));
+    assert.equal(m.slots[0].hw, undefined); assert.equal(m.slots[1].hw!.key, AB1.key); assert.equal(m.slots[1].hwPinned, true);
+    assert.deepEqual(sl.padAssign(m), { [AB1.key]: { kind: 'js', instance: 2 } });
+    assert.deepEqual(sl.reservedJs(m), [1, 2]);
+    const fake = (id: string) => ({ id, index: 0, mapping: '', buttons: Array.from({ length: 8 }, () => ({ pressed: false, value: 0 })), axes: [0, 0] });
+    const d = dev.describePads([fake('Some Stick (Vendor: 1234 Product: 5678)')], {}, [], sl.reservedJs(m));
+    assert.equal(d[0].instance, 3, 'a controller in no slot is numbered after the slots, even disconnected ones');
+    const man = sl.manualHardware('VKBsim Gladiator EVO R');
+    m = sl.assignHardware(m, S('js', 1), man);
+    assert.equal(sl.padAssign(m)[man.key], undefined, 'a device picked by name has no live pad');
+  });
+  t('slots: template auto-match on hardware (re)assignment, manual pick pinned and following the hardware to another slot', () => {
+    let m = sl.addSlot(sl.addSlot(sl.emptySlotMap(), 'js'), 'js');
+    m = sl.assignHardware(m, S('js', 1), sl.hardwareOf(AB2));
+    const r1 = st.resolveSlotTemplate(ALL, m, m.slots[0], undefined);
+    assert.equal(r1.template.id, 'builtin-moza-ab6'); assert.equal(r1.how, 'guessed', 'last of two identical bases = the stick (dupOrderGuess)');
+    m = sl.assignHardware(m, S('js', 1), sl.hardwareOf(AB1));
+    assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[0], undefined).template.id, 'builtin-moza-mtq', 'new hardware: template matched again');
+    m = sl.setSlotTemplate(m, S('js', 1), 'builtin-stick');
+    assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[0], undefined).how, 'chosen');
+    m = sl.assignHardware(m, S('js', 2), sl.hardwareOf(AB1));
+    assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[1], undefined).template.id, 'builtin-stick', 'the pick follows the hardware');
+    assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[0], undefined).how, 'fallback', 'the old slot is empty and automatic again');
+    m = sl.setSlotTemplate(m, S('js', 1), 'builtin-throttle');
+    assert.equal(m.slots[0].template, 'builtin-throttle', 'no hardware: the pick sits on the slot');
+    m = sl.setSlotTemplate(m, S('js', 2), null);
+    assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[1], undefined).template.id, 'builtin-moza-mtq');
+    const legacyKey = tpl.identityKey(st.resolveSlotTemplate(ALL, m, m.slots[1], undefined).ident);
+    assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[1], undefined, { [legacyKey]: 'builtin-stick' }).legacy, true, 'old per-device picks still apply');
+    m = sl.setSlotTemplate(m, S('js', 2), st.AUTO_TEMPLATE);
+    assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[1], undefined, { [legacyKey]: 'builtin-stick' }).template.id, 'builtin-moza-mtq', 'Automatic beats an old pick');
+  });
+  t('slots: removing drops only the profile\'s bindings on that slot (cleared defaults stay cleared); ensureUsedSlots re-adds used numbers', () => {
+    const rb = {
+      spaceship_movement: { v_pitch: [{ slot: 'js', instance: 2, input: 'y' }], v_yaw: [{ slot: 'js', instance: 1, input: 'x' }, { slot: 'js', instance: 2, input: 'button3' }] },
+      spaceship_view: { v_view_yaw: [{ slot: 'kb', instance: 1, input: 'f' }] },
+    } as any;
+    assert.equal(sl.slotBindingCount(rb, S('js', 2)), 2);
+    const r = sl.dropSlotBindings(rb, idx, S('js', 2));
+    assert.equal(r.dropped, 2); assert.equal(sl.slotBindingCount(r.rebinds, S('js', 2)), 0);
+    assert.deepEqual(r.rebinds.spaceship_movement.v_pitch, [{ slot: 'js', instance: 1, input: '' }], 'v_pitch had js1_y by default: it stays cleared');
+    assert.equal(r.rebinds.spaceship_movement.v_yaw, undefined, 'js1_x left = the game default for v_yaw: nothing to store');
+    assert.deepEqual(r.rebinds.spaceship_view, rb.spaceship_view, 'other groups untouched');
+    const m = sl.ensureUsedSlots(sl.seedSlots(prof([])), rb);
+    assert.deepEqual(m.slots.map(sl.slotId), ['kb1', 'mo1', 'js1', 'js2']);
+  });
+  t('slots: copy / move bindings to another slot (same input names; clashes replace or keep both; skip inputs)', () => {
+    const rb = { spaceship_movement: { v_roll: [{ slot: 'js', instance: 2, input: 'y' }] } } as any;
+    const plan = sl.planCopy(rb, idx, S('js', 1), S('js', 2));
+    assert.ok(plan.count > 3, 'js1 defaults count too'); assert.ok(plan.inputs.includes('x') && plan.inputs.includes('y'));
+    assert.equal(plan.clashes, 1, 'js2_y already used by v_roll');
+    const keep = sl.copySlotBindings(rb, idx, S('js', 1), S('js', 2), { clash: 'keep' });
+    assert.ok(keep.copied >= plan.count - 0 && keep.replaced === 0);
+    assert.deepEqual(keep.rebinds.spaceship_movement.v_roll, rb.spaceship_movement.v_roll);
+    assert.ok(keep.rebinds.spaceship_movement.v_pitch.some((x: any) => x.instance === 2 && x.input === 'y'));
+    assert.ok(keep.rebinds.spaceship_movement.v_pitch.some((x: any) => x.instance === 1 && x.input === 'y'), 'copy keeps the source');
+    const rep = sl.copySlotBindings(rb, idx, S('js', 1), S('js', 2), { clash: 'replace' });
+    assert.equal(rep.replaced, 1); assert.ok(!rep.rebinds.spaceship_movement.v_roll?.some((x: any) => x.instance === 2 && x.input === 'y'));
+    const mv = sl.copySlotBindings(rb, idx, S('js', 1), S('js', 2), { clash: 'keep', move: true });
+    assert.equal(sl.slotBindingCount(mv.rebinds, S('js', 1)), 0, 'move leaves nothing on js1');
+    assert.deepEqual(mv.rebinds.spaceship_movement.v_pitch.filter((x: any) => x.input).map((x: any) => `js${x.instance}_${x.input}`), ['js2_y']);
+    const sk = sl.copySlotBindings(rb, idx, S('js', 1), S('js', 2), { clash: 'keep', skip: new Set(['y']) });
+    assert.ok(!sk.rebinds.spaceship_movement.v_pitch?.some((x: any) => x.instance === 2));
+    assert.equal(sl.copySlotBindings(rb, idx, S('js', 1), S('gp', 1), { clash: 'keep' }).copied, 0, 'only between slots of one kind');
+  });
+  t('slots: export declares added slots with their product names (joysticks, gamepad, extra keyboard)', () => {
+    const p = { ...ed.newProfile('X'), rebinds: {} };
+    const xml = buildExport(defaults, p, { format: 'layout', name: 'x', devices: [
+      { type: 'joystick', instance: 1, product: ' MOZA AB6 FFB Base    {1002346E-0000-0000-0000-504944564944}' },
+      { type: 'joystick', instance: 3, product: 'VKBsim Gladiator EVO R' }, { type: 'keyboard', instance: 2, product: 'Second keyboard' }] });
+    assert.match(xml, /<options type="joystick" instance="1" Product=" MOZA AB6 FFB Base {4}\{1002346E-0000-0000-0000-504944564944\}"\/>/);
+    assert.match(xml, /<options type="joystick" instance="3" Product="VKBsim Gladiator EVO R"\/>/);
+    assert.match(xml, /<joystick instance="3"\/>/); assert.match(xml, /<keyboard instance="2"\/>/);
+    assert.match(xml, /<options type="keyboard" instance="2" Product="Second keyboard"\/>/);
+    const back = parseActionMaps(buildExport(defaults, { ...p, rebinds: { spaceship_movement: { v_pitch: [{ slot: 'js', instance: 3, input: 'y' }] } }, rebindCount: 1 } as any, { format: 'actionmaps', name: 'x', devices: [{ type: 'joystick', instance: 3, product: 'VKBsim Gladiator EVO R' }] }), 'actionmaps.xml');
+    assert.deepEqual(sl.seedSlots(back).slots.map((s) => `${sl.slotId(s)}:${s.gameProduct ?? ''}`), ['kb1:Keyboard', 'mo1:', 'js3:VKBsim Gladiator EVO R']);
+  });
+  t('slots: stored maps are sanitized', () => {
+    const m = sl.cleanSlotMap({ slots: [{ slot: 'js', instance: 1, hw: { key: 'k', name: 'n' }, hwPinned: true }, { slot: 'js', instance: 1 }, { slot: 'xx', instance: 2 }, { slot: 'gp', instance: 99 }, { slot: 'kb', instance: 1 }], hwTemplates: { k: 'builtin-stick', z: 5 } });
+    assert.deepEqual(m!.slots.map(sl.slotId), ['kb1', 'js1']);
+    assert.deepEqual(m!.hwTemplates, { k: 'builtin-stick' });
+    assert.equal(sl.cleanSlotMap('nope'), null);
+  });
+}
+
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);

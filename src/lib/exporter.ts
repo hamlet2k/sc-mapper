@@ -7,7 +7,8 @@ import { blockInstance, blockType, serializeBlock, settingsOf, type OptionsBlock
 import type { DefaultsData, Group, Profile, Rebind } from './types';
 
 export type ExportFormat = 'layout' | 'actionmaps';
-export interface ExportDevice { type: 'joystick' | 'gamepad'; instance: number; product?: string }
+/** devices to declare besides the ones the bindings use (game slots, slots.ts): joysticks / gamepads, and extra keyboards / mice (instance 2+) */
+export interface ExportDevice { type: 'joystick' | 'gamepad' | 'keyboard' | 'mouse'; instance: number; product?: string }
 export interface ExportOptions { format: ExportFormat; name: string; devices?: ExportDevice[] }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -69,6 +70,8 @@ export function buildExport(defaults: DefaultsData, profile: Profile, o: ExportO
   const extra = o.devices ?? [];
   const jsInst = [...new Set([...used.js, ...extra.filter((d) => d.type === 'joystick').map((d) => d.instance)])].sort((a, b) => a - b);
   const hasGp = used.gp || extra.some((d) => d.type === 'gamepad') || profile.devices.some((d) => d.slot === 'gp');
+  const extraKm = extra.filter((d) => (d.type === 'keyboard' || d.type === 'mouse') && d.instance > 1)
+    .sort((a, b) => a.type.localeCompare(b.type) || a.instance - b.instance);
 
   if (layout) {
     L.push(`<ActionMaps version="1" optionsVersion="2" rebindVersion="2" profileName="${esc(name)}">`);
@@ -76,6 +79,7 @@ export function buildExport(defaults: DefaultsData, profile: Profile, o: ExportO
     L.push('  <devices>');
     L.push('   <keyboard instance="1"/>');
     L.push('   <mouse instance="1"/>');
+    for (const d of extraKm) L.push(`   <${d.type} instance="${d.instance}"/>`);
     if (hasGp) L.push('   <gamepad instance="1"/>');
     for (const i of jsInst) L.push(`   <joystick instance="${i}"/>`);
     L.push('  </devices>');
@@ -98,6 +102,7 @@ export function buildExport(defaults: DefaultsData, profile: Profile, o: ExportO
   const has = (type: string, inst: number) => optBlocks.some((b) => blockType(b) === type && blockInstance(b) === inst);
   for (const b of settings.blocks) if (b.tag === 'deviceoptions') L.push(...serializeBlock(b, base));
   if (!has('keyboard', 1)) L.push(`${base}<options type="keyboard" instance="1" Product="${esc(KEYBOARD_PRODUCT)}"/>`);
+  for (const d of extraKm) if (!has(d.type, d.instance)) L.push(`${base}<options type="${d.type}" instance="${d.instance}"${d.product ? ` Product="${esc(d.product)}"` : ''}/>`);
   for (const b of optBlocks) L.push(...serializeBlock(b, base));
   if (hasGp && !has('gamepad', 1)) {
     const p = extra.find((d) => d.type === 'gamepad')?.product;

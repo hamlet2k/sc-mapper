@@ -26,9 +26,9 @@ const box = (r: DOMRect): Box => ({ top: r.top, bottom: r.bottom });
  * Live Devices view of a multi-view photo template: when an input whose callout sits on some view becomes active (button down,
  * hat direction, axis past the live deadzone), scroll that view into the middle of the scroll area (only when it isn't already in
  * sight) and return a short pulse marker for it. Off while `enabled` is false (template editor open) and for a moment after the
- * user scrolled the panel themselves.
+ * user scrolled the panel themselves. `scroll` false (Settings → Scroll to it off): the pulse only, the panel stays put.
  */
-export function useFocusPressedView(t: DeviceTemplate, active: ReadonlySet<string>, rootRef: RefObject<HTMLElement | null>, enabled: boolean): ViewPulse | null {
+export function useFocusPressedView(t: DeviceTemplate, active: ReadonlySet<string>, rootRef: RefObject<HTMLElement | null>, enabled: boolean, scroll = true): ViewPulse | null {
   const views = useMemo(() => inputViews(t), [t]);
   const calloutOf = useMemo(() => {
     const m = new Map<string, string>();
@@ -72,7 +72,7 @@ export function useFocusPressedView(t: DeviceTemplate, active: ReadonlySet<strin
       const mk = cid ? el.querySelector<Element>(`[data-marker="${CSS.escape(cid)}"], [data-region="${CSS.escape(cid)}"]`) : null;
       const sp = scrollParent(el);
       const port: Box = sp ? box(sp.getBoundingClientRect()) : { top: 0, bottom: window.innerHeight };
-      const d = performance.now() - userAt.current < USER_SCROLL_HOLD_MS ? 0 : scrollDelta(box(el.getBoundingClientRect()), port, mk ? box(mk.getBoundingClientRect()) : null);
+      const d = !scroll || performance.now() - userAt.current < USER_SCROLL_HOLD_MS ? 0 : scrollDelta(box(el.getBoundingClientRect()), port, mk ? box(mk.getBoundingClientRect()) : null);
       if (d) {
         const behavior: ScrollBehavior = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
         (sp ?? window).scrollBy({ top: d, behavior });
@@ -81,7 +81,7 @@ export function useFocusPressedView(t: DeviceTemplate, active: ReadonlySet<strin
       if (d || last.current !== target.view) setPulse((x) => ({ view: target.view, n: (x?.n ?? 0) + 1 }));
       last.current = target.view;
     }, COALESCE_MS);
-  }, [active, views, enabled, rootRef, calloutOf]);
+  }, [active, views, enabled, scroll, rootRef, calloutOf]);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   useEffect(() => { last.current = null; }, [t]);

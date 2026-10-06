@@ -17,7 +17,7 @@ export interface PadInfo {
   /** the match to a profile device (or the numbering) among identical devices is a guess: which is which can't be told from the id */
   ambiguous?: boolean;
 }
-type Assign = Record<string, { kind?: PadKind; instance?: number }>;
+export type Assign = Record<string, { kind?: PadKind; instance?: number }>;
 /** the parts of a Gamepad this module reads (real Gamepad objects or test doubles) */
 export interface PadLike {
   id: string; index: number; mapping: string; connected?: boolean; timestamp?: number;
@@ -78,7 +78,7 @@ const sameName = (a: string, b: string) => {
  * 1. what the user picked; 2. a device declared in the active profile with the same USB vendor/product id, then the same name;
  * 3. browser order (standard-mapping pads are gamepads, everything else joysticks numbered from the lowest free js slot).
  */
-export function describePads(pads: readonly PadLike[], assign: Assign, profileDevices: readonly ProfileDevice[] = []): PadInfo[] {
+export function describePads(pads: readonly PadLike[], assign: Assign, profileDevices: readonly ProfileDevice[] = [], reservedJs: readonly number[] = []): PadInfo[] {
   const keys = padKeys(pads);
   const legacy = legacyKeys(pads);
   const out: PadInfo[] = pads.map((p, i) => {
@@ -117,7 +117,8 @@ export function describePads(pads: readonly PadLike[], assign: Assign, profileDe
   };
   claim((d, pp) => !!pp.vendor && d.vendor === pp.vendor && d.productId === pp.productId, 'profile-id');
   claim((d, pp) => !!pp.name && sameName(d.name, pp.name), 'profile-name');
-  const taken = new Set(out.filter((d, i) => done.has(i) && d.kind === 'js').map((d) => d.instance));
+  // joystick numbers held by game slots (slots.ts), even when their controller isn't connected, are never handed out again
+  const taken = new Set([...reservedJs, ...out.filter((d, i) => done.has(i) && d.kind === 'js').map((d) => d.instance)]);
   let next = 1;
   out.forEach((d, i) => {
     if (done.has(i)) return;
@@ -134,10 +135,18 @@ export function describePads(pads: readonly PadLike[], assign: Assign, profileDe
  * and `gamepadconnected` may never fire before that, so this polls as well as listening for the events.
  */
 const NO_DEVICES: readonly ProfileDevice[] = [];
-export function usePads(active: boolean, profileDevices: readonly ProfileDevice[] = NO_DEVICES) {
+const NO_NUMBERS: readonly number[] = [];
+/**
+ * `slots`: game numbers from the active profile's slot map (slots.ts). When given, they are the only source of numbers (the
+ * profile's devices are matched once, on import, into that map); controllers in no slot are numbered after the slots.
+ */
+export function usePads(active: boolean, profileDevices: readonly ProfileDevice[] = NO_DEVICES, slots?: { assign: Assign; reserved: readonly number[] }) {
   const [assign, setAssign] = useState<Assign>(() => loadAssign());
   const [pads, setPads] = useState<PadInfo[]>([]);
-  const describe = useCallback((list: readonly PadLike[]) => describePads(list, assign, profileDevices), [assign, profileDevices]);
+  const sAssign = slots?.assign, sReserved = slots?.reserved;
+  const describe = useCallback((list: readonly PadLike[]) => (sAssign
+    ? describePads(list, sAssign, NO_DEVICES, sReserved ?? NO_NUMBERS)
+    : describePads(list, assign, profileDevices)), [assign, profileDevices, sAssign, sReserved]);
   useEffect(() => {
     if (!active) return;
     const tick = () => setPads((prev) => {

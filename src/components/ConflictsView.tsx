@@ -1,18 +1,15 @@
-import { comboLabel, searchSpec, prettyMode } from '../lib/inputs';
+import { bindKey, comboLabel, searchSpec, prettyMode } from '../lib/inputs';
 import type { ConflictGroup } from '../lib/conflicts';
 
 interface Props {
   groups: ConflictGroup[]; onPick: (combo: string) => void;
-  includeDefault: boolean; setIncludeDefault: (v: boolean) => void; hasProfile: boolean;
+  /** "Default overlaps" filter (in the Conflicts filter bar) */
+  includeDefault: boolean; hasProfile: boolean;
+  /** inputs just pressed (bindKey form, Settings → Highlight on press): the groups on them flash */
+  flash?: Set<string> | null;
 }
 
-export function ConflictsView({ groups, onPick, includeDefault, setIncludeDefault, hasProfile }: Props) {
-  const toggle = (
-    <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
-      <input type="checkbox" checked={includeDefault} onChange={(e) => setIncludeDefault(e.target.checked)} className="accent-[#4fd8ff]" />
-      Include overlaps between game defaults
-    </label>
-  );
+export function ConflictsView({ groups, onPick, includeDefault, hasProfile, flash }: Props) {
   if (!groups.length) {
     return (
       <div className="hud-panel hud-corners rounded-lg p-10 text-center">
@@ -20,7 +17,6 @@ export function ConflictsView({ groups, onPick, includeDefault, setIncludeDefaul
         <p className="mt-2 text-sm text-slate-400">
           {includeDefault ? 'No overlapping bindings found in the current view.' : hasProfile ? 'None of your customized bindings collide with another active action.' : 'Import your actionmaps.xml to check your custom bindings for collisions.'}
         </p>
-        <div className="mt-4 flex justify-center">{toggle}</div>
       </div>
     );
   }
@@ -33,15 +29,16 @@ export function ConflictsView({ groups, onPick, includeDefault, setIncludeDefaul
           clashing activation mode. Star Citizen deliberately overloads some keys (tap vs. hold, mode-specific maps), so treat these as
           things to review rather than definite errors. Groups with customized bindings are listed first.
         </span>
-        <div className="mt-2">{toggle}</div>
       </div>
       <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
         {groups.map((g) => {
           const first = g.entries[0].binding;
           const custom = g.entries.some((e) => e.binding.custom);
           const dev = first.slot === 'js' ? `JS${first.instance}` : first.slot === 'gp' ? 'Gamepad' : first.devices.includes('mouse') ? 'Mouse' : 'Keyboard';
+          const lit = !!flash && g.entries.some((e) => flash.has(bindKey(e.binding.slot, e.binding.instance, e.binding.input)));
           return (
-            <div key={g.phys} className={`hud-panel rounded-lg border-l-2 p-3 ${custom ? 'border-l-mod' : 'border-l-alert'}`}>
+            <div key={g.phys} data-flash-row={lit ? '1' : undefined} data-conflict-group={g.phys}
+              className={`hud-panel rounded-lg border-l-2 p-3 ${custom ? 'border-l-mod' : 'border-l-alert'} ${lit ? 'flash-card' : ''}`}>
               <button type="button" onClick={() => onPick(searchSpec(first.slot, first.instance, first.input))} className="flex w-full items-center gap-2 text-left" title="Show these actions in the list">
                 <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">{dev}</span>
                 <span className="keycap !text-sm">{comboLabel(first.input, first.slot)}</span>

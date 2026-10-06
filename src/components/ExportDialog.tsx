@@ -1,25 +1,22 @@
 import { useMemo, useState } from 'react';
 import { buildExport, exportFileName, safeName, usedInstances, type ExportDevice, type ExportFormat } from '../lib/exporter';
-import type { PadInfo } from '../lib/devices';
 import type { DefaultsData, Profile } from '../lib/types';
 
-interface Props { defaults: DefaultsData; profile: Profile; pads: PadInfo[]; onClose: () => void }
+/** a game slot as listed in the export (slots.ts): "js2", device name */
+export interface ExportSlot { id: string; name?: string }
+interface Props {
+  defaults: DefaultsData; profile: Profile;
+  /** the profile's game slots to declare in <options> (with their product names) */
+  devices: ExportDevice[];
+  slots: ExportSlot[];
+  onClose: () => void;
+}
 
-export function ExportDialog({ defaults, profile, pads, onClose }: Props) {
+export function ExportDialog({ defaults, profile, devices, slots, onClose }: Props) {
   const [format, setFormat] = useState<ExportFormat>('layout');
   const [name, setName] = useState(() => safeName(profile.name.replace(/\(actionmaps\.xml\)/i, '').replace(/^layout_|_exported$/g, '')));
   const [copied, setCopied] = useState(false);
   const used = useMemo(() => usedInstances(profile), [profile]);
-  const devices: ExportDevice[] = useMemo(() => {
-    const out: ExportDevice[] = [];
-    for (const i of used.js) {
-      const pad = pads.find((p) => p.kind === 'js' && p.instance === i);
-      if (pad) out.push({ type: 'joystick', instance: i, product: pad.product });
-    }
-    const gp = pads.find((p) => p.kind === 'gp');
-    if (used.gp && gp) out.push({ type: 'gamepad', instance: 1, product: gp.name });
-    return out;
-  }, [used, pads]);
   const opts = { format, name, devices };
   const xml = useMemo(() => buildExport(defaults, profile, opts), [defaults, profile, format, name, devices]); // eslint-disable-line react-hooks/exhaustive-deps
   const file = exportFileName(opts);
@@ -34,7 +31,7 @@ export function ExportDialog({ defaults, profile, pads, onClose }: Props) {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
   const copy = async () => { try { await navigator.clipboard.writeText(xml); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ } };
-  const jsLabel = (i: number) => profile.devices.find((d) => d.slot === 'js' && d.instance === i)?.product ?? pads.find((p) => p.kind === 'js' && p.instance === i)?.name;
+  const unmapped = used.js.filter((i) => !slots.some((s) => s.id === `js${i}`));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/85 p-4 backdrop-blur-sm" onClick={onClose} data-testid="export-dialog">
@@ -62,10 +59,10 @@ export function ExportDialog({ defaults, profile, pads, onClose }: Props) {
             )}
             <div className="rounded border border-edge/70 bg-black/20 p-3 text-xs text-slate-400">
               <div className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-hud/70">Devices in this file</div>
-              <ul className="mt-1 space-y-0.5 font-mono text-[11px]">
-                <li>kb1 / mo1 · keyboard &amp; mouse</li>
-                {(used.gp || profile.devices.some((d) => d.slot === 'gp')) && <li>gp1 · gamepad</li>}
-                {used.js.map((i) => <li key={i} className={jsLabel(i) ? '' : 'text-mod'}>js{i} · {jsLabel(i) ?? 'no device name known (fine; the game maps by instance number)'}</li>)}
+              <ul className="mt-1 space-y-0.5 font-mono text-[11px]" data-testid="export-slots">
+                {!slots.some((s) => s.id === 'kb1') && <li>kb1 / mo1 · keyboard &amp; mouse</li>}
+                {slots.map((s) => <li key={s.id} className={s.name || /^(kb|mo)/.test(s.id) ? '' : 'text-mod'}>{s.id} · {s.name ?? (/^kb/.test(s.id) ? 'keyboard' : /^mo/.test(s.id) ? 'mouse' : 'no device name known (fine; the game maps by instance number)')}</li>)}
+                {unmapped.map((i) => <li key={i} className="text-mod">js{i} · used by bindings, not mapped to a slot</li>)}
               </ul>
               <p className="mt-2 text-[10px] text-slate-500">Only bindings that differ from the {defaults.meta.branch} defaults are written. Cleared defaults are written as an empty input (e.g. <code>kb1_ </code>), as the game does.</p>
             </div>
