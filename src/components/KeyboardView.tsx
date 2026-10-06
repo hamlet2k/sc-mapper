@@ -53,7 +53,10 @@ const U = 40;
 
 export function KeyboardView({ rows, conflictRows, flash, kb = 1, mo = 1, editMode, onEdit, onRemove, onBind, onCapture, onShowInList }: Props) {
   const [mod, setMod] = useState('');
-  const [focus, setFocus] = useState<string | null>(null);
+  /** sticky click selection (survives leaving the key); cleared by clicking the same key again or the board background */
+  const [selected, setSelected] = useState<string | null>(null);
+  /** live hover peek — wins over selected in the inspector while the pointer is over a key */
+  const [hover, setHover] = useState<string | null>(null);
   const [q, setQ] = useState('');
   useEffect(() => {
     if (!flash) return;
@@ -61,8 +64,10 @@ export function KeyboardView({ rows, conflictRows, flash, kb = 1, mo = 1, editMo
     const mods = t.filter(isModifier);
     const main = t.filter((x) => !isModifier(x));
     setMod(main.length && mods.length === 1 ? mods[0] : '');
-    setFocus(main[main.length - 1] ?? mods[mods.length - 1] ?? null);
+    setSelected(main[main.length - 1] ?? mods[mods.length - 1] ?? null);
+    setHover(null);
   }, [flash]);
+  const focus = hover ?? selected;
   const flashKeys = new Set(flash ? tokens(flash.combo) : []);
 
   const index = useMemo(() => {
@@ -119,18 +124,22 @@ export function KeyboardView({ rows, conflictRows, flash, kb = 1, mo = 1, editMo
       <button
         key={k}
         type="button"
-        onMouseEnter={() => setFocus(k)}
-        onClick={() => {
-          // stay on the Keyboard view: modifiers hold a chord, every other key just selects itself in the inspector
+        onMouseEnter={() => setHover(k)}
+        onMouseLeave={() => setHover((h) => (h === k ? null : h))}
+        onClick={(e) => {
+          e.stopPropagation(); // don't clear selection via the board background handler
+          // stay on the Keyboard view: modifiers hold a chord; other keys sticky-select (click again to clear)
           if (isModifier(k)) setMod(mod === k ? '' : k);
-          else setFocus(k);
+          else setSelected((s) => (s === k ? null : k));
         }}
         title={`${keyLabel(k, 'kb')}${mod && k !== mod ? ` with ${keyLabel(mod, 'kb')}` : ''}: ${n} action${n === 1 ? '' : 's'}`}
+        aria-pressed={selected === k || undefined}
+        data-selected={selected === k ? '1' : undefined}
         className={`relative flex flex-col items-start justify-between overflow-hidden rounded-md border px-1.5 py-1 text-left transition
           ${heat || 'border-edge/70 bg-panel2/70 text-slate-500'}
           ${conflict ? '!border-alert shadow-[0_0_14px_-4px_var(--color-alert)]' : ''}
           ${isActiveMod ? '!border-mod !bg-mod/20 !text-mod' : ''}
-          ${focus === k ? 'ring-1 ring-hud2' : ''}
+          ${selected === k ? 'ring-2 ring-hud2 ring-offset-1 ring-offset-void' : hover === k ? 'ring-1 ring-hud/50' : ''}
           ${flashKeys.has(k) ? 'flash-key' : ''}`}
         data-flash={flashKeys.has(k) ? '1' : undefined}
         style={{ width: w * U - 4, height: U - 4, ...style }}
@@ -152,8 +161,8 @@ export function KeyboardView({ rows, conflictRows, flash, kb = 1, mo = 1, editMo
 
   return (
     <div className="flex flex-col gap-4 xl:flex-row" data-testid="keyboard-view">
-      <div className="hud-panel hud-corners min-w-0 flex-1 overflow-x-auto rounded-lg p-4 scrollbar-thin">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="hud-panel hud-corners min-w-0 flex-1 overflow-x-auto rounded-lg p-4 scrollbar-thin" data-testid="keyboard-board" onClick={() => setSelected(null)}>
+        <div className="mb-4 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {kb > 1 && <span className="rounded border border-hud/40 px-1.5 font-mono text-[11px] text-hud2" data-testid="kb-instance">kb{kb}</span>}
           <span className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-hud/70">Modifier</span>
           {MODS.map((m) => (
@@ -162,7 +171,7 @@ export function KeyboardView({ rows, conflictRows, flash, kb = 1, mo = 1, editMo
               {m ? keyLabel(m, 'kb') : 'None'} <span className="text-slate-500">{modCounts[m] ?? 0}</span>
             </button>
           ))}
-          <span className="ml-auto font-mono text-[10px] text-slate-500">hover or click a key · click a modifier to hold it</span>
+          <span className="ml-auto font-mono text-[10px] text-slate-500">click to select · hover to peek · empty area clears · modifier holds a chord</span>
         </div>
         <div className="flex w-max gap-4">
           <div className="flex flex-col gap-1">{MAIN.map((r, i) => <div key={i} className={i === 0 ? 'mb-2' : ''}>{renderRow(r, i)}</div>)}</div>
@@ -242,7 +251,7 @@ export function KeyboardView({ rows, conflictRows, flash, kb = 1, mo = 1, editMo
             )}
           </>
         ) : (
-          <p className="mt-2 text-sm text-slate-500">Hover or click a key to see what it does{editMode ? ', then bind or unbind from here' : ''}. The keyboard reflects your current search, category and filters.</p>
+          <p className="mt-2 text-sm text-slate-500">Click a key to select it{editMode ? ', then bind or unbind from here' : ''}; hover peeks without changing the selection. Click the same key or empty board to clear. The keyboard reflects your current search, category and filters.</p>
         )}
       </aside>
     </div>

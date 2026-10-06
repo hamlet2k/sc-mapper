@@ -953,6 +953,33 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(saved.callouts.find((c) => c.id === 'a2')!.inputs, ['button7']);
     assert.equal(tp.shortInput(''), '?');
   });
+  t('Orion pedals: callouts keep Federico export anchor+box fractions (no withPhotoLayout re-box)', () => {
+    const ped = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion-pedals')!;
+    assert.ok(ped);
+    assert.deepEqual(ped.views?.map((v) => [v.id, v.label, v.image, v.width, v.height]),
+      [['main', 'Pedals', '/device-photos/winctrl-orion-pedals-main.webp', 1413.0434782608697, 1000]]);
+    const by = Object.fromEntries(ped.callouts.map((c) => [c.id, c]));
+    const expect: Record<string, { label: string; kind: string; inputs: string[]; ax: number; ay: number; bx: number; by: number }> = {
+      ltoe: { label: 'Left Toe Brake', kind: 'axis', inputs: ['roty'], ax: 0.23650188953704254, ay: 0.10839489180422053, bx: 0.3330798421069243, by: 0.04177298971756422 },
+      rtoe: { label: 'Right Toe Brake', kind: 'axis', inputs: ['rotx'], ax: 0.7619771631045034, ay: 0.37273337810611146, bx: 0.7847908513174311, by: 0.06541302477937164 },
+      rudder: { label: 'Rudder', kind: 'axis', inputs: ['rotz'], ax: 0.41064638783269963, ay: 0.4694425789120215, bx: 0.09581749339520705, by: 0.7466756130241563 },
+      rudbtns: { label: 'Rudder Buttons', kind: 'buttons', inputs: ['button11', 'button12', 'button13', 'button14', 'button15'], ax: 0.36958173744578776, ay: 0.5543317416916764, bx: 0.21901140104228553, by: 0.8723975412792772 },
+      rbtns: { label: 'Right Buttons', kind: 'buttons', inputs: ['button1', 'button3', 'button4', 'button5', 'button6'], ax: 0.7460075929590958, ay: 0.4415043407514481, bx: 0.8577947000133674, by: 0.21584953887099143 },
+      lbtns: { label: 'Left Buttons', kind: 'buttons', inputs: ['button2', 'button7', 'button8', 'button9', 'button10'], ax: 0.22205323774098443, ay: 0.19865680845733294, bx: 0.48745245987924785, by: 0.0847548567424131 },
+    };
+    assert.deepEqual(Object.keys(by).sort(), Object.keys(expect).sort());
+    for (const [id, e] of Object.entries(expect)) {
+      const c = by[id];
+      assert.equal(c.label, e.label, id);
+      assert.equal(c.kind, e.kind, id);
+      assert.deepEqual(c.inputs, e.inputs, id);
+      assert.equal(c.view, 'main', id);
+      assert.ok(Math.abs(c.anchor.x - e.ax) < 1e-12 && Math.abs(c.anchor.y - e.ay) < 1e-12, `${id} anchor`);
+      assert.ok(Math.abs(c.box.x - e.bx) < 1e-12 && Math.abs(c.box.y - e.by) < 1e-12, `${id} box`);
+    }
+    assert.equal(DEVICE_PHOTO_LAYOUTS['builtin-winctrl-orion-pedals'], undefined, 'not in DEVICE_PHOTO_LAYOUTS (exact path)');
+    assert.ok(ped.match.some((m) => m.vendor === '4098' && m.product === 'BEF0'));
+  });
   {
     // lazy pictures: a template with loadImage gets its picture on demand (cached afterwards); every device template now uses photos
     const d = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion')!;

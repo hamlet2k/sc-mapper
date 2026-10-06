@@ -232,7 +232,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   const labelInfo = (c: Callout) => {
     const lines = c.inputs.flatMap((i, k) => {
       const es = coveredInputs({ inputs: [i] }).flatMap((x) => index.get(x) ?? []);
-      const role = inputRole(c, k) || (c.inputs.length > 1 ? shortInput(i) : '');
+      const role = c.kind === 'buttons' ? shortInput(i) : (inputRole(c, k) || (c.inputs.length > 1 ? shortInput(i) : ''));
       return es.slice(0, 3).map((e) => `${role ? `${role} ` : ''}${e.prefix ? `${e.prefix}+` : ''}${e.row.label}`);
     });
     return { title: `${calloutTitle(c)}${c.label ? ` (${c.inputs.map(shortInput).join(' ')})` : ''}`, lines: lines.length ? lines : ['—'], tone: stateOf(c).tone };
