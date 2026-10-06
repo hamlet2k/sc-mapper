@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ChromiumBanner, ChromiumButtonNotice } from './ChromiumBanner';
 import { createPortal } from 'react-dom';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
@@ -13,7 +13,7 @@ import {
   type Callout, type DeviceIdentity, type DeviceTemplate,
 } from '../lib/templates';
 import type { Binding, Row, Slot } from '../lib/types';
-import { CalloutBody, DeviceCanvas, TONE_STROKE, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
+import { CalloutBody, DeviceCanvas, MULTI_VIEW_MIN_W, TONE_STROKE, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
 import { DROP_HINT } from './GameState';
 import { Ico } from './icons';
 import { Tip } from './Tooltip';
@@ -241,9 +241,11 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   // in sight; the Groups + legend line sticks right under it. Both stick inside the scrolling <main>.
   const barRef = useRef<HTMLElement>(null);
   const lineRef = useRef<HTMLDivElement>(null);
-  const [stick, setStick] = useState({ bar: 0, groups: 0 });
+  const groupsRef = useRef<HTMLDivElement>(null);
+  // page: where the per-page headings of multi-page templates stick (right under the Groups line, whatever its height)
+  const [stick, setStick] = useState({ bar: 0, groups: 0, page: 0 });
   useLayoutEffect(() => {
-    const bar = barRef.current, line = lineRef.current;
+    const bar = barRef.current, line = lineRef.current, groupsLine = groupsRef.current;
     if (!bar || !line) return;
     const measure = () => {
       // sticky offsets count from the scroll container's padding edge: take its top padding out so the line meets the very top
@@ -251,22 +253,39 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
       while (sp && !/(auto|scroll)/.test(getComputedStyle(sp).overflowY)) sp = sp.parentElement;
       const pad = sp ? parseFloat(getComputedStyle(sp).paddingTop) || 0 : 0;
       const hide = line.offsetTop + 1; // the strip and the line's top border scroll away
-      const next = { bar: -hide - pad, groups: bar.offsetHeight - hide - pad };
-      setStick((s) => (s.bar === next.bar && s.groups === next.groups ? s : next));
+      const groups = bar.offsetHeight - hide - pad;
+      const next = { bar: -hide - pad, groups, page: groups + (groupsLine?.offsetHeight ?? 0) };
+      setStick((s) => (s.bar === next.bar && s.groups === next.groups && s.page === next.page ? s : next));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(measure);
-    ro.observe(bar);
+    ro.observe(bar, { box: 'border-box' });
+    if (groupsLine) ro.observe(groupsLine, { box: 'border-box' }); // its wrapping (and padding) moves the page headings
     return () => ro.disconnect();
   }, []);
+  // multi-page templates: the page headings stick under the Groups line. CSS sticky needs every ancestor up to <main> to not
+  // scroll, so the picture column clips horizontally (overflow-x: clip) instead of scrolling; only when it is narrower than
+  // the canvas' minimum width does it scroll again (and the headings stay on their pictures)
+  const [canvasW, setCanvasW] = useState(0);
+  useLayoutEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const m = () => setCanvasW(el.clientWidth);
+    m();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(m);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const stickyHeadings = (shownTpl.views?.length ?? 0) > 1 && canvasW >= MULTI_VIEW_MIN_W;
   const exportJson = async () => {
     try { download(`${slug(tpl.name)}.sc-template.json`, `data:application/json;charset=utf-8,${encodeURIComponent(exportTemplates([await resolveTemplateImage(tpl)]))}`); }
     catch (e) { notify('err', `Template export failed: ${(e as Error).message}`); }
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="device-slot-view" data-slot={`${slot}${instance}`}>
+    <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="device-slot-view" data-slot={`${slot}${instance}`} style={{ '--sticky-page-top': `${stick.page}px` } as CSSProperties}>
       {/* ---- slot bar: slot chips, then hardware · template (+ template tools) · axis settings for the selected slot ---- */}
       <section ref={barRef} className="hud-panel sticky z-40 rounded-lg px-3 py-2.5 print:hidden" data-testid="device-slot-bar" data-sticky-head
         style={{ top: stick.bar, background: STICKY_BAR_BG }}>
@@ -350,7 +369,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
         {filtering && <span className="text-mod" data-testid="device-search-status">{chipInputs.length ? `Pressed ${formatInput(slot, instance, chipInputs[0])}: ${matchCount ? 'selected below' : 'not on this picture (see the list on the right)'}` : `${matchCount} control${matchCount === 1 ? '' : 's'} match “${query.trim()}”`}</span>}
       </div>
       {/* Groups + legend: sticks under the slot bar while the picture scrolls */}
-      <div className="sticky z-40 -my-1.5 flex flex-wrap items-center gap-1 bg-void py-1.5 text-[11px] text-slate-500 shadow-[0_8px_10px_-8px_rgba(0,0,0,.8)] print:hidden" style={{ top: stick.groups }}
+      <div ref={groupsRef} className="sticky z-40 -my-1.5 flex flex-wrap items-center gap-1 bg-void py-1.5 text-[11px] text-slate-500 shadow-[0_8px_10px_-8px_rgba(0,0,0,.8)] print:hidden" style={{ top: stick.groups }}
         data-testid="device-groups-line" data-sticky-head>
         {groups.length > 0 && <>
           <span>Groups:</span>
@@ -372,9 +391,9 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
         </div>
       ))}
       <div className="flex min-h-0 flex-1 gap-3">
-        <div ref={canvasRef} className="min-w-0 flex-1 overflow-auto scrollbar-thin" data-print-area>
+        <div ref={canvasRef} className={`min-w-0 flex-1 scrollbar-thin ${stickyHeadings ? 'overflow-x-clip' : 'overflow-auto'}`} data-print-area>
           <div className="mb-1 hidden font-display text-lg font-bold text-black print:block">{slot.toUpperCase()}{instance} · {ident.name ?? tpl.name}</div>
-          <DeviceCanvas template={shownTpl} stateOf={stateOf} selected={selected} onSelect={(id) => setSelected(id)} pulse={pulse}
+          <DeviceCanvas template={shownTpl} stateOf={stateOf} selected={selected} onSelect={(id) => setSelected(id)} pulse={pulse} stickyHeadings={stickyHeadings}
             renderLabel={(c, s) => <CalloutBody c={c} s={s} entriesFor={(i) => index.get(i) ?? []} live={live} />} />
         </div>
         <aside className="w-80 shrink-0 space-y-3 overflow-y-auto scrollbar-thin print:hidden">

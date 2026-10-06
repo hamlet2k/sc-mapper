@@ -1342,6 +1342,62 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   check(st.scrolled >= 800 && st.lineTop >= -1 && st.lineTop < 4 && st.grpTop >= -1 && st.grpTop < 24 && st.onTop && st.stripGone,
     `scrolled ${st.scrolled}px: hardware/template line stuck at the top (${Math.round(st.lineTop)}px), Groups line under it (${Math.round(st.grpTop)}px), both above the callouts, slot chips scrolled away`);
   await rp.screenshot({ path: shots + '114-devices-sticky-lines.png' });
+  // the page headings of a multi-page template stick right under the Groups line while their page scrolls by
+  {
+    const pageState = () => rp.evaluate(() => {
+      const m = document.getElementById('main');
+      const grp = document.querySelector('[data-testid=device-groups-line]').getBoundingClientRect();
+      return [...document.querySelectorAll('[data-page-heading]')].map((h) => {
+        const r = h.getBoundingClientRect(), page = h.parentElement.getBoundingClientRect();
+        // is the heading painted above the picture's callouts / lines? (hit-test it as if it took the pointer)
+        h.style.pointerEvents = 'auto';
+        const hitEl = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        h.style.pointerEvents = '';
+        const cs = getComputedStyle(h);
+        return { id: h.dataset.pageHeading, text: h.textContent, stuck: h.dataset.stuck === '1', dTop: r.top - grp.bottom, visible: r.bottom > grp.bottom + 1, onTop: !!hitEl && h.contains(hitEl),
+          bg: cs.backgroundColor, z: Number(cs.zIndex), pageTop: page.top - grp.bottom, pageH: page.height, scroll: m.scrollTop };
+      });
+    });
+    // twice: the sticky lines themselves only stop moving once they stick
+    const scrollPage = (k, frac) => rp.evaluate(({ k, frac }) => {
+      const m = document.getElementById('main');
+      for (let i = 0; i < 2; i++) {
+        const grp = document.querySelector('[data-testid=device-groups-line]').getBoundingClientRect();
+        const page = document.querySelectorAll('[data-page-heading]')[k].parentElement.getBoundingClientRect();
+        m.scrollBy(0, page.top - grp.bottom + page.height * frac);
+      }
+    }, { k, frac });
+    await rp.evaluate(() => document.getElementById('main').scrollTo(0, 0));
+    await rp.waitForTimeout(300);
+    const s0 = await pageState();
+    check(s0.length >= 2 && s0.every((h) => !h.stuck && Math.abs(h.pageTop - (h.dTop)) < 1) && s0[0].bg === 'rgba(0, 0, 0, 0)', `URSA: ${s0.length} page headings (${s0.map((h) => h.text).join(' | ')}) sit on their pictures at rest, transparent`);
+    await scrollPage(0, 0.5);
+    await rp.waitForTimeout(300);
+    const s1 = await pageState();
+    const opaque = (bg) => /^rgb\(/.test(bg) || /, 1\)$/.test(bg);
+    check(s1[0].stuck && Math.abs(s1[0].dTop) < 1 && s1[0].onTop && opaque(s1[0].bg) && s1[0].z > 30 && s1[0].z < 40 && !s1[1].stuck,
+      `mid-way into page 1: “${s1[0].text}” stuck right under the Groups line (${s1[0].dTop.toFixed(1)}px), opaque (${s1[0].bg}), above the callouts (z ${s1[0].z}), below the sticky lines`);
+    await scrollPage(1, 0.5);
+    await rp.waitForTimeout(300);
+    const s2 = await pageState();
+    check(s2[1].stuck && Math.abs(s2[1].dTop) < 1 && s2[1].onTop && !s2[0].visible, `mid-way into page 2: “${s2[1].text}” replaced it under the Groups line (${s2[1].dTop.toFixed(1)}px); page 1's heading went with its page`);
+    await rp.screenshot({ path: shots + '116-devices-sticky-page-heading.png' });
+    // a taller Groups line (it wraps in narrower windows) moves the sticking point with it (ResizeObserver -> --sticky-page-top)
+    await rp.getByTestId('device-groups-line').evaluate((e) => { e.style.paddingBottom = '40px'; });
+    await rp.waitForTimeout(300);
+    await scrollPage(1, 0.4);
+    await rp.waitForTimeout(300);
+    const s3 = await pageState();
+    const gh = await rp.getByTestId('device-groups-line').evaluate((e) => e.offsetHeight);
+    check(s3[1].stuck && Math.abs(s3[1].dTop) < 1, `Groups line grown to ${gh}px: the heading still sticks right under it (${s3[1].dTop.toFixed(1)}px)`);
+    await rp.getByTestId('device-groups-line').evaluate((e) => { e.style.paddingBottom = ''; });
+    // a window too narrow for the canvas: the picture column scrolls sideways again and the headings stay on their pictures
+    await rp.setViewportSize({ width: 760, height: 1000 });
+    await rp.waitForTimeout(400);
+    check((await rp.locator('[data-page-heading]').count()) === 0 && (await rp.locator('[data-testid=device-view] [data-view-caption]').count()) === s3.length, 'narrow window: no sticky headings, captions back on the pictures');
+    await rp.setViewportSize({ width: 1680, height: 1000 });
+    await rp.waitForTimeout(400);
+  }
   // tooltips on the icon buttons (a real bubble, not only the title attribute)
   await rp.getByTestId('template-customize').hover();
   await rp.waitForTimeout(500);

@@ -416,3 +416,24 @@ Judgment calls made while building round 1, where the decisions above didn't say
   - Unit tests cover the pages functions, JSON round trips (12 pages, old files), trim / scale / margin, the opaque trim, the flood fill and the mask helpers.
   - The e2e covers adding and renaming a page (and Escape cancelling a rename), Format only on `cutout-offcentre.png` (160×360 → 334×674, glow on/off), the picture landing on the page, callouts on the new page, move left / right, delete with confirm and undo, Remove background on a real vendor photo (Warthog throttle from the user uploads when present, else the fixture), the Devices view captions, and the export JSON.
   - Screenshots: `115-editor-new-page.png`, `115-cutout-before-after.png`, `115-devices-custom-page.png`.
+
+### Sticky page headings (follow-up)
+
+- **What sticks.** In the Devices view, the heading of each page of a multi-page template (built-in or custom) sticks right under the Groups line while its page scrolls by.
+  - It is bound to its own page's box, so at the end of the page it slides away under the sticky lines and the next page's heading takes over.
+  - Single-page templates and the editor keep the caption on the picture.
+- **Look.** At rest the heading sits where the caption was, over the top of the picture, and stays transparent so it doesn't cover the photo.
+  - Once stuck (detected by comparing its position with its page's top, on scroll), it becomes an opaque strip with a bottom border and shadow, like the Groups line.
+  - Stacking: z 35, above the callouts (z 20) and the view pulse (z 30), below the sticky lines (z 40).
+  - Nothing else reflects the active page.
+- **Offset.** `--sticky-page-top` is set on the slot view to the Groups line's sticky top plus its height. ResizeObserver (border box) watches the slot bar and the Groups line, so wrapping or any height change moves the sticking point.
+- **Why the picture column now clips sideways.** CSS sticky only works when no ancestor between it and `<main>` scrolls, and the picture column was `overflow: auto`.
+  - With several pages shown it is now `overflow-x: clip`, which stops sideways scrolling but doesn't create a scroll container.
+  - When the column is narrower than the canvas' minimum width (420 px), it scrolls sideways again and the headings go back onto the pictures.
+- **e2e (URSA MINOR Combat, 3 pages):**
+  - at rest: on the pictures, transparent;
+  - mid-way into page 1: stuck 0.5 px under the Groups line, opaque, painted above the callouts;
+  - mid-way into page 2: page 2's heading replaced it;
+  - a taller Groups line moves it;
+  - in a narrow window it falls back to the captions.
+- **Screenshot:** `116-devices-sticky-page-heading.png`.

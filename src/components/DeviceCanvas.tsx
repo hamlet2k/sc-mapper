@@ -69,11 +69,16 @@ interface Props {
   view?: string;
   /** multi-view templates: briefly emphasize this view (it was just brought into sight by a press); n restarts the pulse */
   pulse?: { view: string; n: number } | null;
+  /** multi-page templates: page headings stick while their page scrolls (needs no horizontally scrolling ancestor, see
+   * DeviceView); otherwise each page keeps its caption on the picture */
+  stickyHeadings?: boolean;
 }
 /** photo views: height (px) a view keeps before the views wrap under each other, and the largest one when stacked. High on
  * purpose: in a usual window two views do not fit side by side at that height, so they stack and each photo gets the full width
  * (the device is the hero, the labels sit around it); very wide windows show them side by side. */
 const VIEW_MIN_H = 440, VIEW_MAX_H = 720;
+/** narrowest a multi-view canvas gets (narrower containers scroll it horizontally) */
+export const MULTI_VIEW_MIN_W = 420;
 /** label-box layout, the same in the Devices view and the template editor (so a box sits exactly where it will be shown):
  * boxes keep this many px from the canvas edges and this gap between each other */
 export const CALLOUT_EDGE_PX = 2, CALLOUT_GAP_PX = 3;
@@ -92,18 +97,50 @@ export function DeviceCanvas(props: Props) {
   if (!t.views?.length) return <ViewCanvas {...props} />;
   const views = view ? t.views.filter((v) => v.id === view).slice(0, 1) : t.views;
   const shown = views.length ? views : t.views.slice(0, 1);
+  // Devices view, several pages shown: each page's heading sticks under the sticky lines while its page scrolls by
+  const sticky = !!props.stickyHeadings && !props.editable && shown.length > 1;
   return (
-    <div data-testid="device-canvas" data-views={shown.length} className="flex w-full flex-wrap items-start justify-center gap-3" style={{ minWidth: Math.min(minWidth, 420) }}>
+    <div data-testid="device-canvas" data-views={shown.length} className="flex w-full flex-wrap items-start justify-center gap-3" style={{ minWidth: Math.min(minWidth, MULTI_VIEW_MIN_W) }}>
       {shown.map((v) => {
         const a = v.width / v.height;
         return (
           <div key={v.id} className="min-w-0" style={props.editable && shownWidth.get(widthKey(viewTemplate(t, v.id), v.id))
             ? { flex: 'none', width: shownWidth.get(widthKey(viewTemplate(t, v.id), v.id)) }
             : { flex: `${a} 1 ${Math.round(a * VIEW_MIN_H)}px`, maxWidth: Math.round(a * VIEW_MAX_H) }}>
-            <ViewCanvas {...props} template={viewTemplate(t, v.id)} photo caption={t.views!.length > 1 ? v.label : undefined} viewId={v.id} minWidth={0} />
+            {sticky && <PageHeading label={v.label} viewId={v.id} focused={props.pulse?.view === v.id} />}
+            <ViewCanvas {...props} template={viewTemplate(t, v.id)} photo caption={!sticky && t.views!.length > 1 ? v.label : undefined} viewId={v.id} minWidth={0} />
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** heading of one page of a multi-page template in the Devices view: it overlays the top of its picture (like the caption it
+ * replaces) and sticks right under the slot bar + Groups line (--sticky-page-top, measured by DeviceView) while its page scrolls
+ * by; it is bound to its own page's box, so the next page's heading takes over. Opaque only while stuck (so it does not cover
+ * the picture at rest); above callouts (z-20) and the view pulse (z-30), below the sticky lines (z-40). */
+const PAGE_HEADING_H = 22;
+function PageHeading({ label, viewId, focused }: { label: string; viewId: string; focused: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = ref.current, page = el?.parentElement;
+    if (!el || !page) return;
+    let raf = 0;
+    // stuck = pushed down from where it sits at rest (the top of its page)
+    const check = () => { raf = 0; setStuck(el.getBoundingClientRect().top - page.getBoundingClientRect().top > 0.5); };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(check); };
+    check();
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    return () => { window.removeEventListener('scroll', onScroll, { capture: true }); window.removeEventListener('resize', onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+  return (
+    <div ref={ref} data-page-heading={viewId} data-stuck={stuck ? '1' : undefined}
+      className={`pointer-events-none sticky z-[35] flex items-center px-2 transition-[background-color,box-shadow] duration-150 print:static ${stuck ? 'rounded-b border-b border-edge/60 bg-void shadow-[0_8px_10px_-8px_rgba(0,0,0,.8)]' : ''}`}
+      style={{ top: 'var(--sticky-page-top, 0px)', height: PAGE_HEADING_H, marginBottom: -PAGE_HEADING_H }}>
+      <span className={`truncate font-display text-[10px] font-bold uppercase tracking-[0.2em] transition-colors duration-500 ${focused ? 'glow-text text-hud2' : stuck ? 'text-hud2/90' : 'text-hud/60'}`} data-view-caption={viewId}>{label}</span>
     </div>
   );
 }
