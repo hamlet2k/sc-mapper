@@ -1431,6 +1431,8 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
   const tp = await import('../src/lib/templates');
   const pg = await import('../src/lib/templatePages');
   const pf = await import('../src/lib/photoFormat');
+  const zv = await import('../src/lib/zoomView');
+  const ip = await import('../src/lib/inputPicker');
   const { readPng } = await import('./png');
   const classic = (): any => ({ version: 1, id: 'c1', name: 'Classic', slot: 'js', image: 'data:image/png;base64,AAAA', aspect: 1.25, match: [],
     callouts: [{ id: 'a', kind: 'button', inputs: ['button1'], anchor: { x: 0.2, y: 0.3 }, box: { x: 0.1, y: 0.1 }, region: 'M0 0L1 1Z' }] });
@@ -1499,7 +1501,7 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     const pw = Math.round(160 * k), ph = Math.round(360 * k), pad = Math.round(0.05 * ph);
     assert.deepEqual([f.mode, f.px.width, f.px.height, f.pad], ['alpha', pw + 2 * pad, ph + 2 * pad, pad]);
     assert.deepEqual(pf.alphaBox(f.px), { x: pad, y: pad, w: pw, h: ph }, 'product centred in its margin');
-    assert.deepEqual(pf.formatSize(2600, 1300), { k: 0.5, w: 1300, h: 650, pad: 65, W: 1430, H: 780 }, 'big products shrink to 1300 px');
+    assert.deepEqual(pf.formatSize(2600, 1300), { k: 0.5, w: 1300, h: 650, pad: 65, padX: 65, padY: 65, W: 1430, H: 780 }, 'big products shrink to 1300 px');
     assert.equal(pf.formatSize(1000, 500).k, 1, '900-1300 px products keep their size');
     // the glow: the margin gets a faint cyan haze, the product stays opaque
     const g = pf.formatPhoto(px, { look: true });
@@ -1544,6 +1546,67 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     const inp = pf.modelInput(solid(50, 30, [255, 0, 0, 255]));
     assert.equal(inp.length, 3 * 320 * 320);
     assert.ok(Math.abs(inp[0] - (1 - 0.485) / 0.229) < 1e-4 && Math.abs(inp[320 * 320] - (0 - 0.456) / 0.224) < 1e-4, 'CHW, scaled by the max, ImageNet-normalised');
+  });
+  t('photo format: canvas aspect presets (stick / throttle / square / custom) keep the product centred', () => {
+    assert.equal(pf.aspectOf({ id: 'auto' }), undefined);
+    assert.ok(Math.abs(pf.aspectOf({ id: 'stick' })! - 990 / 1064) < 1e-9 && Math.abs(pf.aspectOf({ id: 'throttle' })! - 990 / 846) < 1e-9);
+    assert.equal(pf.aspectOf({ id: 'square' }), 1);
+    assert.equal(pf.aspectOf({ id: 'custom', w: 16, h: 9 }), 16 / 9);
+    assert.equal(pf.aspectOf({ id: 'custom', w: 100, h: 1 }), 5, 'custom clamped to 5:1');
+    assert.equal(pf.aspectOf({ id: 'custom', w: 0, h: 9 }), undefined, 'incomplete custom = auto');
+    const s = pf.formatSize(2600, 1300, 990 / 1064);
+    assert.deepEqual([s.W, s.H, s.padX, s.padY], [1430, Math.round(1430 / (990 / 1064)), 65, Math.floor((Math.round(1430 / (990 / 1064)) - 650) / 2)], 'wide product on a portrait canvas grows the height');
+    const px = readPng('scripts/fixtures/photos/cutout-offcentre.png');
+    for (const [id, r] of [['throttle', 990 / 846], ['stick', 990 / 1064], ['square', 1]] as const) {
+      const f = pf.formatPhoto(px, { look: false, aspect: r });
+      assert.ok(Math.abs(f.px.width / f.px.height - r) < 0.002, `${id}: ${f.px.width}x${f.px.height}`);
+      const b = pf.alphaBox(f.px)!;
+      assert.deepEqual([b.w, b.h], [272, 612], `${id}: product size unchanged`);
+      assert.ok(Math.abs(b.x - (f.px.width - b.x - b.w)) <= 1 && Math.abs(b.y - (f.px.height - b.y - b.h)) <= 1, `${id}: centred`);
+      assert.ok(b.x >= f.pad && b.y >= f.pad, `${id}: at least the 5 % margin`);
+      assert.deepEqual([f.padX, f.padY], [b.x, b.y]);
+    }
+  });
+  t('zoom view: fit the union, zoom keeps the point under the cursor, pan, place', () => {
+    const v = zv.fitView([{ x: 0, y: 0, w: 100, h: 50 }, { x: -20, y: -10, w: 60, h: 80 }], 400, 400, 1);
+    assert.deepEqual(v, { z: 400 / 120, cx: 40, cy: 30 }, 'union -20..100 x -10..70');
+    const p = zv.place(v, { x: -20, y: -10, w: 120, h: 80 }, 400, 400);
+    assert.ok(Math.abs(p.left) < 1e-9 && Math.abs(p.width - 400) < 1e-9);
+    const z = zv.zoomAt(v, 2, 300, 100, 400, 400);
+    const before = { x: v.cx + (300 - 200) / v.z, y: v.cy + (100 - 200) / v.z }, after = { x: z.cx + (300 - 200) / z.z, y: z.cy + (100 - 200) / z.z };
+    assert.ok(Math.abs(z.z - 2 * v.z) < 1e-9 && Math.abs(before.x - after.x) < 1e-9 && Math.abs(before.y - after.y) < 1e-9, 'same picture point under the cursor');
+    assert.equal(zv.zoomAt(v, 1e6, 0, 0, 400, 400, 0.01, 8).z, 8, 'max zoom');
+    const q = zv.panBy(z, 30, -10);
+    assert.ok(Math.abs(zv.place(q, { x: 0, y: 0, w: 1, h: 1 }, 400, 400).left - zv.place(z, { x: 0, y: 0, w: 1, h: 1 }, 400, 400).left - 30) < 1e-9, 'drag moves the picture by the drag');
+  });
+  t('input picker: linked device inputs, link-rule fallback, used-by and multi-pick kinds', () => {
+    const tpl = { slot: 'js' as const, match: [{ vendor: '231d', product: '0200', buttons: 32 }] };
+    const ident = { slot: 'js' as const, vendor: '231d', productId: '0200', name: 'VKB Gladiator', buttons: 32 };
+    assert.deepEqual(ip.padLayout([0, 0, 0.5, 0, 0, 0, 0, 0, 9 / 7]), { axes: ['x', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2'], hats: 1 });
+    assert.deepEqual(ip.padLayout([0, 0, 1.2857, 0]), { axes: ['x', 'y', 'rotx'], hats: 1 }, 'a hat axis is not a game axis');
+    const d = ip.deviceInputs(tpl, ident, { buttons: 32, axesRest: [0, 0, 0, 0, 0, 9 / 7], name: 'Gladiator' })!;
+    assert.deepEqual([d.from, d.buttons, d.hats, d.axes.join()], ['device', 32, 1, 'x,y,z,rotx,roty']);
+    const r = ip.deviceInputs(tpl, { ...ident, vendor: '044f' }, undefined)!;
+    assert.deepEqual([r.from, r.buttons, r.hats], ['rule', 32, 0], 'not connected: buttons from the link rule');
+    assert.equal(ip.deviceInputs({ slot: 'js', match: [{ name: 'Gladiator' }] }, ident, undefined), null, 'no button count anywhere: free typing');
+    assert.equal(ip.deviceInputs({ slot: 'js', match: [] }, ident, { buttons: 32, name: 'x' }), null, 'not linked: free typing');
+    const callouts = [
+      { id: 'a', kind: 'button' as const, inputs: ['button1'], label: 'Trigger', anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } },
+      { id: 'b', kind: 'hat' as const, inputs: ['hat1_up', 'hat1_right', 'hat1_down', 'hat1_left'], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } },
+      { id: 'c', kind: 'axis' as const, inputs: ['z'], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } },
+    ];
+    const es = ip.pickEntries(d, callouts, 'button');
+    assert.equal(es.length, 32 + 4);
+    assert.deepEqual(es[0], { input: 'button1', label: 'Button 1', group: 'Buttons', usedBy: [{ id: 'a', title: 'Trigger' }] });
+    assert.deepEqual(es[32].usedBy, [{ id: 'b', title: 'Hat 1' }]);
+    assert.deepEqual([es[32].input, es[35].input, es[35].group], ['hat1_up', 'hat1_left', 'Hats']);
+    assert.deepEqual(ip.pickEntries(d, callouts, 'axis').find((e) => e.input === 'z')!.usedBy.map((u) => u.id), ['c']);
+    const gp = ip.deviceInputs({ slot: 'gp', match: [] }, { slot: 'gp' }, { buttons: 17, name: 'Xbox' })!;
+    assert.deepEqual(ip.pickEntries(gp, [], 'button').map((e) => e.input), cap.GP_BUTTONS, 'gamepads list the SC gamepad buttons');
+    assert.deepEqual(ip.multiPickRange({ kind: 'hat', inputs: ['', '', '', ''] }, 'js'), { min: 4, max: 5 });
+    assert.equal(ip.multiPickRange({ kind: 'hat', inputs: ['hat1_up'] }, 'js'), null, 'a POV hat is one choice');
+    assert.deepEqual(ip.multiPickRange({ kind: 'switch', inputs: ['button1', 'button2'] }, 'js'), { min: 2, max: 8 });
+    assert.equal(ip.multiPickRange({ kind: 'button', inputs: ['button1'] }, 'js'), null);
   });
 }
 

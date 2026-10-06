@@ -64,13 +64,36 @@ export function colorBox(px: Px, bg: Rgb, tol = 24): Box | null {
   return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 
-/** size of the formatted picture for a product of w x h px: scale factor, product size, padding, picture size */
-export function formatSize(w: number, h: number): { k: number; w: number; h: number; pad: number; W: number; H: number } {
+/** canvas shapes offered for the formatted picture (width / height), measured on the built-in photos (devicePhotoSizes.ts):
+ * stick / grip photos are a little taller than wide (MOZA MTQ grips 990 x 1064, VKB grips ~914 x 990), throttle photos a
+ * little wider than tall (X56 990 x 846, MOZA MTP 990 x 842, URSA 1430 x 1243, Virpil VMAX 1062 x 929: median ~1.17) */
+export const ASPECT_PRESETS = [
+  { id: 'auto', label: 'Auto', hint: 'fits the product + margin' },
+  { id: 'stick', label: 'Stick', hint: 'portrait, like the grip photos (990 × 1064)', w: 990, h: 1064 },
+  { id: 'throttle', label: 'Throttle', hint: 'wide, like the throttle photos (990 × 846)', w: 990, h: 846 },
+  { id: 'square', label: 'Square', hint: '1 : 1', w: 1, h: 1 },
+  { id: 'custom', label: 'Custom', hint: 'your own width : height' },
+] as const;
+export type AspectId = (typeof ASPECT_PRESETS)[number]['id'];
+export interface AspectChoice { id: AspectId; w?: number; h?: number }
+/** width / height of a choice (undefined = auto: product + margin); custom ratios are kept within 1:5 .. 5:1 */
+export function aspectOf(c: AspectChoice): number | undefined {
+  const p = ASPECT_PRESETS.find((x) => x.id === c.id);
+  const [w, h] = c.id === 'custom' ? [Number(c.w), Number(c.h)] : p && 'w' in p ? [p.w, p.h] : [NaN, NaN];
+  if (!(w > 0 && h > 0)) return undefined;
+  return Math.min(5, Math.max(0.2, w / h));
+}
+
+/** size of the formatted picture for a product of w x h px: scale factor, product size, margin, picture size. With an
+ * `aspect` (width / height) the canvas grows on one axis to that shape; the product stays centred */
+export function formatSize(w: number, h: number, aspect?: number): { k: number; w: number; h: number; pad: number; padX: number; padY: number; W: number; H: number } {
   const m = Math.max(w, h, 1);
   const k = Math.min(PRODUCT_MAX_SIDE / m, Math.max(1, Math.min(MAX_UPSCALE, PRODUCT_MIN_SIDE / m)));
   const pw = Math.max(1, Math.round(w * k)), ph = Math.max(1, Math.round(h * k));
   const pad = Math.round(PAD_FRAC * Math.max(pw, ph));
-  return { k, w: pw, h: ph, pad, W: pw + 2 * pad, H: ph + 2 * pad };
+  let W = pw + 2 * pad, H = ph + 2 * pad;
+  if (aspect && aspect > 0) { if (W / H < aspect) W = Math.round(H * aspect); else H = Math.round(W / aspect); }
+  return { k, w: pw, h: ph, pad, padX: Math.floor((W - pw) / 2), padY: Math.floor((H - ph) / 2), W, H };
 }
 
 export function cropPx(px: Px, b: Box): Px {
@@ -79,12 +102,11 @@ export function cropPx(px: Px, b: Box): Px {
   return out;
 }
 
-/** the picture with `pad` px around it, filled with rgba `fill` */
-export function padPx(px: Px, pad: number, fill: [number, number, number, number] = [0, 0, 0, 0]): Px {
-  const W = px.width + 2 * pad, H = px.height + 2 * pad;
+/** the picture placed at (left, top) on a W x H canvas filled with rgba `fill` (W, H default to a uniform `left` margin) */
+export function padPx(px: Px, left: number, fill: [number, number, number, number] = [0, 0, 0, 0], top = left, W = px.width + 2 * left, H = px.height + 2 * top): Px {
   const out = makePx(W, H);
   if (fill.some((v) => v)) for (let i = 0; i < out.data.length; i += 4) { out.data[i] = fill[0]; out.data[i + 1] = fill[1]; out.data[i + 2] = fill[2]; out.data[i + 3] = fill[3]; }
-  for (let y = 0; y < px.height; y++) out.data.set(px.data.subarray(y * px.width * 4, (y + 1) * px.width * 4), ((y + pad) * W + pad) * 4);
+  for (let y = 0; y < px.height; y++) out.data.set(px.data.subarray(y * px.width * 4, (y + 1) * px.width * 4), ((y + top) * W + left) * 4);
   return out;
 }
 
@@ -279,11 +301,11 @@ export function applyMask(px: Px, mask: Float32Array, opts: { crisp: boolean }):
 
 /** the built-in look, baked in (cutout.py): soft haze behind the product, faint cyan outer glow and rim, blacks lifted.
  * `px` is the padded picture (product alpha, transparent margin) */
-export function bakeLook(px: Px): Px {
+export function bakeLook(px: Px, productSide = Math.max(px.width, px.height) / (1 + 2 * PAD_FRAC)): Px {
   const { width: W, height: H, data: d } = px;
   const n = W * H, pa = new Float32Array(n);
   for (let p = 0; p < n; p++) pa[p] = d[p * 4 + 3] / 255;
-  const side = Math.max(W, H) / (1 + 2 * PAD_FRAC);
+  const side = productSide;
   const blur = gaussBlur(pa, W, H, Math.max(3, 0.012 * side));
   const er = gaussBlur(rankFilter(pa, W, H, 2, false), W, H, 1.5);
   const out = makePx(W, H);
@@ -307,18 +329,19 @@ export function bakeLook(px: Px): Px {
   return out;
 }
 
-export interface FormatResult { px: Px; mode: 'alpha' | 'opaque'; box: Box; k: number; pad: number }
+export interface FormatResult { px: Px; mode: 'alpha' | 'opaque'; box: Box; k: number; pad: number; padX: number; padY: number; product: { w: number; h: number } }
 /** format like the built-in photos: trim (transparent edges, or the plain background of an opaque picture), scale the product
- * (longest side 900-1300 px), add the 5 % margin (transparent, or the background colour) and optionally the built-in glow
- * (cut-outs only). `resize` scales the trimmed product (a canvas in the browser, resizePx in Node). */
-export function formatPhoto(px: Px, opts: { look: boolean; resize?: (p: Px, w: number, h: number) => Px }): FormatResult {
+ * (longest side 900-1300 px), add the 5 % margin (transparent, or the background colour), grow the canvas to the chosen
+ * `aspect` (product centred) and optionally add the built-in glow (cut-outs only). `resize` scales the trimmed product (a
+ * canvas in the browser, resizePx in Node). */
+export function formatPhoto(px: Px, opts: { look: boolean; aspect?: number; resize?: (p: Px, w: number, h: number) => Px }): FormatResult {
   const alpha = hasTransparency(px);
   const bg = alpha ? null : borderColor(px);
   const box = (alpha ? alphaBox(px) : colorBox(px, bg!)) ?? { x: 0, y: 0, w: px.width, h: px.height };
   const prod = cropPx(px, box);
-  const f = formatSize(box.w, box.h);
+  const f = formatSize(box.w, box.h, opts.aspect);
   const scaled = f.w === box.w && f.h === box.h ? prod : (opts.resize ?? resizePx)(prod, f.w, f.h);
-  let out = padPx(scaled, f.pad, bg ? [bg[0], bg[1], bg[2], 255] : [0, 0, 0, 0]);
-  if (alpha && opts.look) out = bakeLook(out);
-  return { px: out, mode: alpha ? 'alpha' : 'opaque', box, k: f.k, pad: f.pad };
+  let out = padPx(scaled, f.padX, bg ? [bg[0], bg[1], bg[2], 255] : [0, 0, 0, 0], f.padY, f.W, f.H);
+  if (alpha && opts.look) out = bakeLook(out, Math.max(f.w, f.h));
+  return { px: out, mode: alpha ? 'alpha' : 'opaque', box, k: f.k, pad: f.pad, padX: f.padX, padY: f.padY, product: { w: f.w, h: f.h } };
 }

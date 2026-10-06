@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { GP_AXES, GP_BUTTONS, JS_AXES } from '../lib/capture';
-import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
+import { getPads, padLabel, type PadInfo, type PadLike } from '../lib/devices';
+import { deviceInputs, multiPickRange, pickEntries, usage, type DeviceInputs, type PickEntry } from '../lib/inputPicker';
 import { usePadHits, type PressHit } from '../lib/listen';
 import {
   BLANK_ASPECT, CALLOUT_KINDS, HAT_DIRS, calloutFor, calloutTitle, coveredInputs, exportTemplates, freeBoxSpot, hatInputs, inputRole, inputsForKind,
@@ -166,6 +167,9 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   };
   const canSave = t.name.trim().length > 0;
   const linked = matchScore(t, device.ident) > 0;
+  // the linked device's inputs for the callout input pickers (axes / POV hats from the connected device's axis rest values)
+  const [axesRest] = useState(() => (device.pad ? getPads().find((g) => g.index === device.pad!.index)?.axes : undefined));
+  const devIn = deviceInputs(t, device.ident, device.pad && { buttons: device.pad.buttons, axesRest, name: padLabel(device.pad) });
   const devName = device.pad ? padLabel(device.pad) : device.ident.name;
 
   return (
@@ -279,7 +283,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
                   </select>
                 </label>
               )}
-              <InputsEditor c={selC} slot={t.slot} pressTarget={pressTarget} setPressTarget={setPressTarget} canPress={!!device.pad} onChange={(inputs) => patchCallout(selC.id, { inputs })} />
+              <InputsEditor key={selC.id} c={selC} slot={t.slot} devIn={devIn} callouts={t.callouts} pressTarget={pressTarget} setPressTarget={setPressTarget} canPress={!!device.pad} onChange={(inputs) => patchCallout(selC.id, { inputs })} />
               <label className="flex items-center gap-2">Name
                 <input value={selC.label ?? ''} placeholder={calloutTitle({ ...selC, label: undefined })} aria-label="Callout name"
                   onChange={(e) => patchCallout(selC.id, { label: e.target.value || undefined })} className={`${field} flex-1`} />
@@ -333,11 +337,83 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   );
 }
 
-function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange }: {
-  c: Callout; slot: 'js' | 'gp'; pressTarget: { id: string; idx: number } | null; setPressTarget: (p: { id: string; idx: number } | null) => void; canPress: boolean;
+/** "used by" text of a picker entry, relative to the callout being edited */
+function usedText(e: Pick<PickEntry, 'usedBy'>, selfId: string): { text: string; tone: string } {
+  const others = e.usedBy.filter((u) => u.id !== selfId);
+  if (others.length) return { text: `used: ${others.map((u) => u.title).join(', ')}`, tone: 'text-warn' };
+  return e.usedBy.length ? { text: 'this callout', tone: 'text-hud' } : { text: 'free', tone: 'text-slate-600' };
+}
+const pickHead = (d: DeviceInputs) => (d.from === 'device' ? `Inputs of ${d.label}` : d.slot === 'gp' ? 'Gamepad inputs' : `Buttons 1–${d.buttons} from the link rule (device not connected)`);
+
+/** inline list of the linked device's inputs (one pick), grouped, each with the callout already using it */
+function InputPicker({ d, entries, value, selfId, onPick, onClose }: { d: DeviceInputs; entries: PickEntry[]; value: string; selfId: string; onPick: (input: string) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { ref.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }); }, []);
+  const groups = [...new Set(entries.map((e) => e.group))];
+  return (
+    <div ref={ref} role="listbox" aria-label="Device inputs" data-testid="input-picker" data-source={d.from} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}
+      className="max-h-56 overflow-y-auto rounded border border-hud/40 bg-panel2 p-1 text-[11px]">
+      <div className="flex items-center gap-2 px-1 pb-1 text-[10px] text-slate-500"><span className="flex-1 truncate">{pickHead(d)}</span>
+        <button type="button" onClick={onClose} aria-label="Close input list" className="hover:text-slate-200"><Ico name="close" /></button></div>
+      {groups.map((g) => (
+        <div key={g}>
+          {groups.length > 1 && <div className="px-1 pt-1 text-[10px] uppercase tracking-wider text-slate-500">{g}</div>}
+          {entries.filter((e) => e.group === g).map((e) => {
+            const u = usedText(e, selfId);
+            return (
+              <button key={e.input} type="button" role="option" aria-selected={e.input === value} data-testid="input-picker-option" data-input={e.input} data-used={e.usedBy.filter((x) => x.id !== selfId).map((x) => x.title).join(', ')}
+                onClick={() => onPick(e.input)} className={`flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-hud/10 ${e.input === value ? 'bg-hud/15 text-hud' : 'text-slate-200'}`}>
+                <span className="w-24 shrink-0">{e.label}</span><span className="truncate font-mono text-[10px] text-slate-500">{e.input}</span>
+                <span className={`ml-auto truncate pl-2 ${u.tone}`} title={u.text}>{u.text}</span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** pick several inputs at once, in order (a hat's four directions + push, a switch's positions, a row of buttons, an encoder) */
+function MultiPicker({ d, entries, roles, min, max, initial, selfId, onApply, onClose }: {
+  d: DeviceInputs; entries: PickEntry[]; roles: (i: number) => string; min: number; max: number; initial: string[]; selfId: string; onApply: (inputs: string[]) => void; onClose: () => void;
+}) {
+  const [picked, setPicked] = useState<string[]>([]); // a fresh pick; Cancel keeps the current inputs
+  const toggle = (i: string) => setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : p.length < max ? [...p, i] : p));
+  return (
+    <div data-testid="input-picker-multi" data-source={d.from} className="rounded border border-hud/40 bg-panel2 p-1 text-[11px]" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+      <div className="px-1 pb-1 text-[10px] text-slate-500">{pickHead(d)}. Tick in order: {Array.from({ length: max }, (_, i) => roles(i)).join(', ')}{min < max ? ` (${max - min > 1 ? 'more' : 'last'} optional)` : ''}.{initial.some(Boolean) ? ` Now: ${initial.filter(Boolean).join(', ')}.` : ''}</div>
+      <div className="max-h-56 overflow-y-auto">
+        {entries.map((e) => {
+          const k = picked.indexOf(e.input), u = usedText(e, selfId);
+          return (
+            <label key={e.input} data-testid="input-picker-multi-option" data-input={e.input} className={`flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-hud/10 ${k >= 0 ? 'text-hud' : 'text-slate-200'}`}>
+              <input type="checkbox" checked={k >= 0} onChange={() => toggle(e.input)} disabled={k < 0 && picked.length >= max} />
+              <span className="w-24 shrink-0">{e.label}</span>
+              <span className="w-24 shrink-0 truncate text-[10px] text-mod">{k >= 0 ? `${k + 1}. ${roles(k)}` : ''}</span>
+              <span className={`ml-auto truncate pl-2 ${u.tone}`} title={u.text}>{u.text}</span>
+            </label>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-2 px-1 pt-1">
+        <span className="flex-1 text-[10px] text-slate-500">{picked.length} of {min === max ? max : `${min}–${max}`}</span>
+        <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200">Cancel</button>
+        <button type="button" data-testid="input-picker-apply" disabled={picked.length < min} onClick={() => onApply(picked)} className="rounded border border-hud/60 px-2 text-hud enabled:hover:bg-hud/10 disabled:opacity-40">Apply</button>
+      </div>
+    </div>
+  );
+}
+
+function InputsEditor({ c, slot, devIn, callouts, pressTarget, setPressTarget, canPress, onChange }: {
+  c: Callout; slot: 'js' | 'gp'; devIn: DeviceInputs | null; callouts: readonly Callout[]; pressTarget: { id: string; idx: number } | null; setPressTarget: (p: { id: string; idx: number } | null) => void; canPress: boolean;
   onChange: (inputs: string[]) => void;
 }) {
-  const axes = slot === 'gp' ? [...GP_AXES, 'triggerl', 'triggerr'] : JS_AXES;
+  const axes = devIn?.axes ?? (slot === 'gp' ? [...GP_AXES, 'triggerl', 'triggerr'] : JS_AXES);
+  const [open, setOpen] = useState<number | 'multi' | null>(null);
+  const used = usage(callouts);
+  const usedNote = (input: string) => { const o = (used.get(input) ?? []).filter((u) => u.id !== c.id); return o.length ? ` — used: ${o.map((u) => u.title).join(', ')}` : ''; };
+  const buttons = devIn ? pickEntries(devIn, callouts, 'button') : [];
   const set = (i: number, v: string) => onChange(c.inputs.map((x, j) => (j === i ? v : x)));
   const pressBtn = (i: number) => canPress && (
     <button type="button" onClick={() => setPressTarget(pressTarget?.id === c.id && pressTarget.idx === i ? null : { id: c.id, idx: i })} title="Press the control on the device to set this input"
@@ -345,37 +421,61 @@ function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange
       {pressTarget?.id === c.id && pressTarget.idx === i ? 'press…' : <Ico name="press" />}
     </button>
   );
+  /** ▾ next to an input row: opens the list of the linked device's inputs */
+  const pickBtn = (i: number, label: string) => devIn && (
+    <button type="button" data-testid="input-picker-btn" aria-expanded={open === i} aria-label={`Pick ${label} from the device inputs`} title={`Pick from ${devIn.from === 'device' ? 'the device' : 'the link rule'}'s inputs`}
+      onClick={() => setOpen(open === i ? null : i)} className={`rounded border px-1 text-[10px] ${open === i ? 'border-hud bg-hud/15 text-hud' : 'border-edge text-slate-400 hover:border-hud/60'}`}>▾</button>
+  );
+  const picker = (i: number, value: string, apply: (v: string) => void) => devIn && open === i && (
+    <InputPicker d={devIn} entries={buttons} value={value} selfId={c.id} onClose={() => setOpen(null)} onPick={(v) => { setOpen(null); apply(v); }} />
+  );
+  const range = devIn && buttons.length ? multiPickRange(c, slot) : null;
+  const multi = (roles: (i: number) => string, apply: (inputs: string[]) => void) => range && devIn && (open === 'multi'
+    ? <MultiPicker d={devIn} entries={buttons} roles={roles} min={range.min} max={range.max} initial={c.inputs} selfId={c.id} onClose={() => setOpen(null)} onApply={(v) => { setOpen(null); apply(v); }} />
+    : <button type="button" data-testid="input-picker-multi-btn" onClick={() => setOpen('multi')} className="text-[11px] text-hud hover:underline">Pick several from the device…</button>);
   if (c.kind === 'hat') {
     const n = Number(/^hat(\d)_/.exec(c.inputs[0] ?? '')?.[1] ?? 0);
     const dpad = /^dpad_/.test(c.inputs[0] ?? '');
     // a joystick hat is either a POV hat (hatN_up...) or four buttons (many grips report their 4-way hats as buttons)
     const asButtons = slot === 'js' && !n;
+    const setDir = (k: number, v: string) => { if (v !== (c.inputs[k] ?? '')) onChange(HAT_DIRS.map((_, j) => (j === k ? v : c.inputs[j] ?? '')).concat(c.inputs.slice(4))); };
+    const povNote = (k: number) => {
+      const o = hatInputs(k).flatMap((i) => used.get(i) ?? []).filter((u) => u.id !== c.id);
+      return `${o.length ? ` — used: ${[...new Set(o.map((u) => u.title))].join(', ')}` : ''}${devIn?.from === 'device' && k > devIn.hats ? ' (not seen on the device)' : ''}`;
+    };
     return (
       <div className="space-y-1">
         {slot === 'js' && (
           <label className="flex items-center gap-2">Reports as
             <select value={asButtons ? 'b' : String(n)} aria-label="Hat number"
-              onChange={(e) => onChange(e.target.value === 'b' ? ['', '', '', '', ...c.inputs.slice(4)] : [...hatInputs(Number(e.target.value)), ...c.inputs.slice(4)])} className={field}>
-              {[1, 2, 3, 4].map((k) => <option key={k} value={k}>POV hat {k}</option>)}
+              onChange={(e) => onChange(e.target.value === 'b' ? ['', '', '', '', ...c.inputs.slice(4)] : [...hatInputs(Number(e.target.value)), ...c.inputs.slice(4)])} className={`${field} min-w-0 flex-1`}>
+              {[1, 2, 3, 4].map((k) => <option key={k} value={k}>POV hat {k}{povNote(k)}</option>)}
               <option value="b">4 buttons</option>
             </select>
             {!asButtons && pressBtn(0)}
           </label>
         )}
         {asButtons ? HAT_DIRS.map((d, k) => (
-          <label key={d} className="flex items-center gap-2"><span className="w-28 shrink-0">{inputRole(c, k)} {d}</span>
-            <input defaultValue={c.inputs[k] ?? ''} key={`${c.id}:${k}:${c.inputs[k]}`} placeholder="not set, e.g. button7" aria-label={`Hat ${d} input`}
-              onBlur={(e) => { const v = numIn(e.target.value); if (v === '' || INPUT_RE.test(v)) { if (v !== (c.inputs[k] ?? '')) onChange(HAT_DIRS.map((_, j) => (j === k ? v : c.inputs[j] ?? '')).concat(c.inputs.slice(4))); } else e.target.value = c.inputs[k] ?? ''; }}
-              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
-            {pressBtn(k)}
-          </label>
+          <div key={d} className="space-y-1">
+            <label className="flex items-center gap-2"><span className="w-28 shrink-0">{inputRole(c, k)} {d}</span>
+              <input defaultValue={c.inputs[k] ?? ''} key={`${c.id}:${k}:${c.inputs[k]}`} placeholder="not set, e.g. button7" aria-label={`Hat ${d} input`}
+                onBlur={(e) => { const v = numIn(e.target.value); if (v === '' || INPUT_RE.test(v)) setDir(k, v); else e.target.value = c.inputs[k] ?? ''; }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
+              {pickBtn(k, `hat ${d}`)}
+              {pressBtn(k)}
+            </label>
+            {picker(k, c.inputs[k] ?? '', (v) => setDir(k, v))}
+          </div>
         )) : !dpad && <div className="font-mono text-[10px] text-slate-500">{c.inputs.slice(0, 4).map((i, k) => `${inputRole(c, k)} ${i}`).join('  ')}</div>}
         {dpad && <div className="font-mono text-[10px] text-slate-500">{c.inputs.slice(0, 4).map((i, k) => `${inputRole(c, k)} ${i}`).join('  ')}</div>}
         <label className="flex items-center gap-2">Push button
           <input value={c.inputs[4] ?? ''} placeholder="optional, e.g. button5" aria-label="Hat push button"
             onChange={(e) => { const v = e.target.value.trim().toLowerCase(); onChange(v && INPUT_RE.test(v) ? [...c.inputs.slice(0, 4), v] : c.inputs.slice(0, 4)); }} className={`${field} min-w-0 flex-1 font-mono`} />
+          {pickBtn(4, 'the push button')}
           {c.inputs[4] !== undefined && pressBtn(4)}
         </label>
+        {picker(4, c.inputs[4] ?? '', (v) => onChange([...HAT_DIRS.map((_, j) => c.inputs[j] ?? ''), v]))}
+        {asButtons && multi((i) => (i < 4 ? HAT_DIRS[i] : 'push'), (v) => onChange(v))}
       </div>
     );
   }
@@ -384,32 +484,39 @@ function InputsEditor({ c, slot, pressTarget, setPressTarget, canPress, onChange
       <div className="space-y-1">
         {c.inputs.map((a, i) => (
           <label key={i} className="flex items-center gap-2">{c.inputs.length > 1 ? (i ? 'Axis 2' : 'Axis 1') : 'Axis'}
-            <select value={a} onChange={(e) => set(i, e.target.value)} aria-label={`Axis ${i + 1}`} className={`${field} font-mono`}>
-              {[...new Set([a, ...axes])].map((x) => <option key={x} value={x}>{x || '— not set —'}</option>)}
+            <select value={a} onChange={(e) => set(i, e.target.value)} aria-label={`Axis ${i + 1}`} className={`${field} min-w-0 flex-1 font-mono`}>
+              {[...new Set([a, ...axes])].map((x) => <option key={x} value={x}>{x ? `${x}${usedNote(x)}${devIn?.from === 'device' && !devIn.axes.includes(x) ? ' (not on the device)' : ''}` : '— not set —'}</option>)}
             </select>
             {pressBtn(i)}
             {i > 0 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 1))} className="text-slate-500 hover:text-alert" aria-label="Remove second axis"><Ico name="close" /></button>}
           </label>
         ))}
-        {c.inputs.length < 2 && <button type="button" onClick={() => onChange([...c.inputs, axes.find((x) => !c.inputs.includes(x)) ?? axes[0]])} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> second axis (mini-stick)</button>}
+        {devIn?.from === 'device' && <p className="text-[10px] text-slate-500">{devIn.axes.length} axes on {devIn.label}: {devIn.axes.join(', ') || 'none'}</p>}
+        {c.inputs.length < 2 && <button type="button" onClick={() => onChange([...c.inputs, axes.find((x) => !c.inputs.includes(x) && !used.has(x)) ?? axes.find((x) => !c.inputs.includes(x)) ?? axes[0]])} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> second axis (mini-stick)</button>}
       </div>
     );
   }
   const labels = c.kind === 'encoder' ? ['Clockwise', 'Counter-clockwise', 'Push'] : c.kind === 'switch' ? c.inputs.map((_, i) => `Position ${i + 1}`) : c.kind === 'buttons' ? c.inputs.map((_, i) => `Button ${i + 1}`) : ['Input'];
+  const role = (i: number) => (c.kind === 'encoder' ? ['clockwise', 'counter-clockwise', 'push'][i] : c.kind === 'switch' ? `position ${i + 1}` : `button ${i + 1}`);
   return (
     <div className="space-y-1">
       {c.inputs.map((x, i) => (
-        <label key={i} className="flex items-center gap-2"><span className="w-28 shrink-0">{labels[i] ?? `Input ${i + 1}`}</span>
-          <input defaultValue={x} key={`${c.id}:${i}:${x}`} list={slot === 'gp' ? 'tpl-gp-buttons' : undefined} aria-label={`${labels[i] ?? `Input ${i + 1}`} input`} placeholder="not set, e.g. button5"
-            onBlur={(e) => { const v = numIn(e.target.value); if (v !== x && (v === '' || INPUT_RE.test(v))) set(i, v); else e.target.value = x; }}
-            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
-          {pressBtn(i)}
-          {c.kind === 'encoder' && i === 2 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 2))} className="text-slate-500 hover:text-alert" aria-label="Remove push"><Ico name="close" /></button>}
-          {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length > 2 && <button type="button" onClick={() => onChange(c.inputs.filter((_, j) => j !== i))} className="text-slate-500 hover:text-alert" aria-label={`Remove ${c.kind === 'buttons' ? 'button' : 'position'} ${i + 1}`}><Ico name="close" /></button>}
-        </label>
+        <div key={i} className="space-y-1">
+          <label className="flex items-center gap-2"><span className="w-28 shrink-0">{labels[i] ?? `Input ${i + 1}`}</span>
+            <input defaultValue={x} key={`${c.id}:${i}:${x}`} list={slot === 'gp' && !devIn ? 'tpl-gp-buttons' : undefined} aria-label={`${labels[i] ?? `Input ${i + 1}`} input`} placeholder="not set, e.g. button5"
+              onBlur={(e) => { const v = numIn(e.target.value); if (v !== x && (v === '' || INPUT_RE.test(v))) set(i, v); else e.target.value = x; }}
+              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
+            {pickBtn(i, (labels[i] ?? `input ${i + 1}`).toLowerCase())}
+            {pressBtn(i)}
+            {c.kind === 'encoder' && i === 2 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 2))} className="text-slate-500 hover:text-alert" aria-label="Remove push"><Ico name="close" /></button>}
+            {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length > 2 && <button type="button" onClick={() => onChange(c.inputs.filter((_, j) => j !== i))} className="text-slate-500 hover:text-alert" aria-label={`Remove ${c.kind === 'buttons' ? 'button' : 'position'} ${i + 1}`}><Ico name="close" /></button>}
+          </label>
+          {picker(i, x, (v) => set(i, v))}
+        </div>
       ))}
       {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length < 8 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> {c.kind === 'buttons' ? 'button' : 'position'}</button>}
       {c.kind === 'encoder' && c.inputs.length === 2 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> push</button>}
+      {multi(role, (v) => onChange(v))}
       {slot === 'gp' && <datalist id="tpl-gp-buttons">{GP_BUTTONS.map((b) => <option key={b} value={b} />)}</datalist>}
     </div>
   );

@@ -437,3 +437,48 @@ Judgment calls made while building round 1, where the decisions above didn't say
   - a taller Groups line moves it;
   - in a narrow window it falls back to the captions.
 - **Screenshot:** `116-devices-sticky-page-heading.png`.
+
+## Round 7
+
+### Prepare-picture modal: zoom and pan
+
+- **One camera for both panes.** The view (zoom + centre) is kept in the original picture's pixel coordinates. The result pane maps its picture through the same transform the format applied (trim box, scale k, margin, encode scale). So both panes always show the same spot of the product, and a cut-out edge can be compared with the original pixel by pixel.
+- **Controls:**
+  - − / + zoom in 25 % steps around the pane centre;
+  - the readout shows the current %;
+  - Fit (also a double-click) shows both pictures whole (fit = the union of the original and the result, so the margin is visible);
+  - 100% = one pixel of the stored picture per screen pixel (before there is a result, one pixel of the uploaded file).
+- **Mouse.** The wheel zooms around the cursor; the picture point under it stays put. The listener is non-passive, so the page doesn't scroll. Dragging either pane pans both (pointer capture, so leaving the pane mid-drag is fine).
+- **Limits and rendering.** Zoom goes from half the fit up to 16 screen px per stored px. From 2 screen px per pixel the pictures render `pixelated`, so edges show real pixels instead of a smoothed guess.
+- **Margin preview.** The result pane outlines the stored canvas (thin cyan) and the product box in it (dashed amber). The caption reads `W×H (ratio:1), product w×h, ≥ pad px margin`.
+
+### Canvas aspect
+
+- **Presets:** Auto · Stick · Throttle · Square · Custom W:H, as a radio group under the picture.
+  - **Auto** is the round-6 behaviour: the product plus a 5 % margin.
+  - **Stick = 990 : 1064 (0.93).** Measured from the built-in grip photos (`src/lib/devicePhotoSizes.ts`): the MCG / MTQ grips are 990×1064 (0.930), Gladiator SCG 914×990 (0.923) and Gunfighter 0.927.
+  - **Throttle = 990 : 846 (1.17).** The built-in throttle photos range 1.08–1.29, and their median is 1.17: X-56 990×846 (1.170), MTP 990×842 (1.176), VMAX 1062×929 (1.143) and URSA back 1430×1243 (1.150), with TWCS 1.29 and Warthog / Orion ~1.08 at the ends.
+  - **Custom** takes width : height, clamped to 1:5 … 5:1. An incomplete value behaves as Auto.
+- **How it is applied.** The product keeps the built-in scale (900–1300 px longest side) and at least the 5 % margin. Only the shorter canvas side grows to reach the ratio, so the product is never shrunk to fit the shape. It is centred in the canvas.
+- **Persistence.** The last choice (including custom W:H) is stored in `localStorage` under `sc-mapper:photo-aspect` and preselected for the next upload. Changing it re-formats the current result straight away.
+
+### Template editor: input picker
+
+- **When.** Each input row of the selected callout gets a ▾ button that opens a list of the device's inputs. It appears whenever we know the device's inputs:
+  - **Linked and connected** (the template's link rules match the selected device, which is plugged in): buttons 1..N from the Gamepad API's button count; POV hats from the axes resting outside ±1 (Chrome exposes a hat as an axis at 9/7), listed as `hatN_up/right/down/left`; and axes by their game names (`x, y, z, rotx, roty, rotz, slider1, slider2`, index-based like capture), with the hat axis left out.
+  - **Gamepad templates:** the game's gamepad buttons and axes.
+  - **Not connected / not matching:** buttons 1..N from the link rule's button count (labelled "from the link rule").
+  - **Neither:** no picker, free typing only.
+- **Used by.** Every entry shows "free", "this callout", or "used: <callout names>". The POV-hat "Reports as" options and the axis selects carry the same note. Hats or axes that the connected device doesn't seem to have are marked "(not seen on the device)" / "(not on the device)" but stay selectable: a hat that is being held at the moment the editor opens reads as a pressed position, not as rest.
+- **Several at once.** "Pick several from the device…" works for multi-input callouts:
+  - a 4-way hat reported as buttons: up, right, down, left, then an optional push;
+  - a switch / rocker: positions;
+  - a row of buttons;
+  - an encoder: clockwise, counter-clockwise, optional push.
+  The entries are ticked in order (the role is shown next to each tick) and Apply sets the inputs. The pick starts empty, Cancel keeps the current inputs, and the current ones are listed for reference. A POV hat stays a single "Reports as" choice.
+- **Fallbacks kept.** Typing (a bare number means that button) and Press-to-pick work as before, next to the ▾.
+- **Imported profile device options are not used.** The game's `<options>` for a device carry the product name, GUID and per-axis tuning, but no button / hat / axis counts. They can't list the inputs, so the source is the connected device or the link rule.
+- **Tests:**
+  - Unit: the aspect presets (ratios, custom clamp, product size kept and centred), the zoom maths (union fit, zoom keeps the point under the cursor, pan, place) and the picker sources (device / rule / none, hat-axis detection, used-by, multi-pick kinds).
+  - e2e: the ± / 100% / Fit buttons; the wheel keeping the cursor point, with the panes in sync; drag panning both panes; Stick / Throttle / Square / Custom results (ratio, centred); the choice remembered on the next upload; the picker on the connected Gladiator (32 buttons + hat 1 directions, used-by); picking and typing; the 8 axes; multi-pick for a 4-button hat and a switch; the link-rule fallback (24 buttons); and free text only without a count.
+  - Screenshots: `117-prepare-zoomed.png`, `117-prepare-aspect.png`, `117-input-picker.png`.

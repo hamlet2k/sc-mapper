@@ -1759,6 +1759,211 @@ console.log('\nround 6: template pages, picture preparation');
   await c6.close();
 }
 
+// ---- round 7: picture preparation zoom / pan (both panes in sync) and canvas aspect; the template editor's input picker
+console.log('\nround 7: prepare-picture zoom + aspect, input picker');
+{
+  const c7 = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1 });
+  const p7 = await c7.newPage();
+  p7.on('pageerror', (e) => errors.push('[r7] ' + String(e)));
+  p7.on('console', (m) => m.type() === 'error' && errors.push('[r7] ' + m.text()));
+  await p7.addInitScript(() => {
+    const pads = [{ index: 0, id: 'VKBsim Gladiator EVO R (Vendor: 231d Product: 0200)', mapping: '', connected: true, buttons: Array.from({ length: 32 }, () => ({ pressed: false, touched: false, value: 0 })), axes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 9 / 7], timestamp: 0 }];
+    let revealed = false;
+    window.__btn = (i, b, on) => { pads[i].buttons[b] = { pressed: on, touched: on, value: on ? 1 : 0 }; pads[i].timestamp++; if (on) revealed = true; };
+    navigator.getGamepads = () => pads.map((p) => (revealed ? Object.freeze({ ...p, axes: Object.freeze([...p.axes]), buttons: Object.freeze(p.buttons.map((x) => Object.freeze({ ...x }))) }) : null));
+  });
+  await p7.goto(url, { waitUntil: 'networkidle' });
+  await p7.evaluate(() => window.__btn(0, 2, true));
+  await p7.waitForTimeout(120);
+  await p7.evaluate(() => window.__btn(0, 2, false));
+  await p7.getByTestId('open-slots').click();
+  await p7.getByTestId('hw-row').first().getByRole('button', { name: /as js\d+/ }).click();
+  await p7.keyboard.press('Escape');
+  await p7.locator('[data-view-tab=devices]').click();
+  await p7.waitForTimeout(800);
+  const dv7 = p7.getByTestId('device-view');
+  await dv7.locator('[data-slot-chip]').filter({ hasText: /^\s*JS/ }).first().click();
+  await p7.waitForTimeout(500);
+  await dv7.getByTestId('template-new').click();
+  const ed = p7.getByTestId('template-editor');
+  const prep = p7.getByTestId('photo-prep'), after = p7.getByTestId('photo-prep-after'), before = p7.getByTestId('photo-prep-before');
+  const openPrep = async () => { await ed.getByTestId('tpl-upload-file').setInputFiles('scripts/fixtures/photos/cutout-offcentre.png'); await before.waitFor({ timeout: 5000 }); };
+  const settle = () => p7.waitForFunction(() => !document.querySelector('[data-testid=photo-prep-progress]')).then(() => p7.waitForTimeout(150));
+  await openPrep();
+  check((await p7.getByTestId('photo-prep-aspect-auto').getAttribute('aria-checked')) === 'true', 'canvas aspect starts at Auto');
+  await p7.getByTestId('photo-prep-format').click();
+  await after.waitFor({ timeout: 10000 });
+  await settle();
+  const dims = async () => [Number(await after.getAttribute('data-w')), Number(await after.getAttribute('data-h'))];
+  check(JSON.stringify(await dims()) === '[334,674]', `Auto = the round-6 format (${await dims()})`);
+  // zoom buttons, % readout, 100 %, fit
+  const zoom = p7.getByTestId('photo-prep-zoom');
+  const zf = async () => Number(await zoom.getAttribute('data-z'));
+  const pct = async () => (await p7.getByTestId('photo-prep-zoom-pct').innerText()).trim();
+  const z0 = await zf(), pct0 = await pct();
+  await p7.getByTestId('photo-prep-zoom-in').click();
+  await p7.getByTestId('photo-prep-zoom-in').click();
+  const z2 = await zf(), pct2 = await pct();
+  await p7.getByTestId('photo-prep-zoom-out').click();
+  check(Math.abs(z2 / z0 - 1.5625) < 1e-6 && Math.abs((await zf()) / z0 - 1.25) < 1e-6 && pct2 !== pct0, `+ / − zoom by 25 % steps (${pct0} -> ${pct2})`);
+  await p7.getByTestId('photo-prep-zoom-100').click();
+  const pct100 = await pct();
+  // at 100 % one result pixel is one screen pixel: the after image is drawn at its natural size
+  const ab = await after.boundingBox();
+  check(pct100 === '100%' && Math.abs(ab.width - 334) < 1.5 && Math.abs(ab.height - 674) < 1.5, `100% shows the result 1:1 (${pct100}, ${ab.width.toFixed(1)}×${ab.height.toFixed(1)})`);
+  await p7.getByTestId('photo-prep-zoom-fit').click();
+  check(Math.abs((await zf()) - z0) < 1e-9 && (await pct()) === pct0, 'Fit returns to the whole picture');
+  // the two panes show the same spot: the product box sits at the same place in both panes at every zoom
+  const frames = async () => {
+    const [bp, apn, bi, ai] = await Promise.all([p7.getByTestId('photo-prep-before-pane').boundingBox(), p7.getByTestId('photo-prep-after-pane').boundingBox(), before.boundingBox(), after.boundingBox()]);
+    return { bp, apn, bi, ai };
+  };
+  const productIn = (f) => {
+    // the product (original box 470,140 160×360 in the 800×600 fixture) in pane coordinates, from each pane's image
+    const nb = { x: f.bi.x - f.bp.x + (470 / natural[0]) * f.bi.width, y: f.bi.y - f.bp.y + (140 / natural[1]) * f.bi.height, w: (160 / natural[0]) * f.bi.width };
+    const pad = (334 - 272) / 2;
+    const na = { x: f.ai.x - f.apn.x + (pad / 334) * f.ai.width, y: f.ai.y - f.apn.y + (31 / 674) * f.ai.height, w: (272 / 334) * f.ai.width };
+    return { nb, na };
+  };
+  const natural = await before.evaluate((img) => [img.naturalWidth, img.naturalHeight]);
+  const inSync = async () => { const { nb, na } = productIn(await frames()); return Math.abs(nb.x - na.x) < 2 && Math.abs(nb.y - na.y) < 2 && Math.abs(nb.w - na.w) < 2; };
+  const sync0 = await inSync();
+  // wheel zoom around the cursor (before pane): the picture point under the cursor stays put, both panes follow
+  const f0 = await frames();
+  const mx = f0.bp.x + f0.bp.width * 0.62, my = f0.bp.y + f0.bp.height * 0.35;
+  const at = (f) => [(mx - f.bi.x) / f.bi.width, (my - f.bi.y) / f.bi.height];
+  const u0 = at(f0);
+  await p7.mouse.move(mx, my);
+  for (let i = 0; i < 4; i++) { await p7.mouse.wheel(0, -100); await p7.waitForTimeout(60); }
+  await p7.waitForTimeout(150);
+  const f1 = await frames(), u1 = at(f1);
+  check(natural.join('x') === '800x600' && f1.bi.width > f0.bi.width * 2 && Math.abs(u0[0] - u1[0]) * f1.bi.width < 2 && Math.abs(u0[1] - u1[1]) * f1.bi.height < 2 && sync0 && await inSync(),
+    `mouse wheel zooms around the cursor (×${(f1.bi.width / f0.bi.width).toFixed(2)}, point under the cursor kept), before/after panes in sync`);
+  // drag to pan (in the after pane): both pictures move by the drag
+  const ax = f1.apn.x + f1.apn.width / 2, ay = f1.apn.y + f1.apn.height / 2;
+  await p7.mouse.move(ax, ay);
+  await p7.mouse.down();
+  await p7.mouse.move(ax + 30, ay + 20, { steps: 3 });
+  await p7.mouse.move(ax + 60, ay + 40, { steps: 3 });
+  await p7.mouse.up();
+  await p7.waitForTimeout(100);
+  const f2 = await frames();
+  check(Math.abs(f2.bi.x - f1.bi.x - 60) < 1.5 && Math.abs(f2.bi.y - f1.bi.y - 40) < 1.5 && Math.abs(f2.ai.x - f1.ai.x - 60) < 1.5 && Math.abs(f2.ai.y - f1.ai.y - 40) < 1.5 && await inSync(), 'drag pans both panes together');
+  // zoom into the edge of the knob for the screenshot
+  await p7.getByTestId('photo-prep-zoom-fit').click();
+  const fz = await frames(), { nb } = productIn(fz);
+  await p7.mouse.move(fz.bp.x + nb.x + nb.w * 0.215, fz.bp.y + nb.y + nb.w * 0.3); // the left edge of the red knob
+  for (let i = 0; i < 10; i++) { await p7.mouse.wheel(0, -100); await p7.waitForTimeout(30); }
+  await p7.waitForTimeout(200);
+  check(parseInt(await pct()) >= 300, `zoomed in on the cut-out edge (${await pct()})`);
+  await prep.locator('.hud-panel').screenshot({ path: shots + '117-prepare-zoomed.png' });
+  await p7.getByTestId('photo-prep-zoom-fit').click();
+  // canvas aspect: stick / throttle / square / custom; the product keeps its size, centred, with at least the 5 % margin
+  const centred = async () => {
+    const [c, p] = await Promise.all([p7.getByTestId('photo-prep-canvas-frame').boundingBox(), p7.getByTestId('photo-prep-product-frame').boundingBox()]);
+    return Math.abs((p.x - c.x) - (c.x + c.width - p.x - p.width)) < 1.5 && Math.abs((p.y - c.y) - (c.y + c.height - p.y - p.height)) < 1.5;
+  };
+  const ratios = [];
+  for (const [id, r] of [['stick', 990 / 1064], ['throttle', 990 / 846], ['square', 1]]) {
+    await p7.getByTestId(`photo-prep-aspect-${id}`).click();
+    await settle();
+    const [w, h] = await dims();
+    ratios.push(`${id} ${w}×${h}`);
+    check(Math.abs(w / h - r) < 0.003 && (h === 674 || w === 334) && await centred() && (await p7.getByTestId(`photo-prep-aspect-${id}`).getAttribute('aria-checked')) === 'true', `${id} canvas: ${w}×${h} (ratio ${(w / h).toFixed(3)}), product centred in its margin`);
+  }
+  await p7.getByTestId('photo-prep-aspect-throttle').click();
+  await settle();
+  await prep.locator('.hud-panel').screenshot({ path: shots + '117-prepare-aspect.png' });
+  await p7.getByTestId('photo-prep-aspect-custom').click();
+  await p7.getByTestId('photo-prep-aspect-w').fill('16');
+  await p7.getByTestId('photo-prep-aspect-h').fill('9');
+  await p7.getByTestId('photo-prep-aspect-h').press('Enter');
+  await settle();
+  const [cw, ch] = await dims();
+  check(Math.abs(cw / ch - 16 / 9) < 0.003 && await centred(), `custom 16:9 canvas (${cw}×${ch})`);
+  // the choice is remembered: cancel, upload again -> custom 16:9 is preselected
+  await p7.getByTestId('photo-prep-cancel').click();
+  await openPrep();
+  check((await p7.getByTestId('photo-prep-aspect-custom').getAttribute('aria-checked')) === 'true' && (await p7.getByTestId('photo-prep-aspect-w').inputValue()) === '16' && (await p7.getByTestId('photo-prep-aspect-h').inputValue()) === '9', 'last aspect choice remembered for the next picture');
+  await p7.getByTestId('photo-prep-aspect-auto').click();
+  await p7.getByTestId('photo-prep-format').click();
+  await after.waitFor({ timeout: 10000 });
+  await settle();
+  check(JSON.stringify(await dims()) === '[334,674]', 'back to Auto');
+  await p7.getByTestId('photo-prep-use').click();
+  await p7.waitForTimeout(300);
+
+  // input picker: the template is linked to the connected Gladiator (32 buttons, POV hat on axis 9, 8 axes)
+  const pv = ed.getByTestId('device-canvas');
+  const place = async (fx, fy) => { const b = await pv.boundingBox(); await p7.mouse.click(b.x + b.width * fx, b.y + Math.min(b.height, 1000 - b.y - 20) * fy); await p7.waitForTimeout(150); };
+  await place(0.3, 0.2);
+  const props = ed.getByTestId('callout-props');
+  const firstIn = await props.getByLabel('Input input').inputValue();
+  await props.getByLabel('Callout name').fill('Trigger');
+  await place(0.3, 0.45);
+  await props.getByTestId('input-picker-btn').click();
+  const picker = props.getByTestId('input-picker'), opts = picker.getByTestId('input-picker-option');
+  const optInputs = await opts.evaluateAll((els) => els.map((e) => e.dataset.input));
+  const usedFirst = await picker.locator(`[data-input="${firstIn}"]`).getAttribute('data-used');
+  check((await picker.getAttribute('data-source')) === 'device' && optInputs.length === 36 && optInputs[31] === 'button32' && optInputs.slice(32).join() === 'hat1_up,hat1_right,hat1_down,hat1_left' && usedFirst === 'Trigger',
+    `linked: the Input field lists the device's 32 buttons + POV hat directions, each with the callout using it (${firstIn}: "${usedFirst}")`);
+  await p7.screenshot({ path: shots + '117-input-picker.png' });
+  await picker.locator('[data-input="button7"]').click();
+  await p7.waitForTimeout(150);
+  check((await props.getByLabel('Input input').inputValue()) === 'button7' && (await picker.count()) === 0, 'picking an entry sets the input');
+  // free typing still works
+  await props.getByLabel('Input input').fill('12');
+  await props.getByLabel('Input input').press('Enter');
+  await p7.waitForTimeout(100);
+  check((await props.getByLabel('Input input').inputValue()) === 'button12', 'free typing still works next to the picker');
+  // axes: the device's axes by game name, with the callout using each
+  await props.getByLabel('Callout type').selectOption('axis');
+  await p7.waitForTimeout(100);
+  const axOpts = await props.getByLabel('Axis 1').locator('option').evaluateAll((els) => els.map((e) => e.textContent));
+  check(axOpts.length === 8 && axOpts.includes('slider2') && /devices? axes|8 axes on/.test(await props.innerText()), `axis select lists the device's 8 axes by SC name (${axOpts.join(', ')})`);
+  // a 4-way hat reported as buttons: pick its four directions (+ push) at once, in order
+  await props.getByLabel('Callout type').selectOption('hat');
+  await p7.waitForTimeout(100);
+  const povTxt = await props.getByLabel('Hat number').locator('option').evaluateAll((els) => els.map((e) => e.textContent));
+  await props.getByLabel('Hat number').selectOption('b');
+  await p7.waitForTimeout(100);
+  await props.getByTestId('input-picker-multi-btn').click();
+  const multi = props.getByTestId('input-picker-multi');
+  for (const b of ['button20', 'button21', 'button22', 'button23', 'button24']) await multi.locator(`[data-input="${b}"] input`).check();
+  await multi.getByTestId('input-picker-apply').click();
+  await p7.waitForTimeout(150);
+  const dirs = await Promise.all(['up', 'right', 'down', 'left'].map((d) => props.getByLabel(`Hat ${d} input`).inputValue()));
+  check(povTxt[1] === 'POV hat 2 (not seen on the device)' && dirs.join() === 'button20,button21,button22,button23' && (await props.getByLabel('Hat push button').inputValue()) === 'button24',
+    `multi-pick fills a 4-button hat's directions and push in order (${dirs.join(', ')}; POV options: ${povTxt.slice(0, 2).join(' / ')})`);
+  // the picker of another callout now shows those as used
+  await place(0.6, 0.45);
+  await props.getByTestId('input-picker-btn').click();
+  check(/^Hat\b|B20/.test(await props.getByTestId('input-picker').locator('[data-input="button20"]').getAttribute('data-used')), 'entries used by the hat show it');
+  await props.getByTestId('input-picker-btn').click();
+  // a switch (rocker): pick several positions
+  await props.getByLabel('Callout type').selectOption('switch');
+  await p7.waitForTimeout(100);
+  await props.getByTestId('input-picker-multi-btn').click();
+  for (const b of ['button30', 'button31', 'button29']) await props.getByTestId('input-picker-multi').locator(`[data-input="${b}"] input`).check();
+  await props.getByTestId('input-picker-apply').click();
+  await p7.waitForTimeout(150);
+  const pos = await Promise.all([1, 2, 3].map((i) => props.getByLabel(`Position ${i} input`).inputValue()));
+  check(pos.join() === 'button30,button31,button29', `multi-pick sets a switch's positions in the order ticked (${pos.join(', ')})`);
+  // device not connected / not matching: the link rule's button count; no count: free typing only
+  const link = ed.getByTestId('tpl-link');
+  await link.getByLabel('Rule 1 product id').fill('9999');
+  await link.getByLabel('Rule 1 buttons').fill('24');
+  await p7.waitForTimeout(100);
+  await props.getByLabel('Callout type').selectOption('button');
+  await props.getByTestId('input-picker-btn').click();
+  const rp = props.getByTestId('input-picker');
+  check((await rp.getAttribute('data-source')) === 'rule' && (await rp.getByTestId('input-picker-option').count()) === 24 && /link rule/.test(await rp.innerText()), 'not matching the device: buttons 1..24 from the link rule');
+  await link.getByLabel('Rule 1 buttons').fill('');
+  await p7.waitForTimeout(100);
+  check((await props.getByTestId('input-picker-btn').count()) === 0 && await props.getByLabel('Input input').isVisible(), 'no device and no button count: free typing only');
+  await c7.close();
+}
+
 // ---- drag & drop in a real Firefox (Gecko): synthetic file drags exercise the page's handlers there (types list, text-node
 // targets, cancelled dragenter / dragover, the overlay hiding when the drag leaves without a final dragleave)
 console.log('\ndrop overlay in Firefox (Gecko)');

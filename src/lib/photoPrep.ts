@@ -84,4 +84,4 @@ export async function removeBackground(px: Px, onProgress: (p: PrepProgress) => 
 }
 
 /** built-in photo format, scaled with the canvas */
-export const formatForTemplate = (px: Px, look: boolean): FormatResult => formatPhoto(px, { look, resize: canvasResize });
+export const formatForTemplate = (px: Px, look: boolean, aspect?: number): FormatResult => formatPhoto(px, { look, aspect, resize: canvasResize });
