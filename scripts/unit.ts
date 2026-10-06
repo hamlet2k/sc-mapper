@@ -813,7 +813,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-vkb-gunfighter-mcg', 'builtin-vkb-stecs', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
     const USB = new Set(['builtin-tm-warthog-stick', 'builtin-tm-warthog-throttle', 'builtin-tm-t16000m', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-winctrl-ursa-combat',
       'builtin-winctrl-orion-pedals', 'builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad']);
-    const PHOTO_ONLY = new Set(['builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad']);
+    const PHOTO_ONLY = new Set(['builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad']);
     const ASPECTS = new Set<number>();
     for (const d of DEVICE_TEMPLATES) {
       assert.ok(d.builtin && d.brand && d.id.startsWith('builtin-') && !d.image && (d.views?.length ? !d.loadImage && d.views.every((v) => tp.BUILTIN_PHOTO_RE.test(v.image ?? '')) : typeof d.loadImage === 'function') && d.notes, `${d.id}: picture loaded on demand (art) or built-in photos (photo template)`);
@@ -827,6 +827,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       if (OPEN.has(d.id)) {
         assert.ok(open > 5 && d.callouts.flatMap((c) => c.inputs).filter((i) => /^button|^hat/.test(i)).length === 0, `${d.id}: buttons left unassigned`);
         assert.match(d.notes!, /Customize a copy/);
+      } else if (d.id === 'builtin-winctrl-carrierace-mfd-l') {
+        assert.equal(open, 3, 'MFD: only BRT encoder inputs unassigned (diagram does not number it)');
       } else assert.equal(open, 0, `${d.id}: fully numbered`);
       if (PHOTO_ONLY.has(d.id)) {
         assert.equal(d.callouts.length, 0, `${d.id}: photo-only (empty callouts)`);
@@ -859,6 +861,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(btn(by('winctrl-orion')), [...seq(1, 62, [45, 46, 47, 48, 49]), ...seq(65, 111)], 'Orion: grips 1-62, panel 65-111');
     assert.deepEqual(btn(by('winctrl-ursa-combat')), seq(1, 81, [26]), 'URSA MINOR Combat: 1-81 (26 unused)');
     assert.deepEqual(btn(by('moza-ab6')), seq(1, 62, Array.from({ length: 19 }, (_, i) => 30 + i)), 'AB6 + MHG: grip 1-29, base 49-62');
+    assert.deepEqual(btn(by('winctrl-carrierace-mfd-l')), seq(1, 44), 'CarrierAce MFD: bezel 1-44');
+    assert.equal(by('winctrl-carrierace-mfd-l').callouts.length, 9, 'MFD: 4 banks + 4 rockers + BRT');
     assert.deepEqual(btn(by('moza-mtp')), seq(1, 71), 'MTP: 1-71');
     assert.deepEqual(btn(by('moza-mtq')), seq(1, 75, [44, 45, 46, 47, 48]), 'MTQ: 1-65 (combat grip) + 66-75 (Airbus / Boeing grips)');
     const ins = (x: DeviceTemplate, id: string) => x.callouts.find((c) => c.id === id)!.inputs;

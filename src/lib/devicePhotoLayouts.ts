@@ -546,9 +546,20 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       lbtns: { view: 'main', x: 0.104, y: 0.199 },
     },
   },
+  // WinCtrl CarrierAce MFD: anchors on the product photo (3/4 shot), numbering per the WinCtrl diagram; group markers at the centre of each bezel bank / rocker.
   'builtin-winctrl-carrierace-mfd-l': {
     views: [{ id: 'main', label: 'MFD', photo: 'winctrl-carrierace-mfd-l' }],
-    anchors: {},
+    anchors: {
+      left: { view: 'main', x: 0.112, y: 0.46, side: 'L' },
+      gain: { view: 'main', x: 0.135, y: 0.74, side: 'L' },
+      bottom: { view: 'main', x: 0.43, y: 0.82, side: 'L' },
+      cont: { view: 'main', x: 0.665, y: 0.90, side: 'R' },
+      right: { view: 'main', x: 0.72, y: 0.55, side: 'R' },
+      sym: { view: 'main', x: 0.695, y: 0.23, side: 'R' },
+      top: { view: 'main', x: 0.40, y: 0.21, side: 'L' },
+      dayngt: { view: 'main', x: 0.205, y: 0.17, side: 'L' },
+      brt: { view: 'main', x: 0.455, y: 0.165, side: 'R' },
+    },
   },
   'builtin-winctrl-carrierace-pto2': {
     views: [{ id: 'main', label: 'PTO 2', photo: 'winctrl-carrierace-pto2' }],

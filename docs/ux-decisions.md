@@ -585,7 +585,7 @@ Judgment calls made while building round 1, where the decisions above didn't say
 | Id | Name | USB | Callouts | Photos |
 |---|---|---|---|---|
 | `builtin-winctrl-orion-pedals` | WinCtrl Orion Combat Rudder Pedals | 4098:BEF0 | 6 (toe brakes, rudder, button rows) | `winctrl-orion-pedals-main.webp` |
-| `builtin-winctrl-carrierace-mfd-l` | WinCtrl CarrierAce MFD | 4098:BEE0 / BEE1 / BEE2 | none (photo only) | `winctrl-carrierace-mfd-l.webp` |
+| `builtin-winctrl-carrierace-mfd-l` | WinCtrl CarrierAce MFD | 4098:BEE0 / BEE1 / BEE2 | bezel 1–44 + BRT (grouped) | `winctrl-carrierace-mfd-l.webp` |
 | `builtin-winctrl-carrierace-pto2` | WinCtrl CarrierAce PTO 2 | 4098:BF05 | none | `winctrl-carrierace-pto2.webp` |
 | `builtin-winctrl-carrierace-ufc-hud` | WinCtrl CarrierAce UFC + HUD | 4098:BEDE | none | `winctrl-carrierace-ufc.webp` + `winctrl-carrierace-hud.webp` |
 | `builtin-azeron-keypad` | Azeron Keypad (XInput) | 16D0:12F7 | none | `azeron-keypad-main.webp` |
@@ -624,3 +624,7 @@ Every Chrome/Chromium limitation banner (4-controller cap, 32-button notice, inp
 
 - **Cause.** `setPageImage` widened the page with `w + 0.68 h` while built-in photoViews used `w + 2×0.3 h` (`PHOTO_LABEL_GUTTER`). Replacing a picture (Customize a copy → Use formatted/cut-out, or Replace) changed the canvas aspect without remapping callout fractions, so anchors/boxes slid on the product after Save / Export / reload.
 - **Fix.** One shared `PHOTO_LABEL_GUTTER` (0.3/side) for built-ins and user pages; `setPageImage` remaps each callout on that page through object-contain photo space so the marker stays on the same spot of the picture. Legacy 0.68 canvases are still inferred when remapping. Unit: round-trip of callout positions through `setPageImage` and export→import.
+
+### CarrierAce MFD callouts
+
+Built-in `builtin-winctrl-carrierace-mfd-l` now has bezel callouts from the WinCtrl numbered diagram (buttons 1–44) plus BRT. **Grouping:** one `buttons` callout per dense bank (Left 1–9, Bottom 12–20, Right 23–31, Top 34–42) and one per labeled corner rocker (GAIN 10/11, CONT 21/22, SYM 32/33, DAY/NGT 43/44); BRT is an `encoder` with unassigned inputs (diagram does not number it). Photo templates only carry one marker per callout (no per-input `inputRegions` without SVG art), so banks share a centre marker rather than 44 individual labels.

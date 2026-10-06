@@ -614,10 +614,22 @@ photoTpl({
 
 // Photo only: picture shows so users can Customize a copy and place their own callouts.
 const PHOTO_ONLY_NOTE = 'Picture only for now — Customize a copy to place callouts on the controls.';
+const WC_MFD_NOTE = WC_NOTE + ' Bezel 1-44 per the WinCtrl diagram (GAIN 10/11, CONT 21/22, SYM 32/33, DAY/NGT 43/44); BRT encoder unnumbered — Customize a copy if yours differ. Uses buttons above 32: Chrome / Edge only report the first 32, use Firefox.';
 photoTpl({
-  id: 'builtin-winctrl-carrierace-mfd-l', name: 'WinCtrl CarrierAce MFD', brand: 'WinCtrl', notes: PHOTO_ONLY_NOTE,
+  id: 'builtin-winctrl-carrierace-mfd-l', name: 'WinCtrl CarrierAce MFD', brand: 'WinCtrl', notes: WC_MFD_NOTE,
   match: [{ vendor: '4098', product: 'BEE0' }, { vendor: '4098', product: 'BEE1' }, { vendor: '4098', product: 'BEE2' }, { name: 'CarrierAce MFD' }],
-});
+}, [
+  // Dense bezels grouped (photo templates have one marker per callout; inputRegions need SVG art). Corner rockers keep the panel labels from the unit.
+  c('left', 'buttons', b(...range(1, 9)), 'Left 1-9', 'Left', { side: 'L' }),
+  c('gain', 'buttons', b(10, 11), 'GAIN (10 / 11)', 'Left', { side: 'L' }),
+  c('bottom', 'buttons', b(...range(12, 20)), 'Bottom 12-20', 'Bottom', { side: 'L' }),
+  c('cont', 'buttons', b(21, 22), 'CONT (21 / 22)', 'Bottom', { side: 'R' }),
+  c('right', 'buttons', b(...range(23, 31)), 'Right 23-31', 'Right', { side: 'R' }),
+  c('sym', 'buttons', b(32, 33), 'SYM (32 / 33)', 'Top', { side: 'R' }),
+  c('top', 'buttons', b(...range(34, 42)), 'Top 34-42', 'Top', { side: 'R' }),
+  c('dayngt', 'buttons', b(43, 44), 'DAY / NGT (43 / 44)', 'Top', { side: 'L' }),
+  c('brt', 'encoder', u(3), 'BRT (− / +)', 'Top', { side: 'R' }),
+]);
 photoTpl({
   id: 'builtin-winctrl-carrierace-pto2', name: 'WinCtrl CarrierAce PTO 2', brand: 'WinCtrl', notes: PHOTO_ONLY_NOTE,
   match: [{ vendor: '4098', product: 'BF05' }, { name: 'CarrierAce PTO 2' }, { name: 'CarrierAce PTO' }],
