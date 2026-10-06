@@ -383,11 +383,13 @@ export function CalloutBody({ c, s, entriesFor, live }: { c: Callout; s: Callout
     );
   }
   const multi = c.kind === 'encoder' || c.kind === 'switch' || c.kind === 'buttons';
-  const all = c.inputs.flatMap((i, k) => coveredInputs({ inputs: [i] }).flatMap(entriesFor).map((e) => ({ e, role: multi ? inputRole(c, k) : undefined, i })));
+  // buttons: show the real DI numbers only (not invented 1..n row indices — those confuse when inputs are non-consecutive)
+  const chipLabel = (i: string, k: number) => c.kind === 'buttons' ? shortInput(i) : `${inputRole(c, k)} ${shortInput(i)}`;
+  const all = c.inputs.flatMap((i, k) => coveredInputs({ inputs: [i] }).flatMap(entriesFor).map((e) => ({ e, role: c.kind === 'buttons' ? shortInput(i) : multi ? inputRole(c, k) : undefined, i })));
   return (
     <div className="min-w-[90px]">
       {head}
-      {multi && <div className="flex max-w-[150px] flex-wrap gap-0.5">{c.inputs.map((i, k) => <span key={k} data-dir={i || undefined} data-active={live.active.has(i) ? '1' : undefined} className={`rounded px-1 font-mono text-[9px] ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-slate-400'}`}>{inputRole(c, k)} {shortInput(i)}</span>)}</div>}
+      {multi && <div className="flex max-w-[150px] flex-wrap gap-0.5">{c.inputs.map((i, k) => <span key={k} data-dir={i || undefined} data-active={live.active.has(i) ? '1' : undefined} className={`rounded px-1 font-mono text-[9px] ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-slate-400'}`}>{chipLabel(i, k)}</span>)}</div>}
       {all.slice(0, 3).map(({ e, role }, k) => <ActionLine key={k} e={e} role={role} />)}
       {all.length > 3 && <div className="text-slate-500">+{all.length - 3} more</div>}
       {!all.length && none}

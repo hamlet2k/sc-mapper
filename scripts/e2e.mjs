@@ -91,8 +91,36 @@ const vKey = page.locator('button[title^="V:"]').first();
 await vKey.click();
 await page.waitForTimeout(250);
 check((await page.locator('[data-view-tab][aria-current=page]').getAttribute('data-view-tab')) === 'keyboard'
-  && /V/.test(await page.getByTestId('keyboard-inspector').innerText()),
-  'clicking a keyboard key stays on Keyboard and selects it in the inspector');
+  && /V/.test(await page.getByTestId('keyboard-inspector').innerText())
+  && (await vKey.getAttribute('data-selected')) === '1',
+  'clicking a keyboard key stays on Keyboard and sticky-selects it in the inspector');
+// hover another key peeks the inspector; leaving restores the selected key
+const bKey = page.locator('button[title^="B:"]').first();
+await bKey.hover();
+await page.waitForTimeout(150);
+check(/B/.test(await page.getByTestId('keyboard-inspector').innerText()) && (await vKey.getAttribute('data-selected')) === '1',
+  'hovering another key peeks it in the inspector while V stays selected');
+await page.getByTestId('keyboard-inspector').hover(); // leave the keys
+await page.waitForTimeout(150);
+check(/V/.test(await page.getByTestId('keyboard-inspector').innerText()), 'leaving keys restores the selected key in the inspector');
+await page.screenshot({ path: shots + '123-kb-selected.png' });
+// click same key toggles selection off (hover still peeks while the pointer is over it — leave to see empty)
+await vKey.click();
+await page.waitForTimeout(150);
+check((await vKey.getAttribute('data-selected')) !== '1', 'clicking the selected key again clears data-selected');
+await page.getByTestId('keyboard-inspector').hover();
+await page.waitForTimeout(150);
+check(/Click a key to select/i.test(await page.getByTestId('keyboard-inspector').innerText()),
+  'after deselect + leaving the key, inspector is empty');
+await vKey.click();
+await page.waitForTimeout(100);
+check((await vKey.getAttribute('data-selected')) === '1', 'clicking V again selects it');
+// click empty board area clears selection
+await page.getByTestId('keyboard-board').locator('text=1 action').click();
+await page.waitForTimeout(150);
+check((await vKey.getAttribute('data-selected')) !== '1', 'clicking empty board area (legend) clears the selection');
+await vKey.click(); // leave a selection for the Edit toggle check below
+await page.waitForTimeout(100);
 await page.getByTestId('edit-toggle').click();
 await page.waitForTimeout(200);
 check(await page.getByTestId('edit-bar').isVisible() && await page.getByTestId('keyboard-bind').isVisible(), 'Edit on Keyboard: edit bar + bind-an-action search in the inspector');
@@ -982,6 +1010,21 @@ await page.waitForTimeout(500);
 await slotChip('js1');
 await page.waitForTimeout(300);
 check(/linked to this device/.test(await dv.getByTestId('device-status').innerText()) && (await dv.locator('[data-callout]').count()) === 4, 'templates survive a reload (IndexedDB) and still match the profile device');
+{ // Orion Combat Rudder Pedals: faithful Federico export (exact anchor+box); Left Buttons chips = DI numbers 2,7,8,9,10
+  await dv.getByTestId('template-select').selectOption('builtin-winctrl-orion-pedals');
+  await page.waitForTimeout(600);
+  check((await dv.locator('[data-callout]').count()) === 6, 'Orion pedals: 6 callouts');
+  const left = dv.locator('[data-callout="lbtns"]');
+  check(await left.isVisible(), 'Orion pedals: Left Buttons callout visible');
+  const leftTxt = await left.innerText();
+  check(/2/.test(leftTxt) && /7/.test(leftTxt) && /8/.test(leftTxt) && /9/.test(leftTxt) && /10/.test(leftTxt)
+    && !/\b1\s*2\b/.test(leftTxt.replace(/\n/g, ' ')),
+    `Orion pedals Left Buttons chips show DI numbers 2/7/8/9/10 (not invented 1..n) (${leftTxt.replace(/\n/g, ' | ').slice(0, 120)})`);
+  // stored fractions are asserted in unit tests (DOM labels may be nudged to avoid overlap)
+  await dv.getByTestId('device-canvas').screenshot({ path: shots + '124-orion-faithful.png' });
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(300);
+}
 { // device templates: a >32-button device warns in Chrome; numbers can be assigned on a copy of an unassigned built-in
   await dv.getByTestId('template-select').selectOption('builtin-winctrl-orion');
   await page.waitForTimeout(600);

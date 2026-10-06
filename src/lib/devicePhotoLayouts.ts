@@ -535,17 +535,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
 
   // ---- photo-only / new devices from Federico's exports (2026-10-06) ----
   // Photo-only templates (empty callouts) still show the picture so users can Customize a copy and place their own.
-  'builtin-winctrl-orion-pedals': {
-    views: [{ id: 'main', label: 'Pedals', photo: 'winctrl-orion-pedals-main' }],
-    anchors: {
-      ltoe: { view: 'main', x: 0.125, y: 0.108 },
-      rtoe: { view: 'main', x: 0.873, y: 0.373 },
-      rudder: { view: 'main', x: 0.373, y: 0.469 },
-      rudbtns: { view: 'main', x: 0.314, y: 0.554 },
-      rbtns: { view: 'main', x: 0.85, y: 0.442 },
-      lbtns: { view: 'main', x: 0.104, y: 0.199 },
-    },
-  },
+  // builtin-winctrl-orion-pedals: exact callouts via photoTplExact (Federico's export) — not listed here so withPhotoLayout does not re-box them.
   // WinCtrl CarrierAce MFD: anchors on the product photo (3/4 shot), numbering per the WinCtrl diagram; group markers at the centre of each bezel bank / rocker.
   'builtin-winctrl-carrierace-mfd-l': {
     views: [{ id: 'main', label: 'MFD', photo: 'winctrl-carrierace-mfd-l' }],

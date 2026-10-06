@@ -146,6 +146,29 @@ function photoTpl(meta: Meta & { id: string }, specs: Spec[] = []): void {
   else ALL.push(r);
 }
 
+/**
+ * Photo built-in with callouts already placed (anchor + box fractions as authored). Skips withPhotoLayout's
+ * auto box layout so exported positions stay exact. `photo` must be a key of DEVICE_PHOTO_SIZES; the view
+ * uses that file and the given width/height (same aspect as the photo — image fills the canvas).
+ */
+function photoTplExact(
+  meta: Meta & { id: string },
+  photo: string,
+  viewId: string,
+  viewLabel: string,
+  width: number,
+  height: number,
+  callouts: Callout[],
+): void {
+  if (!DEVICE_PHOTO_SIZES[photo]) { PHOTO_LAYOUT_PROBLEMS.push(`${meta.id}: unknown photo “${photo}”`); return; }
+  ALL.push({
+    version: 1, builtin: true, slot: 'js', ...meta,
+    aspect: width / height,
+    views: [{ id: viewId, label: viewLabel, image: `/device-photos/${photo}.webp`, width, height }],
+    callouts,
+  });
+}
+
 /* ------------------------------------------------------------------ photo templates */
 /** @deprecated use PHOTO_LABEL_GUTTER from templatePages — kept as alias for call sites */
 export const PHOTO_GUTTER = PHOTO_LABEL_GUTTER;
@@ -599,17 +622,24 @@ tpl('logitech-x56-throttle', {
 
 /* ------------------------------------------------------------------ photo-only / new WinCtrl + Azeron (Federico's exports, 2026-10-06) */
 // Distinct from builtin-winctrl-orion (the F-15EX throttle): pedals use USB 4098:BEF0 and the "Orion Pedals" / "Combat Rudder" names.
-photoTpl({
+// Exact callouts from Federico's export (anchor + box fractions as saved) — do not run through withPhotoLayout auto-box.
+photoTplExact({
   id: 'builtin-winctrl-orion-pedals', name: 'WinCtrl Orion Combat Rudder Pedals', brand: 'WinCtrl',
-  notes: 'Toe brakes = rotx / roty, rudder = rotz. Button numbers as reported by DirectInput on a Metal unit.',
+  notes: 'Toe brakes = rotx / roty, rudder = rotz. Button numbers as reported by DirectInput on a Metal unit. Callout positions from the published Metal export.',
   match: [{ vendor: '4098', product: 'BEF0' }, { name: 'Orion Pedals' }, { name: 'Orion Combat Rudder' }, { name: 'Combat Rudder Pedals' }],
-}, [
-  c('ltoe', 'axis', ['roty'], 'Left toe brake', 'Pedals', { side: 'L' }),
-  c('lbtns', 'buttons', b(2, 7, 8, 9, 10), 'Left buttons', 'Pedals', { side: 'L' }),
-  c('rudder', 'axis', ['rotz'], 'Rudder', 'Pedals', { side: 'L' }),
-  c('rudbtns', 'buttons', b(11, 12, 13, 14, 15), 'Rudder buttons', 'Pedals', { side: 'L' }),
-  c('rtoe', 'axis', ['rotx'], 'Right toe brake', 'Pedals', { side: 'R' }),
-  c('rbtns', 'buttons', b(1, 3, 4, 5, 6), 'Right buttons', 'Pedals', { side: 'R' }),
+}, 'winctrl-orion-pedals-main', 'main', 'Pedals', 1413.0434782608697, 1000, [
+  { id: 'ltoe', kind: 'axis', inputs: ['roty'], label: 'Left Toe Brake', view: 'main',
+    anchor: { x: 0.23650188953704254, y: 0.10839489180422053 }, box: { x: 0.3330798421069243, y: 0.04177298971756422 } },
+  { id: 'rtoe', kind: 'axis', inputs: ['rotx'], label: 'Right Toe Brake', view: 'main',
+    anchor: { x: 0.7619771631045034, y: 0.37273337810611146 }, box: { x: 0.7847908513174311, y: 0.06541302477937164 } },
+  { id: 'rudder', kind: 'axis', inputs: ['rotz'], label: 'Rudder', view: 'main',
+    anchor: { x: 0.41064638783269963, y: 0.4694425789120215 }, box: { x: 0.09581749339520705, y: 0.7466756130241563 } },
+  { id: 'rudbtns', kind: 'buttons', inputs: b(11, 12, 13, 14, 15), label: 'Rudder Buttons', view: 'main',
+    anchor: { x: 0.36958173744578776, y: 0.5543317416916764 }, box: { x: 0.21901140104228553, y: 0.8723975412792772 } },
+  { id: 'rbtns', kind: 'buttons', inputs: b(1, 3, 4, 5, 6), label: 'Right Buttons', view: 'main',
+    anchor: { x: 0.7460075929590958, y: 0.4415043407514481 }, box: { x: 0.8577947000133674, y: 0.21584953887099143 } },
+  { id: 'lbtns', kind: 'buttons', inputs: b(2, 7, 8, 9, 10), label: 'Left Buttons', view: 'main',
+    anchor: { x: 0.22205323774098443, y: 0.19865680845733294 }, box: { x: 0.48745245987924785, y: 0.0847548567424131 } },
 ]);
 
 // Photo only: picture shows so users can Customize a copy and place their own callouts.
