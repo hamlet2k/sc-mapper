@@ -225,3 +225,61 @@ Judgment calls made while building round 1, where the decisions above didn't say
   - Copy dialog: "X bindings on Y actions: N custom bindings and M game defaults on js1", with a tooltip on each part.
   - Remove dialog: "N custom bindings (changed or added by you)".
 - The Conflicts view's "yours" tag on a customized binding now reads "custom" too, with the same tooltip. The profile delete warning's "N bindings of yours" is left as is: it is a plain sentence about losing your edits, not a count label.
+
+## Slot reordering — what it is for (agreed Oct 6, 2026)
+- The app cannot change the device order the game sees (Windows USB enumeration). pp_resortdevices only rewrites jsN prefixes too, and rejects indexes it doesn't see.
+- Purpose of moving slots: after SC reshuffles device numbers (on its own, or after unplugging a device), shift existing mappings to the new jsN so they match the hardware again, without remapping or chaining console commands.
+- Moving mappings only makes sense after the hardware order has changed; otherwise it breaks two devices.
+- Primary flow (proposed): import a fresh export, compare product names per jsN against the profile, show the detected moves (e.g. Pedals js3 -> js5, MFD L js5 -> js3) and apply them all at once, updating the device names. Manual arrows stay as a fallback.
+- js9+ axis note: explain the order comes from the game/Windows, not the app.
+- To verify in game: whether a mismatched Product name in the options block makes the game drop/reassign bindings.
+
+## Refresh game state (agreed Oct 6, 2026)
+- Game device order is fixed by SC; the app never reorders the XML device list, it maps against it.
+- Timeline: user tunes bindings in state A; the game later reshuffles to state B. The user keeps seeing their mappings and just refreshes game state.
+- Firefox can't read files from a saved path, so the flow is a "Refresh game state" button (file picker, with the usual folder shown: StarCitizen\LIVE\user\client\0\controls\mappings\) plus drag and drop of the fresh export anywhere on the page.
+- Only the device list (instance -> product) is read from the dropped file; its bindings are ignored.
+- Quiet rematch: no change -> short "order unchanged" note. Changed -> one-line summary of moves plus Apply (one undo step) that shifts mappings/hardware/template/axis settings and updates device names to the game's order.
+- Manual up/down arrows stay as a fallback (ambiguous identical devices etc.), not presented as a way to unlock tuning.
+- js9+ axis note: order comes from the game/Windows; the app can't change it.
+
+## Implementation calls (round 4)
+- **Where "Refresh game state" lives.** There are three entries, and all open the same file picker:
+  - a button in the Game slots & controllers header, with the usual folder `StarCitizen\LIVE\user\client\0\controls\mappings\` under it and a copy button (browsers can't open a folder from a path, so copying it for the picker's address bar is the shortcut);
+  - a small "Refresh" button on the profile card's Game slots heading, with the same path + copy;
+  - a "Refresh game state (device order)…" item in the profile ⋯ menu.
+  The js9+ note also has a "Refresh game state" button. Without a profile the header button is disabled and the profile card shows no entry, because there are no mappings to move yet.
+- **Dropping a file.** Dragging a file anywhere shows a full-page overlay:
+  - With a profile active it has two targets. "Refresh game state" is the default: it is the large left zone, and a drop anywhere outside the "Import as profile" zone also counts as a refresh. "Import as profile" is the smaller right zone.
+  - Without a profile it has one "Drop to import" zone and works as before.
+  - A refresh reads only the first file. Several files dropped on Import are imported one by one, as before.
+- **What a refresh reads.** It reads only the `<options type instance Product>` list (`parseDeviceList`). A file with no device list gets an error toast. The file's bindings are never read.
+- **Matching** (`lib/rematch.ts`, unit-tested):
+  - It works per kind (kb / mo / js / gp), comparing the profile's known devices (its device list, plus slots added by hand) with the game's list, by product name. Names are compared case-insensitively, with spacing ignored and the GUID stripped.
+  - A name that occurs once on each side pairs directly.
+  - The result is turned into a full permutation, so data already sitting on a target number is moved out of the way, never merged.
+- **Identical product names** (e.g. two "MOZA AB6 FFB Base"):
+  - If the raw Product strings (GUID part) differ and pair them one to one, the pairing follows them.
+  - Otherwise they are paired in their relative order (1st → 1st). If that changes their numbers, the banner flags them "(?)" with a note: they can't be told apart, so their order is assumed, and if it is wrong they can be swapped with the arrows.
+  - Call: they still move as a block rather than staying put. Leaving them on their old numbers would collide with the other devices that moved, and keeping their relative order is what the game does when nothing else is known.
+- **Devices the game no longer lists** (unplugged):
+  - Their mappings are kept, never deleted.
+  - They keep their number if it is still free. Otherwise they go to the next free number after the game's devices.
+  - The slot is flagged with a chip in the modal ("not in the latest game state · mappings kept"), shown struck through in the sidebar, and listed in the banner ("not in the game: X (js2, mappings kept on js5)").
+  - Refreshing again after plugging the device back in pairs it by name, and the flag clears.
+- **New devices** in the game's list are added as named slots, listed as "new: X js6".
+- **Slots without a device name** (added by hand, never named) can't be matched. They stay put unless a named device needs their number; then they move to the next free number, and the banner names them "js2 (no device name)".
+- **Apply** is one undo step. It:
+  - shifts user bindings with the stored-only rewrite (game defaults stay on their numbers, same as the arrows);
+  - shifts the hardware assignment, template pick and axis settings (`<options>` blocks);
+  - sets the profile's device list to exactly the game's list and order, and rewrites each moved `<options>` block's Product to the game's string;
+  - names the slots after the game's devices.
+  Undo restores a snapshot of the device list, axis settings and slot map, plus the bindings. This also replaces round 3's "swap again" undo for the arrows. Per-row undo ignores these entries, as before.
+- **Same order:** a quiet toast, "Game device order unchanged". Dismissing the banner changes nothing. The banner shows at the top of the main page, and inside the modal when that is open.
+- **Importing an older file over an active profile** whose device order differs (for one file dropped or picked, compared with the active profile's device list, which is the game state after a refresh):
+  - First a dialog lists the moves, with "Shift to the current game order" (default), "Import as is" or Cancel.
+  - Shifting moves the file's bindings and axis settings to the current numbers, the same way as Apply. Devices the file has but the game doesn't list are kept after the game's devices.
+  - Multi-file imports don't ask.
+- **The arrows** stay as the manual fallback. Their tooltip reads "Move mappings to the next slot (use when the game renumbered your devices): …'s bindings, hardware, template and axis settings go to … The game's device order doesn't change." The undo label reads "Move mappings js1 ⇄ js2", and the notice adds "The game's own device order is never changed here."
+- **js9+ / gp2+ note:** uses the agreed text ("The game lists this device as jsN; … then refresh game state here."). It has buttons for Refresh game state and Game slots & controllers.
+- **Still to verify in game** (from the section above): whether a Product string in an `<options>` block that doesn't match makes the game drop or reassign bindings. Apply avoids the question by writing the game's own strings.

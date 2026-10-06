@@ -12,32 +12,43 @@ export async function readXmlFile(file: File): Promise<string> {
 
 const TYPE_SLOT: Record<string, Slot> = { keyboard: 'kb', mouse: 'mo', joystick: 'js', gamepad: 'gp', xboxpad: 'gp', ps4pad: 'gp' };
 
-/**
- * Parse Star Citizen's actionmaps.xml (user/client/0/Profiles/default/actionmaps.xml)
- * or an exported layout (Controls/Mappings/layout_*_exported.xml).
- */
-export function parseActionMaps(text: string, fileName: string): Profile {
+function containerOf(text: string): Element {
   const clean = text.replace(/^\uFEFF/, '').replace(/<\?xml[^>]*\?>/, '').trim();
   const doc = new DOMParser().parseFromString(clean, 'application/xml');
   const err = doc.getElementsByTagName('parsererror')[0];
   if (err) throw new Error(`Not valid XML: ${err.textContent?.split('\n')[0] ?? 'parse error'}`);
-
   // actionmaps.xml can contain several <ActionProfiles>; the one the game uses is "default"
   const profiles = Array.from(doc.getElementsByTagName('ActionProfiles'));
-  const container: Element =
-    profiles.find((p) => p.getAttribute('profileName') === 'default') ?? profiles[0] ?? doc.documentElement;
-
-  const header = container.getElementsByTagName('CustomisationUIHeader')[0];
-  const profileName = container.getAttribute('profileName') || header?.getAttribute('label') || '';
-
+  return profiles.find((p) => p.getAttribute('profileName') === 'default') ?? profiles[0] ?? doc.documentElement;
+}
+/** the device list (<options type=… instance=… Product=…>) in file order */
+function devicesOf(container: Element): ProfileDevice[] {
   const devices: ProfileDevice[] = [];
-  const settings = parseSettings(Array.from(container.children).filter((c) => c.tagName === 'options' || c.tagName === 'deviceoptions'));
   for (const o of Array.from(container.children).filter((c) => c.tagName === 'options')) {
     const slot = TYPE_SLOT[(o.getAttribute('type') ?? '').toLowerCase()];
     const product = (o.getAttribute('Product') ?? '').replace(/\{[0-9A-F-]+\}/i, '').replace(/\s+/g, ' ').trim();
     const raw = o.getAttribute('Product') ?? '';
     if (slot && product) devices.push({ slot, instance: Number(o.getAttribute('instance')) || 1, product, ...(raw.trim() !== product ? { rawProduct: raw } : {}) });
   }
+  return devices;
+}
+/** "Refresh game state": only the game's device list (instance -> product) of an actionmaps.xml / layout export; bindings are ignored */
+export function parseDeviceList(text: string): ProfileDevice[] {
+  return devicesOf(containerOf(text));
+}
+
+/**
+ * Parse Star Citizen's actionmaps.xml (user/client/0/Profiles/default/actionmaps.xml)
+ * or an exported layout (Controls/Mappings/layout_*_exported.xml).
+ */
+export function parseActionMaps(text: string, fileName: string): Profile {
+  const container = containerOf(text);
+
+  const header = container.getElementsByTagName('CustomisationUIHeader')[0];
+  const profileName = container.getAttribute('profileName') || header?.getAttribute('label') || '';
+
+  const devices = devicesOf(container);
+  const settings = parseSettings(Array.from(container.children).filter((c) => c.tagName === 'options' || c.tagName === 'deviceoptions'));
 
   const rebinds: Profile['rebinds'] = {};
   let count = 0;

@@ -1273,6 +1273,107 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.deepEqual(dvo.swapOptionInstances(w, 'joystick', 2, 3), s, 'its own inverse');
   });
 }
+// ---------------------------------------------------------------- refresh game state: rematch to the game's device order
+{
+  const rm = await import('../src/lib/rematch');
+  const sl = await import('../src/lib/slots');
+  const imp = await import('../src/lib/importer');
+  const D = (slot: any, instance: number, product: string, rawProduct?: string) => ({ slot, instance, product, ...(rawProduct ? { rawProduct } : {}) });
+  const MOZA = ' MOZA AB6 FFB Base    {1002346E-0000-0000-0000-504944564944}';
+  const before = [D('kb', 1, 'Keyboard'), D('js', 1, 'MOZA AB6 FFB Base', MOZA), D('js', 2, 'MOZA AB6 FFB Base', MOZA), D('js', 3, 'WINCTRL Orion Pedals'), D('js', 4, 'WINCTRL PTO 2'), D('js', 5, 'WINCTRL CarrierAce MFD L')];
+  const known = (devs: any[]) => rm.knownDevices(devs, sl.emptySlotMap());
+  const S0 = (slot: any, instance: number) => ({ slot, instance });
+  const perm = (r: any, slot = 'js') => Object.fromEntries([...(r.perms[slot] ?? new Map())].map(([a, b]: number[]) => [a, b]));
+  t('rematch: same order = unchanged (identical devices that kept their numbers are not flagged)', () => {
+    const r = rm.computeRematch(known(before), before.map((d) => ({ ...d })));
+    assert.equal(r.unchanged, true); assert.deepEqual(r.moves, []); assert.deepEqual(r.ambiguous, []);
+    const spaced = rm.computeRematch(known(before), before.map((d) => ({ ...d, product: `  ${d.product.toUpperCase()} ` })));
+    assert.equal(spaced.unchanged, true, 'names compared ignoring case and spacing');
+  });
+  t('rematch: the game swapped Pedals and MFD L -> two moves, a js3 <> js5 permutation', () => {
+    const game = [before[0], before[1], before[2], D('js', 3, 'WINCTRL CarrierAce MFD L'), before[4], D('js', 5, 'WINCTRL Orion Pedals')];
+    const r = rm.computeRematch(known(before), game);
+    assert.equal(r.unchanged, false);
+    assert.deepEqual(r.moves.map((m) => `${m.name} ${m.from}->${m.to}`).sort(), ['WINCTRL CarrierAce MFD L 5->3', 'WINCTRL Orion Pedals 3->5']);
+    assert.deepEqual(perm(r), { 3: 5, 5: 3 });
+    assert.deepEqual(rm.rematchParts(r).sort(), ['WINCTRL CarrierAce MFD L js5 → js3', 'WINCTRL Orion Pedals js3 → js5']);
+  });
+  t('rematch: an unplugged device -> the others shift, the missing one keeps its mappings on a free number after the game\'s', () => {
+    const st = [D('js', 1, 'A'), D('js', 2, 'B'), D('js', 3, 'C')];
+    const r = rm.computeRematch(known(st), [D('js', 1, 'A'), D('js', 2, 'C')]);
+    assert.deepEqual(r.moves.map((m) => `${m.name} ${m.from}->${m.to}`), ['C 3->2']);
+    assert.deepEqual(r.missing, [{ slot: 'js', from: 2, to: 3, name: 'B' }]);
+    assert.deepEqual(perm(r), { 3: 2, 2: 3 });
+    const r2 = rm.computeRematch(known(st), [D('js', 1, 'A'), D('js', 3, 'C')]);
+    assert.deepEqual(r2.missing, [{ slot: 'js', from: 2, to: 2, name: 'B' }], 'its number is free: it stays');
+    assert.equal(Object.keys(r2.perms).length, 0);
+  });
+  t('rematch: a new device; a number that receives a device gives its own back (bijection)', () => {
+    const r = rm.computeRematch(known([D('js', 1, 'A')]), [D('js', 1, 'B'), D('js', 2, 'A')]);
+    assert.deepEqual(r.added.map((d) => `${d.product}@${d.instance}`), ['B@1']);
+    assert.deepEqual(perm(r), { 1: 2, 2: 1 });
+    assert.deepEqual(rm.completePerm(new Map([[1, 3], [2, 1]])), new Map([[1, 3], [2, 1], [3, 2]]));
+  });
+  t('rematch: identical names: told apart by their full Product string when it differs, else moved in order and flagged', () => {
+    const X = (n: number, g: string) => D('js', n, 'Stick X', `Stick X {${g}}`);
+    const r = rm.computeRematch(known([X(1, 'AAAA'), X(2, 'BBBB')]), [X(1, 'BBBB'), X(2, 'AAAA')]);
+    assert.deepEqual(perm(r), { 1: 2, 2: 1 }); assert.deepEqual(r.ambiguous, []);
+    const st = [before[1], before[2], D('js', 3, 'Pedals')];
+    const g = rm.computeRematch(known(st), [D('js', 1, 'Pedals'), D('js', 2, 'MOZA AB6 FFB Base', MOZA), D('js', 3, 'MOZA AB6 FFB Base', MOZA)]);
+    assert.deepEqual(g.ambiguous, [{ slot: 'js', name: 'MOZA AB6 FFB Base', from: [1, 2], to: [2, 3] }]);
+    assert.ok(g.moves.filter((m) => m.name.startsWith('MOZA')).every((m) => m.guessed), 'their moves are marked as guessed');
+    assert.deepEqual(perm(g), { 1: 2, 2: 3, 3: 1 });
+  });
+  t('rematch: a slot without a name stays put unless a device lands there; slots named by their hardware are matched', () => {
+    let m = sl.addSlot(sl.addSlot(sl.emptySlotMap(), 'js', 1, { key: 'p', name: 'WINCTRL Orion Pedals' }), 'js', 2);
+    const r = rm.computeRematch(rm.knownDevices([], m), [D('js', 2, 'WINCTRL Orion Pedals'), D('js', 1, 'New Thing')]);
+    assert.deepEqual(r.moves.map((x) => `${x.name} ${x.from}->${x.to}`), ['WINCTRL Orion Pedals 1->2', 'js2 (no device name) 2->3']);
+    m = sl.addSlot(sl.emptySlotMap(), 'js', 4);
+    const k = rm.computeRematch(rm.knownDevices([], m), [D('js', 4, 'Throttle')]);
+    assert.equal(Object.keys(k.perms).length, 0, 'an unnamed js4 meets the game\'s js4: it stays (and gets the name on apply)');
+  });
+  t('rematch apply: bindings, axis settings, hardware, template pick follow; slots named after the game; missing flagged; device list = game\'s', () => {
+    const st = [D('js', 1, 'A', 'A {1}'), D('js', 2, 'B'), D('js', 3, 'C')];
+    let m = sl.seedSlots({ devices: st, rebinds: {} } as any);
+    m = sl.assignHardware(m, S0('js', 3), { key: 'hc', name: 'C' });
+    m = sl.setSlotTemplate(m, S0('js', 3), 'builtin-throttle');
+    m = sl.setSlotTemplate(m, S0('js', 2), 'builtin-stick');
+    const rebinds = { spaceship_movement: { v_strafe_up: [{ slot: 'js', instance: 3, input: 'button4' }], v_strafe_down: [{ slot: 'js', instance: 2, input: 'button7' }] } } as any;
+    let settings = dvo.setGroup(dvo.emptySettings(), 'joystick', 3, 'flight_move_pitch', { invert: true }, 'C');
+    settings = dvo.setGroup(settings, 'joystick', 2, 'flight_move_yaw', { exponent: 2 }, 'B');
+    const game = [D('js', 1, 'A', 'A {1}'), D('js', 2, 'C', 'C {9}'), D('js', 4, 'New')];
+    const r = rm.computeRematch(rm.knownDevices(st, m), game);
+    const a = rm.applyRematch({ rebinds, settings, slots: m }, r, idx);
+    assert.deepEqual(a.rebinds.spaceship_movement.v_strafe_up, [{ slot: 'js', instance: 2, input: 'button4' }], 'C\'s binding js3 -> js2');
+    assert.deepEqual(a.rebinds.spaceship_movement.v_strafe_down, [{ slot: 'js', instance: 5, input: 'button7' }], 'missing B\'s binding kept, on a free number after the game\'s devices (js5)');
+    assert.equal(dvo.groupValues(a.settings, 'joystick', 2, 'flight_move_pitch')!.invert, true);
+    assert.equal(dvo.blockProduct(dvo.optionsBlock(a.settings, 'joystick', 2)!), 'C {9}', 'the options block takes the game\'s Product');
+    assert.equal(dvo.groupValues(a.settings, 'joystick', 5, 'flight_move_yaw')!.exponent, 2);
+    const at = (i: number) => a.slots.slots.find((s) => s.slot === 'js' && s.instance === i)!;
+    assert.equal(at(2).hw!.key, 'hc'); assert.equal(at(2).gameProduct, 'C'); assert.equal(at(2).gameRawProduct, 'C {9}');
+    assert.equal(sl.padAssign(a.slots).hc.instance, 2);
+    assert.equal(a.slots.hwTemplates.hc, 'builtin-throttle', 'template pick follows the hardware');
+    assert.equal(at(5).gameMissing, true); assert.equal(at(5).gameProduct, 'B'); assert.equal(at(5).template, 'builtin-stick', 'a pick on a slot without hardware moves with it');
+    assert.equal(at(4).gameProduct, 'New', 'new device: slot added');
+    assert.deepEqual(a.devices, game, 'device list = the game\'s, in its order');
+    assert.ok(a.moved === 2 && a.touched.length === 2);
+    const again = rm.computeRematch(rm.knownDevices(a.devices, a.slots), game);
+    assert.equal(again.moves.length + again.added.length, 0, 'refreshing with the same file again: nothing to move');
+  });
+  t('rematch: importing a file made for an older order shifts its mappings to the current one', () => {
+    const file = { devices: [D('js', 1, 'Pedals'), D('js', 2, 'Stick')], rebinds: { spaceship_movement: { v_strafe_up: [{ slot: 'js', instance: 1, input: 'button4' }] } } as any, settings: dvo.emptySettings() };
+    const cur = [D('js', 1, 'Stick'), D('js', 2, 'Pedals')];
+    const r = rm.computeRematch(known(file.devices), cur);
+    const out = rm.shiftToOrder(file, r, idx);
+    assert.deepEqual(out.rebinds.spaceship_movement.v_strafe_up, [{ slot: 'js', instance: 2, input: 'button4' }]);
+    assert.deepEqual(out.devices, cur);
+  });
+  t('refresh: only the device list is read from a game file (no bindings needed)', () => {
+    const x = '<ActionMaps><ActionProfiles profileName="default"><options type="joystick" instance="2" Product=" WINCTRL Orion Pedals  {BE644098-0000-0000-0000-504944564944}"/><options type="keyboard" instance="1" Product="Keyboard"/></ActionProfiles></ActionMaps>';
+    assert.deepEqual(imp.parseDeviceList(x).map((d) => `${d.slot}${d.instance}:${d.product}`), ['js2:WINCTRL Orion Pedals', 'kb1:Keyboard']);
+    assert.throws(() => imp.parseDeviceList('<nope'));
+  });
+}
 {
   const inp = await import('../src/lib/inputs');
   t('inputs: kb / mo instances are real (kb2 binds, conflicts and formats apart from kb1)', () => {

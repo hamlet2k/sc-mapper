@@ -257,17 +257,32 @@ export function listOptionBlocks(s: DeviceSettings) {
   return s.blocks.filter((b): b is OptionsBlock => b.tag === 'options').map((b) => ({ type: blockType(b), instance: blockInstance(b), product: blockProduct(b), groups: b.groups.length }));
 }
 export const emptySettings = (): DeviceSettings => ({ blocks: [] });
-/** swap two device numbers' option blocks (invert / exponent / curves per <options type=… instance=…>); per-model axis blocks are untouched */
-export function swapOptionInstances(s: DeviceSettings, type: string, a: number, b: number): DeviceSettings {
-  if (a === b) return s;
+/** renumber option blocks of one device type by a permutation (old instance -> new); per-model axis blocks are untouched */
+export function permuteOptionInstances(s: DeviceSettings, type: string, perm: ReadonlyMap<number, number>): DeviceSettings {
+  if (![...perm].some(([a, b]) => a !== b)) return s;
   return {
     ...s,
     blocks: s.blocks.map((blk) => {
       if (blk.tag !== 'options' || blockType(blk) !== type) return blk;
       const n = blockInstance(blk);
-      if (n !== a && n !== b) return blk;
-      const to = String(n === a ? b : a);
-      return { ...blk, attrs: blk.attrs.some(([k]) => k === 'instance') ? blk.attrs.map(([k, v]) => (k === 'instance' ? [k, to] : [k, v]) as Attr) : [...blk.attrs, ['instance', to] as Attr] };
+      const to = perm.get(n);
+      if (to === undefined || to === n) return blk;
+      const v = String(to);
+      return { ...blk, attrs: blk.attrs.some(([k]) => k === 'instance') ? blk.attrs.map(([k, x]) => (k === 'instance' ? [k, v] : [k, x]) as Attr) : [...blk.attrs, ['instance', v] as Attr] };
+    }),
+  };
+}
+/** swap two device numbers' option blocks (invert / exponent / curves per <options type=… instance=…>) */
+export function swapOptionInstances(s: DeviceSettings, type: string, a: number, b: number): DeviceSettings {
+  return a === b ? s : permuteOptionInstances(s, type, new Map([[a, b], [b, a]]));
+}
+/** set the Product attribute of an existing <options type=… instance=…> block (the game's name for the device at that number) */
+export function setOptionsProduct(s: DeviceSettings, type: string, instance: number, product: string): DeviceSettings {
+  return {
+    ...s,
+    blocks: s.blocks.map((blk) => {
+      if (blk.tag !== 'options' || blockType(blk) !== type || blockInstance(blk) !== instance || blockProduct(blk) === product) return blk;
+      return { ...blk, attrs: blk.attrs.some(([k]) => k === 'Product') ? blk.attrs.map(([k, x]) => (k === 'Product' ? [k, product] : [k, x]) as Attr) : [...blk.attrs, ['Product', product] as Attr] };
     }),
   };
 }

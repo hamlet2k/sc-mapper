@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { slotDeviceName, slotId, type GameSlot } from '../lib/slots';
 import type { Profile } from '../lib/types';
+import { GamePathHint } from './GameState';
 import { Ico, type IconName } from './icons';
 import { useEscape } from './useEscape';
 
@@ -8,10 +9,10 @@ import { useEscape } from './useEscape';
  * The profile, in one place: which profile is active, its file actions (import / export / delete, plus new, duplicate,
  * revert, reset) and its game slots with the way into the Controllers modal.
  */
-export function ProfilePanel({ profiles, profile, versionLabel, slots, connected, onSelect, onImport, onExport, onDelete, onNew, onDuplicate, onRevert, onResetAll, onOpenSlots }: {
+export function ProfilePanel({ profiles, profile, versionLabel, slots, connected, onSelect, onImport, onExport, onDelete, onNew, onDuplicate, onRevert, onResetAll, onOpenSlots, onRefresh }: {
   profiles: Profile[]; profile: Profile | null; versionLabel: string; slots: GameSlot[]; connected: (gs: GameSlot) => boolean;
   onSelect: (id: string | null) => void; onImport: () => void; onExport: () => void; onDelete: () => void;
-  onNew: () => void; onDuplicate: () => void; onRevert?: () => void; onResetAll: () => void; onOpenSlots: () => void;
+  onNew: () => void; onDuplicate: () => void; onRevert?: () => void; onResetAll: () => void; onOpenSlots: () => void; onRefresh: () => void;
 }) {
   const [menu, setMenu] = useState(false);
   useEscape(() => setMenu(false), menu);
@@ -39,6 +40,7 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
             <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-md border border-edge bg-panel p-1 shadow-xl" role="menu" data-testid="profile-menu">
               <MenuItem icon="filePlus" label="New profile from the game defaults" onClick={() => { setMenu(false); onNew(); }} />
               {profile && <MenuItem icon="duplicate" label="Duplicate this profile" onClick={() => { setMenu(false); onDuplicate(); }} />}
+              {profile && <MenuItem icon="refresh" label="Refresh game state (device order)…" onClick={() => { setMenu(false); onRefresh(); }} />}
               {profile && onRevert && <MenuItem icon="undo" label="Revert to the imported file" onClick={() => { setMenu(false); onRevert(); }} />}
               {profile && <MenuItem icon="reset" label="Reset every binding to the defaults" danger disabled={!profile.rebindCount} onClick={() => { setMenu(false); onResetAll(); }} />}
             </div>
@@ -46,13 +48,24 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
         )}
       </div>
       <div className="mt-3 border-t border-edge/60 pt-2.5">
-        <div className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-hud/70">Game slots</div>
+        <div className="flex items-center gap-2">
+          <div className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-hud/70">Game slots</div>
+          {profile && (
+            <button type="button" onClick={onRefresh} data-testid="profile-refresh"
+              title="Refresh game state: pick a fresh export of your layout (or drop it on the page) to move your mappings to the device numbers the game uses now"
+              className="ml-auto flex items-center gap-1 rounded border border-edge px-1.5 py-0.5 text-[10px] text-slate-300 hover:border-hud/60 hover:text-hud2">
+              <Ico name="refresh" className="h-3 w-3" /> Refresh
+            </button>
+          )}
+        </div>
+        {profile && <GamePathHint className="mt-1" />}
         {slots.length ? (
           <ul className="mt-1.5 space-y-0.5" data-testid="sidebar-slots">
             {slots.map((gs) => (
               <li key={slotId(gs)} className="flex items-center gap-2 font-mono text-[10px]">
                 <span className="w-7 text-hud/80">{slotId(gs).toUpperCase()}</span>
-                <span className="min-w-0 flex-1 truncate text-slate-300">{slotDeviceName(gs) ?? (gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'no device')}</span>
+                <span className={`min-w-0 flex-1 truncate ${gs.gameMissing ? 'text-slate-500 line-through decoration-slate-600' : 'text-slate-300'}`}
+                  title={gs.gameMissing ? 'Not in the latest game state: its mappings are kept' : undefined}>{slotDeviceName(gs) ?? (gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'no device')}</span>
                 {(gs.slot === 'js' || gs.slot === 'gp') && <span className={`h-1.5 w-1.5 rounded-full ${connected(gs) ? 'bg-ok shadow-[0_0_6px_var(--color-ok)]' : 'bg-slate-600'}`} title={connected(gs) ? 'connected' : 'not connected'} />}
               </li>
             ))}

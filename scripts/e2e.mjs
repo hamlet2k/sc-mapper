@@ -59,7 +59,7 @@ for (const q of ['quantum', 'mining', 'lalt+n', 'key:f', 'mouse2', 'qntm']) {
 await search.fill('');
 
 // Import via the real file input (same path as the Import XML button)
-await page.locator('input[type=file]').setInputFiles('public/samples/actionmaps.xml');
+await page.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
 await page.waitForTimeout(500);
 log('toast:', await page.locator('.fixed.bottom-5').innerText().catch(() => 'none'));
 log('stats after import:', await page.getByTestId('list-stats').innerText());
@@ -554,7 +554,7 @@ const before = await page.locator('#profile option:checked').innerText();
 await page.keyboard.press('Escape');
 await page.locator('[data-testid=export-dialog]').click({ position: { x: 5, y: 5 } }).catch(() => {});
 await page.waitForTimeout(200);
-await page.locator('input[type=file]').setInputFiles(file);
+await page.locator('input[type=file]').first().setInputFiles(file);
 await page.waitForTimeout(500);
 const after = await page.locator('#profile option:checked').innerText();
 log('re-imported:', after, '| edited:', before);
@@ -1099,9 +1099,11 @@ console.log('\nslot order & axis settings limit (Firefox, 10 joysticks)');
   // js9: the game keeps axis / curve settings for js1–js8 only
   await fchipSel('js9');
   const fbar = fp.getByTestId('device-slot-bar');
-  check(await fbar.getByTestId('slot-axis-settings').isDisabled() && /first 8/.test(await fbar.getByTestId('axis-locked').innerText()) && /reorder/i.test(await fbar.getByTestId('axis-locked').innerText()),
-    `js9: Axis settings CTA disabled, explaining the first-8 limit (${(await fbar.getByTestId('axis-locked').innerText()).slice(0, 80)}…)`);
-  await fp.screenshot({ path: shots + '112-devices-js9-axis-locked.png' });
+  const lockTxt = await fbar.getByTestId('axis-locked').innerText();
+  check(await fbar.getByTestId('slot-axis-settings').isDisabled() && /The game lists this device as js9; Star Citizen only allows axis, inversion and curve tuning on js1–js8\. The order comes from the game and Windows USB order, not this app\. To tune it, change which devices connect first, then refresh game state here\./.test(lockTxt)
+    && !/reorder/i.test(lockTxt) && await fbar.getByTestId('axis-refresh').isVisible(),
+    `js9: Axis settings CTA disabled; the note says the order comes from the game / USB order, not the app (${lockTxt.slice(0, 70)}…)`);
+  await fp.screenshot({ path: shots + '113-js9-note.png' });
   await fbar.getByTestId('axis-reorder').click();
   await fp.waitForTimeout(250);
   check(await fpanel.isVisible() && await fpanel.getByTestId('slots-tab').isVisible(), 'the reorder button opens Game slots & controllers');
@@ -1114,7 +1116,9 @@ console.log('\nslot order & axis settings limit (Firefox, 10 joysticks)');
   const c2 = await fRow('js2').getByTestId('slot-count').innerText().catch(() => '');
   check(/^\(\d+ custom\)$/.test(c1) && c2 === c1 && await fRow('js1').getByTestId('slot-count').count() === 0, `your js1 bindings moved to js2 (${c1} -> ${c2}); none left on js1 (game defaults stay on their number)`);
   check((await fRow('js2').getByTestId('slot-template').inputValue()) === 'builtin-stick' && (await fRow('js1').getByTestId('slot-template').inputValue()) === '', 'the template pick moved with it');
-  check(/Swap js1 and js2/.test(await fpanel.getByTestId('slot-move-notice').innerText()), 'swap notice with Undo');
+  check(/Move mappings js1 ⇄ js2/.test(await fpanel.getByTestId('slot-move-notice').innerText()) && /game's own device order is never changed/.test(await fpanel.getByTestId('slot-move-notice').innerText()), 'move notice with Undo (says the game order is unchanged)');
+  check(/Move mappings to the next slot \(use when the game renumbered your devices\)/.test(await fRow('js1').getByTestId('slot-move-down').getAttribute('title') ?? '')
+    && /use when the game renumbered your devices/.test(await fRow('js2').getByTestId('slot-move-up').getAttribute('aria-label') ?? ''), 'arrows are labelled as moving mappings, not changing the game order');
   await fpanel.evaluate((el) => el.scrollTo(0, 0));
   await fp.screenshot({ path: shots + '112-game-slots-move-arrows.png' });
   await fpanel.getByTestId('slot-move-undo').click();
@@ -1138,6 +1142,97 @@ console.log('\nslot order & axis settings limit (Firefox, 10 joysticks)');
   check(/inverted/.test(await pitchOf('js1')) && !/inverted/.test(await pitchOf('js2')), 'Ctrl+Z undoes the swaps, axis settings included');
 }
 await ff.close();
+
+// ---- refresh game state: a fresh export with renumbered devices, dropped on the page (round 4)
+console.log('\nrefresh game state (drop a reshuffled export)');
+{
+  const rc = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1 });
+  const rp = await rc.newPage();
+  rp.on('pageerror', (e) => errors.push(String(e)));
+  await rp.goto(url, { waitUntil: 'networkidle' });
+  await rp.evaluate(() => localStorage.clear());
+  await rp.reload({ waitUntil: 'networkidle' });
+  const tuned = readFileSync('scripts/fixtures/round4-tuned.xml', 'utf8');
+  const replugged = readFileSync('scripts/fixtures/round4-replugged.xml', 'utf8');
+  /** synthetic file drag: enter (shows the overlay, hovering a zone), then drop on that zone */
+  const dragIn = (name, text, zone) => rp.evaluate(({ name, text, zone }) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([text], name, { type: 'text/xml' }));
+    window.__dt = dt;
+    document.body.dispatchEvent(new DragEvent('dragenter', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    return new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-drop-zone="${zone}"]`) ?? document.body;
+      el.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
+      res(!!document.querySelector(`[data-drop-zone="${zone}"]`));
+    })));
+  }, { name, text, zone });
+  const dropOn = (zone) => rp.evaluate((zone) => {
+    const el = document.querySelector(`[data-drop-zone="${zone}"]`) ?? document.body;
+    el.dispatchEvent(new DragEvent('drop', { dataTransfer: window.__dt, bubbles: true, cancelable: true }));
+  }, zone);
+  const drop = async (name, text, zone) => { await dragIn(name, text, zone); await rp.waitForTimeout(120); await dropOn(zone); await rp.waitForTimeout(400); };
+  const rtoast = () => rp.locator('.fixed.bottom-5.right-5').innerText().catch(() => '');
+
+  check(await rp.getByTestId('profile-refresh').count() === 0, 'no profile: no Refresh game state entry next to the slots');
+  const zoned = await dragIn('round4-tuned.xml', tuned, 'refresh');
+  check(!zoned && await rp.getByTestId('drop-overlay').isVisible() && await rp.locator('[data-drop-zone=import]').count() === 1, 'no profile: the drop overlay only imports');
+  await dropOn('import');
+  await rp.waitForTimeout(400);
+  check(/Imported “round4-tuned/.test(await rtoast()) && await rp.getByTestId('drop-overlay').count() === 0, 'dropped file imported as a profile');
+  check(await rp.getByTestId('profile-refresh').isVisible() && await rp.getByTestId('game-path').first().isVisible(), 'profile card: Refresh entry and the usual folder path with a copy button');
+  check(/StarCitizen\\LIVE\\user\\client\\0\\controls\\mappings\\/.test(await rp.getByTestId('game-path').first().innerText()), 'the path reads StarCitizen\\LIVE\\user\\client\\0\\controls\\mappings\\');
+
+  // the overlay with a profile: Refresh game state (default) vs Import as profile
+  await dragIn('round4-replugged.xml', replugged, 'refresh');
+  check(await rp.getByTestId('drop-refresh').isVisible() && await rp.getByTestId('drop-import').isVisible(), 'with a profile the overlay offers Refresh game state and Import as profile');
+  await rp.screenshot({ path: shots + '113-drop-overlay.png' });
+  await dropOn('refresh');
+  await rp.waitForTimeout(400);
+  const banner = rp.getByTestId('rematch-banner');
+  const btxt = await banner.innerText().catch(() => '');
+  check(await banner.isVisible() && /Orion Pedals js3 → js5/.test(btxt) && /CarrierAce MFD L js5 → js3/.test(btxt) && await banner.getByTestId('rematch-move').count() === 2,
+    `refresh shows the renumbering (${(await banner.getByTestId('rematch-summary').innerText().catch(() => '')).replace(/\s+/g, ' ')})`);
+  check(await rp.locator('#profile option').count() === 2, 'a refresh drop does not add a profile');
+  await rp.screenshot({ path: shots + '113-rematch-banner.png' });
+  await banner.getByTestId('rematch-apply').click();
+  await rp.waitForTimeout(400);
+  check(await banner.count() === 0 && /Mappings moved to the game's device order/.test(await rtoast()), 'Apply moves the mappings (toast)');
+  await rp.getByTestId('open-slots').click();
+  await rp.waitForTimeout(300);
+  const rpanel = rp.getByTestId('controllers-panel');
+  const rRow = (id) => rpanel.locator(`[data-testid=slot-row][data-slot="${id}"]`);
+  check(/CarrierAce MFD L/.test(await rRow('js3').innerText()) && /Orion Pedals/.test(await rRow('js5').innerText()), 'slots now follow the game: js3 CarrierAce MFD L, js5 Orion Pedals');
+  check((await rRow('js5').getByTestId('slot-count').innerText()) === '(1 custom)' && (await rRow('js3').getByTestId('slot-count').innerText()) === '(2 custom)', 'bindings moved with them (pedal yaw on js5, MFD bindings on js3)');
+  check(/Refresh game state \(2 devices renumbered\)/.test(await rpanel.getByTestId('slot-move-notice').innerText()) && await rpanel.getByTestId('refresh-game-state').isEnabled(), 'one undo step, with Refresh game state in the modal header');
+  await rp.screenshot({ path: shots + '113-after-apply-slots-modal.png' });
+  await rpanel.getByTestId('slot-move-undo').click();
+  await rp.waitForTimeout(300);
+  check(/Orion Pedals/.test(await rRow('js3').innerText()) && (await rRow('js3').getByTestId('slot-count').innerText()) === '(1 custom)', 'Undo restores the old numbering in one step');
+  // refresh from the modal's button (file picker)
+  await rp.getByTestId('refresh-file').setInputFiles({ name: 'round4-replugged.xml', mimeType: 'text/xml', buffer: Buffer.from(replugged) });
+  await rp.waitForTimeout(300);
+  check(await rpanel.getByTestId('rematch-banner').isVisible(), 'the modal\'s Refresh game state button shows the banner inside the modal');
+  await rpanel.getByTestId('rematch-apply').click();
+  await rp.waitForTimeout(300);
+  await rp.keyboard.press('Escape');
+  await rp.waitForTimeout(200);
+  // the same export again: nothing to do
+  await drop('round4-replugged.xml', replugged, 'refresh');
+  check(/Game device order unchanged/.test(await rtoast()) && await rp.getByTestId('rematch-banner').count() === 0, 'refreshing with the same order: "Game device order unchanged"');
+  await rp.screenshot({ path: shots + '113-unchanged-toast.png' });
+  // importing the older file as a profile: ask first, offering to shift it to the current order
+  await drop('round4-tuned.xml', tuned, 'import');
+  const ask = rp.getByTestId('import-shift');
+  check(await ask.isVisible() && /Orion Pedals js3 → js5/.test(await ask.innerText()), 'importing an older file over a profile with another device order asks first');
+  await rp.screenshot({ path: shots + '113-import-shift-ask.png' });
+  await ask.getByTestId('import-shift-apply').click();
+  await rp.waitForTimeout(400);
+  check(/shifted to the current game order/.test(await rtoast()) && await rp.locator('#profile option').count() === 3, 'shifted import adds the profile');
+  await rp.getByTestId('open-slots').click();
+  await rp.waitForTimeout(300);
+  check(/Orion Pedals/.test(await rRow('js5').innerText()) && (await rRow('js5').getByTestId('slot-count').innerText()) === '(1 custom)', 'the shifted profile has the pedal bindings on js5');
+  await rc.close();
+}
 
 // ---- photo templates: a TEST-ONLY layout (made-up anchors, not real coordinates) injected through the test hook makes the
 // Gladiator template a two-view photo template; checks views side by side / stacked, markers on the right view, live marker,

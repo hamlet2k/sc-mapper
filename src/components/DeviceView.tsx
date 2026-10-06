@@ -45,6 +45,8 @@ interface Props {
   onOpenAxis: (gs: GameSlot) => void;
   /** how many device numbers per kind the game keeps axis / curve settings for (js: 8, gp: 1) */
   axisLimit: Record<'js' | 'gp', number>;
+  /** "Refresh game state": pick a fresh export to rematch the mappings to the game's device numbers */
+  onRefresh: () => void;
   onEdit: (row: Row) => void;
   onRemove: (row: Row, b: Binding) => void;
   onBind: (row: Row, slot: Slot, instance: number, input: string) => void;
@@ -121,7 +123,7 @@ function NoSlots({ onOpenControllers, hasKm }: { onOpenControllers: () => void; 
 }
 
 type Chosen = ReturnType<typeof resolveSlotTemplate>;
-function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, highlight, scroll, query, chip, onEdit, onRemove, onBind, onShowInList, notify }:
+function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, onRefresh, highlight, scroll, query, chip, onEdit, onRemove, onBind, onShowInList, notify }:
   Props & { opt: DevOption; chosen: Chosen; T: ReturnType<typeof useTemplates>; strip: ReactNode }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
@@ -288,10 +290,13 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
         {axisLocked && (
           <div id="axis-locked-msg" className="mt-2 flex flex-wrap items-center gap-2 rounded border border-mod/40 bg-mod/5 px-3 py-1.5 text-[11px] text-slate-300" data-testid="axis-locked">
             <Ico name="info" className="text-mod" />
-            <span>{slot === 'js'
-              ? <>Star Citizen only keeps axis, inversion and curve settings for the first {axisLimit.js} joysticks (js1–js{axisLimit.js}). To customize them for this device, it must be one of the first {axisLimit.js}: reorder it in Game slots &amp; controllers.</>
-              : <>Star Citizen only keeps gamepad axis, inversion and curve settings for gp1. To customize them for this gamepad, make it gp1: reorder it in Game slots &amp; controllers.</>}</span>
-            <button type="button" onClick={onOpenControllers} data-testid="axis-reorder" className="ml-auto flex items-center gap-1 rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20"><Ico name="slots" className="h-3 w-3" /> Reorder in Game slots &amp; controllers</button>
+            <span className="min-w-0 flex-1">{slot === 'js'
+              ? <>The game lists this device as {slot}{instance}; Star Citizen only allows axis, inversion and curve tuning on js1–js{axisLimit.js}. The order comes from the game and Windows USB order, not this app. To tune it, change which devices connect first, then refresh game state here.</>
+              : <>The game lists this device as {slot}{instance}; Star Citizen only allows gamepad axis, inversion and curve tuning on gp1. The order comes from the game and Windows USB order, not this app. To tune it, change which devices connect first, then refresh game state here.</>}</span>
+            <span className="ml-auto flex shrink-0 gap-1.5">
+              <button type="button" onClick={onRefresh} data-testid="axis-refresh" className="flex items-center gap-1 rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20"><Ico name="refresh" className="h-3 w-3" /> Refresh game state</button>
+              <button type="button" onClick={onOpenControllers} data-testid="axis-reorder" className="flex items-center gap-1 rounded border border-edge px-2 py-0.5 text-slate-300 hover:border-mod/60 hover:text-mod"><Ico name="slots" className="h-3 w-3" /> Game slots &amp; controllers</button>
+            </span>
           </div>
         )}
       </section>

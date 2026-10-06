@@ -36,6 +36,8 @@ export interface GameSlot {
   hwMatch?: 'usb' | 'name' | 'legacy' | 'order';
   /** template picked for this slot while it has no hardware (with hardware the pick lives in SlotMap.hwTemplates) */
   template?: string;
+  /** the device was not in the last game state refreshed from a game file (its mappings are kept) */
+  gameMissing?: boolean;
 }
 export interface SlotMap {
   version: 1;
@@ -334,18 +336,22 @@ export function copySlotBindings(rebinds: RebindMap, idx: DefaultsIndex, from: T
   return { rebinds: out, touched, copied, replaced };
 }
 
-/* ------------------------------------------------------------- reordering (move up / down) */
-const swapNum = (n: number, a: number, b: number) => (n === a ? b : n === b ? a : n);
+/* ------------------------------------------------------------- renumbering (refresh game state, move up / down) */
+/** a renumbering of one slot kind: old instance -> new instance (a bijection; numbers not in it stay put) */
+export type Perm = ReadonlyMap<number, number>;
+const via = (perm: Perm, n: number) => perm.get(n) ?? n;
+const moves = (perm: Perm) => [...perm].some(([a, b]) => a !== b);
+const swapPerm = (a: number, b: number): Perm => new Map([[a, b], [b, a]]);
 /**
- * Swap two slots' numbers (e.g. js2 <> js3) in the profile's own bindings: every stored binding on either number is rewritten
- * to the other (js2_button4 -> js3_button4 and back), so each device keeps what you bound on it. The game's default bindings
- * aren't stored in the profile and stay on their number, like the game's own pp_resortdevices; cleared defaults (js1_) stay
- * cleared. Actions with no stored binding on either number are untouched.
+ * Renumber one slot kind in the profile's own bindings: every stored binding on a renumbered slot is rewritten
+ * (js3_button4 -> js5_button4), so each device keeps what you bound on it. The game's default bindings aren't stored in the
+ * profile and stay on their number, like the game's own pp_resortdevices; cleared defaults (js1_) stay cleared. Actions with
+ * no stored binding on a renumbered slot are untouched.
  */
-export function swapSlotBindings(rebinds: RebindMap, idx: DefaultsIndex, slot: Slot, a: number, b: number): { rebinds: RebindMap; touched: { map: string; action: string }[]; moved: number } {
-  if (a === b) return { rebinds, touched: [], moved: 0 };
+export function permuteSlotBindings(rebinds: RebindMap, idx: DefaultsIndex, slot: Slot, perm: Perm): { rebinds: RebindMap; touched: { map: string; action: string }[]; moved: number } {
+  if (!moves(perm)) return { rebinds, touched: [], moved: 0 };
   const g = groupOfSlot(slot);
-  const hit = (r: Rebind) => r.slot === slot && (r.instance === a || r.instance === b) && !!r.input;
+  const hit = (r: Rebind) => r.slot === slot && via(perm, r.instance) !== r.instance && !!r.input;
   let out = rebinds, moved = 0;
   const touched: { map: string; action: string }[] = [];
   for (const [map, acts] of Object.entries(rebinds)) {
@@ -355,18 +361,29 @@ export function swapSlotBindings(rebinds: RebindMap, idx: DefaultsIndex, slot: S
       if (!n) continue;
       moved += n;
       touched.push({ map, action });
-      out = setGroup(out, idx.get(`${map}/${action}`), map, action, g, own.map((r) => (hit(r) ? { ...r, instance: swapNum(r.instance, a, b) } : r)));
+      out = setGroup(out, idx.get(`${map}/${action}`), map, action, g, own.map((r) => (hit(r) ? { ...r, instance: via(perm, r.instance) } : r)));
     }
   }
   return { rebinds: out, touched, moved };
 }
-/** swap two slots' numbers in the slot map: hardware, template pick and the game file's device name go along with each slot */
-export function swapSlots(map: SlotMap, slot: Slot, a: number, b: number): SlotMap {
-  return { ...map, slots: sortSlots(map.slots.map((s) => (s.slot === slot && (s.instance === a || s.instance === b) ? { ...s, instance: swapNum(s.instance, a, b) } : s))) };
+/** swap two slots' numbers (e.g. js2 <> js3) in the profile's own bindings */
+export function swapSlotBindings(rebinds: RebindMap, idx: DefaultsIndex, slot: Slot, a: number, b: number) {
+  return permuteSlotBindings(rebinds, idx, slot, a === b ? new Map() : swapPerm(a, b));
 }
-/** swap two device numbers in the imported file's device list (<options type=… instance=…>) */
+/** renumber slots of one kind in the slot map: hardware, template pick and the game file's device name go along with each slot */
+export function permuteSlots(map: SlotMap, slot: Slot, perm: Perm): SlotMap {
+  if (!moves(perm)) return map;
+  return { ...map, slots: sortSlots(map.slots.map((s) => (s.slot === slot && via(perm, s.instance) !== s.instance ? { ...s, instance: via(perm, s.instance) } : s))) };
+}
+export function swapSlots(map: SlotMap, slot: Slot, a: number, b: number): SlotMap {
+  return a === b ? map : permuteSlots(map, slot, swapPerm(a, b));
+}
+/** renumber devices of one kind in a device list (<options type=… instance=…>) */
+export function permuteProfileDevices<T extends { slot: Slot; instance: number }>(devices: readonly T[], slot: Slot, perm: Perm): T[] {
+  return devices.map((d) => (d.slot === slot && via(perm, d.instance) !== d.instance ? { ...d, instance: via(perm, d.instance) } : d));
+}
 export function swapProfileDevices<T extends { slot: Slot; instance: number }>(devices: readonly T[], slot: Slot, a: number, b: number): T[] {
-  return devices.map((d) => (d.slot === slot && (d.instance === a || d.instance === b) ? { ...d, instance: swapNum(d.instance, a, b) } : d));
+  return a === b ? [...devices] : permuteProfileDevices(devices, slot, swapPerm(a, b));
 }
 /** the neighbour a slot swaps with when moved up (-1) or down (+1) among the slots of its kind, if any */
 export function neighbourSlot(map: SlotMap, gs: { slot: Slot; instance: number }, dir: -1 | 1): GameSlot | undefined {
@@ -396,6 +413,7 @@ export function cleanSlotMap(v: unknown): SlotMap | null {
     if (s.hwPinned === true) g.hwPinned = true;
     if (s.hwMatch === 'usb' || s.hwMatch === 'name' || s.hwMatch === 'legacy') g.hwMatch = s.hwMatch;
     if (typeof s.template === 'string') g.template = s.template;
+    if (s.gameMissing === true) g.gameMissing = true;
     slots.push(g);
   }
   const hwTemplates: Record<string, string> = {};

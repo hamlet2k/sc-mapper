@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AssignSource, PadInfo, PadKind, PadLike } from '../lib/devices';
 import { getPads, padLabel, parseProfileProduct } from '../lib/devices';
 import {
@@ -9,6 +9,7 @@ import { AUTO_TEMPLATE, autoSlotTemplate, resolveSlotTemplate } from '../lib/slo
 import { coveredInputs, maxButton, templateGroups, useTemplates, type DeviceTemplate } from '../lib/templates';
 import type { Group, Profile, ProfileDevice, Slot } from '../lib/types';
 import { ChromiumBanner } from './ChromiumBanner';
+import { GamePathHint, RefreshGameButton } from './GameState';
 import { InputTester } from './InputTester';
 import { Ico } from './icons';
 import { useEscape } from './useEscape';
@@ -104,8 +105,9 @@ type Tab = 'slots' | 'tester';
 
 /** Game slots & controllers: game slots (kb1, mo1, js1…, gp1…) <> the hardware filling each <> its template; live tester.
  *  (Axis settings & curves open per slot from the Devices view.) */
-export function ControllersPanel({ profile, pads, describe, slots, onClose, initialTab = 'slots' }: {
+export function ControllersPanel({ profile, pads, describe, slots, onClose, onRefresh, banner, initialTab = 'slots' }: {
   profile: Profile | null; pads: PadInfo[]; describe: (l: readonly PadLike[]) => PadInfo[]; slots: SlotActions; onClose: () => void; initialTab?: Tab;
+  /** opens the file picker for a fresh export (only its device list is read) */ onRefresh: () => void; /** the pending rematch, if any */ banner?: ReactNode;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   useEscape(onClose);
@@ -121,9 +123,14 @@ export function ControllersPanel({ profile, pads, describe, slots, onClose, init
             ))}
           </div>
           {profile && <span className="font-mono text-[11px] text-slate-500">{profile.name}</span>}
-          <button type="button" onClick={onClose} className="ml-auto rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2" aria-label="Close"><Ico name="close" /></button>
+          <span className="ml-auto flex flex-col items-end gap-0.5">
+            <RefreshGameButton onClick={onRefresh} disabled={!profile} />
+            {profile && <GamePathHint />}
+          </span>
+          <button type="button" onClick={onClose} className="rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2" aria-label="Close"><Ico name="close" /></button>
         </div>
         <div className="space-y-4 p-5">
+          {banner}
           <ChromiumBanner detected={pads.length} compact />
           {tab === 'slots' && <SlotsTab profile={profile} pads={pads} describe={describe} slots={slots} />}
           {tab === 'tester' && (
@@ -211,7 +218,7 @@ function SlotsTab({ profile, pads, describe, slots }: { profile: Profile | null;
         <div className="space-y-3">
           {slots.lastMove && (
             <div className="flex flex-wrap items-center gap-2 rounded border border-ok/40 bg-ok/5 px-3 py-1.5 text-xs text-slate-300" data-testid="slot-move-notice" role="status">
-              <Ico name="check" className="text-ok" /> {slots.lastMove}: bindings, hardware, template and axis settings moved with them.
+              <Ico name="check" className="text-ok" /> {slots.lastMove}: your bindings, hardware, template and axis settings moved with them. The game&apos;s own device order is never changed here.
               <button type="button" onClick={slots.undoMove} data-testid="slot-move-undo" className={`${BTN} ml-auto`}><Ico name="undo" /> Undo</button>
             </div>
           )}
@@ -317,10 +324,12 @@ function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, onArm, onRemove, o
         {ctl && (
           <span className="flex flex-col gap-0.5">
             <button type="button" onClick={() => up && slots.move(gs, -1)} disabled={!up} data-testid="slot-move-up" className={ARROW}
-              aria-label={up ? `Move ${slotId(gs)} up: swap with ${slotId(up)}` : `${slotId(gs)} is already first`} title={up ? `Swap with ${slotId(up)}: the device, its bindings, template and axis settings become ${slotId(up)}` : undefined}>
+              aria-label={up ? `Move mappings to the next slot up (${slotId(gs)} ⇄ ${slotId(up)}): use when the game renumbered your devices` : `${slotId(gs)} is already first`}
+              title={up ? `Move mappings to the next slot (use when the game renumbered your devices): ${slotId(gs)}'s bindings, hardware, template and axis settings go to ${slotId(up)} and ${slotId(up)}'s to ${slotId(gs)}. The game's device order doesn't change.` : undefined}>
               <Ico name="chevronUp" className="h-3 w-3" strokeWidth={2} /></button>
             <button type="button" onClick={() => down && slots.move(gs, 1)} disabled={!down} data-testid="slot-move-down" className={ARROW}
-              aria-label={down ? `Move ${slotId(gs)} down: swap with ${slotId(down)}` : `${slotId(gs)} is already last`} title={down ? `Swap with ${slotId(down)}: the device, its bindings, template and axis settings become ${slotId(down)}` : undefined}>
+              aria-label={down ? `Move mappings to the next slot down (${slotId(gs)} ⇄ ${slotId(down)}): use when the game renumbered your devices` : `${slotId(gs)} is already last`}
+              title={down ? `Move mappings to the next slot (use when the game renumbered your devices): ${slotId(gs)}'s bindings, hardware, template and axis settings go to ${slotId(down)} and ${slotId(down)}'s to ${slotId(gs)}. The game's device order doesn't change.` : undefined}>
               <Ico name="chevronDown" className="h-3 w-3" strokeWidth={2} /></button>
           </span>
         )}
@@ -328,6 +337,8 @@ function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, onArm, onRemove, o
       <div className="min-w-0">
         <div className="text-[10px] uppercase tracking-widest text-slate-500">In the game file</div>
         <div className="truncate text-slate-200" title={gs.gameRawProduct ?? gs.gameProduct}>{game || <span className="text-slate-500">{gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'not named (added here)'}</span>}</div>
+        {gs.gameMissing && <div className="mt-0.5 inline-block rounded border border-mod/50 bg-mod/10 px-1.5 text-[10px] text-mod" data-testid="slot-game-missing"
+          title="The last refreshed game state doesn't list this device (unplugged?). Its mappings stay here; plug it in and refresh again, or remove the slot.">not in the latest game state · mappings kept</div>}
       </div>
       <div className="min-w-0">
         <div className="text-[10px] uppercase tracking-widest text-slate-500">Hardware</div>

@@ -29,11 +29,13 @@ import { DeleteProfileDialog, ProfilePanel } from './components/ProfilePanel';
 import { useEscape } from './components/useEscape';
 import { effectiveGroup, indexDefaults, newProfile, setAction, setGroup, withRebinds, type CaptureConflict } from './lib/edit';
 import { bindKey, comboLabel, groupOfDevice, groupOfSlot, searchSpec } from './lib/inputs';
-import { parseActionMaps, readXmlFile } from './lib/importer';
+import { parseActionMaps, parseDeviceList, readXmlFile } from './lib/importer';
+import { applyRematch, computeRematch, knownDevices, shiftToOrder, type Rematch } from './lib/rematch';
+import { DropOverlay, ImportShiftDialog, RematchBanner, type DropZone } from './components/GameState';
 import { buildRows } from './lib/merge';
 import { parseQuery, scoreRow } from './lib/search';
 import { load, save, type Persisted } from './lib/storage';
-import type { Binding, DefaultsData, Device, Group, Rebind, RebindMap, Row, Slot } from './lib/types';
+import type { Binding, DefaultsData, Device, Group, Profile, ProfileDevice, Rebind, RebindMap, Row } from './lib/types';
 
 const DEFAULTS = defaultsJson as DefaultsData;
 const IDX = indexDefaults(DEFAULTS);
@@ -41,8 +43,8 @@ const IDX = indexDefaults(DEFAULTS);
 const AXIS_LIMIT = { js: settingsInstances('joystick', DEFAULTS.optionTrees?.joystick), gp: settingsInstances('gamepad', DEFAULTS.optionTrees?.gamepad) };
 interface UndoEntry {
   profileId: string; label: string; before: { map: string; action: string; value?: Rebind[] }[];
-  /** a slot reorder: undoing it also swaps the slot map, device list and axis settings back (the swap is its own inverse) */
-  swap?: { slot: Slot; a: number; b: number };
+  /** a renumbering (moved mappings, refreshed game state): undoing it also restores the slot map, device list and axis settings */
+  meta?: { devices: ProfileDevice[]; settings: DeviceSettings; slots: SlotMap };
 }
 const keyOf = (r: { slot: Rebind['slot']; instance: number; input: string }) => bindKey(r.slot, r.instance, r.input);
 const uniqueName = (names: string[], base: string) => { let n = base, i = 2; while (names.includes(n)) n = `${base} ${i++}`; return n; };
@@ -119,6 +121,7 @@ export default function App() {
   const [view, setView] = useState<View>('list');
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [dropZone, setDropZone] = useState<DropZone>('refresh');
   const [help, setHelp] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -249,19 +252,37 @@ export default function App() {
   }, [rows, conflicts]);
 
   // ---- import ---------------------------------------------------------------
+  const addImported = useCallback((p: Profile, note = '') => {
+    setStore((s) => ({ profiles: [...s.profiles, p], activeId: p.id }));
+    setSlotStore((s) => ({ ...s, [p.id]: seedSlots(p) })); // fresh import: hardware is auto-matched once controllers show
+    setToast({ kind: 'ok', text: `Imported “${p.name}” · ${p.rebindCount} bindings${p.devices.length ? ` · ${p.devices.length} devices` : ''}${note}` });
+  }, []);
   const importFiles = useCallback(async (files: FileList | File[]) => {
-    for (const f of Array.from(files)) {
+    const list = Array.from(files);
+    for (const f of list) {
       try {
         const text = await readXmlFile(f);
         const p = parseActionMaps(text, f.name);
-        setStore((s) => ({ profiles: [...s.profiles, p], activeId: p.id }));
-        setSlotStore((s) => ({ ...s, [p.id]: seedSlots(p) })); // fresh import: hardware is auto-matched once controllers show
-        setToast({ kind: 'ok', text: `Imported “${p.name}” · ${p.rebindCount} bindings${p.devices.length ? ` · ${p.devices.length} devices` : ''}` });
+        // one file over an active profile whose (game) device order differs: ask whether to shift the file's mappings first
+        const cur = storeRef.current.profiles.find((x) => x.id === storeRef.current.activeId);
+        if (list.length === 1 && cur?.devices.length && p.devices.length) {
+          const r = computeRematch(knownDevices(p.devices, emptySlotMap()), cur.devices);
+          if (r.moves.length) { setPendingImport({ p, r }); continue; }
+        }
+        addImported(p);
       } catch (e) {
         setToast({ kind: 'err', text: `${f.name}: ${(e as Error).message}` });
       }
     }
-  }, []);
+  }, [addImported]);
+  const shiftImport = (shift: boolean) => {
+    if (!pendingImport) return;
+    const { p, r } = pendingImport;
+    setPendingImport(null);
+    if (!shift) { addImported(p); return; }
+    const x = shiftToOrder(p, r, IDX);
+    addImported({ ...withRebinds(x, x.rebinds), importedAt: p.importedAt, original: JSON.parse(JSON.stringify(x.rebinds)) }, ' · mappings shifted to the current game order');
+  };
   const loadSample = async () => {
     const res = await fetch(`${import.meta.env.BASE_URL}samples/actionmaps.xml`);
     const blob = await res.blob();
@@ -270,7 +291,7 @@ export default function App() {
 
   // ---- editing --------------------------------------------------------------
   /** Apply a change to the active profile's rebinds (creating a profile from the defaults if needed) and record undo */
-  const applyEdit = useCallback((label: string, touched: { map: string; action: string }[], fn: (r: RebindMap) => RebindMap, extra?: Pick<UndoEntry, 'swap'>) => {
+  const applyEdit = useCallback((label: string, touched: { map: string; action: string }[], fn: (r: RebindMap) => RebindMap, extra?: Pick<UndoEntry, 'meta'>) => {
     const s = storeRef.current;
     let prof = s.profiles.find((p) => p.id === s.activeId) ?? null;
     let profiles = s.profiles;
@@ -318,12 +339,19 @@ export default function App() {
   const rebindOf = (row: Row, b: Binding) =>
     effectiveGroup(IDX.get(row.id), rebindsNow(row), groupOfSlot(b.slot)).find((r) => keyOf(r) === keyOf(b));
 
+  /** set fields of a stored profile (read at call time, so it composes with applyEdit) */
+  const patchProfile = (id: string, patch: Partial<Pick<Profile, 'devices' | 'settings'>>) => {
+    const s = storeRef.current;
+    const ns = { ...s, profiles: s.profiles.map((p) => { if (p.id !== id) return p; const { optionsXml: _l, ...rest } = p; void _l; return { ...rest, ...patch }; }) };
+    storeRef.current = ns;
+    setStore(ns);
+  };
   const undoLast = useCallback((rowId?: string) => {
     const s = storeRef.current;
     const u = undoRef.current;
     let i = u.length - 1;
     // (a slot reorder is undone as a whole only, never per action)
-    for (; i >= 0; i--) if (u[i].profileId === s.activeId && (!rowId || (!u[i].swap && u[i].before.some((b) => `${b.map}/${b.action}` === rowId)))) break;
+    for (; i >= 0; i--) if (u[i].profileId === s.activeId && (!rowId || (!u[i].meta && u[i].before.some((b) => `${b.map}/${b.action}` === rowId)))) break;
     if (i < 0) return;
     const entry = u[i];
     const items = rowId ? entry.before.filter((b) => `${b.map}/${b.action}` === rowId) : entry.before;
@@ -335,12 +363,16 @@ export default function App() {
     const ns = { ...s, profiles: s.profiles.map((p) => (p.id === next.id ? next : p)) };
     storeRef.current = ns;
     setStore(ns);
-    if (entry.swap && !rowId) swapMetaRef.current(entry.swap.slot, entry.swap.a, entry.swap.b);
+    if (entry.meta && !rowId) {
+      patchProfile(entry.profileId, { devices: entry.meta.devices, settings: entry.meta.settings });
+      const slots = entry.meta.slots;
+      setSlotStore((st) => ({ ...st, [entry.profileId]: slots }));
+    }
     const rest = rowId ? entry.before.filter((b) => `${b.map}/${b.action}` !== rowId) : [];
     setUndo([...u.slice(0, i), ...(rest.length ? [{ ...entry, before: rest }] : []), ...u.slice(i + 1)]);
     setToast({ kind: 'ok', text: `Undone: ${entry.label}` });
   }, []);
-  const canUndoRow = (rowId: string) => undo.some((e) => e.profileId === store.activeId && !e.swap && e.before.some((b) => `${b.map}/${b.action}` === rowId));
+  const canUndoRow = (rowId: string) => undo.some((e) => e.profileId === store.activeId && !e.meta && e.before.some((b) => `${b.map}/${b.action}` === rowId));
   const undoCount = undo.filter((e) => e.profileId === store.activeId).length;
 
   const onCaptureCell = useCallback((row: Row, device: Device, b?: Binding) => {
@@ -438,35 +470,56 @@ export default function App() {
     applyEdit(`${o.move ? 'Move' : 'Copy'} ${slotId(from)} bindings to ${slotId(to)}`, r.touched, () => r.rebinds);
     setToast({ kind: 'ok', text: `${o.move ? 'Moved' : 'Copied'} ${r.copied} binding${r.copied === 1 ? '' : 's'} from ${slotId(from)} to ${slotId(to)}${r.replaced ? `, replaced ${r.replaced}` : ''}` });
   }, [applyEdit]);
-  /** the non-binding half of a slot swap on the active profile (its own inverse): slot map, imported device list, axis-settings blocks */
-  const swapSlotMeta = useCallback((slot: Slot, a: number, b: number) => {
-    const s = storeRef.current;
-    const prof = s.profiles.find((p) => p.id === s.activeId);
-    if (prof) {
-      const { optionsXml: _legacy, ...rest } = prof;
-      void _legacy;
-      const next = { ...rest, devices: swapProfileDevices(prof.devices, slot, a, b), settings: swapOptionInstances(settingsOf(prof), EXPORT_TYPE[slot], a, b) };
-      const ns = { ...s, profiles: s.profiles.map((p) => (p.id === next.id ? next : p)) };
-      storeRef.current = ns;
-      setStore(ns);
-    }
-    updateSlots((m) => swapSlots(m, slot, a, b));
-  }, [updateSlots]);
-  const swapMetaRef = useRef(swapSlotMeta);
-  useLayoutEffect(() => { swapMetaRef.current = swapSlotMeta; }, [swapSlotMeta]);
-  /** move a js / gp slot up or down: it swaps numbers with its neighbour, bindings, hardware, template and axis settings included */
+  /** move a js / gp slot's mappings up or down: it swaps numbers with its neighbour, bindings, hardware, template and axis settings included */
   const moveSlotNow = useCallback((gs: GameSlot, dir: -1 | 1) => {
     const other = neighbourSlot(slotMap, gs, dir);
     if (!other) return;
     const { slot } = gs, a = gs.instance, b = other.instance;
     const prof = curProfile();
     const r = swapSlotBindings(prof?.rebinds ?? {}, IDX, slot, a, b);
-    const label = `Swap ${slot}${a} and ${slot}${b}`;
-    if (prof || r.touched.length) applyEdit(label, r.touched, () => r.rebinds, { swap: { slot, a, b } });
-    swapSlotMeta(slot, a, b);
-    setToast({ kind: 'ok', text: `${label}: ${slotDeviceName(gs) ?? `${slot}${a}`} is now ${slot}${b}${r.moved ? `, ${r.moved} binding${r.moved === 1 ? '' : 's'} moved with it` : ''} (Undo reverts it)` });
-  }, [slotMap, applyEdit, swapSlotMeta]); // eslint-disable-line react-hooks/exhaustive-deps
-  const lastSwap = undo.length && undo[undo.length - 1].profileId === store.activeId && undo[undo.length - 1].swap ? undo[undo.length - 1].label : undefined;
+    const label = `Move mappings ${slot}${a} ⇄ ${slot}${b}`;
+    if (prof) {
+      const meta = { devices: prof.devices, settings: settingsOf(prof), slots: slotMap };
+      applyEdit(label, r.touched, () => r.rebinds, { meta });
+      patchProfile(prof.id, { devices: swapProfileDevices(prof.devices, slot, a, b), settings: swapOptionInstances(meta.settings, EXPORT_TYPE[slot], a, b) });
+    }
+    updateSlots((m) => swapSlots(m, slot, a, b));
+    setToast({ kind: 'ok', text: `${label}: ${slotDeviceName(gs) ?? `${slot}${a}`}'s mappings are on ${slot}${b} now${r.moved ? ` (${r.moved} binding${r.moved === 1 ? '' : 's'})` : ''}. The game's device order is unchanged. Undo reverts it.` });
+  }, [slotMap, applyEdit, updateSlots]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ---- refresh game state: the game's current device order from a fresh export --------------------------------
+  const [rematch, setRematch] = useState<{ file: string; r: Rematch; profileId: string } | null>(null);
+  const [pendingImport, setPendingImport] = useState<{ p: Profile; r: Rematch } | null>(null);
+  const refreshRef = useRef<HTMLInputElement>(null);
+  const slotMapRef = useRef(slotMap);
+  useLayoutEffect(() => { slotMapRef.current = slotMap; }, [slotMap]);
+  const refreshGameState = useCallback(async (f: File) => {
+    const prof = curProfile();
+    if (!prof) { void importFiles([f]); return; }
+    try {
+      const game = parseDeviceList(await readXmlFile(f));
+      if (!game.length) { setToast({ kind: 'err', text: `${f.name}: no device list (<options type=… instance=…>) in this file` }); return; }
+      const r = computeRematch(knownDevices(prof.devices, slotMapRef.current), game);
+      if (r.unchanged) { setRematch(null); setToast({ kind: 'ok', text: 'Game device order unchanged' }); return; }
+      setRematch({ file: f.name, r, profileId: prof.id });
+    } catch (e) {
+      setToast({ kind: 'err', text: `${f.name}: ${(e as Error).message}` });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const applyRematchNow = () => {
+    const prof = curProfile();
+    if (!rematch || !prof || prof.id !== rematch.profileId) { setRematch(null); return; }
+    const meta = { devices: prof.devices, settings: settingsOf(prof), slots: slotMapRef.current };
+    const a = applyRematch({ rebinds: prof.rebinds, settings: meta.settings, slots: meta.slots }, rematch.r, IDX);
+    const n = rematch.r.moves.length;
+    applyEdit(`Refresh game state${n ? ` (${n} device${n === 1 ? '' : 's'} renumbered)` : ''}`, a.touched, () => a.rebinds, { meta });
+    patchProfile(prof.id, { devices: a.devices, settings: a.settings });
+    setSlotStore((st) => ({ ...st, [prof.id]: a.slots }));
+    setRematch(null);
+    setToast({ kind: 'ok', text: `Mappings moved to the game's device order${a.moved ? ` (${a.moved} binding${a.moved === 1 ? '' : 's'})` : ''}. Undo reverts it.` });
+  };
+  const rematchBanner = rematch && rematch.profileId === profile?.id
+    ? <RematchBanner r={rematch.r} file={rematch.file} onApply={applyRematchNow} onDismiss={() => setRematch(null)} /> : null;
+  const lastSwap = undo.length && undo[undo.length - 1].profileId === store.activeId && undo[undo.length - 1].meta ? undo[undo.length - 1].label : undefined;
   const slotActions: SlotActions = useMemo(() => ({
     map: slotMap,
     known: knownHardware(slotStore),
@@ -550,12 +603,18 @@ export default function App() {
       }
     };
     let depth = 0;
+    const zoneOf = (e: DragEvent): DropZone => ((e.target as HTMLElement | null)?.closest?.('[data-drop-zone]')?.getAttribute('data-drop-zone') === 'import' ? 'import' : 'refresh');
     const enter = (e: DragEvent) => { if (e.dataTransfer?.types.includes('Files')) { depth++; setDragging(true); } };
     const leave = () => { depth = Math.max(0, depth - 1); if (!depth) setDragging(false); };
-    const over = (e: DragEvent) => e.preventDefault();
+    const over = (e: DragEvent) => { e.preventDefault(); setDropZone(zoneOf(e)); };
     const drop = (e: DragEvent) => {
       e.preventDefault(); depth = 0; setDragging(false);
-      if (e.dataTransfer?.files.length) importFiles(e.dataTransfer.files);
+      const files = e.dataTransfer?.files;
+      if (!files?.length) return;
+      // with a profile active, a dropped file refreshes the game state unless it lands on "Import as profile"
+      if (storeRef.current.activeId && zoneOf(e) === 'refresh') void refreshRef2.current(files[0]);
+      else void importFiles(files);
+      setDropZone('refresh');
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('dragenter', enter);
@@ -570,6 +629,8 @@ export default function App() {
       window.removeEventListener('drop', drop);
     };
   }, [importFiles]);
+  const refreshRef2 = useRef(refreshGameState);
+  useLayoutEffect(() => { refreshRef2.current = refreshGameState; }, [refreshGameState]);
 
   /** filter the list by one exact input, e.g. "js1_button5" or "kb1_lalt+n" (device + instance + full combo) */
   const pickInput = useCallback((spec: string) => {
@@ -604,7 +665,7 @@ export default function App() {
       connected={(gs) => !!gs.hw && pads.some((p) => p.key === gs.hw!.key)}
       onSelect={(id) => setStore((s) => ({ ...s, activeId: id }))} onImport={() => fileRef.current?.click()} onExport={() => setExportOpen(true)}
       onDelete={() => setDeleting(true)} onNew={() => createLayout(false)} onDuplicate={() => createLayout(true)} onRevert={profile?.original ? revertImported : undefined}
-      onResetAll={resetAll} onOpenSlots={() => setDevicesOpen('slots')} />
+      onResetAll={resetAll} onOpenSlots={() => setDevicesOpen('slots')} onRefresh={() => refreshRef.current?.click()} />
   );
 
   return (
@@ -627,6 +688,8 @@ export default function App() {
               className="flex h-8 w-8 items-center justify-center rounded border border-edge text-slate-300 hover:border-hud/60 hover:text-hud2"><Ico name="help" className="h-4 w-4" /></button>
             <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" multiple hidden
               onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
+            <input ref={refreshRef} type="file" accept=".xml,text/xml,application/xml" hidden data-testid="refresh-file"
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void refreshGameState(f); }} />
           </div>
         </div>
         <nav className="flex gap-1 px-4" aria-label="Views" data-testid="view-tabs">
@@ -755,6 +818,7 @@ export default function App() {
             </div>
           )}
         <main className="min-w-0 flex-1 overflow-y-auto p-4 scrollbar-thin" id="main">
+          {rematchBanner && !devicesOpen && <div className="mb-3">{rematchBanner}</div>}
           {!profile && !filtered.hasQuery && view === 'list' && (
             <div className="hud-panel hud-corners mb-4 flex flex-wrap items-center gap-4 rounded-lg px-4 py-3">
               <div className="flex-1 text-sm text-slate-300">
@@ -779,21 +843,15 @@ export default function App() {
             flash={flash && (flash.hit.slot === 'kb' || flash.hit.slot === 'mo') ? { combo: flash.hit.inputs[0], at: flash.at } : null} />}
           {view === 'devices' && <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads}
             slots={deviceSlots} slotMap={slotMap} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => setDevicesOpen('slots')} highlight={highlightOn} scroll={highlightOn && scrollOn}
-            query={dq} chip={chip} onOpenAxis={(gs) => setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance })} axisLimit={AXIS_LIMIT}
+            query={dq} chip={chip} onOpenAxis={(gs) => setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance })} axisLimit={AXIS_LIMIT} onRefresh={() => refreshRef.current?.click()}
             onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })} />}
           {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} hasProfile={!!profile} flash={flash?.keys} />}
         </main>
         </div>
       </div>
 
-      {dragging && (
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm">
-          <div className="hud-panel hud-corners rounded-xl border-2 border-dashed border-hud px-16 py-12 text-center">
-            <div className="glow-text font-display text-3xl font-bold uppercase tracking-[0.3em] text-hud2">Drop to import</div>
-            <div className="mt-2 font-mono text-xs text-slate-400">actionmaps.xml · layout_*_exported.xml</div>
-          </div>
-        </div>
-      )}
+      {dragging && <DropOverlay withRefresh={!!profile} zone={dropZone} />}
+      {pendingImport && <ImportShiftDialog file={pendingImport.p.fileName} r={pendingImport.r} onShift={() => shiftImport(true)} onAsIs={() => shiftImport(false)} onCancel={() => setPendingImport(null)} />}
       {flash && (
         <div data-testid="flash-badge" className="pointer-events-none fixed bottom-5 left-5 z-40 max-w-md rounded-lg border border-mod/60 bg-panel/95 px-3 py-2 text-xs shadow-xl backdrop-blur">
           <span className="font-mono font-bold text-mod">{hitSpecs(flash.hit)[0]}</span>
@@ -822,7 +880,8 @@ export default function App() {
       )}
       {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} devices={exportDevices} slots={exportSlots} onClose={() => setExportOpen(false)} />}
       {devicesOpen && (
-        <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(false)} />
+        <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(false)}
+          onRefresh={() => refreshRef.current?.click()} banner={rematchBanner} />
       )}
       {deleting && profile && (
         <DeleteProfileDialog profile={profile} slotCount={slotMap.slots.length} onCancel={() => setDeleting(false)} onExport={() => { setDeleting(false); setExportOpen(true); }}
