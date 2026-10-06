@@ -1034,6 +1034,16 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   const apTxt = await ap.innerText();
   check(/1/.test(apTxt) && /7/.test(apTxt), `Bravo AP chips show DI 1–7 (${apTxt.replace(/\n/g, ' | ').slice(0, 100)})`);
   await dv.getByTestId('device-canvas').screenshot({ path: shots + '125-bravo-builtin.png' });
+  { // Federico's positions: each marker centre sits on its exported anchor fraction
+    const off = await dv.evaluate((root) => {
+      const view = root.querySelector('[data-testid=device-canvas-view][data-view=main], [data-testid=device-canvas]');
+      const r = view.getBoundingClientRect();
+      const at = { apsel: [0.42243348328332936, 0.3188625338925878], l6: [0.6840303950436668, 0.6769308877231421], rev: [0.6049429889867515, 0.8869258235407149] };
+      return Object.entries(at).map(([id, [x, y]]) => { const m = root.querySelector(`[data-marker="${id}"] circle`).getBoundingClientRect(); return Math.hypot((m.x + m.width / 2 - r.x) / r.width - x, (m.y + m.height / 2 - r.y) / r.height - y); });
+    });
+    check(off.every((d) => d < 0.006), `Bravo markers on Federico's anchors (max off ${Math.max(...off).toFixed(4)})`);
+  }
+  await dv.getByTestId('device-canvas').screenshot({ path: shots + '128-bravo-federico.png' });
   await dv.getByTestId('template-select').selectOption('');
   await page.waitForTimeout(300);
 }

@@ -998,20 +998,39 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(DEVICE_PHOTO_LAYOUTS['builtin-moza-ab6'], undefined, 'not in DEVICE_PHOTO_LAYOUTS (exact path)');
     assert.ok(ab6.match.some((m) => m.vendor === '346E' && m.product === '1002'));
   });
-  t('Honeycomb Bravo: researched DI map + photoTplExact (invented spots)', () => {
+  t('Honeycomb Bravo: callouts keep Federico export anchor+box fractions (no withPhotoLayout re-box)', () => {
     const br = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-honeycomb-bravo')!;
     assert.ok(br);
     assert.deepEqual(br.views?.map((v) => [v.id, v.label, v.image, v.width, v.height]),
       [['main', 'Bravo', '/device-photos/honeycomb-bravo-main.webp', 1825, 1031]]);
-    assert.equal(br.callouts.length, 17);
     assert.ok(br.match.some((m) => m.vendor === '294B' && m.product === '1901'));
     const by = Object.fromEntries(br.callouts.map((c) => [c.id, c]));
-    assert.deepEqual(by.ap.inputs, ['button1', 'button2', 'button3', 'button4', 'button5', 'button6', 'button7']);
-    assert.deepEqual(by.l1.inputs, ['y']);
-    assert.deepEqual(by.l2.inputs, ['x']);
-    assert.deepEqual(by.l3.inputs, ['rotz']);
-    assert.deepEqual(by.l6.inputs, ['z']);
-    assert.ok(by.toga.inputs.includes('button48'));
+    const expect: Record<string, { label: string; kind: string; inputs: string[]; ax: number; ay: number; bx: number; by: number }> = {
+      apsel: { label: "AP mode (IAS/CRS/HDG/VS/ALT)", kind: 'switch', inputs: ["button17", "button18", "button19", "button20", "button21"], ax: 0.42243348328332936, ay: 0.3188625338925878, bx: 0.18745248308653162, by: 0.10617531909946491 },
+      ap: { label: "AP modes (HDG…IAS)", kind: 'buttons', inputs: ["button1", "button2", "button3", "button4", "button5", "button6", "button7"], ax: 0.5737642353478494, ay: 0.30270906544112974, bx: 0.6954372391501307, by: 0.06579167364605011 },
+      apenc: { label: "AP value (INCR / DECR)", kind: 'encoder', inputs: ["button13", "button14"], ax: 0.6216730038022814, ay: 0.30001681214080994, bx: 0.8612167300380228, by: 0.12771326847633221 },
+      apm: { label: "AUTO PILOT", kind: 'button', inputs: ["button8"], ax: 0.6619772095190708, ay: 0.28924785028999145, bx: 0.9205323425989187, by: 0.31213192631701864 },
+      gear: { label: "Gear (UP / DOWN)", kind: 'switch', inputs: ["button31", "button32"], ax: 0.3365019011406844, ay: 0.4911660775570655, bx: 0.09, by: 0.28 },
+      sw14: { label: "Panel switches 1-4", kind: 'buttons', inputs: ["button34", "button35", "button36", "button37", "button38", "button39", "button40", "button41"], ax: 0.4939163266026022, ay: 0.4130910399505557, bx: 0.3821292775665399, by: 0.03 },
+      sw57: { label: "Panel switches 5-7", kind: 'buttons', inputs: ["button42", "button43", "button44", "button45", "button46", "button47"], ax: 0.5623573912413855, ay: 0.4023220780997372, bx: 0.5357414216596365, by: 0.03 },
+      flaps: { label: "Flaps (down / up)", kind: 'switch', inputs: ["button15", "button16"], ax: 0.6939163498098859, ay: 0.4373212169525124, bx: 0.9091254984924548, by: 0.5248191154349112 },
+      trim: { label: "Trim (nose down / up)", kind: 'encoder', inputs: ["button22", "button23"], ax: 0.41254752851711024, ay: 0.6217398747931988, bx: 0.09, by: 0.58 },
+      l1: { label: "Lever 1 (Y)", kind: 'axis', inputs: ["y"], ax: 0.4863117638649596, ay: 0.69173820384921, bx: 0.14106463298144903, by: 0.97 },
+      l2: { label: "Lever 2 (X)", kind: 'axis', inputs: ["x"], ax: 0.5273764142518714, ay: 0.6876997982235, bx: 0.32433461236409816, by: 0.97 },
+      l3: { label: "Lever 3 (RZ)", kind: 'axis', inputs: ["rotz"], ax: 0.5623573912413855, ay: 0.6850075962736408, bx: 0.4969581633013011, by: 0.97 },
+      l4: { label: "Lever 4 (RY)", kind: 'axis', inputs: ["roty"], ax: 0.6049429889867515, ay: 0.6823152916228604, bx: 0.8574144486692015, by: 0.97 },
+      l5: { label: "Lever 5 (RX)", kind: 'axis', inputs: ["rotx"], ax: 0.6467680840437856, ay: 0.6809691906479308, bx: 0.8893535889600166, by: 0.8034662279831049 },
+      l6: { label: "Lever 6 (Z)", kind: 'axis', inputs: ["z"], ax: 0.6840303950436668, ay: 0.6769308877231421, bx: 0.9182509505703422, by: 0.6473161527700851 },
+      rev: { label: "Reverse detents", kind: 'buttons', inputs: ["button24", "button25", "button26", "button27", "button28", "button33"], ax: 0.6049429889867515, ay: 0.8869258235407149, bx: 0.6923954604696412, by: 0.97 },
+      toga: { label: "Lever TOGA / rev btns", kind: 'buttons', inputs: ["button9", "button10", "button11", "button12", "button29", "button30", "button48"], ax: 0.5661596726102067, ay: 0.5988557987661717, bx: 0.15475284010738474, by: 0.8075046336088149 },
+    };
+    assert.deepEqual(br.callouts.map((c) => c.id), Object.keys(expect), 'same 17 callouts, export order');
+    for (const [id, e] of Object.entries(expect)) {
+      const c = by[id];
+      assert.equal(c.label, e.label, id); assert.equal(c.kind, e.kind, id); assert.deepEqual(c.inputs, e.inputs, id); assert.equal(c.view, 'main', id);
+      assert.ok(Math.abs(c.anchor.x - e.ax) < 1e-12 && Math.abs(c.anchor.y - e.ay) < 1e-12, `${id} anchor`);
+      assert.ok(Math.abs(c.box.x - e.bx) < 1e-12 && Math.abs(c.box.y - e.by) < 1e-12, `${id} box`);
+    }
     assert.equal(tp.maxButton(br), 48);
     assert.match(br.notes!, /Firefox/);
     assert.equal(DEVICE_PHOTO_LAYOUTS['builtin-honeycomb-bravo'], undefined, 'not in DEVICE_PHOTO_LAYOUTS (exact path)');
