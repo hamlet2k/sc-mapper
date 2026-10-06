@@ -1199,6 +1199,79 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     const p2 = sl.planCopy(rb, idx, S('kb', 2), S('kb', 3));
     assert.equal(p2.yours, 1); assert.equal(p2.count, 1, 'kb2 has no game defaults');
   });
+  // ---- move up / down: swapping two slot numbers
+  const effOf = (rb: any, map: string, action: string) => ed.effectiveGroup(idx.get(`${map}/${action}`), rb[map]?.[action], 'js')
+    .filter((r) => r.input).map((r) => `js${r.instance}_${r.input}`).sort();
+  t('slots: swapping js2 <> js3 moves every stored binding on either number (both ways, js1 untouched)', () => {
+    const rb = {
+      spaceship_movement: { v_strafe_up: [{ slot: 'js', instance: 2, input: 'button4' }], v_strafe_down: [{ slot: 'js', instance: 3, input: 'button7' }, { slot: 'js', instance: 1, input: 'button9' }] },
+      seat_general: { v_eject: [{ slot: 'kb', instance: 1, input: 'ralt+l' }] },
+    } as any;
+    const r = sl.swapSlotBindings(rb, idx, 'js', 2, 3);
+    assert.deepEqual(effOf(r.rebinds, 'spaceship_movement', 'v_strafe_up'), ['js3_button4']);
+    assert.deepEqual(effOf(r.rebinds, 'spaceship_movement', 'v_strafe_down'), ['js1_button9', 'js2_button7'], 'js1 stays js1');
+    assert.equal(r.moved, 2);
+    assert.deepEqual(r.touched.map((x) => x.action).sort(), ['v_strafe_down', 'v_strafe_up']);
+    assert.deepEqual(r.rebinds.seat_general, rb.seat_general, 'keyboard bindings untouched');
+    const back = sl.swapSlotBindings(r.rebinds, idx, 'js', 2, 3);
+    assert.deepEqual(effOf(back.rebinds, 'spaceship_movement', 'v_strafe_up'), ['js2_button4'], 'swapping again restores the numbers');
+    assert.deepEqual(effOf(back.rebinds, 'spaceship_movement', 'v_strafe_down'), ['js1_button9', 'js3_button7']);
+    assert.equal(sl.swapSlotBindings(rb, idx, 'js', 2, 2).rebinds, rb, 'same number: nothing to do');
+  });
+  t('slots: swapping js1 <> js2 rewrites only the profile\'s own bindings; game defaults stay on their number, cleared defaults stay cleared', () => {
+    assert.equal(sl.swapSlotBindings({} as any, idx, 'js', 1, 2).moved, 0, 'no stored bindings: nothing to rewrite');
+    const rb = { spaceship_movement: {
+      v_pitch: [{ slot: 'js', instance: 1, input: 'rotx' }],          // your override of the js1_y default
+      v_yaw: [{ slot: 'js', instance: 1, input: '' }],                // a cleared default
+      v_roll: [{ slot: 'js', instance: 2, input: 'rotz' }, { slot: 'kb', instance: 1, input: 'q' }],
+    } } as any;
+    const r = sl.swapSlotBindings(rb, idx, 'js', 1, 2);
+    assert.deepEqual(effOf(r.rebinds, 'spaceship_movement', 'v_pitch'), ['js2_rotx']);
+    assert.deepEqual(effOf(r.rebinds, 'spaceship_movement', 'v_roll'), ['js1_rotz']);
+    assert.deepEqual(r.rebinds.spaceship_movement.v_roll.filter((x: any) => x.slot === 'kb'), [{ slot: 'kb', instance: 1, input: 'q' }], 'keyboard half of the action kept');
+    assert.deepEqual(r.rebinds.spaceship_movement.v_yaw, rb.spaceship_movement.v_yaw, 'cleared stays cleared');
+    assert.equal(r.moved, 2);
+    assert.equal(r.rebinds.spaceship_movement.v_strafe_vertical, undefined, 'untouched actions keep their game defaults on js1');
+  });
+  t('slots: swapping slots moves hardware, template pick and the game file\'s device with each number; neighbours of the same kind', () => {
+    let m = sl.addSlot(sl.addSlot(sl.addSlot(sl.addSlot(sl.emptySlotMap(), 'js'), 'js'), 'js'), 'gp');
+    m = sl.assignHardware(m, S('js', 2), sl.hardwareOf(AB1));
+    m = sl.assignHardware(m, S('js', 3), sl.hardwareOf(MTQ));
+    m = sl.setSlotTemplate(m, S('js', 1), 'builtin-throttle');
+    m = { ...m, slots: m.slots.map((s) => (s.slot === 'js' && s.instance === 3 ? { ...s, gameProduct: 'MOZA MTQ Throttle' } : s)) };
+    const w = sl.swapSlots(m, 'js', 2, 3);
+    const at = (mm: typeof m, i: number) => mm.slots.find((s) => s.slot === 'js' && s.instance === i)!;
+    assert.equal(at(w, 2).hw!.key, MTQ.key); assert.equal(at(w, 2).gameProduct, 'MOZA MTQ Throttle');
+    assert.equal(at(w, 3).hw!.key, AB1.key);
+    assert.deepEqual(w.slots.map(sl.slotId), m.slots.map(sl.slotId), 'still sorted js1, js2, js3, gp1');
+    assert.deepEqual(sl.padAssign(w), { [MTQ.key]: { kind: 'js', instance: 2 }, [AB1.key]: { kind: 'js', instance: 3 } });
+    const t1 = sl.swapSlots(m, 'js', 1, 2);
+    assert.equal(at(t1, 2).template, 'builtin-throttle', 'a template picked on a slot with no hardware moves with it');
+    assert.equal(at(t1, 1).hw!.key, AB1.key);
+    assert.equal(sl.neighbourSlot(m, S('js', 1), -1), undefined, 'js1 is first');
+    assert.equal(sl.slotId(sl.neighbourSlot(m, S('js', 1), 1)!), 'js2');
+    assert.equal(sl.neighbourSlot(m, S('js', 3), 1), undefined, 'gp1 is not a joystick neighbour');
+    assert.equal(sl.neighbourSlot(m, S('gp', 1), -1), undefined);
+    const gaps = sl.addSlot(sl.emptySlotMap(), 'js', 5);
+    assert.equal(sl.slotId(sl.neighbourSlot(sl.addSlot(gaps, 'js', 2), S('js', 5), -1)!), 'js2', 'numbers with gaps: the next one of the kind');
+    const devs = sl.swapProfileDevices([{ slot: 'js', instance: 2, product: 'A' }, { slot: 'js', instance: 3, product: 'B' }, { slot: 'gp', instance: 2, product: 'C' }] as any[], 'js', 2, 3);
+    assert.deepEqual(devs.map((d: any) => `${d.slot}${d.instance}:${d.product}`), ['js3:A', 'js2:B', 'gp2:C']);
+  });
+  t('devopts: swapping option instances moves invert / curves with the device number; deviceoptions (per model) stay', () => {
+    let s = dvo.emptySettings();
+    s = dvo.setGroup(s, 'joystick', 2, 'flight_move_pitch', { invert: true }, 'Stick A');
+    s = dvo.setGroup(s, 'joystick', 3, 'flight_move_yaw', { exponent: 2 }, 'Stick B');
+    s = dvo.setGroup(s, 'gamepad', 1, 'flight_move_pitch', { invert: true });
+    s = dvo.setAxis(s, 'Stick A', 'x', 'deadzone', 0.05);
+    const w = dvo.swapOptionInstances(s, 'joystick', 2, 3);
+    assert.equal(dvo.groupValues(w, 'joystick', 3, 'flight_move_pitch')!.invert, true);
+    assert.equal(dvo.groupValues(w, 'joystick', 2, 'flight_move_yaw')!.exponent, 2);
+    assert.equal(dvo.groupValues(w, 'joystick', 2, 'flight_move_pitch'), undefined);
+    assert.equal(dvo.blockProduct(dvo.optionsBlock(w, 'joystick', 3)!), 'Stick A', 'the product name goes with it');
+    assert.equal(dvo.groupValues(w, 'gamepad', 1, 'flight_move_pitch')!.invert, true, 'other device types untouched');
+    assert.deepEqual(dvo.axisValues(w, 'Stick A'), { x: { deadzone: 0.05 } });
+    assert.deepEqual(dvo.swapOptionInstances(w, 'joystick', 2, 3), s, 'its own inverse');
+  });
 }
 {
   const inp = await import('../src/lib/inputs');

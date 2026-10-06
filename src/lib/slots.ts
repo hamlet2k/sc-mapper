@@ -334,6 +334,47 @@ export function copySlotBindings(rebinds: RebindMap, idx: DefaultsIndex, from: T
   return { rebinds: out, touched, copied, replaced };
 }
 
+/* ------------------------------------------------------------- reordering (move up / down) */
+const swapNum = (n: number, a: number, b: number) => (n === a ? b : n === b ? a : n);
+/**
+ * Swap two slots' numbers (e.g. js2 <> js3) in the profile's own bindings: every stored binding on either number is rewritten
+ * to the other (js2_button4 -> js3_button4 and back), so each device keeps what you bound on it. The game's default bindings
+ * aren't stored in the profile and stay on their number, like the game's own pp_resortdevices; cleared defaults (js1_) stay
+ * cleared. Actions with no stored binding on either number are untouched.
+ */
+export function swapSlotBindings(rebinds: RebindMap, idx: DefaultsIndex, slot: Slot, a: number, b: number): { rebinds: RebindMap; touched: { map: string; action: string }[]; moved: number } {
+  if (a === b) return { rebinds, touched: [], moved: 0 };
+  const g = groupOfSlot(slot);
+  const hit = (r: Rebind) => r.slot === slot && (r.instance === a || r.instance === b) && !!r.input;
+  let out = rebinds, moved = 0;
+  const touched: { map: string; action: string }[] = [];
+  for (const [map, acts] of Object.entries(rebinds)) {
+    for (const [action, list] of Object.entries(acts)) {
+      const own = list.filter((r) => groupOfSlot(r.slot) === g);
+      const n = own.filter(hit).length;
+      if (!n) continue;
+      moved += n;
+      touched.push({ map, action });
+      out = setGroup(out, idx.get(`${map}/${action}`), map, action, g, own.map((r) => (hit(r) ? { ...r, instance: swapNum(r.instance, a, b) } : r)));
+    }
+  }
+  return { rebinds: out, touched, moved };
+}
+/** swap two slots' numbers in the slot map: hardware, template pick and the game file's device name go along with each slot */
+export function swapSlots(map: SlotMap, slot: Slot, a: number, b: number): SlotMap {
+  return { ...map, slots: sortSlots(map.slots.map((s) => (s.slot === slot && (s.instance === a || s.instance === b) ? { ...s, instance: swapNum(s.instance, a, b) } : s))) };
+}
+/** swap two device numbers in the imported file's device list (<options type=… instance=…>) */
+export function swapProfileDevices<T extends { slot: Slot; instance: number }>(devices: readonly T[], slot: Slot, a: number, b: number): T[] {
+  return devices.map((d) => (d.slot === slot && (d.instance === a || d.instance === b) ? { ...d, instance: swapNum(d.instance, a, b) } : d));
+}
+/** the neighbour a slot swaps with when moved up (-1) or down (+1) among the slots of its kind, if any */
+export function neighbourSlot(map: SlotMap, gs: { slot: Slot; instance: number }, dir: -1 | 1): GameSlot | undefined {
+  const same = map.slots.filter((s) => s.slot === gs.slot).sort((x, y) => x.instance - y.instance);
+  const i = same.findIndex((s) => s.instance === gs.instance);
+  return i < 0 ? undefined : same[i + dir];
+}
+
 /* ------------------------------------------------------------- storage */
 export const SLOTS_KEY = 'sc-mapper:slots:v1';
 /** slot map of the game defaults (no profile): copied to the profile created on the first edit */

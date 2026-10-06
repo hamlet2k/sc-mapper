@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChromiumBanner, ChromiumButtonNotice } from './ChromiumBanner';
 import { createPortal } from 'react-dom';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
@@ -15,7 +15,6 @@ import {
 import type { Binding, Row, Slot } from '../lib/types';
 import { CalloutBody, DeviceCanvas, TONE_STROKE, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
 import { Ico } from './icons';
-import { KeyboardView } from './KeyboardView';
 import { TemplateEditor } from './TemplateEditor';
 import { useFocusPressedView } from './useFocusPressedView';
 import { useSwapViews } from './useSwapViews';
@@ -42,8 +41,10 @@ interface Props {
   query: string;
   /** find by pressing: selects that slot and the control */
   chip: PressHit | null;
-  /** open the List on one exact input (keyboard / mouse slots) */
-  onPickKey: (spec: string) => void;
+  /** open "Axis settings & curves" for one joystick / gamepad slot */
+  onOpenAxis: (gs: GameSlot) => void;
+  /** how many device numbers per kind the game keeps axis / curve settings for (js: 8, gp: 1) */
+  axisLimit: Record<'js' | 'gp', number>;
   onEdit: (row: Row) => void;
   onRemove: (row: Row, b: Binding) => void;
   onBind: (row: Row, slot: Slot, instance: number, input: string) => void;
@@ -54,17 +55,23 @@ interface Props {
 const SEL_KEY = 'sc-mapper:device-view';
 const download = (name: string, href: string) => { const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'device';
-const BTN = 'flex items-center gap-1.5 rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60 hover:text-hud2';
+const ICON_BTN = 'flex h-7 w-7 items-center justify-center text-slate-300 transition hover:bg-hud/10 hover:text-hud2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-hud';
+const ICON_GROUP = 'flex items-stretch divide-x divide-edge overflow-hidden rounded border border-edge';
+const LABEL = 'font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500';
+/** an icon-only toolbar button: tooltip (title) and accessible name both carry the full label */
+function IconButton({ icon, label, onClick, testid }: { icon: Parameters<typeof Ico>[0]['name']; label: string; onClick: () => void; testid?: string }) {
+  return <button type="button" onClick={onClick} title={label} aria-label={label} data-testid={testid} className={ICON_BTN}><Ico name={icon} className="h-4 w-4" /></button>;
+}
 
 const NO_ACTIVE: Live = { active: new Set<string>(), values: {} };
 
 /** visual view of one game slot: a controller's picture with every control's bindings (live highlight, click to edit), or the keyboard */
 export function DeviceView(props: Props) {
-  const { slots, slotMap, chip, onOpenControllers, onPickTemplate } = props;
+  const { slots, chip, onOpenControllers } = props;
   const T = useTemplates();
-  // the profile's game slots (what goes into the export), not every controller the browser sees
-  const options = useMemo(() => slots.map(({ gs, pad }): DevOption => {
-    const name = pad ? padLabel(pad) : slotDeviceName(gs) ?? (gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : undefined);
+  // the profile's joystick / gamepad slots (what goes into the export); keyboard and mouse live in the Keyboard view
+  const options = useMemo(() => slots.filter(({ gs }) => isController(gs)).map(({ gs, pad }): DevOption => {
+    const name = pad ? padLabel(pad) : slotDeviceName(gs);
     return { key: `slot:${slotId(gs)}`, slot: gs.slot, instance: gs.instance, gs, pad, name, label: `${slotId(gs).toUpperCase()} · ${name ?? 'no device assigned'}` };
   }), [slots]);
   const [selKey, setSelKey] = useState<string>(() => localStorage.getItem(SEL_KEY) ?? '');
@@ -75,83 +82,47 @@ export function DeviceView(props: Props) {
     const o = options.find((x) => x.slot === chip.slot && x.instance === chip.instance);
     if (o) { setSelKey(o.key); localStorage.setItem(SEL_KEY, o.key); }
   }, [chip]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!options.length) return <NoSlots onOpenControllers={onOpenControllers} />;
-  const opt = options.find((o) => o.key === selKey) ?? options.find((o) => o.pad && o.slot === 'js') ?? options.find((o) => isController(o.gs)) ?? options[0];
-  const chosen = isController(opt.gs) ? resolveSlotTemplate(T.templates, slotMap, opt.gs, opt.pad, T.picks) : null;
+  if (!options.length) return <NoSlots onOpenControllers={onOpenControllers} hasKm={slots.length > 0} />;
+  const opt = options.find((o) => o.key === selKey) ?? options.find((o) => o.pad && o.slot === 'js') ?? options[0];
+  const chosen = resolveSlotTemplate(T.templates, props.slotMap, opt.gs, opt.pad, T.picks);
+  const strip = (
+    <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Game slot" data-testid="device-slot-strip">
+      <span className={`mr-1 ${LABEL}`}>Game slot</span>
+      {options.map((o) => {
+        const on = o.key === opt.key;
+        return (
+          <button key={o.key} type="button" role="tab" aria-selected={on} onClick={() => pick(o.key)} data-slot-chip={slotId(o.gs)} title={o.label}
+            className={`flex max-w-[15rem] items-center gap-1.5 rounded border px-2 py-1 text-xs transition ${on ? 'border-hud/70 bg-hud/15 text-hud2 shadow-[0_0_14px_-6px_var(--color-hud)]' : 'border-edge text-slate-400 hover:border-hud/40 hover:text-slate-200'}`}>
+            <Ico name={o.slot === 'gp' ? 'gamepad' : 'joystick'} className="h-3.5 w-3.5" />
+            <span className="font-mono font-bold">{slotId(o.gs).toUpperCase()}</span>
+            <span className="min-w-0 truncate">{o.name ?? 'no device'}</span>
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${o.pad ? 'bg-ok shadow-[0_0_6px_var(--color-ok)]' : 'bg-slate-600'}`} />
+          </button>
+        );
+      })}
+    </div>
+  );
   return (
     <div className="flex min-h-full flex-col gap-3" data-testid="device-view">
-      {/* ---- inline slot / hardware / template selection ---- */}
-      <section className="hud-panel rounded-lg px-3 py-2.5 print:hidden" data-testid="device-slot-bar">
-        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Game slot" data-testid="device-slot-strip">
-          <span className="mr-1 font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Game slot</span>
-          {options.map((o) => {
-            const on = o.key === opt.key;
-            const ctl = isController(o.gs);
-            return (
-              <button key={o.key} type="button" role="tab" aria-selected={on} onClick={() => pick(o.key)} data-slot-chip={slotId(o.gs)} title={o.label}
-                className={`flex max-w-[15rem] items-center gap-1.5 rounded border px-2 py-1 text-xs transition ${on ? 'border-hud/70 bg-hud/15 text-hud2 shadow-[0_0_14px_-6px_var(--color-hud)]' : 'border-edge text-slate-400 hover:border-hud/40 hover:text-slate-200'}`}>
-                <Ico name={o.slot === 'kb' ? 'keyboard' : o.slot === 'mo' ? 'mouse' : o.slot === 'gp' ? 'gamepad' : 'joystick'} className="h-3.5 w-3.5" />
-                <span className="font-mono font-bold">{slotId(o.gs).toUpperCase()}</span>
-                <span className="min-w-0 truncate">{o.name ?? 'no device'}</span>
-                {ctl && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${o.pad ? 'bg-ok shadow-[0_0_6px_var(--color-ok)]' : 'bg-slate-600'}`} />}
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-edge/50 pt-2 text-xs">
-          <span className="flex min-w-0 items-center gap-1.5 text-slate-400" data-testid="device-hardware">
-            <span className="font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Hardware</span>
-            {!isController(opt.gs) ? <span className="text-slate-300">{opt.slot === 'kb' ? 'Your keyboard' : 'Your mouse'}</span>
-              : opt.gs.hw ? <span className="truncate text-slate-200">{opt.pad ? padLabel(opt.pad) : opt.gs.hw.name}</span> : <span className="text-slate-500">none assigned</span>}
-            {isController(opt.gs) && opt.gs.hw && (opt.pad
-              ? <span className="rounded border border-ok/40 px-1 font-mono text-[10px] text-ok">connected</span>
-              : <span className="rounded border border-edge px-1 font-mono text-[10px] text-slate-500">not connected</span>)}
-          </span>
-          {chosen && (
-            <label className="flex items-center gap-1.5 text-slate-400">
-              <span className="font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Template</span>
-              <select value={chosen.pick} onChange={(e) => onPickTemplate(opt.gs, e.target.value || (chosen.legacy ? AUTO_TEMPLATE : null))} data-testid="template-select"
-                className="max-w-[20rem] rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200 outline-none focus:border-hud">
-                <option value="">Automatic ({autoSlotTemplate(T.templates, opt.gs, opt.pad).name})</option>
-                {templateGroups(T.templates).map((g) => (
-                  <optgroup key={g.label} label={g.label} data-group={g.label}>
-                    {g.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.slot !== opt.slot ? ` · ${t.slot}` : ''}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-          )}
-          <button type="button" onClick={onOpenControllers} title="Map game slots to your controllers and pick their templates" data-testid="device-manage-slots"
-            className="ml-auto flex items-center gap-1.5 text-[11px] text-hud hover:underline"><Ico name="slots" className="h-3.5 w-3.5" /> Game slots &amp; controllers…</button>
-        </div>
-      </section>
-      {isController(opt.gs) && chosen
-        ? <SlotDeviceView key={opt.key} {...props} opt={opt} chosen={chosen} T={T} />
-        : <KmSlotView gs={opt.gs} rows={props.rows} conflictRows={props.conflictRows} onPickKey={props.onPickKey} />}
+      <SlotDeviceView key={opt.key} {...props} opt={opt} chosen={chosen} T={T} strip={strip} />
     </div>
   );
 }
 
-/** a keyboard or mouse slot: its keyboard (kb2 / mo2 show only their own bindings) */
-function KmSlotView({ gs, rows, conflictRows, onPickKey }: { gs: GameSlot; rows: Row[]; conflictRows: Map<string, Set<string>>; onPickKey: (spec: string) => void }) {
-  const shown = useMemo(() => rows.filter((r) => !r.hidden), [rows]);
-  const kb = gs.slot === 'kb' ? gs.instance : 1, mo = gs.slot === 'mo' ? gs.instance : 1;
-  return <KeyboardView rows={shown} conflictRows={conflictRows} kb={kb} mo={mo} onPick={(combo) => onPickKey(searchSpec(gs.slot, gs.instance, combo))} />;
-}
-
-function NoSlots({ onOpenControllers }: { onOpenControllers: () => void }) {
+function NoSlots({ onOpenControllers, hasKm }: { onOpenControllers: () => void; hasKm: boolean }) {
   return (
     <div className="hud-panel hud-corners mx-auto mt-8 max-w-xl rounded-lg p-8 text-center" data-testid="device-view-empty">
-      <div className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">No game slots yet</div>
-      <p className="mt-2 text-sm text-slate-400">This view shows the devices that go into your export: keyboard, mouse, joysticks and gamepads. Map them to game slots (kb1, js1, js2, gp1…) first: import your <code>actionmaps.xml</code> to have them matched for you, or add slots by hand.</p>
+      <div className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">No joysticks or gamepads yet</div>
+      <p className="mt-2 text-sm text-slate-400">This view shows the joysticks, HOTAS and gamepads that go into your export, each on its game slot (js1, js2, gp1…).
+        {hasKm ? ' Keyboard and mouse bindings are in the Keyboard view.' : ''} Import your <code>actionmaps.xml</code> to have them matched for you, or add slots by hand.</p>
       <button type="button" onClick={onOpenControllers} data-testid="open-controllers" className="mt-4 inline-flex items-center gap-2 rounded border border-hud/60 bg-hud/15 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wider text-hud2 hover:bg-hud/25"><Ico name="slots" className="h-4 w-4" /> Game slots &amp; controllers</button>
     </div>
   );
 }
 
 type Chosen = ReturnType<typeof resolveSlotTemplate>;
-function SlotDeviceView({ opt, chosen, T, rows, conflictRows, pads, describe, onPickTemplate, highlight, scroll, query, chip, onEdit, onRemove, onBind, onShowInList, notify }:
-  Props & { opt: DevOption; chosen: Chosen; T: ReturnType<typeof useTemplates> }) {
+function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, highlight, scroll, query, chip, onEdit, onRemove, onBind, onShowInList, notify }:
+  Props & { opt: DevOption; chosen: Chosen; T: ReturnType<typeof useTemplates>; strip: ReactNode }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
   const [editing, setEditing] = useState<DeviceTemplate | null>(null);
@@ -259,6 +230,7 @@ function SlotDeviceView({ opt, chosen, T, rows, conflictRows, pads, describe, on
     try { setEditing(withLink(cloneTemplate(await resolveTemplateImage(tpl), ident.name ?? `${tpl.name} (copy)`))); }
     catch (e) { notify('err', `Could not load the template picture: ${(e as Error).message}`); }
   };
+  const axisLocked = instance > axisLimit[slot];
   const exportJson = async () => {
     try { download(`${slug(tpl.name)}.sc-template.json`, `data:application/json;charset=utf-8,${encodeURIComponent(exportTemplates([await resolveTemplateImage(tpl)]))}`); }
     catch (e) { notify('err', `Template export failed: ${(e as Error).message}`); }
@@ -266,21 +238,63 @@ function SlotDeviceView({ opt, chosen, T, rows, conflictRows, pads, describe, on
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="device-slot-view" data-slot={`${slot}${instance}`}>
-      <div className="flex flex-wrap items-center gap-2 print:hidden" data-testid="template-tools">
-        <span className="font-display text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Template</span>
-        {tpl.builtin
-          ? <button type="button" onClick={() => void customize()} data-testid="template-customize" className={BTN}><Ico name="edit" className="h-3.5 w-3.5" /> Customize a copy</button>
-          : <button type="button" onClick={() => setEditing(structuredClone(tpl))} data-testid="template-edit" className={BTN}><Ico name="edit" className="h-3.5 w-3.5" /> Edit template</button>}
-        <button type="button" onClick={() => setEditing(withLink(newTemplate(slot, ident.name ?? 'My device')))} data-testid="template-new" className={BTN}><Ico name="plus" className="h-3.5 w-3.5" /> New</button>
-        <button type="button" onClick={() => importRef.current?.click()} data-testid="template-import" className={BTN}><Ico name="import" className="h-3.5 w-3.5" /> Import</button>
-        <button type="button" onClick={() => void exportJson()} data-testid="template-export" className={BTN}><Ico name="export" className="h-3.5 w-3.5" /> Export</button>
-        <span className="ml-auto flex flex-wrap gap-1.5">
-          <button type="button" onClick={exportPng} data-testid="device-png" className={BTN}><Ico name="image" className="h-3.5 w-3.5" /> PNG</button>
-          <button type="button" onClick={() => window.print()} className={BTN}><Ico name="print" className="h-3.5 w-3.5" /> Print</button>
-        </span>
-        <input ref={importRef} type="file" accept=".json,application/json" className="hidden" data-testid="template-import-file"
-          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
-      </div>
+      {/* ---- slot bar: slot chips, then hardware · template (+ template tools) · axis settings for the selected slot ---- */}
+      <section className="hud-panel rounded-lg px-3 py-2.5 print:hidden" data-testid="device-slot-bar">
+        {strip}
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-edge/50 pt-2 text-xs" data-testid="device-slot-line">
+          <span className="flex min-w-0 items-center gap-1.5 text-slate-400" data-testid="device-hardware">
+            <span className={LABEL}>Hardware</span>
+            {opt.gs.hw ? <span className="max-w-[16rem] truncate text-slate-200" title={opt.pad ? padLabel(opt.pad) : opt.gs.hw.name}>{opt.pad ? padLabel(opt.pad) : opt.gs.hw.name}</span> : <span className="text-slate-500">none assigned</span>}
+            {opt.gs.hw && (opt.pad
+              ? <span className="rounded border border-ok/40 px-1 font-mono text-[10px] text-ok">connected</span>
+              : <span className="rounded border border-edge px-1 font-mono text-[10px] text-slate-500">not connected</span>)}
+          </span>
+          <span className="flex flex-wrap items-center gap-2" data-testid="template-line">
+            <label className="flex items-center gap-1.5 text-slate-400">
+              <span className={LABEL}>Template</span>
+              <select value={chosen.pick} onChange={(e) => onPickTemplate(opt.gs, e.target.value || (chosen.legacy ? AUTO_TEMPLATE : null))} data-testid="template-select" aria-label={`Template for ${slot}${instance}`}
+                className="max-w-[18rem] rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200 outline-none focus:border-hud">
+                <option value="">Automatic ({autoSlotTemplate(T.templates, opt.gs, opt.pad).name})</option>
+                {templateGroups(T.templates).map((g) => (
+                  <optgroup key={g.label} label={g.label} data-group={g.label}>
+                    {g.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.slot !== opt.slot ? ` · ${t.slot}` : ''}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+            <span className={ICON_GROUP} role="group" aria-label="Template" data-testid="template-tools">
+              {tpl.builtin
+                ? <IconButton icon="edit" label="Customize a copy of this template" onClick={() => void customize()} testid="template-customize" />
+                : <IconButton icon="edit" label="Edit this template" onClick={() => setEditing(structuredClone(tpl))} testid="template-edit" />}
+              <IconButton icon="filePlus" label="New template (draw your own device)" onClick={() => setEditing(withLink(newTemplate(slot, ident.name ?? 'My device')))} testid="template-new" />
+              <IconButton icon="import" label="Import templates (.json)" onClick={() => importRef.current?.click()} testid="template-import" />
+              <IconButton icon="export" label="Export this template (.json)" onClick={() => void exportJson()} testid="template-export" />
+            </span>
+            <span className="h-5 w-px bg-edge" aria-hidden="true" />
+            <span className={ICON_GROUP} role="group" aria-label="Picture" data-testid="picture-tools">
+              <IconButton icon="image" label="Save the picture with its bindings as PNG" onClick={() => void exportPng()} testid="device-png" />
+              <IconButton icon="print" label="Print the picture with its bindings" onClick={() => window.print()} testid="device-print" />
+            </span>
+            <input ref={importRef} type="file" accept=".json,application/json" className="hidden" data-testid="template-import-file"
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
+          </span>
+          <button type="button" onClick={() => !axisLocked && onOpenAxis(opt.gs)} disabled={axisLocked} data-testid="slot-axis-settings"
+            aria-label={`Axis settings & curves for ${slot}${instance}`} aria-describedby={axisLocked ? 'axis-locked-msg' : undefined}
+            title={axisLocked ? `Not available for ${slot}${instance}: see below` : `Invert, exponent, custom response curves${slot === 'js' ? ' and deadzone / saturation' : ''} for ${slot}${instance} only`}
+            className="ml-auto flex items-center gap-1.5 rounded border border-hud/50 bg-hud/10 px-2.5 py-1 font-display text-[11px] font-semibold uppercase tracking-wider text-hud2 transition hover:bg-hud/20 disabled:cursor-not-allowed disabled:border-edge disabled:bg-transparent disabled:text-slate-500">
+            <Ico name="curve" className="h-3.5 w-3.5" /> Axis settings &amp; curves <span className="font-mono normal-case">· {slot}{instance}</span>
+          </button>
+        </div>
+        {axisLocked && (
+          <div id="axis-locked-msg" className="mt-2 flex flex-wrap items-center gap-2 rounded border border-mod/40 bg-mod/5 px-3 py-1.5 text-[11px] text-slate-300" data-testid="axis-locked">
+            <Ico name="info" className="text-mod" />
+            <span>{slot === 'js'
+              ? <>Star Citizen only keeps axis, inversion and curve settings for the first {axisLimit.js} joysticks (js1–js{axisLimit.js}). To customize them for this device, it must be one of the first {axisLimit.js}: reorder it in Game slots &amp; controllers.</>
+              : <>Star Citizen only keeps gamepad axis, inversion and curve settings for gp1. To customize them for this gamepad, make it gp1: reorder it in Game slots &amp; controllers.</>}</span>
+            <button type="button" onClick={onOpenControllers} data-testid="axis-reorder" className="ml-auto flex items-center gap-1 rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20"><Ico name="slots" className="h-3 w-3" /> Reorder in Game slots &amp; controllers</button>
+          </div>
+        )}
+      </section>
       <div className="print:hidden"><ChromiumBanner detected={pads.length} compact /></div>
       <ChromiumButtonNotice templateMax={tplMax} deviceButtons={opt.pad?.buttons} device={ident.name ?? `${slot.toUpperCase()}${instance}`} />
       {unassigned > 0 && (

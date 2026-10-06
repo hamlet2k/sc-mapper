@@ -167,3 +167,61 @@ Judgment calls made while building round 1, where the decisions above didn't say
 ### Icons
 - One line-icon set lives in `src/components/icons.tsx`: 24px grid, 1.5 stroke, round caps, `currentColor`, sized to the text unless a size is given. It replaces every emoji / pictograph in the header, tabs, filters, buttons, modals, chips and the category list.
 - "×" multipliers and "→" arrows inside sentences are kept as typography.
+
+## Round 2 review feedback (Federico, Oct 5, 2026)
+- Devices view slot bar lists only js slots (and gp slots); kb/mo slots never appear there. kb/mo slot pickers live only in the Keyboard view.
+- Remove the "Game slots & controllers" link from the Devices view (the profile card button is the single entry point).
+- Template actions (Customize a copy, New, Import, Export) and output actions (PNG, Print) become icon buttons on the same line as the template dropdown, as two separated groups.
+- Each js/gp slot page in Devices gets its own "Axis settings & curves" CTA (axis, inversion, curves for that device); remove that tab from the controllers modal.
+- Curves can only be customized for the first 8 devices: beyond js8 the CTA stays visible but disabled, with a message to reorder in Game slots & controllers.
+- Game slots modal: move up / move down on js (and gp) rows, swapping the instance numbers of two slots, carrying bindings, hardware, template and axis settings.
+- Rename "N yours" to clearer wording (custom bindings vs game defaults).
+
+## Implementation calls (round 3)
+
+### Devices slot bar
+- The slot bar lists only js and gp slots. A saved selection of a kb/mo slot from an earlier version falls back to the first connected joystick.
+- Keyboard and mouse slots are reached only through the Keyboard view's kb / mo picker (unchanged). A find-by-press on a key while on Devices selects nothing there.
+- A profile with no js/gp slot gets the empty state "No joysticks or gamepads yet", which points to the Keyboard view when kb/mo slots exist.
+- The "Game slots & controllers…" link is gone from the bar. The one exception to the single entry point is the reorder button in the js9+ notice (see below), because that message is about reordering.
+- Second line of the bar: Hardware, then Template (dropdown, then the template icon group, then the picture icon group), then the axis CTA on the right.
+  - Template group: Customize a copy (Edit for user templates), New, Import, Export.
+  - Picture group: PNG, Print.
+  - Each group is a joined, bordered button set, with a divider and a gap between the two groups.
+  - Each icon button has a tooltip (`title`) and an `aria-label` with the same full text, e.g. "Customize a copy of this template" or "Save the picture with its bindings as PNG".
+  - The old separate template row is removed.
+
+### Axis settings & curves per slot
+- An "Axis settings & curves · jsN" button in each js/gp slot's bar opens a modal for that slot's number only.
+  - It reuses the existing editor: groups list, invert, exponent, custom curve, live chart, deadzone/saturation table and ranges.
+  - There are no instance tabs. The header names the slot and the device.
+  - Edits go through the same undoable settings path, labelled e.g. "Invert flight_move_pitch (js2)".
+- The modal tab and the profile-card link are removed.
+- **Input tester:** kept as the second tab of the Game slots & controllers modal. It covers every controller, which helps when you assign hardware or check which identical device is which. A per-slot copy would add nothing.
+- **Limit:** the game's joystick option tree declares 8 instances, so js9+ shows the CTA disabled with the explanation.
+  - The explanation names the first-8 rule and has a "Reorder in Game slots & controllers" button that opens the modal.
+  - The limit is read from the option tree, so it follows the game data if that ever changes.
+- **Gamepads:** the joystick option tree declares 8 instances, but the gamepad tree declares none. So gp1 is treated as the only customizable gamepad, and gp2+ gets the same disabled CTA and reorder message ("make it gp1"). This is an inference from the game data, not confirmed in game.
+  - The gamepad editor uses the gamepad option tree (thumbstick curves: FPS view / move, vehicles…).
+  - It hides the deadzone/saturation table and the axis-preview picker. Those are joystick axis names (x, y, rotz…) stored per device model in `<deviceoptions>`, and the game's gamepad sticks have no equivalent here.
+
+### Move up / down (Game slots modal)
+- Up / down arrows sit next to the slot id on every js and gp row. kb/mo rows have none, since their numbers don't depend on Windows device order.
+  - A slot swaps with the next slot of the same kind by number, even across gaps: js5 moves up to swap with js2 if js3/js4 don't exist.
+  - The arrow is disabled at the ends. Its tooltip / aria-label says which slot it swaps with.
+- A swap rewrites, both ways at once:
+  - **Bindings:** the profile's own bindings, every stored jsA_ / jsB_ entry in every action. Cleared defaults (js1_) stay as they are.
+  - **Game defaults** aren't stored in the profile, so they stay on their number (js1 defaults remain js1), which matches the game's own `pp_resortdevices`. Materializing them onto the moved device was tried first. It turned ~67 defaults into "custom" bindings after a single swap, which was confusing and bloated the export.
+  - **Slot map:** hardware, template pick and the game-file device name all move with the slot.
+  - **Profile:** the imported device list (`<options>` product) and the `<options type=… instance=…>` blocks (invert / exponent / curves) are swapped. `<deviceoptions>` are per model and need no change.
+- **Undo:** one undo step labelled "Swap jsA and jsB", undone by Ctrl+Z or by the Undo button in the green notice above the slot list. Undo restores the bindings and reverts the slot map, devices and settings.
+  - Per-row undo in the List skips swap steps, so a partial revert can't happen.
+  - A swap with no profile active (slots set up on the game defaults) changes only the slot map and isn't recorded. You undo it by moving the slot back.
+- Unit tests cover the binding rewrite (both ways, js1 untouched, keyboard half kept, cleared kept, swap twice = identity), the slot map, devices, option blocks and the neighbour rule.
+
+### Wording
+- "N yours" is replaced:
+  - Copy button: "Copy bindings (N custom)". Its tooltip explains that custom means bindings you changed or added in this profile, and that the copy also carries the game defaults on that slot.
+  - Copy dialog: "X bindings on Y actions: N custom bindings and M game defaults on js1", with a tooltip on each part.
+  - Remove dialog: "N custom bindings (changed or added by you)".
+- The Conflicts view's "yours" tag on a customized binding now reads "custom" too, with the same tooltip. The profile delete warning's "N bindings of yours" is left as is: it is a plain sentence about losing your edits, not a count label.

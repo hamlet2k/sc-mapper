@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AssignSource, PadInfo, PadKind, PadLike } from '../lib/devices';
 import { getPads, padLabel, parseProfileProduct } from '../lib/devices';
-import type { DeviceSettings } from '../lib/devopts';
 import {
-  SLOT_KIND_LABEL, hardwareOf, isController, isFixed, manualHardware, nextInstance, slotDeviceName, slotId,
+  SLOT_KIND_LABEL, hardwareOf, isController, isFixed, manualHardware, neighbourSlot, nextInstance, slotDeviceName, slotId,
   type CopyPlan, type GameSlot, type SlotHardware, type SlotMap,
 } from '../lib/slots';
 import { AUTO_TEMPLATE, autoSlotTemplate, resolveSlotTemplate } from '../lib/slotTemplates';
 import { coveredInputs, maxButton, templateGroups, useTemplates, type DeviceTemplate } from '../lib/templates';
-import type { Group, OptionTree, Profile, ProfileDevice, Slot } from '../lib/types';
+import type { Group, Profile, ProfileDevice, Slot } from '../lib/types';
 import { ChromiumBanner } from './ChromiumBanner';
-import { DeviceSettingsEditor } from './DeviceSettings';
 import { InputTester } from './InputTester';
 import { Ico } from './icons';
 import { useEscape } from './useEscape';
@@ -96,13 +94,18 @@ export interface SlotActions {
   count: (gs: GameSlot) => number;
   plan: (from: GameSlot, to: GameSlot) => CopyPlan;
   copy: (from: GameSlot, to: GameSlot, o: { clash: 'replace' | 'keep'; move: boolean; skip: Set<string> }) => void;
+  /** swap a js/gp slot's number with its neighbour (bindings, hardware, template, axis settings follow) */
+  move: (gs: GameSlot, dir: -1 | 1) => void;
+  /** label of the last swap, while it is the newest undo step */
+  lastMove?: string;
+  undoMove: () => void;
 }
-type Tab = 'slots' | 'settings' | 'tester';
+type Tab = 'slots' | 'tester';
 
-/** Game slots & controllers: game slots (kb1, mo1, js1…, gp1…) <> the hardware filling each <> its template; axis settings; live tester */
-export function ControllersPanel({ profile, pads, describe, slots, onClose, settings, tree, onSettings, initialTab = 'slots' }: {
-  profile: Profile | null; pads: PadInfo[]; describe: (l: readonly PadLike[]) => PadInfo[]; slots: SlotActions; onClose: () => void;
-  settings?: DeviceSettings; tree?: OptionTree; onSettings?: (label: string, fn: (s: DeviceSettings) => DeviceSettings) => void; initialTab?: Tab;
+/** Game slots & controllers: game slots (kb1, mo1, js1…, gp1…) <> the hardware filling each <> its template; live tester.
+ *  (Axis settings & curves open per slot from the Devices view.) */
+export function ControllersPanel({ profile, pads, describe, slots, onClose, initialTab = 'slots' }: {
+  profile: Profile | null; pads: PadInfo[]; describe: (l: readonly PadLike[]) => PadInfo[]; slots: SlotActions; onClose: () => void; initialTab?: Tab;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
   useEscape(onClose);
@@ -112,7 +115,7 @@ export function ControllersPanel({ profile, pads, describe, slots, onClose, sett
         <div className="flex flex-wrap items-center gap-3 border-b border-edge px-5 py-3">
           <h2 className="flex items-center gap-2 font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2"><Ico name="slots" className="h-5 w-5" /> Game slots &amp; controllers</h2>
           <div className="ml-4 flex rounded-md border border-edge p-0.5" role="tablist">
-            {([['slots', 'Game slots'], ['settings', 'Axis settings & curves'], ['tester', 'Input tester']] as const).map(([k, l]) => (
+            {([['slots', 'Game slots'], ['tester', 'Input tester']] as const).map(([k, l]) => (
               <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} data-testid={`tab-${k}`}
                 className={`rounded px-3 py-1 font-display text-sm font-semibold uppercase tracking-wider ${tab === k ? 'bg-hud/20 text-hud2' : 'text-slate-400 hover:text-slate-200'}`}>{l}</button>
             ))}
@@ -123,7 +126,6 @@ export function ControllersPanel({ profile, pads, describe, slots, onClose, sett
         <div className="space-y-4 p-5">
           <ChromiumBanner detected={pads.length} compact />
           {tab === 'slots' && <SlotsTab profile={profile} pads={pads} describe={describe} slots={slots} />}
-          {tab === 'settings' && settings && onSettings && <DeviceSettingsEditor profile={profile} settings={settings} tree={tree} pads={pads} onChange={onSettings} />}
           {tab === 'tester' && (
             <section>
               <p className="mb-2 text-[11px] text-slate-500">Everything the browser reports, live. &quot;last&quot; shows the Star Citizen input a press or move would be captured as. If a device or button doesn&apos;t show up here, the browser can&apos;t see it.</p>
@@ -207,6 +209,12 @@ function SlotsTab({ profile, pads, describe, slots }: { profile: Profile | null;
         </div>
       ) : (
         <div className="space-y-3">
+          {slots.lastMove && (
+            <div className="flex flex-wrap items-center gap-2 rounded border border-ok/40 bg-ok/5 px-3 py-1.5 text-xs text-slate-300" data-testid="slot-move-notice" role="status">
+              <Ico name="check" className="text-ok" /> {slots.lastMove}: bindings, hardware, template and axis settings moved with them.
+              <button type="button" onClick={slots.undoMove} data-testid="slot-move-undo" className={`${BTN} ml-auto`}><Ico name="undo" /> Undo</button>
+            </div>
+          )}
           {kinds.map((k) => {
             const rows = map.slots.filter((s) => s.slot === k);
             if (!rows.length) return null;
@@ -299,9 +307,24 @@ function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, onArm, onRemove, o
     if (h) slots.assign(gs, h);
   };
   const st = ctl ? resolveSlotTemplate(T.templates, slots.map, gs, pad, T.picks) : null;
+  const up = ctl ? neighbourSlot(slots.map, gs, -1) : undefined;
+  const down = ctl ? neighbourSlot(slots.map, gs, 1) : undefined;
+  const ARROW = 'flex h-5 w-5 items-center justify-center rounded border border-edge text-slate-400 hover:border-hud/60 hover:text-hud2 disabled:pointer-events-none disabled:opacity-25';
   return (
-    <div data-testid="slot-row" data-slot={slotId(gs)} data-armed={armed ? '1' : undefined} className={`grid items-center gap-x-3 gap-y-1.5 rounded border px-3 py-2 text-xs md:grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_14rem] ${armed ? 'border-mod bg-mod/[0.07] shadow-[0_0_18px_-6px_var(--color-mod)]' : pad ? 'border-hud/40 bg-hud/[0.04]' : 'border-edge/70 bg-black/20'}`}>
-      <span className="font-mono text-sm font-bold text-hud2">{slotId(gs)}</span>
+    <div data-testid="slot-row" data-slot={slotId(gs)} data-armed={armed ? '1' : undefined} className={`grid items-center gap-x-3 gap-y-1.5 rounded border px-3 py-2 text-xs md:grid-cols-[4.5rem_minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_17rem] ${armed ? 'border-mod bg-mod/[0.07] shadow-[0_0_18px_-6px_var(--color-mod)]' : pad ? 'border-hud/40 bg-hud/[0.04]' : 'border-edge/70 bg-black/20'}`}>
+      <div className="flex items-center gap-1.5">
+        <span className="font-mono text-sm font-bold text-hud2">{slotId(gs)}</span>
+        {ctl && (
+          <span className="flex flex-col gap-0.5">
+            <button type="button" onClick={() => up && slots.move(gs, -1)} disabled={!up} data-testid="slot-move-up" className={ARROW}
+              aria-label={up ? `Move ${slotId(gs)} up: swap with ${slotId(up)}` : `${slotId(gs)} is already first`} title={up ? `Swap with ${slotId(up)}: the device, its bindings, template and axis settings become ${slotId(up)}` : undefined}>
+              <Ico name="chevronUp" className="h-3 w-3" strokeWidth={2} /></button>
+            <button type="button" onClick={() => down && slots.move(gs, 1)} disabled={!down} data-testid="slot-move-down" className={ARROW}
+              aria-label={down ? `Move ${slotId(gs)} down: swap with ${slotId(down)}` : `${slotId(gs)} is already last`} title={down ? `Swap with ${slotId(down)}: the device, its bindings, template and axis settings become ${slotId(down)}` : undefined}>
+              <Ico name="chevronDown" className="h-3 w-3" strokeWidth={2} /></button>
+          </span>
+        )}
+      </div>
       <div className="min-w-0">
         <div className="text-[10px] uppercase tracking-widest text-slate-500">In the game file</div>
         <div className="truncate text-slate-200" title={gs.gameRawProduct ?? gs.gameProduct}>{game || <span className="text-slate-500">{gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'not named (added here)'}</span>}</div>
@@ -369,8 +392,9 @@ function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, onArm, onRemove, o
         )}
       </div>
       <div className="flex items-center gap-1.5 justify-self-end">
-        <button type="button" onClick={onCopy} data-testid="slot-copy" className={BTN} title={`Copy or move this slot's bindings to another ${SLOT_KIND_LABEL[gs.slot].toLowerCase()} slot.${count ? ` ${count} of them are yours;` : ''} the copy also carries the game defaults on ${slotId(gs)}.`}>
-          <Ico name="copy" /> Copy{count ? <span className="ml-1 rounded bg-mod/15 px-1 font-mono text-[10px] text-mod" data-testid="slot-count">{count} yours</span> : null}
+        <button type="button" onClick={onCopy} data-testid="slot-copy" className={BTN}
+          title={`Copy or move this slot's bindings to another ${SLOT_KIND_LABEL[gs.slot].toLowerCase()} slot. ${count ? `${count} custom binding${count === 1 ? '' : 's'} (ones you changed or added in this profile)` : 'No custom bindings (none changed or added in this profile)'}; the copy also carries the game's default bindings on ${slotId(gs)}.`}>
+          <Ico name="copy" /> Copy bindings{count ? <span className="ml-1 rounded bg-mod/15 px-1 font-mono text-[10px] text-mod" data-testid="slot-count">({count} custom)</span> : null}
         </button>
         {isFixed(gs) ? <span className="px-1 text-[10px] text-slate-600" title="Keyboard and mouse slots are always there">fixed</span>
           : <button type="button" onClick={onRemove} data-testid="slot-remove" className={`${BTN} hover:!border-alert hover:!text-alert`} aria-label={`Remove ${slotId(gs)}`}><Ico name="trash" /> Remove</button>}
@@ -388,8 +412,8 @@ function RemoveSlotDialog({ gs, count, hasTargets, onCancel, onRemove, onCopyFir
         <h3 className="font-display text-lg font-bold uppercase tracking-[0.2em] text-alert">Remove {slotId(gs)}?</h3>
         {name && <div className="mt-0.5 text-xs text-slate-400">{name}</div>}
         {count > 0 ? (
-          <p className="mt-3"><b className="text-alert">{count} binding{count === 1 ? '' : 's'}</b> of yours on <code className="text-hud2">{slotId(gs)}_</code> will be dropped from this profile and from the export. You can undo it with Undo (Ctrl+Z).</p>
-        ) : <p className="mt-3">This slot has no bindings of yours, so nothing is dropped.</p>}
+          <p className="mt-3"><b className="text-alert">{count} custom binding{count === 1 ? '' : 's'}</b> (changed or added by you) on <code className="text-hud2">{slotId(gs)}_</code> will be dropped from this profile and from the export. You can undo it with Undo (Ctrl+Z).</p>
+        ) : <p className="mt-3">This slot has no custom bindings, so nothing is dropped.</p>}
         <p className="mt-2 text-[11px] text-slate-500">The game&apos;s default bindings aren&apos;t stored in your file and aren&apos;t affected. The slot&apos;s device entry (and its axis settings) leave the export too.</p>
         {count > 0 && (
           <button type="button" onClick={onCopyFirst} data-testid="remove-copy-first" className="mt-3 w-full rounded border border-hud/60 bg-hud/10 px-3 py-2 text-left text-xs text-hud2 hover:bg-hud/20">
@@ -454,7 +478,7 @@ function CopyBindingsDialog({ from, thenRemove, slots, pads, T, onClose }: { fro
         </div>
         <div className="mt-3 rounded border border-edge/70 bg-black/30 p-3 text-xs" data-testid="copy-preview">
           {!plan.count ? <span className="text-slate-500">{slotId(from)} has no bindings to copy.</span> : <>
-            <div><b className="text-slate-100">{plan.count}</b> binding{plan.count === 1 ? '' : 's'} on <b className="text-slate-100">{plan.actions}</b> action{plan.actions === 1 ? '' : 's'}: <b className="text-mod">{plan.yours} yours</b>{plan.count > plan.yours ? <> and <b className="text-slate-200">{plan.count - plan.yours} game default{plan.count - plan.yours === 1 ? '' : 's'}</b> on {slotId(from)}</> : null}. The same inputs carry over ({isController(from) ? 'button5 stays button5' : 'L-Alt+N stays L-Alt+N'}).</div>
+            <div><b className="text-slate-100">{plan.count}</b> binding{plan.count === 1 ? '' : 's'} on <b className="text-slate-100">{plan.actions}</b> action{plan.actions === 1 ? '' : 's'}: <b className="text-mod" title="Bindings you changed or added in this profile">{plan.yours} custom binding{plan.yours === 1 ? '' : 's'}</b>{plan.count > plan.yours ? <> and <b className="text-slate-200" title="Star Citizen's own default bindings on this slot (not stored in your file)">{plan.count - plan.yours} game default{plan.count - plan.yours === 1 ? '' : 's'}</b> on {slotId(from)}</> : null}. The same inputs carry over ({isController(from) ? 'button5 stays button5' : 'L-Alt+N stays L-Alt+N'}).</div>
             {tpl && <div className="mt-2 text-slate-400">Target template: <b className="text-slate-200">{tpl.name}</b>{pad ? ` · ${pad.buttons} buttons connected` : ''}</div>}
             {missing.length > 0 ? (
               <div className="mt-1 text-mod" data-testid="copy-missing">

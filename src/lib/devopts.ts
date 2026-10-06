@@ -257,6 +257,20 @@ export function listOptionBlocks(s: DeviceSettings) {
   return s.blocks.filter((b): b is OptionsBlock => b.tag === 'options').map((b) => ({ type: blockType(b), instance: blockInstance(b), product: blockProduct(b), groups: b.groups.length }));
 }
 export const emptySettings = (): DeviceSettings => ({ blocks: [] });
+/** swap two device numbers' option blocks (invert / exponent / curves per <options type=… instance=…>); per-model axis blocks are untouched */
+export function swapOptionInstances(s: DeviceSettings, type: string, a: number, b: number): DeviceSettings {
+  if (a === b) return s;
+  return {
+    ...s,
+    blocks: s.blocks.map((blk) => {
+      if (blk.tag !== 'options' || blockType(blk) !== type) return blk;
+      const n = blockInstance(blk);
+      if (n !== a && n !== b) return blk;
+      const to = String(n === a ? b : a);
+      return { ...blk, attrs: blk.attrs.some(([k]) => k === 'instance') ? blk.attrs.map(([k, v]) => (k === 'instance' ? [k, to] : [k, v]) as Attr) : [...blk.attrs, ['instance', to] as Attr] };
+    }),
+  };
+}
 
 const legacy = new WeakMap<object, DeviceSettings>();
 /** A profile's device settings (converting the legacy optionsXml of profiles saved by earlier versions) */

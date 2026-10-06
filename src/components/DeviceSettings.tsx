@@ -8,32 +8,38 @@ import {
 } from '../lib/devopts';
 import type { OptionTree, OptionTreeGroup, Profile } from '../lib/types';
 import { Ico } from './icons';
+import { useEscape } from './useEscape';
 
 type Change = (label: string, fn: (s: DeviceSettings) => DeviceSettings) => void;
 interface Pt { x: number; y: number }
 
 const shortName = (product?: string) => (product ? parseProfileProduct(product).name || product.trim() : '');
 
+export type SettingsType = 'joystick' | 'gamepad';
+const SLOT_OF: Record<SettingsType, 'js' | 'gp'> = { joystick: 'js', gamepad: 'gp' };
+/** how many device numbers of a type the game keeps curve / axis settings for (the option tree's instance count; gamepad: 1) */
+export const settingsInstances = (type: SettingsType, tree?: OptionTree) => tree?.instances ?? (type === 'joystick' ? JOYSTICK_SETTING_INSTANCES : 1);
+
 /**
- * Per-device settings the game stores in actionmaps.xml / layout exports: deadzone & saturation per axis (<deviceoptions>, per
- * device model) and invert / exponent / custom curve per option group (<options type="joystick" instance="N">).
+ * Per-device settings the game stores in actionmaps.xml / layout exports, for ONE game device (js3, gp1…): invert / exponent /
+ * custom curve per option group (<options type="joystick" instance="N">) and, for joysticks, deadzone & saturation per axis
+ * (<deviceoptions>, per device model).
  */
-export function DeviceSettingsEditor({ profile, settings, tree, pads, onChange }: {
+export function DeviceSettingsEditor({ profile, settings, tree, pads, onChange, type, instance: inst, product: knownProduct }: {
   profile: Profile | null; settings: DeviceSettings; tree?: OptionTree; pads: PadInfo[]; onChange: Change;
+  type: SettingsType; instance: number; product?: string;
 }) {
-  const [inst, setInst] = useState(1);
+  const slot = SLOT_OF[type];
+  const isJs = type === 'joystick';
   const [sel, setSel] = useState<string>('flight_move_pitch');
   const [filter, setFilter] = useState('');
   const [previewAxis, setPreviewAxis] = useState('');
-  const maxInst = tree?.instances ?? JOYSTICK_SETTING_INSTANCES;
+  const maxInst = settingsInstances(type, tree);
 
-  const productOf = (n: number) => {
-    const b = optionsBlock(settings, 'joystick', n);
-    return (b && blockProduct(b)) || profile?.devices.find((d) => d.slot === 'js' && d.instance === n)?.rawProduct
-      || profile?.devices.find((d) => d.slot === 'js' && d.instance === n)?.product || pads.find((p) => p.kind === 'js' && p.instance === n)?.product;
-  };
-  const product = productOf(inst);
-  const pad = pads.find((p) => p.kind === 'js' && p.instance === inst);
+  const block0 = optionsBlock(settings, type, inst);
+  const pd = profile?.devices.find((d) => d.slot === slot && d.instance === inst);
+  const product = (block0 && blockProduct(block0)) || pd?.rawProduct || pd?.product || knownProduct || pads.find((p) => p.kind === slot && p.instance === inst)?.product;
+  const pad = pads.find((p) => p.kind === slot && p.instance === inst);
   const groups = useMemo(() => (tree?.groups ?? []).filter((g) => g.showCurve !== 0 || g.showInvert !== 0), [tree]);
   const byName = useMemo(() => new Map((tree?.groups ?? []).map((g) => [g.name, g])), [tree]);
   const pathOf = (g: OptionTreeGroup) => {
@@ -41,45 +47,33 @@ export function DeviceSettingsEditor({ profile, settings, tree, pads, onChange }
     for (let p = g.parent ? byName.get(g.parent) : undefined; p && p.depth >= 3; p = p.parent ? byName.get(p.parent) : undefined) out.unshift(p.label);
     return out.join(' › ');
   };
-  const block = optionsBlock(settings, 'joystick', inst);
+  const block = block0;
   const unknown = (block?.groups ?? []).filter((g) => !byName.has(g.name));
   const q = filter.trim().toLowerCase();
   const shown = groups.filter((g) => !q || `${g.label} ${g.name} ${pathOf(g)}`.toLowerCase().includes(q));
   const selTree = byName.get(sel);
-  const vals = groupValues(settings, 'joystick', inst, sel);
-  const axes = product ? axisValues(settings, product) : {};
-  const jsProducts = Array.from({ length: maxInst }, (_, k) => shortName(productOf(k + 1))).filter(Boolean);
-  const others = settings.blocks.filter((b) => (b.tag === 'deviceoptions' ? !jsProducts.includes(shortName(axisBlockName(b))) : blockType(b) !== 'joystick' || blockInstance(b) > maxInst));
-  const set = (label: string, fn: (s: DeviceSettings) => DeviceSettings) => onChange(`${label} (js${inst})`, fn);
+  const vals = groupValues(settings, type, inst, sel);
+  const axes = isJs && product ? axisValues(settings, product) : {};
+  const others = settings.blocks.filter((b) => (b.tag === 'deviceoptions' ? !isJs || !product || shortName(axisBlockName(b)) !== shortName(product) : blockType(b) !== type || blockInstance(b) !== inst));
+  const set = (label: string, fn: (s: DeviceSettings) => DeviceSettings) => onChange(`${label} (${slot}${inst})`, fn);
 
   return (
-    <div className="space-y-4" data-testid="device-settings">
+    <div className="space-y-4" data-testid="device-settings" data-instance={`${slot}${inst}`}>
       <div className="rounded border border-hud/30 bg-hud/5 p-3 text-xs leading-relaxed text-slate-300">
-        These are the controller settings Star Citizen saves in <code>actionmaps.xml</code> and exported layouts, read from your imported file and written back on export.
-        <b> Invert</b>, <b>exponent</b> and <b>custom curves</b> are set per joystick number and per control (pitch, yaw, strafe…).
-        <b> Deadzone</b> and <b>saturation</b> are set per axis of a device <i>model</i>: the game stores them by product name, so identical devices share them.
-        The game keeps settings for <b>js1–js{maxInst}</b> only (its option tree declares {maxInst} joystick instances); devices numbered higher can be bound but have no settings.
-        The chart is an approximation: the game&apos;s exact maths isn&apos;t published.
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Joystick">
-        {Array.from({ length: maxInst }, (_, i) => i + 1).map((n) => {
-          const b = optionsBlock(settings, 'joystick', n);
-          const name = shortName(productOf(n));
-          return (
-            <button key={n} type="button" role="tab" aria-selected={inst === n} onClick={() => setInst(n)} data-testid={`settings-js${n}`}
-              className={`rounded border px-2 py-1 text-left font-mono text-[11px] ${inst === n ? 'border-hud bg-hud/15 text-hud2' : 'border-edge text-slate-400 hover:border-hud/60'}`}>
-              <b>js{n}</b>{name ? <span className="ml-1 font-sans text-[10px] text-slate-400">{name.slice(0, 22)}</span> : null}
-              {b?.groups.length ? <span className="ml-1 rounded bg-mod/20 px-1 text-[9px] text-mod">{b.groups.length}</span> : null}
-            </button>
-          );
-        })}
+        The settings Star Citizen saves for <b className="font-mono text-hud2">{slot}{inst}</b> in <code>actionmaps.xml</code> and exported layouts, read from your imported file and written back on export.
+        <b> Invert</b>, <b>exponent</b> and <b>custom curves</b> are set per control (pitch, yaw, strafe…) and only change this device.
+        {isJs
+          ? <> <b>Deadzone</b> and <b>saturation</b> are set per axis of a device <i>model</i>: the game stores them by product name, so identical devices share them.
+            {' '}The game keeps these settings for <b>js1–js{maxInst}</b> only.</>
+          : <> The game keeps gamepad settings for <b>gp1</b> only, and has no per-axis deadzone table for gamepads here.</>}
+        {' '}The chart is an approximation: the game&apos;s exact maths isn&apos;t published.
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
         <section className="space-y-3">
           <div className="text-xs text-slate-400">
-            <span className="font-mono font-bold text-hud2">js{inst}</span>{' '}
-            {product ? <span className="text-slate-100">{shortName(product)}</span> : <span className="text-slate-500">no device known for this number (import a profile or connect it)</span>}
+            <span className="font-mono font-bold text-hud2">{slot}{inst}</span>{' '}
+            {product ? <span className="text-slate-100">{shortName(product)}</span> : <span className="text-slate-500">{isJs ? 'no device known for this number (import a profile or connect it)' : 'no device name known (fine: gamepad settings don\'t need one)'}</span>}
             {pad && <span className="ml-2 rounded border border-ok/40 px-1 font-mono text-[10px] text-ok">connected: {pad.name}</span>}
           </div>
           <div>
@@ -90,7 +84,7 @@ export function DeviceSettingsEditor({ profile, settings, tree, pads, onChange }
             </div>
             <ul className="mt-2 max-h-[420px] space-y-0.5 overflow-y-auto pr-1 scrollbar-thin" data-testid="settings-groups">
               {shown.map((g) => {
-                const v = groupValues(settings, 'joystick', inst, g.name);
+                const v = groupValues(settings, type, inst, g.name);
                 const head = g.showCurve === -1 || g.showInvert === -1;
                 return (
                   <li key={g.name}>
@@ -111,7 +105,7 @@ export function DeviceSettingsEditor({ profile, settings, tree, pads, onChange }
               {unknown.map((g) => (
                 <li key={`u-${g.name}`} className="flex items-center gap-2 rounded px-2 py-1 text-xs text-slate-500" title="Kept as imported">
                   <span className="font-mono text-[10px]">{g.name}</span><span className="text-[10px]">not in this game version&apos;s option tree (kept as is)</span>
-                  <button type="button" onClick={() => set(`Remove ${g.name}`, (s) => resetGroup(s, 'joystick', inst, g.name))} className="ml-auto text-[10px] text-slate-500 hover:text-alert">remove</button>
+                  <button type="button" onClick={() => set(`Remove ${g.name}`, (s) => resetGroup(s, type, inst, g.name))} className="ml-auto text-[10px] text-slate-500 hover:text-alert">remove</button>
                 </li>
               ))}
             </ul>
@@ -120,14 +114,14 @@ export function DeviceSettingsEditor({ profile, settings, tree, pads, onChange }
 
         <section className="rounded-lg border border-edge/70 bg-black/25 p-3">
           {selTree ? (
-            <GroupEditor key={`${inst}:${sel}`} g={selTree} path={pathOf(selTree)} vals={vals} axes={axes} pad={pad} axis={previewAxis} setAxis={setPreviewAxis}
-              onPatch={(label, patch) => set(label, (s) => setGroup(s, 'joystick', inst, sel, patch.curve ? { ...patch, curve: tidyCurve(patch.curve) } : patch, product))}
-              onReset={() => set(`Reset ${sel}`, (s) => resetGroup(s, 'joystick', inst, sel))} />
+            <GroupEditor key={`${inst}:${sel}`} g={selTree} path={pathOf(selTree)} vals={vals} axes={axes} pad={isJs ? pad : undefined} axis={isJs ? previewAxis : ''} setAxis={setPreviewAxis} preview={isJs}
+              onPatch={(label, patch) => set(label, (s) => setGroup(s, type, inst, sel, patch.curve ? { ...patch, curve: tidyCurve(patch.curve) } : patch, product))}
+              onReset={() => set(`Reset ${sel}`, (s) => resetGroup(s, type, inst, sel))} />
           ) : <p className="text-xs text-slate-500">Pick a control on the left.</p>}
         </section>
       </div>
-      <AxisTable product={product} axes={axes} pad={pad} selected={previewAxis} onSelect={setPreviewAxis}
-        onSet={(input, key, v) => product && set(`${key} ${input}`, (s) => setAxis(s, product, input, key, v))} />
+      {isJs && <AxisTable product={product} axes={axes} pad={pad} selected={previewAxis} onSelect={setPreviewAxis}
+        onSet={(input, key, v) => product && set(`${key} ${input}`, (s) => setAxis(s, product, input, key, v))} />}
       <RangesInfo />
 
       {others.length > 0 && (
@@ -301,9 +295,9 @@ function NumField({ value, min, max, step, label, onSet }: { value?: number; min
 }
 
 type Patch = Parameters<typeof setGroup>[4];
-function GroupEditor({ g, path, vals, axes, pad, axis, setAxis: setAxisSel, onPatch, onReset }: {
+function GroupEditor({ g, path, vals, axes, pad, axis, setAxis: setAxisSel, preview = true, onPatch, onReset }: {
   g: OptionTreeGroup; path: string; vals: ReturnType<typeof groupValues>; axes: Record<string, { deadzone?: number; saturation?: number }>; pad?: PadInfo;
-  axis: string; setAxis: (a: string) => void;
+  axis: string; setAxis: (a: string) => void; preview?: boolean;
   onPatch: (label: string, p: Patch) => void; onReset: () => void;
 }) {
   const mode: 'default' | 'exponent' | 'curve' = vals?.curve ? 'curve' : vals?.exponent !== undefined ? 'exponent' : 'default';
@@ -378,13 +372,13 @@ function GroupEditor({ g, path, vals, axes, pad, axis, setAxis: setAxisSel, onPa
           defaultShape={{ exponent: defExp, curve: defCurve }} live={live}
           onDrag={(p) => setDraft(p)} onCommit={(p) => { setDraft(null); onPatch(`Curve ${g.name}`, { curve: p }); }} />
         <div className="min-w-[200px] flex-1 space-y-2 text-xs">
-          <label className="flex items-center gap-2 text-[11px] text-slate-400">
+          {preview && <label className="flex items-center gap-2 text-[11px] text-slate-400">
             Preview with axis
             <select value={axis} onChange={(e) => setAxisSel(e.target.value)} aria-label="Preview axis" className="rounded border border-edge bg-panel2 px-1 py-0.5 font-mono text-[11px] text-slate-200">
               <option value="">— (curve only)</option>
               {JS_AXIS_INPUTS.map((a) => <option key={a} value={a}>{a}{axes[a] ? ` · dz ${axes[a].deadzone ?? '-'} / sat ${axes[a].saturation ?? '-'}` : ''}</option>)}
             </select>
-          </label>
+          </label>}
           {axis && <p className="text-[10px] text-slate-500">{pad ? `Move ${axis} on ${pad.name} to see it on the curve.` : 'Connect and assign the device to see its live position.'}</p>}
           {canCurve && mode === 'curve' && points && (
             <div data-testid="curve-points">
@@ -511,6 +505,26 @@ function CurveChart({ shape, defaultShape, invert, editable, points, live, onDra
         <span><span className="mr-1 inline-block h-0.5 w-3 bg-hud align-middle" />this setting</span>
         <span><span className="mr-1 inline-block h-0.5 w-3 bg-slate-500 align-middle" />game default</span>
         {lx !== undefined && <span className="text-ok"><span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-ok align-middle" />live {live!.toFixed(3)}</span>}
+      </div>
+    </div>
+  );
+}
+
+/** "Axis settings & curves" for one game slot, opened from that slot in the Devices view */
+export function AxisSettingsModal({ slotLabel, deviceName, onClose, ...rest }: {
+  slotLabel: string; deviceName?: string; onClose: () => void;
+} & Parameters<typeof DeviceSettingsEditor>[0]) {
+  useEscape(onClose);
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-void/85 p-4 backdrop-blur-sm" onClick={onClose} data-testid="axis-settings-modal">
+      <div className="hud-panel hud-corners my-4 w-full max-w-6xl rounded-xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Axis settings & curves for ${slotLabel}`}>
+        <div className="flex flex-wrap items-center gap-3 border-b border-edge px-5 py-3">
+          <h2 className="flex items-center gap-2 font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2"><Ico name="curve" className="h-5 w-5" /> Axis settings &amp; curves</h2>
+          <span className="rounded border border-hud/50 bg-hud/10 px-2 py-0.5 font-mono text-sm font-bold text-hud2">{slotLabel}</span>
+          {deviceName && <span className="text-sm text-slate-300">{deviceName}</span>}
+          <button type="button" onClick={onClose} className="ml-auto rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:text-hud2" aria-label="Close"><Ico name="close" /></button>
+        </div>
+        <div className="p-5"><DeviceSettingsEditor {...rest} /></div>
       </div>
     </div>
   );

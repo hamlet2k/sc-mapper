@@ -9,16 +9,17 @@ import { ExportDialog, type ExportSlot } from './components/ExportDialog';
 import { SettingsModal, loadAppSettings, saveAppSettings, type AppSettings } from './components/SettingsModal';
 import { KeyboardView } from './components/KeyboardView';
 import { DeviceView, type SlotOption } from './components/DeviceView';
+import { AxisSettingsModal, settingsInstances } from './components/DeviceSettings';
 import { Sidebar, type MapCount } from './components/Sidebar';
 import { findConflicts } from './lib/conflicts';
 import { GROUPS } from './lib/groups';
 import { getPads, loadAssign, usePads, type PadKind } from './lib/devices';
-import { blockInstance, blockType, settingsOf, type DeviceSettings } from './lib/devopts';
+import { blockInstance, blockType, settingsOf, swapOptionInstances, type DeviceSettings } from './lib/devopts';
 import type { ExportDevice } from './lib/exporter';
 import {
   DEFAULTS_SLOT_KEY, addSlot, assignHardware, autoMatchHardware, copySlotBindings, dropSlotBindings, emptySlotMap, ensureUsedSlots, hardwareOf,
-  isController, knownHardware, loadSlotStore, padAssign, planCopy, removeSlot, reservedJs, saveSlotStore, seedSlots, setSlotTemplate, slotBindingCount,
-  slotDeviceName, slotId, slotProduct, type GameSlot, type SlotMap, type SlotStore,
+  isController, knownHardware, loadSlotStore, neighbourSlot, padAssign, planCopy, removeSlot, reservedJs, saveSlotStore, seedSlots, setSlotTemplate, slotBindingCount,
+  slotDeviceName, slotId, slotProduct, swapProfileDevices, swapSlotBindings, swapSlots, type GameSlot, type SlotMap, type SlotStore,
 } from './lib/slots';
 import { hitKeys, hitLabel, hitSpecs, useKeyHits, usePadHits, type PressHit } from './lib/listen';
 import { comboFrom, scMouseButton, scWheel } from './lib/capture';
@@ -32,11 +33,17 @@ import { parseActionMaps, readXmlFile } from './lib/importer';
 import { buildRows } from './lib/merge';
 import { parseQuery, scoreRow } from './lib/search';
 import { load, save, type Persisted } from './lib/storage';
-import type { Binding, DefaultsData, Device, Group, Rebind, RebindMap, Row } from './lib/types';
+import type { Binding, DefaultsData, Device, Group, Rebind, RebindMap, Row, Slot } from './lib/types';
 
 const DEFAULTS = defaultsJson as DefaultsData;
 const IDX = indexDefaults(DEFAULTS);
-interface UndoEntry { profileId: string; label: string; before: { map: string; action: string; value?: Rebind[] }[] }
+/** device numbers the game keeps axis / curve settings for, per kind (the option trees' instance counts; gamepad: gp1 only) */
+const AXIS_LIMIT = { js: settingsInstances('joystick', DEFAULTS.optionTrees?.joystick), gp: settingsInstances('gamepad', DEFAULTS.optionTrees?.gamepad) };
+interface UndoEntry {
+  profileId: string; label: string; before: { map: string; action: string; value?: Rebind[] }[];
+  /** a slot reorder: undoing it also swaps the slot map, device list and axis settings back (the swap is its own inverse) */
+  swap?: { slot: Slot; a: number; b: number };
+}
 const keyOf = (r: { slot: Rebind['slot']; instance: number; input: string }) => bindKey(r.slot, r.instance, r.input);
 const uniqueName = (names: string[], base: string) => { let n = base, i = 2; while (names.includes(n)) n = `${base} ${i++}`; return n; };
 const ALL_DEVICES: Device[] = ['keyboard', 'mouse', 'joystick', 'gamepad'];
@@ -105,6 +112,8 @@ export default function App() {
   useEffect(() => saveAppSettings(appSettings), [appSettings]);
   const { highlight: highlightOn, scroll: scrollOn, internal: showInternal } = appSettings;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** "Axis settings & curves" open for one joystick / gamepad slot (Devices view) */
+  const [axisFor, setAxisFor] = useState<{ slot: 'js' | 'gp'; instance: number } | null>(null);
   const [selGroup, setSelGroup] = useState<string | null>(null);
   const [selMap, setSelMap] = useState<string | null>(null);
   const [view, setView] = useState<View>('list');
@@ -119,7 +128,7 @@ export default function App() {
   const [capture, setCapture] = useState<CaptureRequest | null>(null);
   const [editorId, setEditorId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [devicesOpen, setDevicesOpen] = useState<false | 'slots' | 'settings'>(false);
+  const [devicesOpen, setDevicesOpen] = useState<false | 'slots'>(false);
   const [deleting, setDeleting] = useState(false);
   // which keyboard / mouse slot (kb1, kb2… / mo1, mo2…) the Keyboard view shows and captures go to, when there are several
   const [kbInst, setKbInst] = useState(1);
@@ -261,7 +270,7 @@ export default function App() {
 
   // ---- editing --------------------------------------------------------------
   /** Apply a change to the active profile's rebinds (creating a profile from the defaults if needed) and record undo */
-  const applyEdit = useCallback((label: string, touched: { map: string; action: string }[], fn: (r: RebindMap) => RebindMap) => {
+  const applyEdit = useCallback((label: string, touched: { map: string; action: string }[], fn: (r: RebindMap) => RebindMap, extra?: Pick<UndoEntry, 'swap'>) => {
     const s = storeRef.current;
     let prof = s.profiles.find((p) => p.id === s.activeId) ?? null;
     let profiles = s.profiles;
@@ -277,7 +286,7 @@ export default function App() {
     const ns = { profiles: profiles.map((p) => (p.id === next.id ? next : p)), activeId: next.id };
     storeRef.current = ns;
     setStore(ns);
-    setUndo((u) => [...u.slice(-199), { profileId: next.id, label, before }]);
+    setUndo((u) => [...u.slice(-199), { profileId: next.id, label, before, ...extra }]);
     if (created) setSlotStore((st) => ({ ...st, [next.id]: st[DEFAULTS_SLOT_KEY] ?? emptySlotMap() })); // the slots set up on the defaults move along
     if (created) setToast({ kind: 'ok', text: `Created profile “${next.name}” from the game defaults. Edits are saved there.` });
   }, []);
@@ -313,7 +322,8 @@ export default function App() {
     const s = storeRef.current;
     const u = undoRef.current;
     let i = u.length - 1;
-    for (; i >= 0; i--) if (u[i].profileId === s.activeId && (!rowId || u[i].before.some((b) => `${b.map}/${b.action}` === rowId))) break;
+    // (a slot reorder is undone as a whole only, never per action)
+    for (; i >= 0; i--) if (u[i].profileId === s.activeId && (!rowId || (!u[i].swap && u[i].before.some((b) => `${b.map}/${b.action}` === rowId)))) break;
     if (i < 0) return;
     const entry = u[i];
     const items = rowId ? entry.before.filter((b) => `${b.map}/${b.action}` === rowId) : entry.before;
@@ -325,11 +335,12 @@ export default function App() {
     const ns = { ...s, profiles: s.profiles.map((p) => (p.id === next.id ? next : p)) };
     storeRef.current = ns;
     setStore(ns);
+    if (entry.swap && !rowId) swapMetaRef.current(entry.swap.slot, entry.swap.a, entry.swap.b);
     const rest = rowId ? entry.before.filter((b) => `${b.map}/${b.action}` !== rowId) : [];
     setUndo([...u.slice(0, i), ...(rest.length ? [{ ...entry, before: rest }] : []), ...u.slice(i + 1)]);
     setToast({ kind: 'ok', text: `Undone: ${entry.label}` });
   }, []);
-  const canUndoRow = (rowId: string) => undo.some((e) => e.profileId === store.activeId && e.before.some((b) => `${b.map}/${b.action}` === rowId));
+  const canUndoRow = (rowId: string) => undo.some((e) => e.profileId === store.activeId && !e.swap && e.before.some((b) => `${b.map}/${b.action}` === rowId));
   const undoCount = undo.filter((e) => e.profileId === store.activeId).length;
 
   const onCaptureCell = useCallback((row: Row, device: Device, b?: Binding) => {
@@ -427,6 +438,35 @@ export default function App() {
     applyEdit(`${o.move ? 'Move' : 'Copy'} ${slotId(from)} bindings to ${slotId(to)}`, r.touched, () => r.rebinds);
     setToast({ kind: 'ok', text: `${o.move ? 'Moved' : 'Copied'} ${r.copied} binding${r.copied === 1 ? '' : 's'} from ${slotId(from)} to ${slotId(to)}${r.replaced ? `, replaced ${r.replaced}` : ''}` });
   }, [applyEdit]);
+  /** the non-binding half of a slot swap on the active profile (its own inverse): slot map, imported device list, axis-settings blocks */
+  const swapSlotMeta = useCallback((slot: Slot, a: number, b: number) => {
+    const s = storeRef.current;
+    const prof = s.profiles.find((p) => p.id === s.activeId);
+    if (prof) {
+      const { optionsXml: _legacy, ...rest } = prof;
+      void _legacy;
+      const next = { ...rest, devices: swapProfileDevices(prof.devices, slot, a, b), settings: swapOptionInstances(settingsOf(prof), EXPORT_TYPE[slot], a, b) };
+      const ns = { ...s, profiles: s.profiles.map((p) => (p.id === next.id ? next : p)) };
+      storeRef.current = ns;
+      setStore(ns);
+    }
+    updateSlots((m) => swapSlots(m, slot, a, b));
+  }, [updateSlots]);
+  const swapMetaRef = useRef(swapSlotMeta);
+  useLayoutEffect(() => { swapMetaRef.current = swapSlotMeta; }, [swapSlotMeta]);
+  /** move a js / gp slot up or down: it swaps numbers with its neighbour, bindings, hardware, template and axis settings included */
+  const moveSlotNow = useCallback((gs: GameSlot, dir: -1 | 1) => {
+    const other = neighbourSlot(slotMap, gs, dir);
+    if (!other) return;
+    const { slot } = gs, a = gs.instance, b = other.instance;
+    const prof = curProfile();
+    const r = swapSlotBindings(prof?.rebinds ?? {}, IDX, slot, a, b);
+    const label = `Swap ${slot}${a} and ${slot}${b}`;
+    if (prof || r.touched.length) applyEdit(label, r.touched, () => r.rebinds, { swap: { slot, a, b } });
+    swapSlotMeta(slot, a, b);
+    setToast({ kind: 'ok', text: `${label}: ${slotDeviceName(gs) ?? `${slot}${a}`} is now ${slot}${b}${r.moved ? `, ${r.moved} binding${r.moved === 1 ? '' : 's'} moved with it` : ''} (Undo reverts it)` });
+  }, [slotMap, applyEdit, swapSlotMeta]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastSwap = undo.length && undo[undo.length - 1].profileId === store.activeId && undo[undo.length - 1].swap ? undo[undo.length - 1].label : undefined;
   const slotActions: SlotActions = useMemo(() => ({
     map: slotMap,
     known: knownHardware(slotStore),
@@ -437,7 +477,10 @@ export default function App() {
     count: (gs) => slotBindingCount(curProfile()?.rebinds ?? {}, gs),
     plan: (from, to) => planCopy(curProfile()?.rebinds ?? {}, IDX, from, to),
     copy: copySlotNow,
-  }), [slotMap, slotStore, updateSlots, removeSlotNow, copySlotNow]); // eslint-disable-line react-hooks/exhaustive-deps
+    move: moveSlotNow,
+    lastMove: lastSwap,
+    undoMove: () => undoLast(),
+  }), [slotMap, slotStore, updateSlots, removeSlotNow, copySlotNow, moveSlotNow, lastSwap, undoLast]); // eslint-disable-line react-hooks/exhaustive-deps
   /** the capture dialog's "this controller is js n" picker: puts the controller into that slot (adding it if needed) */
   const assignPad = useCallback((key: string, v: { kind?: PadKind; instance?: number }) => {
     const pad = pads.find((p) => p.key === key);
@@ -460,7 +503,7 @@ export default function App() {
   const onPickSlotTemplate = useCallback((gs: GameSlot, id: string | null) => updateSlots((m) => setSlotTemplate(m, gs, id)), [updateSlots]);
 
   const hot = useRef({ capture: false, undo: undoLast });
-  useLayoutEffect(() => { hot.current = { capture: !!capture || !!editorId || exportOpen || !!devicesOpen || settingsOpen, undo: undoLast }; }, [capture, editorId, exportOpen, devicesOpen, settingsOpen, undoLast]);
+  useLayoutEffect(() => { hot.current = { capture: !!capture || !!editorId || exportOpen || !!devicesOpen || settingsOpen || !!axisFor, undo: undoLast }; }, [capture, editorId, exportOpen, devicesOpen, settingsOpen, axisFor, undoLast]);
 
   // ---- press-to-search: the next controller input / key / mouse button becomes an exact input filter
   const onPressHit = useCallback((h: PressHit) => {
@@ -471,7 +514,7 @@ export default function App() {
   usePadHits(pressMode, describePads, onPressHit);
   useKeyHits(pressMode, 'capture', onPressHit, stopPress);
   // ---- live highlight: when nothing else is listening, pressing an input flashes its bindings
-  const passiveOn = view !== 'devices' && highlightOn && !query && !chip && !pressMode && !(editMode && vf.edit) && !capture && !editorId && !exportOpen && !devicesOpen && !settingsOpen && !help;
+  const passiveOn = view !== 'devices' && highlightOn && !query && !chip && !pressMode && !(editMode && vf.edit) && !capture && !editorId && !exportOpen && !devicesOpen && !settingsOpen && !axisFor && !help;
   const onFlash = useCallback((h: PressHit) => {
     setFlash(null);
     requestAnimationFrame(() => setFlash({ hit: h, keys: hitKeys(h), at: Date.now() }));
@@ -561,7 +604,7 @@ export default function App() {
       connected={(gs) => !!gs.hw && pads.some((p) => p.key === gs.hw!.key)}
       onSelect={(id) => setStore((s) => ({ ...s, activeId: id }))} onImport={() => fileRef.current?.click()} onExport={() => setExportOpen(true)}
       onDelete={() => setDeleting(true)} onNew={() => createLayout(false)} onDuplicate={() => createLayout(true)} onRevert={profile?.original ? revertImported : undefined}
-      onResetAll={resetAll} onOpenSlots={() => setDevicesOpen('slots')} onOpenCurves={() => setDevicesOpen('settings')} />
+      onResetAll={resetAll} onOpenSlots={() => setDevicesOpen('slots')} />
   );
 
   return (
@@ -736,7 +779,7 @@ export default function App() {
             flash={flash && (flash.hit.slot === 'kb' || flash.hit.slot === 'mo') ? { combo: flash.hit.inputs[0], at: flash.at } : null} />}
           {view === 'devices' && <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads}
             slots={deviceSlots} slotMap={slotMap} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => setDevicesOpen('slots')} highlight={highlightOn} scroll={highlightOn && scrollOn}
-            query={dq} chip={chip} onPickKey={pickInput}
+            query={dq} chip={chip} onOpenAxis={(gs) => setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance })} axisLimit={AXIS_LIMIT}
             onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })} />}
           {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} hasProfile={!!profile} flash={flash?.keys} />}
         </main>
@@ -779,13 +822,20 @@ export default function App() {
       )}
       {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} devices={exportDevices} slots={exportSlots} onClose={() => setExportOpen(false)} />}
       {devicesOpen && (
-        <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(false)}
-          settings={settingsOf(profile)} tree={DEFAULTS.optionTrees?.joystick} onSettings={applySettings} initialTab={devicesOpen === 'settings' ? 'settings' : 'slots'} />
+        <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(false)} />
       )}
       {deleting && profile && (
         <DeleteProfileDialog profile={profile} slotCount={slotMap.slots.length} onCancel={() => setDeleting(false)} onExport={() => { setDeleting(false); setExportOpen(true); }}
           onConfirm={() => { const name = profile.name; removeProfile(profile.id); setDeleting(false); setToast({ kind: 'ok', text: `Deleted “${name}”` }); }} />
       )}
+      {axisFor && (() => {
+        const gs = slotMap.slots.find((x) => x.slot === axisFor.slot && x.instance === axisFor.instance);
+        const pad = gs?.hw ? pads.find((p) => p.key === gs.hw!.key) : undefined;
+        const type = axisFor.slot === 'gp' ? 'gamepad' : 'joystick';
+        return <AxisSettingsModal slotLabel={`${axisFor.slot}${axisFor.instance}`} deviceName={pad?.name ?? (gs ? slotDeviceName(gs) : undefined)} onClose={() => setAxisFor(null)}
+          profile={profile} settings={settingsOf(profile)} tree={DEFAULTS.optionTrees?.[type]} pads={pads} onChange={applySettings}
+          type={type} instance={axisFor.instance} product={gs?.gameRawProduct ?? gs?.gameProduct ?? pad?.product} />;
+      })()}
       {settingsOpen && <SettingsModal settings={appSettings} onChange={setAppSettings} onClose={() => setSettingsOpen(false)} meta={meta} versionLabel={versionLabel} />}
     </div>
   );
@@ -850,7 +900,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
           <li><b className="text-slate-200">Edit</b> (List view toolbar): click any binding to rebind it, <b>+</b> to add one, the cross to unbind, or an action name for the full editor (activation mode, taps, reset). Ctrl+Z undoes.</li>
           <li>Keyboard, mouse, gamepads and joysticks/HOTAS are captured live. Controllers use the browser&apos;s Gamepad API; press a button first so the browser reveals them. <b className="text-slate-200">Game slots &amp; controllers</b> (in the profile panel) lists the game slots (kb1, mo1, js1, js2…, gp1) with the hardware and template for each, and has a live input tester.</li>
           <li><b className="text-slate-200">Find by pressing</b> (the target icon inside the search box): press a controller button, hat or axis, or a key, and the current view narrows to that exact input (on Devices it jumps to that control). With <b>Highlight on press</b> on (Settings), pressing an input while you&apos;re not searching or editing briefly highlights its bindings, keys, conflict groups or device callouts.</li>
-          <li><b className="text-slate-200">Axis settings &amp; curves</b> (profile panel, or the Controllers modal&apos;s second tab): invert, exponent and custom response curves per control, and deadzone / saturation per axis, read from and written back to your file.</li>
+          <li><b className="text-slate-200">Axis settings &amp; curves</b> (the button on each joystick / gamepad slot in the Devices view): invert, exponent and custom response curves per control, and deadzone / saturation per axis, read from and written back to your file.</li>
           <li><b className="text-slate-200">Export</b> (profile panel) writes <code>layout_&lt;name&gt;_exported.xml</code> for <code>…\user\client\0\Controls\Mappings</code> (load via Options → Keybindings → Control Profiles, or <code>pp_RebindKeys</code>) or a full <code>actionmaps.xml</code>. Only changes from the defaults are written.</li>
         </ul>
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-xs text-slate-400">

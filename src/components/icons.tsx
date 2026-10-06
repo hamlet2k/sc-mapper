@@ -35,6 +35,7 @@ export const ICONS = {
   check: 'M4.5 12.5l5 5 10-11',
   chevronDown: 'M6 9l6 6 6-6',
   chevronRight: 'M9 6l6 6-6 6',
+  chevronUp: 'M6 15l6-6 6 6',
   curve: 'M3.5 3.5v17h17M6.5 17.5c4.5 0 6-11 11-11',
   slots: `${rr(3, 3, 18, 18, 2)}M3 9h18M3 15h18M9 3v18`,
   image: `${rr(3, 4.5, 18, 15, 1.5)}${c(8.5, 9.5, 1.5)}M21 15.5l-5-5-9.5 9`,

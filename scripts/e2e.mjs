@@ -172,17 +172,31 @@ check(await panel.count() === 0, 'Esc closes the controllers modal');
 // ===================== device settings: invert / exponent / curve / deadzone =====================
 console.log('\ndevice settings & curve editor');
 await page.getByTestId('open-slots').click();
-await panel.getByTestId('tab-settings').click();
-const ds = page.getByTestId('device-settings');
-check(await ds.isVisible(), 'settings tab opens');
-check(await ds.getByTestId('settings-js9').count() === 0 && await ds.getByTestId('settings-js8').count() === 1, 'settings limited to js1–js8 like the game');
+check(await panel.getByTestId('tab-settings').count() === 0 && await panel.getByTestId('tab-tester').count() === 1, 'controllers modal: no Axis settings tab any more (Game slots + Input tester)');
+await page.keyboard.press('Escape');
+check(await page.getByTestId('open-curves').count() === 0, 'no "Axis settings & curves" link under the profile card');
+await page.locator('[data-view-tab=devices]').click();
+await page.waitForTimeout(600);
+const pickChip = async (id) => { await page.getByTestId('device-slot-strip').locator(`[data-slot-chip="${id}"]`).click(); await page.waitForTimeout(250); };
+const axisModal = page.getByTestId('axis-settings-modal');
+const ds = axisModal.getByTestId('device-settings');
+const openAxis = async (id) => { await pickChip(id); await page.getByTestId('slot-axis-settings').click(); await page.waitForTimeout(250); };
+const closeAxis = async () => { await axisModal.getByRole('button', { name: 'Close' }).first().click(); await page.waitForTimeout(150); };
+await openAxis('js1');
+check(await axisModal.isVisible() && (await ds.getAttribute('data-instance')) === 'js1' && /EVO R/.test(await axisModal.innerText()), 'Axis settings & curves opens from the js1 slot in the Devices view, scoped to js1 (EVO R)');
+check(await ds.locator('[data-testid^=settings-js]').count() === 0, 'only that device: no joystick tabs in the editor');
 const grp = (n) => ds.locator(`[data-testid=settings-groups] button[data-group="${n}"]`);
 check((await grp('flight_move_yaw').innerText()).includes('exp 1.3000001'), 'imported js1 flight_move_yaw exponent shown');
-await ds.getByTestId('settings-js2').click();
+await closeAxis();
+check(await axisModal.count() === 0, 'Close closes it');
+await openAxis('js2');
+check((await ds.getAttribute('data-instance')) === 'js2' && /EVO L/.test(await axisModal.innerText()), 'the js2 slot opens js2 (EVO L)');
 check((await grp('flight_move_strafe_vertical').innerText()).includes('curve 4pt') && (await grp('flight_move_strafe_vertical').innerText()).includes('inverted'), 'imported js2 strafe vertical invert + 4-point curve shown');
 check((await ds.getByLabel('saturation x').count()) === 1, 'axis table shown for js2');
-await ds.getByTestId('settings-js1').click();
+await page.keyboard.press('Escape');
 await page.waitForTimeout(150);
+check(await axisModal.count() === 0, 'Esc closes the axis settings');
+await openAxis('js1');
 check((await ds.getByLabel('saturation x').inputValue()) === '0.94050002', 'imported EVO R x saturation shown');
 await grp('flight_move_pitch').click();
 const ge = ds.getByTestId('group-editor');
@@ -208,6 +222,7 @@ if (npts) {
   await page.mouse.up();
 }
 check(npts >= 3, `curve points are draggable handles (${npts})`);
+await page.screenshot({ path: shots + '112-axis-settings-from-slot.png' });
 await ds.getByLabel('deadzone x').fill('0.05');
 await ds.getByLabel('deadzone x').press('Enter');
 await ge.getByLabel('Preview axis').selectOption('x');
@@ -244,7 +259,9 @@ await page.waitForTimeout(150);
 await ds.locator('tr[data-axis="x"]').scrollIntoViewIfNeeded();
 await ds.screenshot({ path: shots + '23-axis-sliders.png' });
 await page.evaluate(() => window.__axis(1, 0, 0));
-await panel.getByRole('button', { name: 'Close' }).first().click();
+await closeAxis();
+await page.locator('[data-view-tab=list]').click();
+await page.waitForTimeout(200);
 await page.getByTestId('profile-export').click();
 {
   const [d] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-download').click()]);
@@ -570,6 +587,7 @@ await page.waitForTimeout(300);
 check(await page.getByTestId('km-slot-kb').isVisible(), 'Keyboard view gets a kb1 / kb2 picker in its View section');
 await page.locator('[data-km-slot=kb2]').click();
 await page.waitForTimeout(250);
+await page.screenshot({ path: shots + '112-keyboard-kb-mo-picker.png' });
 const boundKeys = async () => page.locator('#main button[title]').evaluateAll((bs) => bs.filter((b) => /: [1-9]\d* actions?$/.test(b.title)).map((b) => b.title));
 const kb2Keys = (await boundKeys()).filter((t) => !/^(LMB|MMB|RMB|Wheel|Mouse|M\d)/.test(t)); // the mouse block follows the mouse slot (mo1)
 check(kb2Keys.length === 1 && /^J:/.test(kb2Keys[0]), `kb2 keyboard shows only kb2 bindings (${kb2Keys.join(', ')})`);
@@ -579,9 +597,10 @@ check((await boundKeys()).length > 50, 'kb1 keyboard shows the kb1 bindings');
 await page.locator('[data-view-tab=list]').click();
 await page.getByTestId('open-slots').click();
 const kb2Row = page.locator('[data-testid=slot-row][data-slot=kb2]');
-check(/1 yours/.test(await kb2Row.getByTestId('slot-count').innerText()), `copy count shows your own bindings (${await kb2Row.getByTestId('slot-count').innerText()})`);
+check(/^Copy bindings\s*\(1 custom\)$/.test((await kb2Row.getByTestId('slot-copy').innerText()).trim()) && /1 custom binding \(ones you changed or added/.test(await kb2Row.getByTestId('slot-copy').getAttribute('title')), `copy button: "Copy bindings (1 custom)" with an explaining tooltip (${(await kb2Row.getByTestId('slot-copy').innerText()).trim()})`);
+check(!/yours/.test(await page.getByTestId('controllers-panel').innerText()), 'no "yours" wording left in the slots modal');
 await kb2Row.getByTestId('slot-copy').click();
-check(await page.getByTestId('copy-bindings').isVisible() && /1 yours/.test(await page.getByTestId('copy-bindings').innerText()), 'copy dialog splits yours vs game defaults');
+check(await page.getByTestId('copy-bindings').isVisible() && /1 custom binding\b/.test(await page.getByTestId('copy-preview').innerText()) && !/yours/.test(await page.getByTestId('copy-bindings').innerText()), `copy dialog says "custom bindings" (${(await page.getByTestId('copy-preview').innerText()).split('.')[0]})`);
 await page.keyboard.press('Escape');
 await page.waitForTimeout(150);
 check(await page.getByTestId('copy-bindings').count() === 0 && await page.getByTestId('controllers-panel').isVisible(), 'Esc closes the Copy dialog only');
@@ -630,11 +649,54 @@ await page.waitForTimeout(600);
 check(await dv.isVisible(), 'devices view opens');
 const slotChip = async (id) => { await page.getByTestId('device-slot-strip').locator(`[data-slot-chip="${id}"]`).click(); await page.waitForTimeout(200); };
 const dopts = (await page.getByTestId('device-slot-strip').locator('[data-slot-chip]').allInnerTexts()).map((x) => x.replace(/\s+/g, ' ').trim());
-check(dopts.some((o) => /^JS1 VKBsim Gladiator EVO R/.test(o)) && dopts.some((o) => /^JS2 VKBsim Gladiator EVO L/.test(o)) && dopts.some((o) => /^GP1/.test(o)) && dopts.some((o) => /^KB1/.test(o)), `inline slot strip lists kb/mo/js/gp slots with their hardware (${dopts.join(' | ')})`);
-check(await page.getByTestId('device-slot-bar').getByTestId('device-manage-slots').isVisible(), 'slot bar links to the full Game slots & controllers modal');
+check(dopts.some((o) => /^JS1 VKBsim Gladiator EVO R/.test(o)) && dopts.some((o) => /^JS2 VKBsim Gladiator EVO L/.test(o)) && dopts.some((o) => /^GP1/.test(o)), `inline slot strip lists the js/gp slots with their hardware (${dopts.join(' | ')})`);
+check(!dopts.some((o) => /^(KB|MO)\d/.test(o)), 'no kb / mo slots in the Devices slot bar (they live in the Keyboard view)');
+check(await page.getByTestId('device-manage-slots').count() === 0, 'no "Game slots & controllers…" link in the slot bar (the profile card button is the entry point)');
 await slotChip('js1');
 check(/VKBsim Gladiator EVO R/.test(await page.getByTestId('device-hardware').innerText()), 'slot bar shows the hardware assigned to js1');
 await page.waitForTimeout(300);
+{ // the template line: dropdown + icon groups (template tools | picture tools) on the same line, and the slot's axis settings CTA
+  const bar = page.getByTestId('device-slot-bar');
+  const line = bar.getByTestId('template-line');
+  const tools = line.getByTestId('template-tools'), pic = line.getByTestId('picture-tools');
+  const labels = await tools.locator('button').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')));
+  const titlesOk = await line.locator('button').evaluateAll((bs) => bs.every((b) => b.title && b.title === b.getAttribute('aria-label') && !b.innerText.trim()));
+  check(await line.getByTestId('template-select').isVisible() && labels.length === 4 && /Customize a copy|Edit this template/.test(labels[0]) && /^New/.test(labels[1]) && /^Import/.test(labels[2]) && /^Export/.test(labels[3]),
+    `template group: Customize a copy, New, Import, Export as icon buttons next to the Template dropdown (${labels.join(' | ')})`);
+  check(await pic.locator('button').count() === 2 && /PNG/.test(await pic.getByTestId('device-png').getAttribute('aria-label')) && /Print/.test(await pic.getByTestId('device-print').getAttribute('aria-label')), 'second group: PNG, Print');
+  check(titlesOk, 'icon buttons: icon only, with a tooltip and the same accessible name');
+  const [sb, tb, pb] = await Promise.all([line.getByTestId('template-select').boundingBox(), tools.boundingBox(), pic.boundingBox()]);
+  check(Math.abs((sb.y + sb.height / 2) - (tb.y + tb.height / 2)) < 6 && Math.abs((tb.y + tb.height / 2) - (pb.y + pb.height / 2)) < 6 && pb.x - (tb.x + tb.width) >= 12, `dropdown and both groups on one line, the groups visibly apart (gap ${Math.round(pb.x - tb.x - tb.width)} px)`);
+  check(await dv.getByTestId('device-slot-view').getByTestId('template-tools').count() === 1 && await bar.locator('[data-testid=template-tools]').count() === 1, 'no separate template button row any more');
+  const cta = bar.getByTestId('slot-axis-settings');
+  check(await cta.isEnabled() && /Axis settings & curves for js1/.test(await cta.getAttribute('aria-label')), 'js1: "Axis settings & curves" CTA in the slot bar, enabled');
+  await page.screenshot({ path: shots + '112-devices-slot-bar.png' });
+  await bar.screenshot({ path: shots + '112-devices-slot-bar-closeup.png' });
+  await slotChip('gp1');
+  check(await cta.isEnabled() && await bar.getByTestId('axis-locked').count() === 0, 'gp1: CTA enabled (the game keeps gamepad settings for gp1)');
+  await cta.click();
+  await page.waitForTimeout(250);
+  const gm = page.getByTestId('axis-settings-modal');
+  check((await gm.getByTestId('device-settings').getAttribute('data-instance')) === 'gp1' && await gm.getByTestId('axis-table').count() === 0 && await gm.locator('[data-group="fps_view_pitch"]').count() === 1,
+    'gp1 axis settings use the gamepad option tree, without the joystick deadzone table');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  await slotChip('js1');
+}
+{ // copy dialog wording: custom bindings vs game defaults
+  await page.getByTestId('open-slots').click();
+  const r1 = page.locator('[data-testid=slot-row][data-slot=js1]');
+  const btn = (await r1.getByTestId('slot-copy').innerText()).trim();
+  check(/^Copy bindings\s*\(\d+ custom\)$/.test(btn), `js1 copy button: "${btn}"`);
+  await r1.getByTestId('slot-copy').click();
+  const prev = await page.getByTestId('copy-preview').innerText();
+  check(/\d+ custom bindings? and \d+ game defaults? on js1/.test(prev), `copy dialog: "N custom bindings and M game defaults" (${prev.split('.')[0]})`);
+  await page.getByTestId('copy-bindings').screenshot({ path: shots + '112-copy-dialog-wording.png' });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+}
 { // the EVO R is a VKB Gladiator: its own drawing loads on demand; VKB numbering is configurable, so the callouts start unassigned
   await page.waitForTimeout(500);
   const st = await dv.getByTestId('device-status').innerText();
@@ -990,6 +1052,90 @@ await fp.waitForTimeout(400);
   await fp.screenshot({ path: shots + '26-grip-swap-highlight-off.png', fullPage: false });
   await fp.evaluate(() => window.__btn(12, 65, false));
   check(/Combat/.test(g0) && /Airbus/.test(g1) && lit === 0, `highlight off: pressing Airbus grip button 66 still swaps the photo (${g0} -> ${g1}), nothing lights up`);
+  await fp.getByTestId('open-settings').click();
+  await fp.getByTestId('setting-highlight').click();
+  await fp.keyboard.press('Escape');
+}
+// ---- slot order: move up / down (swap numbers, everything follows, undoable) and the game's js1–js8 axis-settings limit
+console.log('\nslot order & axis settings limit (Firefox, 10 joysticks)');
+{
+  await fp.getByTestId('open-slots').click();
+  await fp.waitForTimeout(200);
+  for (let k = 0; k < 8; k++) { await fpanel.locator('[data-testid=hw-row]').getByRole('button', { name: /as js\d+/ }).first().click(); await fp.waitForTimeout(120); }
+  await fp.keyboard.press('Escape');
+  await fp.getByTestId('profile-more').click();
+  await fp.getByTestId('profile-menu').getByText('New profile from the game defaults').click();
+  await fp.waitForTimeout(300);
+  await fp.getByTestId('open-slots').click();
+  const fRow = (id) => fpanel.locator(`[data-testid=slot-row][data-slot="${id}"]`);
+  const fHw = async (id) => fRow(id).getByTestId('slot-hw').evaluate((s) => s.options[s.selectedIndex]?.text ?? '');
+  const jsRows = await fpanel.locator('[data-testid=slot-row][data-slot^=js]').count();
+  check(jsRows === 10, `new profile from the defaults keeps the 10 joystick slots (${jsRows})`);
+  check(await fRow('js1').getByTestId('slot-move-up').isDisabled() && await fRow('js1').getByTestId('slot-move-down').isEnabled() && await fRow('js10').getByTestId('slot-move-down').isDisabled(),
+    'move arrows on joystick rows: js1 can\'t go up, js10 can\'t go down');
+  check(await fRow('kb1').getByTestId('slot-move-up').count() === 0, 'no move arrows on keyboard / mouse rows');
+  const hw1 = await fHw('js1'), hw2 = await fHw('js2');
+  await fp.keyboard.press('Escape');
+  // an axis setting on js1, to see it travel with the device
+  await fp.locator('[data-view-tab=devices]').click();
+  await fp.waitForTimeout(400);
+  const fchipSel = async (id) => { await fp.getByTestId('device-slot-strip').locator(`[data-slot-chip="${id}"]`).click(); await fp.waitForTimeout(250); };
+  const fam = fp.getByTestId('axis-settings-modal');
+  const pitchOf = async (id) => { await fchipSel(id); await fp.getByTestId('slot-axis-settings').click(); await fp.waitForTimeout(200); const t = await fam.locator('[data-testid=settings-groups] button[data-group="flight_move_pitch"]').innerText(); await fam.getByRole('button', { name: 'Close' }).first().click(); await fp.waitForTimeout(120); return t; };
+  await fchipSel('js1');
+  await fp.getByTestId('slot-axis-settings').click();
+  await fam.locator('[data-testid=settings-groups] button[data-group="flight_move_pitch"]').click();
+  await fam.getByTestId('group-editor').getByLabel('Invert').selectOption('1');
+  await fam.getByRole('button', { name: 'Close' }).first().click();
+  // a template pick and a binding of your own on js1, to see them travel too
+  const fdv = fp.getByTestId('device-view');
+  await fdv.getByTestId('template-select').selectOption('builtin-stick');
+  await fp.waitForTimeout(300);
+  await fdv.locator('[data-callout="b6"]').click();
+  const fip = fdv.getByTestId('input-panel');
+  await fip.getByLabel('Search actions to bind').fill('landing system');
+  await fip.getByTestId('bind-results').locator('button').first().click();
+  await fp.waitForTimeout(300);
+  // js9: the game keeps axis / curve settings for js1–js8 only
+  await fchipSel('js9');
+  const fbar = fp.getByTestId('device-slot-bar');
+  check(await fbar.getByTestId('slot-axis-settings').isDisabled() && /first 8/.test(await fbar.getByTestId('axis-locked').innerText()) && /reorder/i.test(await fbar.getByTestId('axis-locked').innerText()),
+    `js9: Axis settings CTA disabled, explaining the first-8 limit (${(await fbar.getByTestId('axis-locked').innerText()).slice(0, 80)}…)`);
+  await fp.screenshot({ path: shots + '112-devices-js9-axis-locked.png' });
+  await fbar.getByTestId('axis-reorder').click();
+  await fp.waitForTimeout(250);
+  check(await fpanel.isVisible() && await fpanel.getByTestId('slots-tab').isVisible(), 'the reorder button opens Game slots & controllers');
+  const hw9 = await fHw('js9');
+  const c1 = await fRow('js1').getByTestId('slot-count').innerText().catch(() => '');
+  // move js1 down: js1 <> js2 swap hardware and bindings
+  await fRow('js1').getByTestId('slot-move-down').click();
+  await fp.waitForTimeout(300);
+  check((await fHw('js2')) === hw1 && (await fHw('js1')) === hw2, `move down: js1's hardware is now js2 and the other way round (${hw1.slice(0, 30)} / ${hw2.slice(0, 30)})`);
+  const c2 = await fRow('js2').getByTestId('slot-count').innerText().catch(() => '');
+  check(/^\(\d+ custom\)$/.test(c1) && c2 === c1 && await fRow('js1').getByTestId('slot-count').count() === 0, `your js1 bindings moved to js2 (${c1} -> ${c2}); none left on js1 (game defaults stay on their number)`);
+  check((await fRow('js2').getByTestId('slot-template').inputValue()) === 'builtin-stick' && (await fRow('js1').getByTestId('slot-template').inputValue()) === '', 'the template pick moved with it');
+  check(/Swap js1 and js2/.test(await fpanel.getByTestId('slot-move-notice').innerText()), 'swap notice with Undo');
+  await fpanel.evaluate((el) => el.scrollTo(0, 0));
+  await fp.screenshot({ path: shots + '112-game-slots-move-arrows.png' });
+  await fpanel.getByTestId('slot-move-undo').click();
+  await fp.waitForTimeout(300);
+  check((await fHw('js1')) === hw1 && (await fHw('js2')) === hw2 && await fRow('js2').getByTestId('slot-count').count() === 0 && (await fRow('js1').getByTestId('slot-count').innerText()) === c1 && await fpanel.getByTestId('slot-move-notice').count() === 0, 'Undo reverts the swap (hardware, bindings)');
+  await fRow('js2').getByTestId('slot-move-up').click(); // the same swap from the other row
+  await fp.waitForTimeout(300);
+  check((await fHw('js2')) === hw1, 'move up on js2 swaps it with js1');
+  await fRow('js9').getByTestId('slot-move-up').click();
+  await fp.waitForTimeout(300);
+  check((await fHw('js8')) === hw9, `js9 moved up: its device is js8 now (${hw9})`);
+  await fp.keyboard.press('Escape');
+  await fp.waitForTimeout(200);
+  check(/inverted/.test(await pitchOf('js2')) && !/inverted/.test(await pitchOf('js1')), 'axis settings followed the device: the js1 pitch inversion is on js2 now');
+  await fchipSel('js8');
+  check(await fbar.getByTestId('slot-axis-settings').isEnabled() && await fbar.getByTestId('axis-locked').count() === 0, 'the device moved to js8 can be customized now');
+  await fp.evaluate(() => document.activeElement?.blur());
+  await fp.keyboard.press('Control+z'); // js9 -> js8 swap
+  await fp.keyboard.press('Control+z'); // js1 <> js2 swap
+  await fp.waitForTimeout(300);
+  check(/inverted/.test(await pitchOf('js1')) && !/inverted/.test(await pitchOf('js2')), 'Ctrl+Z undoes the swaps, axis settings included');
 }
 await ff.close();
 

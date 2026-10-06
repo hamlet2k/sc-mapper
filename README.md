@@ -52,8 +52,9 @@ keyboard / mouse / gamepad / joystick capture, and export a file the game loads.
   Only bindings that differ from the defaults are written. Cleared defaults become an empty input (`kb1_ `). Device `<options>` blocks
   from imported files (curves, inverts, deadzones) are kept, and joystick names and product GUIDs are added for controllers seen in the browser.
   Re-exporting a real game-written layout reproduces it byte for byte (see tests).
-- **📈 Axis settings & curves** (🕹 Controllers → *Axis settings & curves*, or the edit bar): per joystick number **js1–js8** (the game's
-  option tree declares 8 joystick instances; higher numbers can be bound but have no settings), every control group from the game's
+- **📈 Axis settings & curves** (the button on each joystick / gamepad slot in the Devices view, for that device only): per joystick number
+  **js1–js8** (the game's option tree declares 8 joystick instances; higher numbers can be bound but have no settings: reorder the device in
+  Game slots & controllers to customize it) and for **gp1**, every control group from the game's
   `<optiontree type="joystick">` (Flight pitch/yaw/roll, strafe, throttle, turrets, FPS, EVA, vehicles…) with **invert**, **exponent**
   or a **custom curve** (draggable points, double-click to add, a points table), plus per-axis **deadzone** and **saturation** for the device
   model. A live chart shows the curve against the game default and, for a connected device, the axis position. Settings are read from the

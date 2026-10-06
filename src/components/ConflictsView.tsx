@@ -50,7 +50,7 @@ export function ConflictsView({ groups, onPick, includeDefault, hasProfile, flas
                   <li key={i} className="flex items-start gap-2 text-sm">
                     <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${e.binding.custom ? 'bg-mod' : 'bg-hud/60'}`} />
                     <span className="min-w-0">
-                      <span className="block text-slate-100">{e.row.label}{e.binding.custom && <span className="ml-2 font-mono text-[9px] uppercase text-mod">yours</span>}</span>
+                      <span className="block text-slate-100">{e.row.label}{e.binding.custom && <span className="ml-2 font-mono text-[9px] uppercase text-mod" title="A custom binding: you changed or added it in this profile">custom</span>}</span>
                       <span className="block font-mono text-[10px] text-slate-500">{e.row.mapLabel}{e.binding.mode ? ` · ${prettyMode(e.binding.mode)}` : ''}</span>
                     </span>
                   </li>

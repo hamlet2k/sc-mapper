@@ -8,10 +8,10 @@ import { useEscape } from './useEscape';
  * The profile, in one place: which profile is active, its file actions (import / export / delete, plus new, duplicate,
  * revert, reset) and its game slots with the way into the Controllers modal.
  */
-export function ProfilePanel({ profiles, profile, versionLabel, slots, connected, onSelect, onImport, onExport, onDelete, onNew, onDuplicate, onRevert, onResetAll, onOpenSlots, onOpenCurves }: {
+export function ProfilePanel({ profiles, profile, versionLabel, slots, connected, onSelect, onImport, onExport, onDelete, onNew, onDuplicate, onRevert, onResetAll, onOpenSlots }: {
   profiles: Profile[]; profile: Profile | null; versionLabel: string; slots: GameSlot[]; connected: (gs: GameSlot) => boolean;
   onSelect: (id: string | null) => void; onImport: () => void; onExport: () => void; onDelete: () => void;
-  onNew: () => void; onDuplicate: () => void; onRevert?: () => void; onResetAll: () => void; onOpenSlots: () => void; onOpenCurves: () => void;
+  onNew: () => void; onDuplicate: () => void; onRevert?: () => void; onResetAll: () => void; onOpenSlots: () => void;
 }) {
   const [menu, setMenu] = useState(false);
   useEscape(() => setMenu(false), menu);
@@ -61,9 +61,6 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
         <button type="button" onClick={onOpenSlots} data-testid="open-slots" title="Which device is kb1, js1, js2, gp1… in the game, the hardware for each and its template"
           className="mt-2.5 flex w-full items-center justify-center gap-2 rounded border border-hud/50 bg-hud/10 px-2.5 py-1.5 font-display text-xs font-semibold uppercase tracking-wider text-hud2 transition hover:bg-hud/20 hover:shadow-[0_0_14px_-6px_var(--color-hud)]">
           <Ico name="slots" /> Game slots &amp; controllers
-        </button>
-        <button type="button" onClick={onOpenCurves} data-testid="open-curves" className="mt-1.5 flex w-full items-center justify-center gap-1.5 text-[11px] text-slate-400 hover:text-hud2">
-          <Ico name="curve" /> Axis settings &amp; curves
         </button>
       </div>
     </section>
