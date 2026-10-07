@@ -656,3 +656,13 @@ Federico runs the AB6 base with three grips besides the MHG: MOZA MH16, WinCtrl 
 - Photos: Federico's pictures, cut out with `scripts/device-photos/cutout.py` (entries in `views.json`; the three front views are crops of his three-grips photo). Positions placed by eye.
 - To check on the hardware: CarrierAce support on the AB6 (not on MOZA's supported-grip list), the MH16 numbers (taken from an AB9 Cockpit screenshot), the ViperAce EX wheel / hall trigger 41/42 vs SimAppPro's 42/43, and where button 6 (CarrierAce rear button) and 3 / 5 (MH16 FOV / NWS) physically sit.
 - Screenshots: `133`-`139` (each photo page of each variant), `140-ab6-grip-variant-picked.png` (Firefox, the AB6 stick slot with the ViperAce variant picked).
+
+## Support / feedback links and licence (Oct 6, 2026)
+
+- **Header links.** The title row's right side holds, left to right: **Feedback** (GitHub new issue), **GitHub** (repo), **Support** (Ko-fi), a divider, then Settings and Help. `src/components/HeaderLinks.tsx` has the URLs.
+  - Plain `<a target="_blank" rel="noopener noreferrer">` links. No Ko-fi widget script, no iframe, no tracking; nothing is requested from Ko-fi or GitHub until a click (checked in the e2e).
+  - Icons are drawn in the app's line set (`coffee`, `github`, `feedback` in `icons.tsx`): a line octocat silhouette and a coffee cup, not the vendors' artwork.
+  - From `lg` (1024 px) Feedback and Support show a text label; GitHub is always icon-only. Below `lg` all three are icon-only. Each has an `aria-label` naming the target and "(opens in a new tab)", plus a `Tip` bubble on hover / keyboard focus.
+  - Support has a faint accent border and fill so it reads as the "thank you" action without shouting.
+  - To fit at 360 px the title row tightens below `sm` (smaller gaps and padding, title tracking 0.12em), the subtitle truncates with an ellipsis (full text in its `title`), and below 360 px the hex logo hides so the row still fits at 320 px. The title itself never truncates (clipping would cut its glow into a visible box). The e2e checks 420 / 360 px in Chrome and 360 px in Firefox with the title not cut.
+- **Licence.** The source is MIT (`LICENSE`, © 2026 hamlet2k; `"license": "MIT"` in package.json). Third-party software, the U²-Net-p model (Apache-2.0, licence text now in `public/models/`), the game data and the product photos keep their own terms: see `THIRD_PARTY_NOTICES.md`. The build writes the bundled npm packages' licences to `dist/third-party-licenses.md` (`build.license`). The round-6 note about `@imgly/background-removal` still holds: AGPL would require the whole app under AGPL, which MIT doesn't satisfy.

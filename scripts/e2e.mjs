@@ -2456,6 +2456,85 @@ console.log('\nround 9: slot picker in the sidebar, narrow fallback');
   await c9.close();
 }
 
+// ---- header links: Feedback (GitHub issues), GitHub repo, Support (Ko-fi). Plain links, new tab, no widget script
+const HEADER_LINKS = { feedback: 'https://github.com/hamlet2k/sc-mapper/issues/new', github: 'https://github.com/hamlet2k/sc-mapper', support: 'https://ko-fi.com/hamlet2k' };
+/** href / target / rel / accessible name / visible label / box of each header link, plus whether the title row overflows */
+const headerLinkInfo = (pg) => pg.evaluate((ids) => {
+  const row = document.querySelector('header').firstElementChild;
+  const links = Object.fromEntries(ids.map((id) => {
+    const a = document.querySelector(`[data-testid=link-${id}]`);
+    if (!a) return [id, null];
+    const r = a.getBoundingClientRect();
+    return [id, { href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel') ?? '', name: a.getAttribute('aria-label') ?? '', text: a.innerText.trim(), left: r.left, right: r.right, w: r.width, h: r.height, svg: !!a.querySelector('svg') }];
+  }));
+  const title = document.querySelector('[data-testid=app-title]');
+  return { links, rowOverflow: row.scrollWidth > row.clientWidth + 1, titleCut: title.scrollWidth > title.clientWidth + 1, vw: innerWidth, thirdParty: !!document.querySelector('script[src*="ko-fi"], iframe[src*="ko-fi"], script[src*="github"]') };
+}, Object.keys(HEADER_LINKS));
+/** every link: right href, new tab, rel=noopener, an icon, an accessible name naming it, inside the viewport */
+const headerLinksOk = (info, names = { feedback: /Feedback/, github: /GitHub/, support: /Support.*Ko-fi/ }) => Object.entries(HEADER_LINKS).every(([id, href]) => {
+  const l = info.links[id];
+  return l && l.href === href && l.target === '_blank' && /\bnoopener\b/.test(l.rel) && l.svg && names[id].test(l.name) && /new tab/.test(l.name) && l.left >= 0 && l.right <= info.vw && l.w >= 24 && l.h >= 24;
+});
+console.log('\nheader links (Chrome)');
+{
+  const lc = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1 });
+  const lp = await lc.newPage();
+  lp.on('pageerror', (e) => errors.push('[links] ' + String(e)));
+  const outside = [];
+  lp.on('request', (r) => { if (/ko-fi\.com|github\.com/.test(r.url())) outside.push(r.url()); });
+  await lp.goto(url, { waitUntil: 'networkidle' });
+  await lp.evaluate(() => localStorage.clear());
+  await lp.reload({ waitUntil: 'networkidle' });
+  await lp.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+  await lp.waitForTimeout(600);
+  const wide = await headerLinkInfo(lp);
+  check(headerLinksOk(wide) && !wide.rowOverflow, `wide: Feedback, GitHub and Support links in the title row with the right hrefs, target=_blank, rel=noopener (${Object.values(wide.links).map((l) => l.href).join(' · ')})`);
+  check(/^feedback$/i.test(wide.links.feedback.text) && /^support$/i.test(wide.links.support.text) && wide.links.github.text === '', `wide: Feedback and Support carry a text label, GitHub is icon-only (${wide.links.feedback.text} / ${wide.links.support.text})`);
+  check(!wide.thirdParty && outside.length === 0, `no Ko-fi / GitHub widget script, iframe or request on load${outside.length ? ': ' + outside.join(' ') : ''}`);
+  // a click opens the page in a new tab (the outside site is stubbed: no network in the test)
+  await lc.route(/^https:\/\/(ko-fi\.com|github\.com)\//, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>stub</title>' }));
+  const opened = [];
+  for (const id of Object.keys(HEADER_LINKS)) {
+    const [pop] = await Promise.all([lc.waitForEvent('page'), lp.getByTestId(`link-${id}`).click()]);
+    await pop.waitForLoadState().catch(() => {});
+    opened.push(pop.url());
+    await pop.close();
+  }
+  check(opened.join(' ') === Object.values(HEADER_LINKS).join(' ') && lp.url().startsWith(url), `clicking each link opens it in a new tab and the app stays put (${opened.join(' · ')})`);
+  await lp.bringToFront(); // background tabs throttle the tooltip timer
+  await lp.mouse.move(5, 500); // the last click left the pointer on Support (and its pointerdown hid the tip)
+  await lp.getByTestId('link-support').hover();
+  await lp.waitForTimeout(450);
+  const tip = await lp.getByTestId('tip-support').innerText().catch(() => '');
+  check(/Ko-fi/.test(tip) && /new tab/.test(tip), `hovering Support shows a tooltip ("${tip}")`);
+  await lp.screenshot({ path: shots + '160-header-links-wide.png', clip: { x: 0, y: 0, width: 1680, height: 260 } });
+  await lp.mouse.move(5, 500);
+  // narrow: icon-only buttons with aria-labels and tooltips; the title row still fits
+  for (const w of [420, 360]) {
+    await lp.setViewportSize({ width: w, height: 800 });
+    await lp.waitForTimeout(300);
+    const n = await headerLinkInfo(lp);
+    check(headerLinksOk(n) && !n.rowOverflow && !n.titleCut && Object.values(n.links).every((l) => l.text === '') && await lp.getByTestId('app-title').isVisible() && await lp.getByTestId('open-help').isVisible(),
+      `${w} px: the three links collapse to icon-only buttons with aria-labels, the title row fits without cutting the title (help at ${Math.round((await lp.getByTestId('open-help').boundingBox()).x + 32)} px)`);
+  }
+  // keyboard focus shows the tooltip at once. A Tab press also counts as "highlight on press" (it scrolls the list to
+  // Tab's bindings, and any scroll hides tooltips), so Tab once to enter keyboard mode, let that settle, then move focus.
+  await lp.keyboard.press('Tab');
+  for (let i = 0, last = -1; i < 40; i++) { // until the list has stopped scrolling
+    await lp.waitForTimeout(250);
+    const top = await lp.evaluate(() => document.querySelector('main')?.scrollTop ?? 0);
+    if (top === last) break;
+    last = top;
+  }
+  await lp.getByTestId('link-github').focus();
+  await lp.getByTestId('link-feedback').focus();
+  await lp.waitForTimeout(150);
+  const ntip = await lp.getByTestId('tip-feedback').innerText().catch(() => '');
+  check(/Feedback/.test(ntip), `narrow: keyboard focus on the Feedback icon shows its tooltip ("${ntip}")`);
+  await lp.screenshot({ path: shots + '161-header-links-narrow.png', clip: { x: 0, y: 0, width: 360, height: 400 } });
+  await lc.close();
+}
+
 // ---- drag & drop in a real Firefox (Gecko): synthetic file drags exercise the page's handlers there (types list, text-node
 // targets, cancelled dragenter / dragover, the overlay hiding when the drag leaves without a final dragleave)
 console.log('\ndrop overlay in Firefox (Gecko)');
@@ -2499,6 +2578,19 @@ console.log('\ndrop overlay in Firefox (Gecko)');
     await gdrag('round4-tuned.xml', tunedX, 'refresh', { drop: false }); // the drag leaves the window without a final dragleave
     await gp.waitForTimeout(1600);
     check(await gp.getByTestId('drop-overlay').count() === 0, 'Firefox: the overlay hides by itself when no dragover arrives any more (no stuck overlay)');
+    // header links in Gecko: wide (labels) and narrow (icon-only), same hrefs / new tab / rel
+    const gw = await headerLinkInfo(gp);
+    check(headerLinksOk(gw) && !gw.rowOverflow && /^support$/i.test(gw.links.support.text), 'Firefox: Feedback, GitHub and Support links with the right hrefs, target=_blank, rel=noopener');
+    await gp.context().route(/^https:\/\/(ko-fi\.com|github\.com)\//, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>stub</title>' }));
+    const [gpop] = await Promise.all([gp.context().waitForEvent('page'), gp.getByTestId('link-support').click()]);
+    await gpop.waitForLoadState().catch(() => {});
+    check(gpop.url() === HEADER_LINKS.support, `Firefox: Support opens Ko-fi in a new tab (${gpop.url()})`);
+    await gpop.close();
+    await gp.setViewportSize({ width: 360, height: 800 });
+    await gp.waitForTimeout(300);
+    const gn = await headerLinkInfo(gp);
+    check(headerLinksOk(gn) && !gn.rowOverflow && !gn.titleCut && Object.values(gn.links).every((l) => l.text === ''), 'Firefox 360 px: icon-only links inside the viewport, the title row fits (title not cut)');
+    await gp.screenshot({ path: shots + '162-header-links-firefox-narrow.png', clip: { x: 0, y: 0, width: 360, height: 300 } });
     await gecko.close();
   }
 }

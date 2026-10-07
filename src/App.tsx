@@ -6,6 +6,7 @@ import { CaptureDialog, type CaptureRequest } from './components/CaptureDialog';
 import { ConflictsView } from './components/ConflictsView';
 import { ControllersPanel, type SlotActions } from './components/ControllersPanel';
 import { ExportDialog, type ExportSlot } from './components/ExportDialog';
+import { HeaderLinks } from './components/HeaderLinks';
 import { SettingsModal, loadAppSettings, saveAppSettings, type AppSettings } from './components/SettingsModal';
 import { KeyboardView } from './components/KeyboardView';
 import { DEVICE_SEL_KEY, DeviceView, deviceSlotKey, shownDeviceSlot, type SlotOption } from './components/DeviceView';
@@ -708,15 +709,17 @@ export default function App() {
       <div className="scanline" />
       {/* ---------------- header: title, then the views (first class) ---------------- */}
       <header className="relative z-30 border-b border-edge bg-panel/80 backdrop-blur">
-        <div className="flex items-center gap-3 px-5 pb-1.5 pt-2.5">
-          <svg viewBox="0 0 40 40" className="h-7 w-7 text-hud drop-shadow-[0_0_8px_rgba(79,216,255,.6)]" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+        <div className="flex items-center gap-2 px-3 pb-1.5 pt-2.5 sm:gap-3 sm:px-5">
+          <svg viewBox="0 0 40 40" className="h-7 w-7 shrink-0 text-hud max-[359px]:hidden drop-shadow-[0_0_8px_rgba(79,216,255,.6)]" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
             <path d="M20 2 36 11v18L20 38 4 29V11z" />
             <path d="M20 9l9 5v12l-9 5-9-5V14z" opacity=".5" />
             <path d="M14 20h12M20 14v12" />
           </svg>
-          <h1 className="glow-text font-display text-xl font-bold uppercase leading-none tracking-[0.25em] text-hud2" data-testid="app-title">SC Keymap</h1>
-          <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500 sm:inline">Star Citizen binding console · {versionLabel}</span>
-          <div className="ml-auto flex items-center gap-1.5">
+          <h1 className="glow-text shrink-0 whitespace-nowrap font-display text-lg font-bold uppercase leading-none tracking-[0.12em] text-hud2 sm:text-xl sm:tracking-[0.25em]" data-testid="app-title">SC Keymap</h1>
+          <span className="hidden min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500 sm:block" data-testid="app-subtitle" title={`Star Citizen binding console · ${versionLabel}`}>Star Citizen binding console · {versionLabel}</span>
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+            <HeaderLinks />
+            <span className="mx-0.5 h-5 w-px bg-edge sm:mx-1" aria-hidden="true" />
             <button type="button" onClick={() => setSettingsOpen(true)} data-testid="open-settings" title="Settings" aria-label="Settings"
               className="flex h-8 w-8 items-center justify-center rounded border border-edge text-slate-300 hover:border-hud/60 hover:text-hud2"><Ico name="settings" className="h-4 w-4" /></button>
             <button type="button" onClick={() => setHelp(true)} data-testid="open-help" title="Help: where are my keybind files?" aria-label="Help"
