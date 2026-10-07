@@ -586,8 +586,8 @@ Judgment calls made while building round 1, where the decisions above didn't say
 |---|---|---|---|---|
 | `builtin-winctrl-orion-pedals` | WinCtrl Orion Combat Rudder Pedals | 4098:BEF0 | 6 (toe brakes, rudder, button rows) | `winctrl-orion-pedals-main.webp` |
 | `builtin-winctrl-carrierace-mfd-l` | WinCtrl CarrierAce MFD | 4098:BEE0 / BEE1 / BEE2 | bezel 1–44 + BRT (grouped) | `winctrl-carrierace-mfd-l.webp` |
-| `builtin-winctrl-carrierace-pto2` | WinCtrl CarrierAce PTO 2 | 4098:BF05 | none | `winctrl-carrierace-pto2.webp` |
-| `builtin-winctrl-carrierace-ufc-hud` | WinCtrl CarrierAce UFC + HUD | 4098:BEDE | none | `winctrl-carrierace-ufc.webp` + `winctrl-carrierace-hud.webp` |
+| `builtin-winctrl-carrierace-pto2` | WinCtrl CarrierAce PTO 2 | 4098:BF05 | 1, 3-41 (14 grouped) | `winctrl-carrierace-pto2.webp` |
+| `builtin-winctrl-carrierace-ufc-hud` | WinCtrl CarrierAce UFC + HUD | 4098:BEDE | UFC 1-41, HUD 65-83 + 7 axes | `winctrl-carrierace-ufc.webp` + `winctrl-carrierace-hud.webp` |
 | `builtin-azeron-keypad` | Azeron Keypad (XInput) | 16D0:12F7 | none | `azeron-keypad-main.webp` |
 
 - Photos decoded from the exported dataURLs as-is (already cut out with transparency / glow). Sizes recorded in `devicePhotoSizes.ts`.
@@ -628,3 +628,12 @@ Every Chrome/Chromium limitation banner (4-controller cap, 32-button notice, inp
 ### CarrierAce MFD callouts
 
 Built-in `builtin-winctrl-carrierace-mfd-l` now has bezel callouts from the WinCtrl numbered diagram (buttons 1–44) plus BRT. **Grouping:** one `buttons` callout per dense bank (Left 1–9, Bottom 12–20, Right 23–31, Top 34–42) and one per labeled corner rocker (GAIN 10/11, CONT 21/22, SYM 32/33, DAY/NGT 43/44); BRT is an `encoder` with unassigned inputs (diagram does not number it). Photo templates only carry one marker per callout (no per-input `inputRegions` without SVG art), so banks share a centre marker rather than 44 individual labels.
+
+### CarrierAce UFC + HUD and PTO 2 callouts
+
+From Federico's WinCtrl / SimAppPro diagrams (2026-10-06); anchors placed by eye on the existing product photos (Customize a copy to adjust).
+
+- **UFC view (14 callouts):** I/P 1, keypad 2-13 (one group: 1-9, CLR, 0, ENT), option select 14-18, EM CON 19, function row 20-26 (A/P … ON/OFF), ADF 39/40/41, COMM 1 / COMM 2 channel knobs as encoders with PULL 29 / 32 (−/+ unassigned: the diagram shows their turning as a "Slider", no button numbers — 27/28/30/31 are likely candidates but unconfirmed), VOL 1 = RX, VOL 2 = RY, BRT = RZ. Top-edge toggles 33/34, 35/36, 37/38 are on the UFC photo's top edge (no rear product photo; the rear diagram is mirrored, so 33/34 = left seen from the front).
+- **HUD view (11 callouts):** NORM/REJ1/REJ2 65-67, DAY/NIGHT 68/69, W/B/VID/OFF 70-72, ALT BARO/RDR 73/74, ATT INS/AUTO/STBY 75-77, HDG 80/79/78, CRS 83/82/81 (left / centre / right); axes BRT = X, BLK LVL = Y, BAL = Z, AOA = Dial (`slider2`, same convention as the Orion dial wheel).
+- **PTO 2 (14 callouts):** PUSH TO JETT 1, LAUNCH BAR 3/4, FLAP 5-7, LDG/TAXI 8/9, ANTI SKID 10/11, HOOK BYPASS 12/13, PROBE 14-16, SELECT JETT rotary 17-21 + push 22 (separate callouts), JETT STATION 23-27 (group), WING FOLD 28-31, HOOK 32-34, LDG GEAR 35-37, EMERG/PARK BRK 38-41. Button 2 (MASTER CAUTION) is not numbered in the diagram and is not mapped.
+

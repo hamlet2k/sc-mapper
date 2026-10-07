@@ -1071,6 +1071,38 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await dv.getByTestId('template-select').selectOption('');
   await page.waitForTimeout(300);
 }
+{ // CarrierAce UFC + HUD: Federico's WinCtrl diagrams (UFC 1-41 incl. top toggles 33-38, HUD 65-83 + X/Y/Z/Dial)
+  await dv.getByTestId('template-select').selectOption('builtin-winctrl-carrierace-ufc-hud');
+  await page.waitForTimeout(600);
+  check((await dv.locator('[data-callout]').count()) === 25, 'UFC + HUD: 25 callouts');
+  const ufc = dv.locator('[data-testid=device-canvas-view][data-view=ufc]');
+  const hud = dv.locator('[data-testid=device-canvas-view][data-view=hud]');
+  check(await ufc.count() === 1 && await hud.count() === 1, 'UFC + HUD: UFC + HUD photo pages');
+  const kp = (await dv.locator('[data-callout="keypad"]').innerText()).replace(/\n/g, ' ');
+  check(/\b2\b/.test(kp) && /\b13\b/.test(kp), `UFC keypad chips show DI 2-13 (${kp.slice(0, 100)})`);
+  const crs = (await dv.locator('[data-callout="crs"]').innerText()).replace(/\n/g, ' ');
+  check(/81/.test(crs) && /83/.test(crs), `HUD CRS chips show 81-83 (${crs.slice(0, 80)})`);
+  await page.setViewportSize({ width: 1680, height: 1600 }); // each whole photo page clear of the sticky header
+  await ufc.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(200);
+  await ufc.screenshot({ path: shots + '129-ufc-front.png' });
+  await hud.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(200);
+  await hud.screenshot({ path: shots + '130-ufc-hud.png' });
+  await page.setViewportSize({ width: 1680, height: 1000 });
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(300);
+}
+{ // CarrierAce PTO 2: Federico's WinCtrl diagram (1, 3-41)
+  await dv.getByTestId('template-select').selectOption('builtin-winctrl-carrierace-pto2');
+  await page.waitForTimeout(600);
+  check((await dv.locator('[data-callout]').count()) === 14, 'PTO 2: 14 callouts');
+  const sj = (await dv.locator('[data-callout="seljett"]').innerText()).replace(/\n/g, ' ');
+  check(/17/.test(sj) && /21/.test(sj), `PTO 2 SELECT JETT chips show 17-21 (${sj.slice(0, 80)})`);
+  await dv.getByTestId('device-canvas').screenshot({ path: shots + '132-pto2.png' });
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(300);
+}
 { // device templates: a >32-button device warns in Chrome; numbers can be assigned on a copy of an unassigned built-in
   await dv.getByTestId('template-select').selectOption('builtin-winctrl-orion');
   await page.waitForTimeout(600);

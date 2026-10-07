@@ -744,14 +744,63 @@ photoTpl({
   c('dayngt', 'buttons', b(43, 44), 'DAY / NGT (43 / 44)', 'Top', { side: 'L' }),
   c('brt', 'encoder', u(3), 'BRT (− / +)', 'Top', { side: 'R' }),
 ]);
+// PTO 2: numbering from Federico's WinCtrl diagram (2026-10-06). Button 2 (MASTER CAUTION) is not numbered there, so not mapped.
+const WC_PTO2_NOTE = WC_NOTE + ' Per Federico\'s WinCtrl diagram: 1, 3-41 (switch positions grouped); MASTER CAUTION is not numbered there. Buttons above 32: use Firefox (Chrome / Edge stop at 32).';
 photoTpl({
-  id: 'builtin-winctrl-carrierace-pto2', name: 'WinCtrl CarrierAce PTO 2', brand: 'WinCtrl', notes: PHOTO_ONLY_NOTE,
+  id: 'builtin-winctrl-carrierace-pto2', name: 'WinCtrl CarrierAce PTO 2', brand: 'WinCtrl', notes: WC_PTO2_NOTE,
   match: [{ vendor: '4098', product: 'BF05' }, { name: 'CarrierAce PTO 2' }, { name: 'CarrierAce PTO' }],
-});
+}, [
+  c('jett1', 'button', b(1), 'PUSH TO JETT (1)', 'Left'),
+  c('gear', 'switch', b(35, 36, 37), 'LDG GEAR (UP 35 / 36 / DN 37)', 'Left'),
+  c('lbar', 'switch', b(3, 4), 'LAUNCH BAR (RETRACT 3 / EXTEND 4)', 'Left'),
+  c('flap', 'switch', b(5, 6, 7), 'FLAP (AUTO 5 / HALF 6 / FULL 7)', 'Left'),
+  c('ldgtaxi', 'switch', b(8, 9), 'LDG/TAXI LIGHT (ON 8 / OFF 9)', 'Left'),
+  c('askid', 'switch', b(10, 11), 'ANTI SKID (ON 10 / OFF 11)', 'Left'),
+  c('hbypass', 'switch', b(12, 13), 'HOOK BYPASS (FIELD 12 / CARRIER 13)', 'Left'),
+  c('probe', 'switch', b(14, 15, 16), 'PROBE (EXTEND 14 / 15 / EMERG 16)', 'Left'),
+  c('seljett', 'switch', b(17, 18, 19, 20, 21), 'SELECT JETT (L FUS 17 / SAFE 18 / R FUS 19 / RACK 20 / STORES 21)', 'Jettison'),
+  c('jettbtn', 'button', b(22), 'JETT push (22)', 'Jettison'),
+  c('brake', 'switch', b(38, 39, 40, 41), 'EMERG / PARK BRK (38 up / 39 ctr / 40 L / 41 R)', 'Jettison'),
+  c('jettsta', 'buttons', b(23, 24, 25, 26, 27), 'JETT STATION (CTR 23 / LI 24 / RI 25 / LO 26 / RO 27)', 'Right'),
+  c('hook', 'switch', b(32, 33, 34), 'HOOK (32 / 33 / 34)', 'Right'),
+  c('wfold', 'switch', b(28, 29, 30, 31), 'WING FOLD (28 / HOLD 29 / SPREAD 30 / FOLD 31)', 'Right'),
+]);
+// UFC + HUD (one USB device, 4098:BEDE): numbering + axes from Federico's WinCtrl SimAppPro diagrams (2026-10-06).
+// COMM 1 / COMM 2 channel knobs: only PULL is numbered (29 / 32); rotation shows as a "Slider" there, so −/+ stay unassigned.
+const WC_UFC_NOTE = WC_NOTE + ' UFC 1-41 (top toggles 33-38), HUD 65-83. Axes: UFC VOL 1/2 = RX/RY, BRT = RZ; HUD BRT = X, BLK LVL = Y, BAL = Z, AOA = Dial. COMM knob turning is not numbered (PULL 29/32 only). Buttons above 32: use Firefox.';
 photoTpl({
-  id: 'builtin-winctrl-carrierace-ufc-hud', name: 'WinCtrl CarrierAce UFC + HUD', brand: 'WinCtrl', notes: PHOTO_ONLY_NOTE,
+  id: 'builtin-winctrl-carrierace-ufc-hud', name: 'WinCtrl CarrierAce UFC + HUD', brand: 'WinCtrl', notes: WC_UFC_NOTE,
   match: [{ vendor: '4098', product: 'BEDE' }, { name: 'CarrierAce UFC' }, { name: 'CarrierAce HUD' }, { name: 'UFC+HUD' }],
-});
+}, [
+  // UFC front
+  c('ip', 'button', b(1), 'I/P (1)', 'UFC'),
+  c('adf', 'switch', b(39, 40, 41), 'ADF (1 39 / OFF 40 / 2 41)', 'UFC'),
+  c('vol1', 'axis', ['rotx'], 'COMM 1 VOL (RX)', 'UFC'),
+  c('comm1', 'encoder', ['', '', 'button29'], 'COMM 1 channel (− / + / PULL 29)', 'UFC'),
+  c('keypad', 'buttons', b(...range(2, 13)), 'Keypad 1-9, CLR, 0, ENT (2-13)', 'UFC'),
+  c('opt', 'buttons', b(...range(14, 18)), 'Option select 1-5 (14-18)', 'UFC'),
+  c('fn', 'buttons', b(...range(20, 26)), 'A/P IFF TCN ILS D/L BCN ON/OFF (20-26)', 'UFC'),
+  c('brt', 'axis', ['rotz'], 'BRT (RZ)', 'UFC'),
+  c('emcon', 'button', b(19), 'EM CON (19)', 'UFC'),
+  c('vol2', 'axis', ['roty'], 'COMM 2 VOL (RY)', 'UFC'),
+  c('comm2', 'encoder', ['', '', 'button32'], 'COMM 2 channel (− / + / PULL 32)', 'UFC'),
+  // UFC top edge: three 2-way toggles (rear diagram 33-38; left → right seen from the front)
+  c('tgl1', 'switch', b(33, 34), 'Top toggle left (33 / 34)', 'UFC top'),
+  c('tgl2', 'switch', b(35, 36), 'Top toggle centre (35 / 36)', 'UFC top'),
+  c('tgl3', 'switch', b(37, 38), 'Top toggle right (37 / 38)', 'UFC top'),
+  // HUD panel
+  c('rej', 'switch', b(65, 66, 67), 'NORM / REJ 1 / REJ 2 (65 / 66 / 67)', 'HUD'),
+  c('hbrt', 'axis', ['x'], 'BRT (X)', 'HUD'),
+  c('daynight', 'switch', b(68, 69), 'DAY / NIGHT (68 / 69)', 'HUD'),
+  c('blk', 'axis', ['y'], 'BLK LVL (Y)', 'HUD'),
+  c('aoa', 'axis', ['slider2'], 'AOA (Dial)', 'HUD'),
+  c('alt', 'switch', b(73, 74), 'ALT BARO / RDR (73 / 74)', 'HUD'),
+  c('att', 'switch', b(75, 76, 77), 'ATT INS / AUTO / STBY (75 / 76 / 77)', 'HUD'),
+  c('vid', 'switch', b(70, 71, 72), 'W/B / VID / OFF (70 / 71 / 72)', 'HUD'),
+  c('bal', 'axis', ['z'], 'BAL (Z)', 'HUD'),
+  c('hdg', 'switch', b(80, 79, 78), 'HDG (80 / 79 / 78)', 'HUD'),
+  c('crs', 'switch', b(83, 82, 81), 'CRS (83 / 82 / 81)', 'HUD'),
+]);
 photoTpl({
   id: 'builtin-azeron-keypad', name: 'Azeron Keypad (XInput)', brand: 'Azeron', notes: PHOTO_ONLY_NOTE,
   match: [{ vendor: '16D0', product: '12F7' }, { name: 'Azeron Keypad' }, { name: 'Azeron Cyborg' }],

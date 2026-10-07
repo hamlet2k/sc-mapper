@@ -813,7 +813,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-vkb-gunfighter-mcg', 'builtin-vkb-stecs', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
     const USB = new Set(['builtin-tm-warthog-stick', 'builtin-tm-warthog-throttle', 'builtin-tm-t16000m', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-winctrl-ursa-combat',
       'builtin-winctrl-orion-pedals', 'builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad', 'builtin-honeycomb-bravo']);
-    const PHOTO_ONLY = new Set(['builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad']);
+    const PHOTO_ONLY = new Set(['builtin-azeron-keypad']);
     const ASPECTS = new Set<number>();
     for (const d of DEVICE_TEMPLATES) {
       assert.ok(d.builtin && d.brand && d.id.startsWith('builtin-') && !d.image && (d.views?.length ? !d.loadImage && d.views.every((v) => tp.BUILTIN_PHOTO_RE.test(v.image ?? '')) : typeof d.loadImage === 'function') && d.notes, `${d.id}: picture loaded on demand (art) or built-in photos (photo template)`);
@@ -829,6 +829,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         assert.match(d.notes!, /Customize a copy/);
       } else if (d.id === 'builtin-winctrl-carrierace-mfd-l') {
         assert.equal(open, 3, 'MFD: only BRT encoder inputs unassigned (diagram does not number it)');
+      } else if (d.id === 'builtin-winctrl-carrierace-ufc-hud') {
+        assert.equal(open, 4, 'UFC: only COMM 1 / COMM 2 channel −/+ unassigned (diagram numbers PULL only)');
       } else assert.equal(open, 0, `${d.id}: fully numbered`);
       if (PHOTO_ONLY.has(d.id)) {
         assert.equal(d.callouts.length, 0, `${d.id}: photo-only (empty callouts)`);
@@ -863,6 +865,40 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(btn(by('moza-ab6')), seq(1, 62, Array.from({ length: 19 }, (_, i) => 30 + i)), 'AB6 + MHG: grip 1-29, base 49-62');
     assert.deepEqual(btn(by('winctrl-carrierace-mfd-l')), seq(1, 44), 'CarrierAce MFD: bezel 1-44');
     assert.equal(by('winctrl-carrierace-mfd-l').callouts.length, 9, 'MFD: 4 banks + 4 rockers + BRT');
+    { // CarrierAce UFC + HUD / PTO 2: DI coverage per view from Federico's WinCtrl diagrams
+      const uh = by('winctrl-carrierace-ufc-hud'), pto = by('winctrl-carrierace-pto2');
+      const b = (...n: number[]) => n.map((i) => `button${i}`);
+      const ins = (x: DeviceTemplate, id: string) => x.callouts.find((c) => c.id === id)!.inputs;
+      const onView = (x: DeviceTemplate, v: string) => ({ ...x, callouts: x.callouts.filter((c) => c.view === v) });
+      assert.deepEqual(uh.views!.map((v) => v.id), ['ufc', 'hud'], 'UFC + HUD: two photo views');
+      assert.deepEqual(btn(onView(uh, 'ufc')), [...seq(1, 26), 29, ...seq(32, 41)], 'UFC: 1-26, PULL 29/32, top toggles 33-38, ADF 39-41');
+      assert.deepEqual(btn(onView(uh, 'hud')), seq(65, 83), 'HUD: 65-83');
+      const axes = (x: DeviceTemplate, v: string) => x.callouts.filter((c) => c.view === v && c.kind === 'axis').map((c) => `${c.id}:${c.inputs.join(',')}`).sort();
+      assert.deepEqual(axes(uh, 'ufc'), ['brt:rotz', 'vol1:rotx', 'vol2:roty'], 'UFC axes RX / RY / RZ');
+      assert.deepEqual(axes(uh, 'hud'), ['aoa:slider2', 'bal:z', 'blk:y', 'hbrt:x'], 'HUD axes X / Y / Z / Dial');
+      assert.equal(uh.callouts.length, 25, 'UFC + HUD: 14 UFC + 11 HUD callouts');
+      assert.deepEqual(ins(uh, 'adf'), b(39, 40, 41)); assert.deepEqual(ins(uh, 'rej'), b(65, 66, 67)); assert.deepEqual(ins(uh, 'hdg'), b(80, 79, 78));
+      assert.deepEqual(ins(uh, 'crs'), b(83, 82, 81)); assert.deepEqual(ins(uh, 'comm1'), ['', '', 'button29']); assert.deepEqual(ins(uh, 'comm2'), ['', '', 'button32']);
+      assert.deepEqual(['tgl1', 'tgl2', 'tgl3'].map((id) => ins(uh, id)), [b(33, 34), b(35, 36), b(37, 38)], 'top toggles in pairs');
+      assert.deepEqual(btn(pto), [1, ...seq(3, 41)], 'PTO 2: 1, 3-41 (2 = MASTER CAUTION, not numbered in the diagram)');
+      assert.equal(pto.callouts.length, 14, 'PTO 2: 14 callouts');
+      assert.deepEqual(ins(pto, 'seljett'), b(17, 18, 19, 20, 21)); assert.deepEqual(ins(pto, 'jettbtn'), b(22));
+      assert.deepEqual(ins(pto, 'brake'), b(38, 39, 40, 41)); assert.deepEqual(ins(pto, 'wfold'), b(28, 29, 30, 31));
+      assert.deepEqual(ins(pto, 'jettsta'), b(23, 24, 25, 26, 27)); assert.deepEqual(ins(pto, 'gear'), b(35, 36, 37)); assert.deepEqual(ins(pto, 'hook'), b(32, 33, 34));
+      // exact anchors: layout fractions of the photo -> canvas fractions (photo centred between the label gutters)
+      const L = DEVICE_PHOTO_LAYOUTS;
+      const at = (x: DeviceTemplate, id: string) => {
+        const lay = L[x.id], a = lay.anchors[id], photo = lay.views.find((v) => v.id === a.view)!.photo, view = x.views!.find((v) => v.id === a.view)!;
+        const pw = DEVICE_PHOTO_SIZES[photo][0], gx = (view.width - pw) / 2, cc = x.callouts.find((c) => c.id === id)!;
+        assert.equal(cc.view, a.view, `${x.id}/${id}: on view ${a.view}`);
+        assert.ok(Math.abs(cc.anchor.x - (gx + a.x * pw) / view.width) < 1e-9 && Math.abs(cc.anchor.y - a.y) < 1e-9, `${x.id}/${id}: anchor from the layout`);
+        return [a.x, a.y];
+      };
+      assert.deepEqual(at(uh, 'ip'), [0.125, 0.238]); assert.deepEqual(at(uh, 'keypad'), [0.274, 0.462]); assert.deepEqual(at(uh, 'tgl2'), [0.42, 0.131]);
+      assert.deepEqual(at(uh, 'comm2'), [0.674, 0.811]); assert.deepEqual(at(uh, 'rej'), [0.098, 0.377]); assert.deepEqual(at(uh, 'aoa'), [0.244, 0.536]); assert.deepEqual(at(uh, 'crs'), [0.747, 0.792]);
+      assert.deepEqual(at(pto, 'jett1'), [0.122, 0.528]); assert.deepEqual(at(pto, 'seljett'), [0.445, 0.33]); assert.deepEqual(at(pto, 'wfold'), [0.664, 0.846]); assert.deepEqual(at(pto, 'hook'), [0.65, 0.484]);
+      for (const x of [uh, pto]) for (const cc of x.callouts) at(x, cc.id);
+    }
     assert.deepEqual(btn(by('moza-mtp')), seq(1, 71), 'MTP: 1-71');
     assert.deepEqual(btn(by('moza-mtq')), seq(1, 75, [44, 45, 46, 47, 48]), 'MTQ: 1-65 (combat grip) + 66-75 (Airbus / Boeing grips)');
     const ins = (x: DeviceTemplate, id: string) => x.callouts.find((c) => c.id === id)!.inputs;
