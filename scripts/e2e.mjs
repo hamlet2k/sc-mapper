@@ -1071,6 +1071,20 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await dv.getByTestId('template-select').selectOption('');
   await page.waitForTimeout(300);
 }
+{ // Warthog throttle: faithful Federico export (exact coords, new rear photo on the top view)
+  await dv.getByTestId('template-select').selectOption('builtin-tm-warthog-throttle');
+  await page.waitForTimeout(600);
+  check((await dv.locator('[data-callout]').count()) === 24, 'Warthog throttle: 24 callouts');
+  const top = dv.locator('[data-testid=device-canvas-view][data-view=top]');
+  const front = dv.locator('[data-testid=device-canvas-view][data-view=front]');
+  check(await top.count() === 1 && await front.count() === 1, 'Warthog throttle: top + front photo pages');
+  await top.scrollIntoViewIfNeeded();
+  await top.screenshot({ path: shots + '170-warthog-throttle-top.png' });
+  await front.scrollIntoViewIfNeeded();
+  await front.screenshot({ path: shots + '171-warthog-throttle-front.png' });
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(300);
+}
 { // CarrierAce UFC + HUD: Federico's WinCtrl diagrams (UFC 1-41 incl. top toggles 33-38, HUD 65-83 + X/Y/Z/Dial)
   await dv.getByTestId('template-select').selectOption('builtin-winctrl-carrierace-ufc-hud');
   await page.waitForTimeout(600);
