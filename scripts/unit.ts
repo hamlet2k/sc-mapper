@@ -804,15 +804,16 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[2].id]: { view: 'front', x: 1.5, y: 0.5 } } })), 'coordinates outside 0..1 rejected');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { views: [], anchors: {} })), 'empty layout rejected');
   });
-  t('device templates (27 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
+  t('device templates (34 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    assert.equal(DEVICE_TEMPLATES.length, 27, 'all 27 device templates (24 devices + 3 AB6 grip variants)');
+    assert.equal(DEVICE_TEMPLATES.length, 34, 'all 34 device templates (31 devices + 3 AB6 grip variants)');
     assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
     // devices without published numbers: callout spots only (stick X / Y where obvious)
     const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-vkb-gunfighter-mcg', 'builtin-vkb-stecs', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
     const USB = new Set(['builtin-tm-warthog-stick', 'builtin-tm-warthog-throttle', 'builtin-tm-t16000m', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-winctrl-ursa-combat',
-      'builtin-winctrl-orion-pedals', 'builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad', 'builtin-honeycomb-bravo']);
+      'builtin-winctrl-orion-pedals', 'builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad', 'builtin-honeycomb-bravo',
+      'builtin-honeycomb-charlie', 'builtin-logitech-flight-rudder', 'builtin-mfg-crosswind', 'builtin-tm-tfrp', 'builtin-tm-tpr', 'builtin-vkb-t-rudder']);
     const PHOTO_ONLY = new Set(['builtin-azeron-keypad']);
     const ASPECTS = new Set<number>();
     for (const d of DEVICE_TEMPLATES) {
@@ -973,17 +974,17 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(tp.pickTemplate(all, { name: 'Honeycomb Bravo', slot: 'js' }).template.id, 'builtin-honeycomb-bravo', 'Bravo by name');
     assert.equal(tp.pickTemplate(all, { name: 'WINCTRL Orion Pedals', slot: 'js' }).template.id, 'builtin-winctrl-orion-pedals', 'Orion pedals by name');
     assert.equal(tp.pickTemplate(all, { name: 'WINCTRL CarrierAce MFD L', slot: 'js' }).template.id, 'builtin-winctrl-carrierace-mfd-l');
-    // still no template: ViperAce ICP, Orion F18 HANDLE throttle, VKB T-Rudder
-    for (const name of ['WINCTRL ViperAce ICP', 'WINCTRL Orion Throttle Base II + F18 HANDLE', 'VKBsim T-Rudder'])
+    // still no template: ViperAce ICP, Orion F18 HANDLE throttle (the VKB T-Rudder has its pedal template now)
+    for (const name of ['WINCTRL ViperAce ICP', 'WINCTRL Orion Throttle Base II + F18 HANDLE'])
       assert.ok(!tp.pickTemplate(all, { name, slot: 'js' }).template.id.startsWith('builtin-winctrl') && !tp.pickTemplate(all, { name, slot: 'js' }).template.id.startsWith('builtin-vkb'), `${name} is not a stick/throttle template`);
     assert.equal(pick('Thrustmaster T.Flight Hotas One (Vendor: 044f Product: b68d)', 14), 'builtin-stick', 'other devices keep the generic stick');
     assert.equal(tp.pickTemplate(all, { name: 'Throttle - HOTAS Warthog', slot: 'gp' }).template.id, 'builtin-gamepad', 'slot respected');
     // picker groups: user templates, generic built-ins, then brands A-Z
     const mine = { ...tp.newTemplate('js', 'Mine'), brand: 'Thrustmaster' };
     const gr = tp.templateGroups([mine, ...all]);
-    assert.deepEqual(gr.map((g) => g.label), ['Your templates', 'Generic (built-in)', 'Azeron', 'Honeycomb', 'Logitech', 'MOZA', 'Thrustmaster', 'VIRPIL', 'VKB', 'WinCtrl']);
+    assert.deepEqual(gr.map((g) => g.label), ['Your templates', 'Generic (built-in)', 'Azeron', 'Honeycomb', 'Logitech', 'MFG', 'MOZA', 'Thrustmaster', 'VIRPIL', 'VKB', 'WinCtrl']);
     assert.deepEqual(gr[0].templates.map((x) => x.name), ['Mine'], 'a user copy of a brand template stays under “Your templates”');
-    assert.equal(gr[6].templates.length, 4, 'Thrustmaster: Warthog stick + throttle, T.16000M, TWCS');
+    assert.equal(gr[7].templates.length, 6, 'Thrustmaster: Warthog stick + throttle, T.16000M, TWCS, TFRP, TPR');
     // a copy of an unassigned template takes numbers per callout (the editor's “Customize a copy” path)
     const copy = tp.cloneTemplate(by('vkb-gladiator-scg'), 'My Gladiator');
     assert.ok(!copy.builtin && !(copy as any).loadImage);
@@ -991,6 +992,94 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const saved = tp.parseTemplates(tp.exportTemplates([copy]))[0];
     assert.deepEqual(saved.callouts.find((c) => c.id === 'a2')!.inputs, ['button7']);
     assert.equal(tp.shortInput(''), '?');
+  });
+  t('rudder pedal built-ins: USB / name auto-match, axes per set, nothing taken from the existing templates', () => {
+    const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+    const by = (id: string) => DEVICE_TEMPLATES.find((x) => x.id === `builtin-${id}`)!;
+    const ident = (id: string, buttons = 0) => { const q = cap.parsePadId(id); return { name: q.name, vendor: q.vendor, productId: q.product, buttons, slot: 'js' as const }; };
+    const pick = (id: string, n = 0) => tp.pickTemplate(all, ident(id, n)).template.id;
+    const byName = (name: string) => tp.pickTemplate(all, { name, slot: 'js' }).template.id;
+    // axes per set: left toe brake / right toe brake / rudder (no buttons on any of them)
+    const SETS: [string, string, string, string | null, string | null, string][] = [
+      ['honeycomb-charlie', 'Honeycomb', 'honeycomb-charlie-main', 'x', 'y', 'z'],
+      ['logitech-flight-rudder', 'Logitech', 'logitech-flight-rudder-main', 'x', 'y', 'rotz'],
+      ['mfg-crosswind', 'MFG', 'mfg-crosswind-v3-main', 'x', 'y', 'rotz'],
+      ['tm-tfrp', 'Thrustmaster', 'tm-tfrp-main', 'y', 'x', 'z'],
+      ['tm-tpr', 'Thrustmaster', 'tm-tpr-main', 'y', 'x', 'z'],
+      ['virpil-r1-falcon', 'VIRPIL', 'virpil-r1-falcon-main', 'slider1', 'slider2', 'z'],
+      ['vkb-t-rudder', 'VKB', 'vkb-t-rudder-main', null, null, 'rotx'],
+    ];
+    const ids = DEVICE_TEMPLATES.map((x) => x.id);
+    const firstPedal = ids.indexOf('builtin-honeycomb-charlie');
+    for (const [id, brand, photo, l, r, rud] of SETS) {
+      const d = by(id);
+      assert.ok(d, id);
+      assert.ok(ids.indexOf(d.id) >= firstPedal, `${id}: after every older built-in (older templates win ties)`);
+      assert.equal(d.brand, brand);
+      assert.deepEqual(d.views?.map((v) => [v.id, v.image]), [['main', `/device-photos/${photo}.webp`]], `${id}: one photo page`);
+      const [pw, ph] = DEVICE_PHOTO_SIZES[photo];
+      const v = d.views![0];
+      assert.equal(v.height, ph); assert.equal(v.width, Math.round(pw + 0.6 * ph), `${id}: label gutters like the other photo built-ins`);
+      const ax = Object.fromEntries(d.callouts.map((c) => [c.id, c]));
+      assert.ok(d.callouts.every((c) => c.kind === 'axis' && c.inputs.length === 1 && c.view === 'main'), `${id}: axes only`);
+      assert.deepEqual(d.callouts.map((c) => c.inputs[0]).sort(), [l, r, rud].filter(Boolean).sort(), `${id}: axis coverage`);
+      assert.equal(ax.rudder.inputs[0], rud, `${id}: rudder`); assert.equal(ax.rudder.label, 'Rudder');
+      if (l) { assert.equal(ax.ltoe.inputs[0], l, `${id}: left toe brake`); assert.equal(ax.ltoe.label, 'Left Toe Brake'); }
+      if (r) { assert.equal(ax.rtoe.inputs[0], r, `${id}: right toe brake`); assert.equal(ax.rtoe.label, 'Right Toe Brake'); }
+      if (l && r) assert.ok(ax.ltoe.box.x < 0.5 && ax.rtoe.box.x > 0.5, `${id}: left brake labelled left, right brake right`);
+      // anchors sit on the photo (inside the product box), not in the label gutters
+      const [, , bx, by0, bw, bh] = DEVICE_PHOTO_SIZES[photo], gx = (v.width - pw) / 2;
+      for (const c of d.callouts) {
+        const px = (c.anchor.x * v.width - gx) / pw;
+        assert.ok(px >= bx && px <= bx + bw && c.anchor.y >= by0 && c.anchor.y <= by0 + bh, `${id}/${c.id}: anchor on the product`);
+      }
+      assert.equal(tp.maxButton(d), 0, `${id}: no buttons`);
+    }
+    assert.equal(by('vkb-t-rudder').callouts.length, 1, 'T-Rudder Mk.V: rudder only (no toe brakes)');
+    // auto-link by USB id (Chromium) and by name (Firefox ids / renamed devices)
+    for (const [padId, id] of [
+      ['Honeycomb Aeronautical Charlie Rudder Pedal (Vendor: 294b Product: 1903)', 'honeycomb-charlie'],
+      ['294b-1903-Charlie Rudder Pedals', 'honeycomb-charlie'],
+      ['Saitek Pro Flight Rudder Pedals (Vendor: 06a3 Product: 0763)', 'logitech-flight-rudder'],
+      ['Logitech G Flight Rudder Pedals (Vendor: 06a3 Product: 0763)', 'logitech-flight-rudder'],
+      ['MFG Crosswind V2 (Vendor: 16d0 Product: 0a38)', 'mfg-crosswind'],
+      ['16d0-0a38-MFG Crosswind v2/3', 'mfg-crosswind'],
+      ['T-Rudder (Vendor: 044f Product: b679)', 'tm-tfrp'],
+      ['T.Flight Rudder Pedals (Vendor: 044f Product: b678)', 'tm-tfrp'],
+      ['044f-b679-T-Rudder', 'tm-tfrp'],
+      ['T-Pendular-Rudder (Vendor: 044f Product: b68f)', 'tm-tpr'],
+      ['VPC R1-FALCON Rudder Pedals (Vendor: 3344 Product: 0000)', 'virpil-r1-falcon'],
+      ['VPC Rudder Pedals (Vendor: 3344 Product: 01f8)', 'virpil-r1-falcon'],
+      ['VKBsim T-Rudder (Vendor: 231d Product: 011f)', 'vkb-t-rudder'],
+      [' VKBsim T-Rudder ', 'vkb-t-rudder'],
+    ] as const) assert.equal(pick(padId), `builtin-${id}`, padId);
+    for (const [name, id] of [['Charlie Rudder Pedals', 'honeycomb-charlie'], ['Honeycomb Charlie', 'honeycomb-charlie'], ['Saitek Pro Flight Rudder Pedals', 'logitech-flight-rudder'],
+      ['MFG Crosswind V2', 'mfg-crosswind'], ['T.Flight Rudder Pedals', 'tm-tfrp'], ['T-Pendular-Rudder', 'tm-tpr'], ['VIRPIL R1-FALCON', 'virpil-r1-falcon'], ['VKBsim T-Rudder', 'vkb-t-rudder']] as const)
+      assert.equal(byName(name), `builtin-${id}`, `${name} by name`);
+    // the VKB "T-Rudder" never goes to the TFRP and a TFRP never goes to the VKB
+    assert.equal(byName('T-Rudder') === 'builtin-tm-tfrp', false, 'bare “T-Rudder” without the Thrustmaster vendor id: not linked to the TFRP');
+    assert.equal(pick('VKBsim T-Rudder (Vendor: 231d Product: 0120)'), 'builtin-vkb-t-rudder', 'VKB with another PID: by name');
+    // the Orion pedals still win their own id and names; other devices keep their template
+    assert.equal(pick('WINCTRL Orion Combat Rudder Pedals Metal (Vendor: 4098 Product: bef0)', 15), 'builtin-winctrl-orion-pedals');
+    assert.equal(pick('4098-bef0-WINCTRL Orion Combat Rudder Pedals', 15), 'builtin-winctrl-orion-pedals');
+    assert.equal(byName('WINCTRL Orion Pedals'), 'builtin-winctrl-orion-pedals');
+    assert.equal(byName('WINCTRL Orion Combat Rudder Pedals'), 'builtin-winctrl-orion-pedals');
+    assert.equal(pick('Saitek Pro Flight Combat Rudder Pedals (Vendor: 06a3 Product: 0764)'), 'builtin-winctrl-orion-pedals', 'Combat Rudder Pedals: unchanged (Orion name rule), not the Flight Rudder Pedals');
+    assert.notEqual(pick('Saitek Pro Flight Cessna Rudder Pedals (Vendor: 06a3 Product: 0765)'), 'builtin-logitech-flight-rudder');
+    assert.equal(pick('Bravo Throttle Quadrant (Vendor: 294b Product: 1901)', 48), 'builtin-honeycomb-bravo', 'Bravo keeps 294B:1901');
+    assert.equal(pick('Controller (Azeron Keypad - XInput) (Vendor: 16d0 Product: 12f7)', 20), 'builtin-azeron-keypad', 'Azeron keeps 16D0:12F7 (same vendor id as MFG)');
+    assert.equal(pick('T.16000M (Vendor: 044f Product: b10a)', 16), 'builtin-tm-t16000m');
+    assert.equal(pick('TWCS Throttle (Vendor: 044f Product: b687)', 14), 'builtin-tm-twcs');
+    assert.equal(pick('Thrustmaster T.Flight Hotas One (Vendor: 044f Product: b68d)', 14), 'builtin-stick', 'T.Flight HOTAS (TFRP on RJ12 inside): generic stick');
+    assert.equal(byName('VPC Constellation Alpha Prime R'), 'builtin-virpil-alpha-prime');
+    assert.equal(byName('VKBsim Gladiator EVO R'), 'builtin-vkb-gladiator-scg');
+    // no pedal template claims a device another built-in matched before (every existing USB id + name keeps its template)
+    const older = DEVICE_TEMPLATES.slice(0, firstPedal);
+    for (const o of older) for (const m of o.match) {
+      const name = m.name ?? o.name;
+      const idn = { name, vendor: m.vendor, productId: m.product, buttons: m.buttons, slot: 'js' as const };
+      assert.equal(tp.pickTemplate(all, idn).template.id, tp.pickTemplate([...BUILTIN_TEMPLATES, ...older], idn).template.id, `${o.id}: ${JSON.stringify(m)} keeps its template`);
+    }
   });
   t('Orion pedals: callouts keep Federico export anchor+box fractions (no withPhotoLayout re-box)', () => {
     const ped = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion-pedals')!;
@@ -1101,8 +1190,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(r.image === 'data:image/svg+xml,<svg/>' && !(lazy as { image?: string }).image, 'picture resolves, template untouched');
     assert.equal((await tp.resolveTemplateImage(lazy)).image, r.image, 'cached'); assert.equal(calls, 1);
     const imgs = await Promise.all(DEVICE_TEMPLATES.map((x) => tp.resolveTemplateImage(x).then((y) => y.image ?? y.views!.map((v) => v.image).join()))); // (photo templates: their views' photos)
-    assert.equal(new Set(imgs).size, 27, 'one distinct picture per device');
-    passed++; console.log('  ✓ device template pictures: all 27 photo templates (distinct), lazy pictures cached');
+    assert.equal(new Set(imgs).size, 34, 'one distinct picture per device');
+    passed++; console.log('  ✓ device template pictures: all 34 photo templates (distinct), lazy pictures cached');
   }
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };

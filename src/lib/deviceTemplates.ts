@@ -920,4 +920,104 @@ photoTplExact({
     anchor: { x: 0.5661596726102067, y: 0.5988557987661717 }, box: { x: 0.15475284010738474, y: 0.8075046336088149 } },
 ]);
 
+/* ------------------------------------------------------------------ rudder pedals (photo built-ins, 2026-10-06) */
+// Appended after every other built-in so ties on a name rule keep the older template (the Orion pedals keep 4098:BEF0 and
+// their names). Anchors are measured on the cut-out photo (fractions of the picture) and moved onto the canvas, where the
+// photo sits centred between the two label gutters; boxes go to the label columns.
+type PedalCallout = { id: string; input: string; label: string; at: [number, number]; box: [number, number] };
+function pedalTpl(meta: Meta & { id: string }, photo: string, callouts: PedalCallout[]): void {
+  const size = DEVICE_PHOTO_SIZES[photo];
+  if (!size) { PHOTO_LAYOUT_PROBLEMS.push(`${meta.id}: unknown photo “${photo}”`); return; }
+  const [w, h] = size, { width, height } = pageSizeForPhoto(w, h), gx = (width - w) / 2;
+  photoTplExact(meta, photo, 'main', 'Pedals', width, height, callouts.map((c) => ({
+    id: c.id, kind: 'axis', inputs: [c.input], label: c.label, view: 'main',
+    anchor: { x: (gx + c.at[0] * w) / width, y: c.at[1] }, box: { x: c.box[0], y: c.box[1] },
+  })));
+}
+const PEDAL_L = 0.115, PEDAL_R = 0.885;
+
+// Honeycomb Charlie: USB 294B:1903 ("Honeycomb Aeronautical Charlie Rudder Pedal", a user's lsusb). Windows Game Controllers:
+// X = left toe brake, Y = right toe brake, Z = rudder (IL-2 forum user report). No buttons.
+pedalTpl({
+  id: 'builtin-honeycomb-charlie', name: 'Honeycomb Charlie Rudder Pedals', brand: 'Honeycomb',
+  notes: 'Left toe brake = x, right toe brake = y, rudder = z (as Windows Game Controllers shows them). No buttons. The toe brakes can read inverted (100 % at rest) until calibrated: invert the axis in game if so. USB 294B:1903 (from a Linux lsusb report); other units are matched by name.',
+  match: [{ vendor: '294B', product: '1903' }, { name: 'Charlie Rudder' }, { name: 'Honeycomb Charlie' }],
+}, 'honeycomb-charlie-main', [
+  { id: 'ltoe', input: 'x', label: 'Left Toe Brake', at: [0.17, 0.22], box: [PEDAL_L, 0.22] },
+  { id: 'rtoe', input: 'y', label: 'Right Toe Brake', at: [0.66, 0.14], box: [PEDAL_R, 0.14] },
+  { id: 'rudder', input: 'z', label: 'Rudder', at: [0.42, 0.3], box: [PEDAL_L, 0.8] },
+]);
+
+// Logitech G Flight Rudder Pedals (ex Saitek Pro Flight Rudder Pedals): USB 06A3:0763 (usb.ids "Pro Flight Rudder Pedals";
+// the Logitech-badged unit keeps the Saitek id and name). X = left toe brake, Y = right toe brake, RZ = rudder.
+// Not 06A3:0764 (Pro Flight Combat Rudder Pedals) or 0765 (Cessna pedals); "Flight Rudder Pedals" alone would also hit the TFRP.
+pedalTpl({
+  id: 'builtin-logitech-flight-rudder', name: 'Logitech G Flight Rudder Pedals (Saitek Pro Flight)', brand: 'Logitech',
+  notes: 'Left toe brake = x, right toe brake = y, rudder = rotz. No buttons. Windows lists it as “Saitek Pro Flight Rudder Pedals” (USB 06A3:0763) even on the Logitech-badged unit. Not the Pro Flight Combat Rudder Pedals (06A3:0764) or the Cessna pedals (0765).',
+  match: [{ vendor: '06A3', product: '0763' }, { name: 'Pro Flight Rudder Pedals' }, { name: 'Saitek Flight Rudder' }, { name: 'Logitech G Flight Rudder' }],
+}, 'logitech-flight-rudder-main', [
+  { id: 'ltoe', input: 'x', label: 'Left Toe Brake', at: [0.37, 0.12], box: [PEDAL_L, 0.12] },
+  { id: 'rtoe', input: 'y', label: 'Right Toe Brake', at: [0.79, 0.28], box: [PEDAL_R, 0.28] },
+  { id: 'rudder', input: 'rotz', label: 'Rudder', at: [0.5, 0.47], box: [PEDAL_L, 0.8] },
+]);
+
+// MFG Crosswind V3: USB 16D0:0A38 "MFG Crosswind V2" (V2 and V3 share the electronics; firmware 5.09+ may report
+// "MFG Crosswind v2/3"). DCS default assignment: rudder JOY_RZ, left brake JOY_X, right brake JOY_Y (both inverted).
+pedalTpl({
+  id: 'builtin-mfg-crosswind', name: 'MFG Crosswind V3 Rudder Pedals', brand: 'MFG',
+  notes: 'Left toe brake = x, right toe brake = y, rudder = rotz. No buttons. V2 and V3 share the electronics: Windows shows “MFG Crosswind V2” (USB 16D0:0A38) or, on newer firmware, “MFG Crosswind v2/3”. Brakes may need inverting in game. MFG Configurator can merge the brakes into one axis, and the second-set (SN2) firmware has another id: Customize a copy if yours differ.',
+  match: [{ vendor: '16D0', product: '0A38' }, { name: 'MFG Crosswind' }],
+}, 'mfg-crosswind-v3-main', [
+  { id: 'ltoe', input: 'x', label: 'Left Toe Brake', at: [0.13, 0.22], box: [PEDAL_L, 0.22] },
+  { id: 'rtoe', input: 'y', label: 'Right Toe Brake', at: [0.74, 0.18], box: [PEDAL_R, 0.18] },
+  { id: 'rudder', input: 'rotz', label: 'Rudder', at: [0.5, 0.6], box: [PEDAL_R, 0.8] },
+]);
+
+// Thrustmaster T.Flight Rudder Pedals: Windows name "T-Rudder" (TFRP manual), USB 044F:B679 "T-Rudder" / B678
+// "T.Flight Rudder Pedals" (usb.ids). Y = left toe brake, X = right toe brake, Z = rudder (Federico's Game Controllers
+// screenshot). "T-Rudder" only with the Thrustmaster vendor id: "VKBsim T-Rudder" is the VKB pedals.
+pedalTpl({
+  id: 'builtin-tm-tfrp', name: 'Thrustmaster T.Flight Rudder Pedals (TFRP)', brand: 'Thrustmaster',
+  notes: 'Left toe brake = y, right toe brake = x, rudder = z. No buttons. On USB (T.RJ12 adapter, selector on AIRPLANE) Windows shows “T-Rudder”. Plugged into a T.Flight HOTAS (RJ12) the pedals are axes of the stick instead and this template does not apply.',
+  match: [{ vendor: '044F', product: 'B679' }, { vendor: '044F', product: 'B678' }, { vendor: '044F', name: 'T-Rudder' }, { name: 'T.Flight Rudder' }],
+}, 'tm-tfrp-main', [
+  { id: 'ltoe', input: 'y', label: 'Left Toe Brake', at: [0.36, 0.14], box: [PEDAL_L, 0.14] },
+  { id: 'rtoe', input: 'x', label: 'Right Toe Brake', at: [0.8, 0.22], box: [PEDAL_R, 0.22] },
+  { id: 'rudder', input: 'z', label: 'Rudder', at: [0.48, 0.6], box: [PEDAL_L, 0.66] },
+]);
+
+// Thrustmaster Pendular Rudder: USB 044F:B68F "T-Pendular-Rudder". DCS default assignment and Federico's Game Controllers
+// screenshot agree: Y = left toe brake, X = right toe brake, Z = rudder.
+pedalTpl({
+  id: 'builtin-tm-tpr', name: 'Thrustmaster Pendular Rudder (TPR)', brand: 'Thrustmaster',
+  notes: 'Left toe brake = y, right toe brake = x, rudder = z. No buttons. Windows shows “T-Pendular-Rudder” (USB 044F:B68F).',
+  match: [{ vendor: '044F', product: 'B68F' }, { name: 'T-Pendular-Rudder' }, { name: 'Pendular Rudder' }],
+}, 'tm-tpr-main', [
+  { id: 'ltoe', input: 'y', label: 'Left Toe Brake', at: [0.19, 0.33], box: [PEDAL_L, 0.33] },
+  { id: 'rtoe', input: 'x', label: 'Right Toe Brake', at: [0.82, 0.52], box: [PEDAL_R, 0.52] },
+  { id: 'rudder', input: 'z', label: 'Rudder', at: [0.45, 0.3], box: [PEDAL_R, 0.14] },
+]);
+
+// VIRPIL R1-FALCON (VPC-305-001): USB product id not published, so name rules only. VIRPIL pedals show as "VPC Rudder Pedals"
+// with Z = rudder, Slider = left toe brake, Dial = right toe brake (ED forum; DCS default rudder JOY_Z).
+pedalTpl({
+  id: 'builtin-virpil-r1-falcon', name: 'VIRPIL R1-FALCON Rudder Pedals', brand: 'VIRPIL',
+  notes: 'Left toe brake = slider1 (Slider), right toe brake = slider2 (Dial), rudder = z, as VIRPIL pedals report by default. No buttons. Matched by name only (“VPC Rudder Pedals” also covers the older ACE pedals). The VPC Configurator can rename or move the axes: Customize a copy if your numbers differ.',
+  match: [{ name: 'R1-FALCON' }, { name: 'VPC Rudder Pedals' }],
+}, 'virpil-r1-falcon-main', [
+  { id: 'ltoe', input: 'slider1', label: 'Left Toe Brake', at: [0.18, 0.3], box: [PEDAL_L, 0.3] },
+  { id: 'rtoe', input: 'slider2', label: 'Right Toe Brake', at: [0.77, 0.2], box: [PEDAL_R, 0.2] },
+  { id: 'rudder', input: 'z', label: 'Rudder', at: [0.48, 0.55], box: [PEDAL_R, 0.8] },
+]);
+
+// VKB T-Rudder Mk.V: USB 231D:011F "VKBsim T-Rudder" (linux-hardware probes). One axis: the rudder (MARS sensor) = Rx
+// (VKB pedals manual; DCS default for "VKBsim T-Rudder" = JOY_RX). No toe brakes.
+pedalTpl({
+  id: 'builtin-vkb-t-rudder', name: 'VKB T-Rudder Mk.V', brand: 'VKB',
+  notes: 'Rudder = rotx (VKB default). No toe brakes and no buttons. VKB ids and axes depend on the VKBDevCfg setup (some shop pages say Z; through a Black Box it shows as “VKBsim Black Box”), and differential braking from the rudder is a VKBDevCfg option that adds axes: Customize a copy if your numbers differ.',
+  match: [{ vendor: '231D', product: '011F' }, { name: 'VKBsim T-Rudder' }, { name: 'VKB T-Rudder' }, { name: 'T-Rudder Mk' }],
+}, 'vkb-t-rudder-main', [
+  { id: 'rudder', input: 'rotx', label: 'Rudder', at: [0.47, 0.38], box: [PEDAL_L, 0.2] },
+]);
+
 export const DEVICE_TEMPLATES: DeviceTemplate[] = ALL;

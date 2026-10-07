@@ -1134,6 +1134,44 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await sel.selectOption('');
   await page.waitForTimeout(300);
 }
+{ // rudder pedal built-ins: one photo page each, axis chips, markers on the measured spots (photo fractions -> canvas)
+  const sel = dv.getByTestId('template-select');
+  const sizes = Object.fromEntries([...readFileSync(new URL('../src/lib/devicePhotoSizes.ts', import.meta.url), 'utf8').matchAll(/"([\w-]+)": \[ (\d+), (\d+),/g)].map((m) => [m[1], [Number(m[2]), Number(m[3])]]));
+  const PEDALS = [ // id, photo, screenshot, { callout: [chip, photo x, photo y] }
+    ['builtin-honeycomb-charlie', 'honeycomb-charlie-main', '141-pedals-honeycomb-charlie', { ltoe: ['X', 0.17, 0.22], rtoe: ['Y', 0.66, 0.14], rudder: ['Z', 0.42, 0.3] }],
+    ['builtin-logitech-flight-rudder', 'logitech-flight-rudder-main', '142-pedals-logitech-flight-rudder', { ltoe: ['X', 0.37, 0.12], rtoe: ['Y', 0.79, 0.28], rudder: ['RZ', 0.5, 0.47] }],
+    ['builtin-mfg-crosswind', 'mfg-crosswind-v3-main', '143-pedals-mfg-crosswind-v3', { ltoe: ['X', 0.13, 0.22], rtoe: ['Y', 0.74, 0.18], rudder: ['RZ', 0.5, 0.6] }],
+    ['builtin-tm-tfrp', 'tm-tfrp-main', '144-pedals-tm-tfrp', { ltoe: ['Y', 0.36, 0.14], rtoe: ['X', 0.8, 0.22], rudder: ['Z', 0.48, 0.6] }],
+    ['builtin-tm-tpr', 'tm-tpr-main', '145-pedals-tm-tpr', { ltoe: ['Y', 0.19, 0.33], rtoe: ['X', 0.82, 0.52], rudder: ['Z', 0.45, 0.3] }],
+    ['builtin-virpil-r1-falcon', 'virpil-r1-falcon-main', '146-pedals-virpil-r1-falcon', { ltoe: ['S1', 0.18, 0.3], rtoe: ['S2', 0.77, 0.2], rudder: ['Z', 0.48, 0.55] }],
+    ['builtin-vkb-t-rudder', 'vkb-t-rudder-main', '147-pedals-vkb-t-rudder', { rudder: ['RX', 0.47, 0.38] }],
+  ];
+  await page.setViewportSize({ width: 1680, height: 1600 }); // the whole photo page clear of the sticky header
+  for (const [id, photo, file, cs] of PEDALS) {
+    await sel.selectOption(id);
+    await page.waitForTimeout(600);
+    const n = Object.keys(cs).length;
+    check((await dv.locator('[data-callout]').count()) === n, `${id}: ${n} axis callouts`);
+    const view = dv.locator('[data-testid=device-canvas-view][data-view=main]');
+    check((await view.count()) === 1 && (await view.locator('img').first().getAttribute('src') ?? '').includes(`/device-photos/${photo}.webp`), `${id}: its pedal photo`);
+    const chips = {};
+    for (const cid of Object.keys(cs)) chips[cid] = (await dv.locator(`[data-callout="${cid}"]`).innerText()).replace(/\n/g, ' ');
+    check(Object.entries(cs).every(([cid, [chip]]) => new RegExp(`\\b${chip}\\b`).test(chips[cid])) && /Rudder/.test(chips.rudder), `${id}: axis chips ${Object.entries(cs).map(([cid, [chip]]) => `${cid}=${chip}`).join(' ')} (${Object.values(chips).join(' | ').slice(0, 120)})`);
+    const [pw, ph] = sizes[photo], W = Math.round(pw + 0.6 * ph), gx = (W - pw) / 2;
+    const want = Object.fromEntries(Object.entries(cs).map(([cid, [, x, y]]) => [cid, [(gx + x * pw) / W, y]]));
+    const off = await dv.evaluate((root, want) => {
+      const r = root.querySelector('[data-testid=device-canvas-view][data-view=main]').getBoundingClientRect();
+      return Object.entries(want).map(([cid, [x, y]]) => { const m = root.querySelector(`[data-marker="${cid}"] circle`).getBoundingClientRect(); return Math.hypot((m.x + m.width / 2 - r.x) / r.width - x, (m.y + m.height / 2 - r.y) / r.height - y); });
+    }, want);
+    check(off.every((d) => d < 0.006), `${id}: markers on the measured pedal spots (max off ${Math.max(...off).toFixed(4)})`);
+    await view.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(250);
+    await view.screenshot({ path: shots + file + '.png' });
+  }
+  await page.setViewportSize({ width: 1680, height: 1000 });
+  await sel.selectOption('');
+  await page.waitForTimeout(300);
+}
 { // device templates: a >32-button device warns in Chrome; numbers can be assigned on a copy of an unassigned built-in
   await dv.getByTestId('template-select').selectOption('builtin-winctrl-orion');
   await page.waitForTimeout(600);

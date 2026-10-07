@@ -39,6 +39,13 @@
     { "device": "moza-ab6-mh16", "view": "side", "label": "Thumb side (module off)", "src": "stick/moza/ab6-grips/federico-mh16-module-off-grip-only.png" },
     { "device": "moza-ab6-carrierace", "view": "front", "label": "Front (on AB6)", "src": "stick/moza/ab6-grips/federico-ab6-three-grips.png", "crop": [548, 100, 972, 1050] },
     { "device": "moza-ab6-carrierace", "view": "rear", "label": "Rear", "src": "stick/moza/ab6-grips/federico-carrierace-rear.jpg" },
-    { "device": "moza-ab6-viperace", "view": "front", "label": "Front (on AB6)", "src": "stick/moza/ab6-grips/federico-ab6-three-grips.png", "crop": [972, 100, 1448, 1050] }
+    { "device": "moza-ab6-viperace", "view": "front", "label": "Front (on AB6)", "src": "stick/moza/ab6-grips/federico-ab6-three-grips.png", "crop": [972, 100, 1448, 1050] },
+    { "device": "honeycomb-charlie", "view": "main", "label": "Pedals", "src": "../../pedals/honeycomb/HC003073_CHARLIERUDDERPEDALS_2.webp" },
+    { "device": "logitech-flight-rudder", "view": "main", "label": "Pedals", "src": "../../pedals/logitech/flight-rudder-pedals-gallery-3.webp" },
+    { "device": "mfg-crosswind-v3", "view": "main", "label": "Pedals", "src": "../../pedals/mfg/mfg-crosswind-v3-base-clean.png" },
+    { "device": "tm-tfrp", "view": "main", "label": "Pedals", "src": "../../pedals/thrustmaster/tfrp/tfrp-rudder_1_1.webp" },
+    { "device": "tm-tpr", "view": "main", "label": "Pedals", "src": "../../pedals/thrustmaster/tpr/tpr_1000x100-3.webp" },
+    { "device": "virpil-r1-falcon", "view": "main", "label": "Pedals", "src": "../../pedals/virpil/vpc-305-001_04.jpg" },
+    { "device": "vkb-t-rudder", "view": "main", "label": "Pedals", "src": "../../pedals/vkb/T-Rudder_1200_03.webp", "crop": [0, 120, 600, 600] }
   ]
 }
