@@ -1103,6 +1103,37 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await dv.getByTestId('template-select').selectOption('');
   await page.waitForTimeout(300);
 }
+{ // MOZA AB6 base + other grips: grip variants of the AB6 (same USB id, never auto-linked), one photo page per view
+  const sel = dv.getByTestId('template-select');
+  const GRIPS = [
+    ['builtin-moza-ab6-mh16', 19, [['front', '133-moza-ab6-mh16-front'], ['side', '134-moza-ab6-mh16-side']], ['castle', /20/, /24/]],
+    ['builtin-moza-ab6-carrierace', 16, [['front', '135-moza-ab6-carrierace-front'], ['side', '136-moza-ab6-carrierace-side'], ['rear', '137-moza-ab6-carrierace-rear']], ['hatC', /21/, /25/]],
+    ['builtin-moza-ab6-viperace', 21, [['front', '138-moza-ab6-viperace-front'], ['side', '139-moza-ab6-viperace-side']], ['hatE', /36/, /40/]],
+  ];
+  check(await sel.locator('optgroup[data-group=grips]').count() === 0, 'grip variants: no “Grips for this base” group when the slot is not an AB6');
+  check(await sel.locator('optgroup[data-group=MOZA] option[value="builtin-moza-ab6-mh16"]').count() === 1, 'grip variants listed under MOZA in the template picker');
+  await page.setViewportSize({ width: 1680, height: 1600 }); // each whole photo page clear of the sticky header
+  for (const [id, n, views, [cid, lo, hi]] of GRIPS) {
+    await sel.selectOption(id);
+    await page.waitForTimeout(600);
+    check((await dv.locator('[data-callout]').count()) === n, `${id}: ${n} callouts (${await dv.locator('[data-callout]').count()})`);
+    const chips = (await dv.locator(`[data-callout="${cid}"]`).innerText()).replace(/\n/g, ' ');
+    check(lo.test(chips) && hi.test(chips), `${id}: ${cid} chips show its DI numbers (${chips.slice(0, 80)})`);
+    const keys = (await dv.locator('[data-callout="bkeys"]').innerText()).replace(/\n/g, ' ');
+    check(/49/.test(keys) && /52/.test(keys), `${id}: AB6 base keys 49-52 (${keys.slice(0, 60)})`);
+    check(/Firefox/.test(await dv.getByTestId('chromium-button-notice').innerText().catch(() => '')), `${id}: buttons up to 62 -> Chromium notice points to Firefox`);
+    for (const [v, file] of views) {
+      const page_ = dv.locator(`[data-testid=device-canvas-view][data-view=${v}]`);
+      check(await page_.count() === 1, `${id}: ${v} photo page`);
+      await page_.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(250);
+      await page_.screenshot({ path: shots + file + '.png' });
+    }
+  }
+  await page.setViewportSize({ width: 1680, height: 1000 });
+  await sel.selectOption('');
+  await page.waitForTimeout(300);
+}
 { // device templates: a >32-button device warns in Chrome; numbers can be assigned on a copy of an unassigned built-in
   await dv.getByTestId('template-select').selectOption('builtin-winctrl-orion');
   await page.waitForTimeout(600);
@@ -1177,6 +1208,24 @@ for (let k = 0; k < 2; k++) { await mozaHw.nth(k).getByRole('button', { name: /a
 const mozaSlots = await fpanel.locator('[data-testid=slot-row]').evaluateAll((rs) => rs.map((r) => [r.dataset.slot, r.querySelector('[data-testid=slot-hw]')?.selectedOptions[0]?.text ?? '']));
 check(mozaSlots.length === 2 && mozaSlots.every(([, t]) => /MOZA AB6/.test(t)), `MOZA bases added as slots (${mozaSlots.map((x) => x.join('=')).join(', ')})`);
 const moza133 = mozaSlots.find(([, t]) => /133 buttons/.test(t))?.[0];
+{ // AB6 grip variants: offered under the AB6 in the Template list of the AB6 stick slot only (Automatic stays the plain AB6); a pick sticks
+  const stickRow = fpanel.locator(`[data-testid=slot-row][data-slot="${moza133}"]`);
+  const otherRow = fpanel.locator(`[data-testid=slot-row][data-slot="${mozaSlots.find(([id]) => id !== moza133)[0]}"]`);
+  const tsel = stickRow.getByTestId('slot-template');
+  const grips = await tsel.locator('optgroup[data-group=grips] option').allInnerTexts();
+  const autoTxt = await tsel.locator('option[value=""]').innerText();
+  check(/MOZA AB6 base \+ MHG/.test(autoTxt) && grips.length === 4 && /MHG/.test(grips[0]) && /MH16/.test(grips[1]) && /CarrierAce/.test(grips[2]) && /ViperAce/.test(grips[3]),
+    `AB6 stick slot: Automatic = plain AB6, “Grips for this base” = AB6 + MH16 / CarrierAce / ViperAce (${autoTxt} | ${grips.join(' | ')})`);
+  check(await otherRow.getByTestId('slot-template').locator('optgroup[data-group=grips]').count() === 0, 'the other AB6 (guessed MTQ throttle) has no grip group');
+  await tsel.selectOption('builtin-moza-ab6-viperace');
+  await fp.waitForTimeout(300);
+  check((await tsel.inputValue()) === 'builtin-moza-ab6-viperace' && /picked by you/.test(await stickRow.innerText()), 'picking the ViperAce grip variant sticks on the AB6 slot');
+  await stickRow.scrollIntoViewIfNeeded();
+  await stickRow.screenshot({ path: shots + '140-ab6-grip-variant-picked.png' });
+  await tsel.selectOption('');
+  await fp.waitForTimeout(300);
+  check((await tsel.inputValue()) === '', 'back to Automatic (plain AB6)');
+}
 await fpanel.getByTestId('tab-tester').click();
 await fp.waitForTimeout(400);
 // round 5: a press scrolls its device card into sight and flashes it (held buttons don't repeat; the user scrolling wins)

@@ -804,10 +804,10 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[2].id]: { view: 'front', x: 1.5, y: 0.5 } } })), 'coordinates outside 0..1 rejected');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { views: [], anchors: {} })), 'empty layout rejected');
   });
-  t('device templates (24 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
+  t('device templates (27 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    assert.equal(DEVICE_TEMPLATES.length, 24, 'all 24 device templates');
+    assert.equal(DEVICE_TEMPLATES.length, 27, 'all 27 device templates (24 devices + 3 AB6 grip variants)');
     assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
     // devices without published numbers: callout spots only (stick X / Y where obvious)
     const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-vkb-gunfighter-mcg', 'builtin-vkb-stecs', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
@@ -818,7 +818,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     for (const d of DEVICE_TEMPLATES) {
       assert.ok(d.builtin && d.brand && d.id.startsWith('builtin-') && !d.image && (d.views?.length ? !d.loadImage && d.views.every((v) => tp.BUILTIN_PHOTO_RE.test(v.image ?? '')) : typeof d.loadImage === 'function') && d.notes, `${d.id}: picture loaded on demand (art) or built-in photos (photo template)`);
       ASPECTS.add(d.aspect);
-      assert.ok(d.match.some((m) => m.name), `${d.id}: name pattern`);
+      if (d.variantOf) assert.deepEqual(d.match, [], `${d.id}: a grip variant has no match rules (picked by hand)`);
+      else assert.ok(d.match.some((m) => m.name), `${d.id}: name pattern`);
       assert.equal(d.match.some((m) => m.vendor && m.product), USB.has(d.id), `${d.id}: USB id only where confident`);
       const inputs = d.callouts.flatMap((c) => c.inputs).filter(Boolean);
       assert.equal(new Set(inputs).size, inputs.length, `${d.id}: every input on one callout`);
@@ -1100,8 +1101,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(r.image === 'data:image/svg+xml,<svg/>' && !(lazy as { image?: string }).image, 'picture resolves, template untouched');
     assert.equal((await tp.resolveTemplateImage(lazy)).image, r.image, 'cached'); assert.equal(calls, 1);
     const imgs = await Promise.all(DEVICE_TEMPLATES.map((x) => tp.resolveTemplateImage(x).then((y) => y.image ?? y.views!.map((v) => v.image).join()))); // (photo templates: their views' photos)
-    assert.equal(new Set(imgs).size, 24, 'one distinct picture per device');
-    passed++; console.log('  ✓ device template pictures: all 24 photo templates (distinct), lazy pictures cached');
+    assert.equal(new Set(imgs).size, 27, 'one distinct picture per device');
+    passed++; console.log('  ✓ device template pictures: all 27 photo templates (distinct), lazy pictures cached');
   }
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };
@@ -1290,6 +1291,75 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[1], undefined, { [legacyKey]: 'builtin-stick' }).legacy, true, 'old per-device picks still apply');
     m = sl.setSlotTemplate(m, S('js', 2), st.AUTO_TEMPLATE);
     assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[1], undefined, { [legacyKey]: 'builtin-stick' }).template.id, 'builtin-moza-mtq', 'Automatic beats an old pick');
+  });
+  t('MOZA AB6 grip variants (MH16 / CarrierAce / ViperAce EX): never picked automatically, listed under the AB6, real DI numbers per grip', () => {
+    const ids = ['builtin-moza-ab6-mh16', 'builtin-moza-ab6-carrierace', 'builtin-moza-ab6-viperace'];
+    const [mh, ca, va] = ids.map((id) => ALL.find((x) => x.id === id)!);
+    const ab6 = ALL.find((x) => x.id === 'builtin-moza-ab6')!;
+    for (const v of [mh, ca, va]) {
+      assert.ok(v, 'variant exists');
+      assert.equal(v.variantOf, 'builtin-moza-ab6', `${v.id}: variant of the AB6`);
+      assert.deepEqual(v.match, [], `${v.id}: no match rules (same USB id as the plain AB6)`);
+      assert.equal(v.brand, 'MOZA'); assert.ok(v.builtin);
+      assert.match(v.notes!, /Never picked automatically/); assert.match(v.notes!, /Firefox/, `${v.id}: buttons above 32 need Firefox`);
+      assert.equal(tpl.maxButton(v), 62, `${v.id}: base buttons up to 62`);
+      for (const id of ['bkeys', 'bkeysr', 'wl', 'wlb', 'wr', 'wrb'])
+        assert.deepEqual(v.callouts.find((c) => c.id === id)?.inputs, ab6.callouts.find((c) => c.id === id)!.inputs, `${v.id}/${id}: the AB6 base numbers`);
+      for (const view of v.views!) assert.ok(v.callouts.some((c) => c.view === view.id), `${v.id}: callouts on view ${view.id}`);
+    }
+    assert.deepEqual([mh, ca, va].map((v) => v.views!.map((w) => w.id)), [['front', 'side'], ['front', 'side', 'rear'], ['front', 'side']]);
+    assert.deepEqual([mh, ca, va].map((v) => v.views![0].image), ['/device-photos/moza-ab6-mh16-front.webp', '/device-photos/moza-ab6-carrierace-front.webp', '/device-photos/moza-ab6-viperace-front.webp']);
+    // autodetect untouched: one or two AB6 bases, 128 / 133 buttons, USB id or name only
+    const ab6Id = (buttons: number, dup?: { n: number; of: number }) => ({ name: 'MOZA AB6 FFB Base', vendor: '346E', productId: '1002', buttons, slot: 'js' as const, ...(dup ? { dup } : {}) });
+    for (const n of [128, 133]) {
+      assert.equal(tpl.pickTemplate(ALL, ab6Id(n)).template.id, 'builtin-moza-ab6', `one AB6 (${n} buttons): the plain AB6`);
+      assert.equal(tpl.pickTemplate(ALL, ab6Id(n, { n: 2, of: 2 })).template.id, 'builtin-moza-ab6', `last of two AB6 (${n}): the stick = plain AB6`);
+      assert.equal(tpl.pickTemplate(ALL, ab6Id(n, { n: 1, of: 2 })).template.id, 'builtin-moza-mtq', `first of two AB6 (${n}): the MTQ`);
+    }
+    for (const name of ['MOZA AB6', 'MOZA AB6 FFB Base', 'MOZA AB6 MH16', 'AB6 CarrierAce', 'AB6 ViperAce'])
+      assert.equal(tpl.pickTemplate(ALL, { name, slot: 'js' }).template.id, 'builtin-moza-ab6', `name only (${name}): the plain AB6`);
+    assert.ok(!ids.includes(tpl.pickTemplate(ALL, { name: 'WINCTRL Orion Joystick Base Metal 2 + JGRIP-F16', slot: 'js' }).template.id), 'WinCtrl base keeps its own ViperAce template');
+    // picked by hand: wins, and follows the hardware like any pick
+    for (const id of ids) {
+      const r = tpl.pickTemplate(ALL, ab6Id(128, { n: 2, of: 2 }), id);
+      assert.deepEqual([r.template.id, r.how], [id, 'chosen']);
+    }
+    let m = sl.assignHardware(sl.addSlot(sl.emptySlotMap(), 'js'), S('js', 1), sl.hardwareOf(AB2));
+    assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[0], undefined).template.id, 'builtin-moza-ab6');
+    m = sl.setSlotTemplate(m, S('js', 1), 'builtin-moza-ab6-viperace');
+    assert.deepEqual([st.resolveSlotTemplate(ALL, m, m.slots[0], undefined).template.id, st.resolveSlotTemplate(ALL, m, m.slots[0], undefined).how], ['builtin-moza-ab6-viperace', 'chosen']);
+    assert.equal(st.autoSlotTemplate(ALL, m.slots[0]).id, 'builtin-moza-ab6', 'Automatic stays the plain AB6');
+    // the pickers' grip group: the AB6 first, then its variants; nothing for other templates or user copies
+    const fam = ['builtin-moza-ab6', ...ids];
+    assert.deepEqual(tpl.templateVariants(ALL, ab6).map((x) => x.id), fam);
+    assert.deepEqual(tpl.templateVariants(ALL, ca).map((x) => x.id), fam, 'from a variant too');
+    assert.deepEqual(tpl.templateVariants(ALL, ALL.find((x) => x.id === 'builtin-moza-mtq')), []);
+    assert.deepEqual(tpl.templateVariants(ALL, undefined), []);
+    const copy = tpl.cloneTemplate(mh);
+    assert.equal(copy.variantOf, undefined, 'a user copy is no variant'); assert.deepEqual(tpl.templateVariants([copy, ...ALL], copy), []);
+    assert.ok(!('variantOf' in tpl.parseTemplates(tpl.exportTemplates([{ ...mh, builtin: undefined, id: 'copy' } as any]))[0]), 'not exported');
+    // DI coverage per grip
+    const nums = (x: DeviceTemplate) => x.callouts.flatMap((c) => c.inputs).filter((i) => /^button/.test(i)).map((i) => Number(i.slice(6))).sort((p, q) => p - q);
+    const axes = (x: DeviceTemplate) => x.callouts.flatMap((c) => c.inputs).filter((i) => !/^(button|hat)/.test(i)).sort();
+    const seq = (a: number, z: number, skip: number[] = []) => Array.from({ length: z - a + 1 }, (_, i) => a + i).filter((n) => !skip.includes(n));
+    const ins = (x: DeviceTemplate, id: string) => x.callouts.find((c) => c.id === id)!.inputs;
+    const bs = (...n: number[]) => n.map((i) => `button${i}`);
+    assert.deepEqual(nums(mh), [...seq(1, 31, [27]), ...seq(49, 62)], 'MH16: grip 1-31 (27 unused) + base 49-62');
+    assert.deepEqual(axes(mh), ['slider1', 'slider2', 'x', 'y'], 'MH16: X / Y (no twist) + base levers');
+    assert.deepEqual([ins(mh, 'trig'), ins(mh, 'wpn'), ins(mh, 'fov'), ins(mh, 'paddle'), ins(mh, 'nws')], [bs(1, 6), bs(2), bs(3), bs(4), bs(5)]);
+    assert.deepEqual([ins(mh, 'tms'), ins(mh, 'dms'), ins(mh, 'cms')], [bs(7, 8, 9, 10), bs(11, 12, 13, 14), bs(15, 16, 17, 18, 19)], 'MH16 hats: up / right / down / left (+ CMS push)');
+    assert.deepEqual([ins(mh, 'castle'), ins(mh, 'msw'), ins(mh, 'trim'), ins(mh, 'trimpov')], [bs(20, 21, 22, 23, 24), bs(25, 26), bs(28, 29, 30, 31), ['hat1_up', 'hat1_right', 'hat1_down', 'hat1_left']]);
+    // WinCtrl grips: the WinCtrl template's grip numbers (minus the paddle axis, which shares S1 with the base left lever)
+    for (const [v, wc] of [[ca, 'builtin-winctrl-carrierace'], [va, 'builtin-winctrl-viperace']] as const) {
+      const w = ALL.find((x) => x.id === wc)!;
+      for (const cw of w.callouts.filter((x) => x.id !== 'paddlea')) assert.deepEqual(ins(v, cw.id), cw.inputs, `${v.id}/${cw.id}: as on ${wc}`);
+      assert.ok(!v.callouts.some((x) => x.id === 'paddlea'), `${v.id}: no separate paddle axis`);
+    }
+    assert.deepEqual(nums(ca), [...seq(1, 27, [19]), ...seq(49, 62)], 'CarrierAce on AB6: grip 1-27 (19 = POV trim) + base 49-62');
+    assert.deepEqual(axes(ca), ['slider1', 'slider2', 'x', 'y']);
+    assert.deepEqual(nums(va), [...seq(1, 42, [19]), ...seq(49, 62)], 'ViperAce EX on AB6: grip 1-42 (19 = POV trim) + base 49-62');
+    assert.deepEqual(axes(va), ['rotx', 'roty', 'rotz', 'slider1', 'slider2', 'x', 'y']);
+    assert.deepEqual([mh, ca, va].map((v) => v.callouts.length), [19, 16, 21]);
   });
   t('slots: removing drops only the profile\'s bindings on that slot (cleared defaults stay cleared); ensureUsedSlots re-adds used numbers', () => {
     const rb = {

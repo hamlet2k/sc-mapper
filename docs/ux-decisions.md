@@ -637,3 +637,22 @@ From Federico's WinCtrl / SimAppPro diagrams (2026-10-06); anchors placed by eye
 - **HUD view (11 callouts):** NORM/REJ1/REJ2 65-67, DAY/NIGHT 68/69, W/B/VID/OFF 70-72, ALT BARO/RDR 73/74, ATT INS/AUTO/STBY 75-77, HDG 80/79/78, CRS 83/82/81 (left / centre / right); axes BRT = X, BLK LVL = Y, BAL = Z, AOA = Dial (`slider2`, same convention as the Orion dial wheel).
 - **PTO 2 (14 callouts):** PUSH TO JETT 1, LAUNCH BAR 3/4, FLAP 5-7, LDG/TAXI 8/9, ANTI SKID 10/11, HOOK BYPASS 12/13, PROBE 14-16, SELECT JETT rotary 17-21 + push 22 (separate callouts), JETT STATION 23-27 (group), WING FOLD 28-31, HOOK 32-34, LDG GEAR 35-37, EMERG/PARK BRK 38-41. Button 2 (MASTER CAUTION) is not numbered in the diagram and is not mapped.
 
+## MOZA AB6 with other grips (grip variants, Oct 6 2026)
+
+Federico runs the AB6 base with three grips besides the MHG: MOZA MH16, WinCtrl CarrierAce and WinCtrl ViperAce EX.
+
+- **USB identity.** A grip has no USB of its own: the AB6 is the only USB / DirectInput device ("MOZA AB6 FFB Base", 346E:1002) and reports the grip's buttons with its own (grip in the low numbers, base 49-62). WinWing grips go on the base through MOZA's grip adaptor + data cable, set as the grip type in MOZA Cockpit, and report the same buttons as on a WinWing base. Nothing tells the grips apart from the browser (same id, same button count).
+- **Decision: grip variants, picked by hand.** Three built-ins with `variantOf: 'builtin-moza-ab6'` and **no match rules**, so autodetect, the dual-AB6 guess (last AB6 = stick, others = MTQ) and the plain AB6 as the automatic default are all unchanged. Separate templates (not TemplateView swap views like the MTQ grips) because the grips reuse the same button numbers.
+- **Picker.** When a slot's automatic template is a base that has variants, both template pickers (Game slots modal `slot-template`, Devices bar `template-select`) show a "Grips for this base (pick yours)" group right under Automatic: the base, then its variants (`templateVariants`). They're also listed under MOZA as usual. A pick follows the hardware like any other pick. `variantOf` is built-in only: a "Customize a copy" drops it, and it isn't exported.
+- **Base controls** keep the AB6 numbers in every variant: keys 49-52 / 53-56, left lever S1 + zones 57-59, right lever S2 + zones 60-62. Every variant goes up to button 62, so its notes point to Firefox.
+
+| Id | Grip numbering | Photos |
+|---|---|---|
+| `builtin-moza-ab6-mh16` | MOZA Cockpit MH16 diagram: trigger 1/6, WPN REL 2, Expand/FOV 3, paddle 4 (button only), NWS 5, TMS 7-10, DMS 11-14, CMS 15-19, module hat 20-24, module switch 25/26, trim 28-31 in Button mode (POV 1 in D-pad mode, own callout); X/Y only | `moza-ab6-mh16-front.webp`, `moza-ab6-mh16-side.webp` (module off) |
+| `builtin-moza-ab6-carrierace` | as `builtin-winctrl-carrierace` (1-27, trim POV 1) | `moza-ab6-carrierace-front.webp`, `winctrl-carrierace-side.webp`, `moza-ab6-carrierace-rear.webp` |
+| `builtin-moza-ab6-viperace` | as `builtin-winctrl-viperace` (1-42, trim POV 1, ministick RX/RY, wheel RZ) | `moza-ab6-viperace-front.webp`, `winctrl-viperace-side.webp` |
+
+- The WinCtrl grips' separate paddle axis (`paddlea`, S1) is left out: on the AB6 it takes the base left lever's S1 when turned on in MOZA Cockpit (noted on the template).
+- Photos: Federico's pictures, cut out with `scripts/device-photos/cutout.py` (entries in `views.json`; the three front views are crops of his three-grips photo). Positions placed by eye.
+- To check on the hardware: CarrierAce support on the AB6 (not on MOZA's supported-grip list), the MH16 numbers (taken from an AB9 Cockpit screenshot), the ViperAce EX wheel / hall trigger 41/42 vs SimAppPro's 42/43, and where button 6 (CarrierAce rear button) and 3 / 5 (MH16 FOV / NWS) physically sit.
+- Screenshots: `133`-`139` (each photo page of each variant), `140-ab6-grip-variant-picked.png` (Firefox, the AB6 stick slot with the ViperAce variant picked).

@@ -81,6 +81,13 @@ export interface DeviceTemplate {
   brand?: string;
   /** short note shown with the template, e.g. how the device numbers its buttons */
   notes?: string;
+  /**
+   * built-in device templates only: the id of the template this one is a variant of (e.g. a MOZA AB6 base fitted with another
+   * grip, which reports the same USB id and button count as the plain AB6, so it can't be told apart). A variant has no match
+   * rules (never linked automatically); the pickers list it under its base whenever that base is the slot's automatic template.
+   * Not stored or exported (a user copy is a template of its own).
+   */
+  variantOf?: string;
   /** built-in device templates: the picture is loaded on demand (see resolveTemplateImage); never stored or exported */
   loadImage?: () => Promise<string>;
   updatedAt?: number;
@@ -466,6 +473,20 @@ export function templateGroups(list: DeviceTemplate[]): { label: string; templat
   ];
 }
 
+/**
+ * grip variants for the template pickers: when `t` (usually the slot's automatic template) is a built-in with variants, or is a
+ * variant itself, the base first and then its variants (built-ins only, A-Z); otherwise none
+ */
+/** picker group of a base's grip variants (see templateVariants) */
+export const GRIPS_GROUP = 'Grips for this base (pick yours)';
+export function templateVariants(list: DeviceTemplate[], t: DeviceTemplate | undefined): DeviceTemplate[] {
+  if (!t?.builtin) return [];
+  const baseId = t.variantOf ?? t.id;
+  const base = list.find((x) => x.id === baseId && x.builtin);
+  const vs = list.filter((x) => x.builtin && x.variantOf === baseId).sort((a, b) => a.name.localeCompare(b.name));
+  return base && vs.length ? [base, ...vs] : [];
+}
+
 /** pictures of built-in device templates, loaded on demand (each its own chunk) */
 const imageCache = new Map<string, string>();
 /** the template with its picture: built-in device templates load theirs on first use */
@@ -524,7 +545,10 @@ export function useTemplates() {
 /** a fresh template (blank canvas unless an image is given) */
 export const newTemplate = (slot: 'js' | 'gp', name = 'My device'): DeviceTemplate => ({ version: 1, id: uid(), name, slot, aspect: BLANK_ASPECT, match: [], callouts: [] });
 /** an editable copy of a template (built-ins are read-only) */
-export const cloneTemplate = (t: DeviceTemplate, name = `${t.name} (copy)`): DeviceTemplate => ({ ...structuredClone({ ...t, builtin: undefined, loadImage: undefined }), id: uid(), name, builtin: undefined, loadImage: undefined });
+export const cloneTemplate = (t: DeviceTemplate, name = `${t.name} (copy)`): DeviceTemplate => {
+  const { variantOf: _variant, ...rest } = t; // a copy is a template of its own, not a grip variant of a built-in
+  return { ...structuredClone({ ...rest, builtin: undefined, loadImage: undefined }), id: uid(), name, builtin: undefined, loadImage: undefined };
+};
 // (a copy keeps `brand` and `notes`: harmless for user templates, which are always listed under “Your templates”)
 
 /** where the label for a new callout goes: free slots down the left and right edges, nearest side first */

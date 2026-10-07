@@ -583,6 +583,76 @@ photoTplExactViews({
     anchor: { x: 0.59429658955041, y: 0.6451036764766327 }, box: { x: 0.7626964231480046, y: 0.921313452697316 } },
 ]);
 
+// MOZA AB6 base fitted with other grips: grip variants of the AB6 above (same USB id 346E:1002 and button count whatever grip is
+// fitted, so they have no match rules and are never picked automatically; the template pickers list them under the AB6).
+// Base controls keep the AB6's numbers (keys 49-56, levers S1 / S2 + zones 57-62).
+const AB6_GRIP_NOTE = 'Never picked automatically (same USB id 346E:1002 as the plain AB6): pick it under “Grips for this base”. Base 49-62, S1, S2 as on the AB6. Buttons above 32: use Firefox.';
+const AB6_WC_NOTE = 'WinCtrl grip on the MOZA adaptor: numbers as on the WinCtrl template (check in the input tester). Paddle axis, if on, replaces base lever S1.';
+const ab6Base = (): Spec[] => [
+  c('bkeys', 'buttons', b(49, 50, 51, 52), 'Base keys (left) 49-52', 'Base'),
+  c('bkeysr', 'buttons', b(53, 54, 55, 56), 'Base keys (right) 53-56', 'Base'),
+  c('wl', 'axis', ['slider1'], 'Slider wheel (left)', 'Base'),
+  c('wlb', 'switch', b(57, 58, 59), 'Slider wheel (zones)', 'Base'),
+  c('wr', 'axis', ['slider2'], 'Dial wheel (right)', 'Base'),
+  c('wrb', 'switch', b(60, 61, 62), 'Dial wheel (zones)', 'Base'),
+];
+photoTpl({
+  id: 'builtin-moza-ab6-mh16', name: 'MOZA AB6 base + MH16 grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
+  notes: 'MOZA Cockpit MH16 diagram, trim in Button mode (D-pad mode: trim = POV 1). TMS / DMS / trim: no push; paddle: button only; twist only with the Z module. Numbers differ? “Customize a copy”. ' + AB6_GRIP_NOTE,
+}, [
+  c('castle', 'hat', b(20, 21, 22, 23, 24), 'Module hat (4-way + push)', 'Side module'),
+  c('msw', 'switch', b(25, 26), 'Module switch (25 / centre / 26)', 'Side module'),
+  c('wpn', 'button', b(2), 'WPN REL', 'Grip head'),
+  c('trim', 'hat', b(28, 29, 30, 31), 'Trim hat (Button mode)', 'Grip head'),
+  c('trimpov', 'hat', hat(1), 'Trim hat as POV (D-pad mode)', 'Grip head'),
+  c('tms', 'hat', b(7, 8, 9, 10), 'TMS hat (4-way)', 'Grip head'),
+  c('dms', 'hat', b(11, 12, 13, 14), 'DMS hat (4-way)', 'Grip head'),
+  c('cms', 'hat', b(15, 16, 17, 18, 19), 'CMS hat (4-way + push)', 'Grip'),
+  c('nws', 'button', b(5), 'NWS / A/R DISC / MSL STEP', 'Grip head'),
+  c('trig', 'switch', b(1, 6), 'Trigger (stage 1 / 2)', 'Grip'),
+  c('fov', 'button', b(3), 'Expand / FOV', 'Grip'),
+  c('paddle', 'button', b(4), 'Paddle switch', 'Grip'),
+  c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes'),
+  ...ab6Base(),
+]);
+photoTpl({
+  id: 'builtin-moza-ab6-carrierace', name: 'MOZA AB6 base + WinCtrl CarrierAce grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
+  notes: AB6_WC_NOTE + ' Not on MOZA’s supported-grip list: check your AB6 firmware. ' + AB6_GRIP_NOTE,
+}, [
+  c('wpn', 'button', b(20), 'Weapon release', 'Grip head'),
+  c('hatC', 'hat', b(22, 23, 24, 25, 21), 'Hat C (4-way + push)', 'Grip head'),
+  c('sel5', 'switch', b(1, 2, 26, 27, 3), '5-way switch', 'Grip head'),
+  c('trim', 'hat', hat(1), 'Trim hat (8-way POV)', 'Grip head'),
+  c('hatB', 'hat', b(15, 16, 17, 18, 14), 'Hat B (4-way + push)', 'Grip head'),
+  c('hatA', 'hat', b(10, 11, 12, 13, 9), 'Hat A (4-way + push)', 'Grip'),
+  c('trig', 'switch', b(4, 5), 'Trigger (stage 1 / 2)', 'Grip'),
+  c('paddle', 'switch', b(7, 8), 'Paddle (stage 1 / 2)', 'Grip'),
+  c('rear', 'button', b(6), 'Rear button', 'Grip'),
+  c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes'),
+  ...ab6Base(),
+]);
+photoTpl({
+  id: 'builtin-moza-ab6-viperace', name: 'MOZA AB6 base + WinCtrl ViperAce EX grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
+  notes: AB6_WC_NOTE + ' Wheel / EX trigger 1 / 2 / 41 / 42 / 3 (SimAppPro: 42 / 43). ' + AB6_GRIP_NOTE,
+}, [
+  c('cms', 'hat', b(22, 23, 24, 25, 21), 'Thumb hat (4-way + push)', 'Side module'),
+  c('wpn', 'button', b(20), 'Weapon release', 'Grip head'),
+  c('mini', 'axis', ['rotx', 'roty'], 'Ministick', 'Side module'),
+  c('minib', 'hat', b(27, 28, 29, 30, 26), 'Ministick (digital + press)', 'Side module'),
+  c('trim', 'hat', hat(1), 'Trim hat (8-way POV)', 'Grip head'),
+  c('hatD', 'hat', b(32, 33, 34, 35, 31), 'Hat D (4-way + push)', 'Grip head'),
+  c('hatE', 'hat', b(37, 38, 39, 40, 36), 'Hat E (4-way + push)', 'Grip head'),
+  c('tms', 'hat', b(10, 11, 12, 13, 9), 'Hat (4-way + push)', 'Grip'),
+  c('nws', 'button', b(6), 'Front button', 'Grip'),
+  c('dms', 'hat', b(15, 16, 17, 18, 14), 'Hat (4-way + push)', 'Grip'),
+  c('trig', 'switch', b(4, 5), 'Trigger (stage 1 / 2)', 'Grip'),
+  c('wheel', 'switch', b(1, 2, 41, 42, 3), 'Wheel / EX trigger (5-way)', 'Grip'),
+  c('wheela', 'axis', ['rotz'], 'Wheel / EX trigger (analog)', 'Grip'),
+  c('paddle', 'switch', b(7, 8), 'Paddle (stage 1 / 2)', 'Grip'),
+  c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes'),
+  ...ab6Base(),
+]);
+
 tpl('moza-mtp', {
   id: 'builtin-moza-mtp', name: 'MOZA MTP throttle', brand: 'MOZA',
   notes: MOZA_NOTE + ' Uses buttons up to 71: Chrome / Edge only report the first 32, use Firefox.',

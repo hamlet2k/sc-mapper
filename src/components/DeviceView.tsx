@@ -9,7 +9,7 @@ import type { PressHit } from '../lib/listen';
 import { parseQuery, scoreRow } from '../lib/search';
 import {
   DUP_ORDER_GUESSES, calloutFor, calloutTitle, cloneTemplate, coveredInputs, exportTemplates, identityKey, inputRole, matchFor, matchScore, maxButton, newTemplate,
-  calloutView, imageSrc, parseTemplates, resolveTemplateImage, templateViews, shortInput, splitCombo, templateGroups, unassignedCount, useTemplateImage, useTemplates,
+  calloutView, imageSrc, parseTemplates, resolveTemplateImage, templateViews, shortInput, splitCombo, templateGroups, templateVariants, GRIPS_GROUP, unassignedCount, useTemplateImage, useTemplates,
   type Callout, type DeviceIdentity, type DeviceTemplate,
 } from '../lib/templates';
 import type { Binding, Row, Slot } from '../lib/types';
@@ -147,6 +147,8 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   const ident = chosen.ident;
   const idKey = identityKey(ident);
   const tpl = useTemplateImage(chosen.template); // built-in device templates: the picture arrives on demand
+  const autoTpl = autoSlotTemplate(T.templates, opt.gs, opt.pad);
+  const grips = templateVariants(T.templates, autoTpl); // grip variants of the automatic template (e.g. MOZA AB6 + another grip: same USB id)
   const tplMax = maxButton(tpl);
   const unassigned = tpl.callouts.reduce((n, c) => n + unassignedCount(c), 0);
   const rawLive = useLiveInputs(opt.pad);
@@ -312,7 +314,12 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
               <span className={LABEL}>Template</span>
               <select value={chosen.pick} onChange={(e) => onPickTemplate(opt.gs, e.target.value || (chosen.legacy ? AUTO_TEMPLATE : null))} data-testid="template-select" aria-label={`Template for ${slot}${instance}`}
                 className="max-w-[18rem] rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200 outline-none focus:border-hud">
-                <option value="">Automatic ({autoSlotTemplate(T.templates, opt.gs, opt.pad).name})</option>
+                <option value="">Automatic ({autoTpl.name})</option>
+                {grips.length > 0 && (
+                  <optgroup label={GRIPS_GROUP} data-group="grips">
+                    {grips.map((t) => <option key={t.id} value={t.id}>{t.name}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
+                  </optgroup>
+                )}
                 {templateGroups(T.templates).map((g) => (
                   <optgroup key={g.label} label={g.label} data-group={g.label}>
                     {g.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.slot !== opt.slot ? ` · ${t.slot}` : ''}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}

@@ -34,6 +34,11 @@
     { "device": "vkb-stecs", "view": "front", "label": "Front", "src": "throttles/vkb/STECS/STECS_Standard_Mk2_1200_04.webp" },
     { "device": "vkb-stecs", "view": "back", "label": "Grip side", "src": "throttles/vkb/STECS/STECS_Standard_Mk2_1200_05.webp" },
     { "device": "logitech-x56-stick", "view": "main", "label": "Front", "src": "stick/logitech/x56/1045614839_6_.webp" },
-    { "device": "logitech-x56-throttle", "view": "main", "label": "Front", "src": "throttles/logitech/x56/flight-simulation-logitech-saitek-pro-flight-x-56-h-o-t-a-s-system-for-pc-33735051739179.webp" }
+    { "device": "logitech-x56-throttle", "view": "main", "label": "Front", "src": "throttles/logitech/x56/flight-simulation-logitech-saitek-pro-flight-x-56-h-o-t-a-s-system-for-pc-33735051739179.webp" },
+    { "device": "moza-ab6-mh16", "view": "front", "label": "Front (on AB6)", "src": "stick/moza/ab6-grips/federico-ab6-three-grips.png", "crop": [40, 100, 548, 1050] },
+    { "device": "moza-ab6-mh16", "view": "side", "label": "Thumb side (module off)", "src": "stick/moza/ab6-grips/federico-mh16-module-off-grip-only.png" },
+    { "device": "moza-ab6-carrierace", "view": "front", "label": "Front (on AB6)", "src": "stick/moza/ab6-grips/federico-ab6-three-grips.png", "crop": [548, 100, 972, 1050] },
+    { "device": "moza-ab6-carrierace", "view": "rear", "label": "Rear", "src": "stick/moza/ab6-grips/federico-carrierace-rear.jpg" },
+    { "device": "moza-ab6-viperace", "view": "front", "label": "Front (on AB6)", "src": "stick/moza/ab6-grips/federico-ab6-three-grips.png", "crop": [972, 100, 1448, 1050] }
   ]
 }
