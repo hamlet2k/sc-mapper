@@ -1122,7 +1122,7 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   const GRIPS = [
     ['builtin-moza-ab6-mh16', 19, [['front', '133-moza-ab6-mh16-front'], ['side', '134-moza-ab6-mh16-side']], ['castle', /20/, /24/]],
     ['builtin-moza-ab6-carrierace', 16, [['front', '135-moza-ab6-carrierace-front'], ['side', '136-moza-ab6-carrierace-side'], ['rear', '137-moza-ab6-carrierace-rear']], ['hatC', /21/, /25/]],
-    ['builtin-moza-ab6-viperace', 21, [['front', '138-moza-ab6-viperace-front'], ['side', '139-moza-ab6-viperace-side']], ['hatE', /36/, /40/]],
+    ['builtin-moza-ab6-viperace', 22, [['front', '138-moza-ab6-viperace-front'], ['side', '139-moza-ab6-viperace-side']], ['hatE', /36/, /40/]],
   ];
   check(await sel.locator('optgroup[data-group=grips]').count() === 0, 'grip variants: no “Grips for this base” group when the slot is not an AB6');
   check(await sel.locator('optgroup[data-group=MOZA] option[value="builtin-moza-ab6-mh16"]').count() === 1, 'grip variants listed under MOZA in the template picker');
@@ -1274,6 +1274,42 @@ const moza133 = mozaSlots.find(([, t]) => /133 buttons/.test(t))?.[0];
   check((await tsel.inputValue()) === 'builtin-moza-ab6-viperace' && /picked by you/.test(await stickRow.innerText()), 'picking the ViperAce grip variant sticks on the AB6 slot');
   await stickRow.scrollIntoViewIfNeeded();
   await stickRow.screenshot({ path: shots + '140-ab6-grip-variant-picked.png' });
+  { // the picked ViperAce grip on the Devices page: Federico's positions (photoTplExactViews), markers on his exported anchors
+    await fp.keyboard.press('Escape');
+    await fp.locator('[data-view-tab=devices]').click();
+    await fp.waitForTimeout(400);
+    await fp.getByTestId('sidebar-slots').locator(`[data-slot-row="${moza133}"]`).click();
+    await fp.waitForTimeout(600);
+    const vdv = fp.getByTestId('device-view');
+    check((await vdv.getByTestId('template-select').inputValue()) === 'builtin-moza-ab6-viperace', `Devices page on ${moza133}: the picked ViperAce grip`);
+    check((await vdv.locator('[data-callout]').count()) === 22, `ViperAce grip on the AB6: 22 callouts (${await vdv.locator('[data-callout]').count()})`);
+    await fp.setViewportSize({ width: 1680, height: 1800 }); // each whole photo page clear of the sticky header
+    const AT = {
+      front: { cms: [0.43750877192982457, 0.135], trim: [0.528361403508772, 0.08], xy: [0.5576842105263158, 0.42], wrb: [0.6466140350877194, 0.645] },
+      side: { nws: [0.47584267948450665, 0.7111010079796145], wheel: [0.670912738214644, 0.551], paddlea: [0.6028090059087517, 0.7471357980803838] },
+    };
+    for (const [v, file] of [['front', '175-ab6-viperace-front-federico'], ['side', '176-ab6-viperace-side-federico']]) {
+      const pg = vdv.locator(`[data-testid=device-canvas-view][data-view=${v}]`);
+      check(await pg.count() === 1, `ViperAce grip on the AB6: ${v} photo page`);
+      await pg.scrollIntoViewIfNeeded();
+      await fp.waitForTimeout(300);
+      const off = await pg.evaluate((root, at) => {
+        const r = root.getBoundingClientRect();
+        return Object.entries(at).map(([id, [x, y]]) => { const m = root.querySelector(`[data-marker="${id}"] circle`).getBoundingClientRect(); return Math.hypot((m.x + m.width / 2 - r.x) / r.width - x, (m.y + m.height / 2 - r.y) / r.height - y); });
+      }, AT[v]);
+      check(off.every((d) => d < 0.006), `ViperAce grip ${v}: markers on Federico's anchors (max off ${Math.max(...off).toFixed(4)})`);
+      const hidden = await pg.evaluate((root) => { // nothing (sticky header, toolbars) drawn over the page's top edge or any of its markers
+        const r = root.getBoundingClientRect();
+        const pts = [[r.x + r.width / 2, r.y + 4], ...[...root.querySelectorAll('[data-marker] circle')].map((c) => { const b = c.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })];
+        return pts.filter(([x, y]) => y < 0 || y > innerHeight || !root.contains(document.elementFromPoint(x, y))).length;
+      });
+      check(hidden === 0, `ViperAce grip ${v}: whole page in sight, no marker under the sticky header (${hidden} covered)`);
+      await pg.screenshot({ path: shots + file + '.png' });
+    }
+    await fp.setViewportSize({ width: 1680, height: 1100 });
+    await fp.getByTestId('open-slots').click();
+    await fp.waitForTimeout(300);
+  }
   await tsel.selectOption('');
   await fp.waitForTimeout(300);
   check((await tsel.inputValue()) === '', 'back to Automatic (plain AB6)');

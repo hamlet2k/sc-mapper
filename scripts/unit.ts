@@ -822,7 +822,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       if (d.variantOf) assert.deepEqual(d.match, [], `${d.id}: a grip variant has no match rules (picked by hand)`);
       else assert.ok(d.match.some((m) => m.name), `${d.id}: name pattern`);
       assert.equal(d.match.some((m) => m.vendor && m.product), USB.has(d.id), `${d.id}: USB id only where confident`);
-      const inputs = d.callouts.flatMap((c) => c.inputs).filter(Boolean);
+      // one exception: the AB6 + ViperAce paddle lever and the base left lever are both S1 (whichever is switched on; Federico's export)
+      const inputs = d.callouts.filter((c) => !(d.id === 'builtin-moza-ab6-viperace' && c.id === 'paddlea')).flatMap((c) => c.inputs).filter(Boolean);
       assert.equal(new Set(inputs).size, inputs.length, `${d.id}: every input on one callout`);
       for (const i of inputs) assert.ok(jsName.test(i), `${d.id}: ${i}`);
       const open = d.callouts.reduce((n, c) => n + tp.unassignedCount(c), 0);
@@ -1161,6 +1162,52 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.match(br.notes!, /Firefox/);
     assert.equal(DEVICE_PHOTO_LAYOUTS['builtin-honeycomb-bravo'], undefined, 'not in DEVICE_PHOTO_LAYOUTS (exact path)');
   });
+  t('MOZA AB6 + ViperAce EX: callouts keep Federico export anchor+box fractions (no withPhotoLayout re-box), same canvases', () => {
+    const va = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-moza-ab6-viperace')!;
+    assert.ok(va);
+    assert.equal(va.name, 'MOZA AB6 base + WinCtrl ViperAce EX grip'); assert.equal(va.brand, 'MOZA'); assert.deepEqual(va.match, []);
+    assert.deepEqual(va.views?.map((v) => [v.id, v.label, v.image, v.width, v.height]), [
+      ['front', 'Front (on the AB6)', '/device-photos/moza-ab6-viperace-front.webp', 1140, 986],
+      ['side', 'Grip, labelled side', '/device-photos/winctrl-viperace-side.webp', 1994, 1430],
+    ]);
+    // the export's canvases = the app's canvas for each photo (photo centred between the 0.3 * h label gutters)
+    for (const [photo, w, h] of [['moza-ab6-viperace-front', 1140, 986], ['winctrl-viperace-side', 1994, 1430]] as const) {
+      const [pw, ph] = DEVICE_PHOTO_SIZES[photo];
+      assert.deepEqual([Math.round(pw + 0.6 * ph), ph], [w, h], `${photo}: canvas as positioned`);
+    }
+    const expect: Record<string, { label: string; kind: string; group: string | undefined; view: string; inputs: string[]; ax: number; ay: number; bx: number; by: number }> = {
+      cms: { label: "Thumb hat (4-way + push)", kind: 'hat', group: "Side module", view: 'front', inputs: ["button22", "button23", "button24", "button25", "button21"], ax: 0.43750877192982457, ay: 0.135, bx: 0.125, by: 0.13731744421906694 },
+      wpn: { label: "Weapon release", kind: 'button', group: "Grip head", view: 'front', inputs: ["button20"], ax: 0.48077192982456146, ay: 0.112, bx: 0.115, by: 0.05 },
+      mini: { label: "Ministick", kind: 'axis', group: "Side module", view: 'front', inputs: ["rotx", "roty"], ax: 0.45192982456140357, ay: 0.20700000000000002, bx: 0.115, by: 0.2789756592292089 },
+      minib: { label: "Ministick (digital + press)", kind: 'hat', group: "Side module", view: 'front', inputs: ["button27", "button28", "button29", "button30", "button26"], ax: 0.45433333333333337, ay: 0.215, bx: 0.125, by: 0.4206338742393509 },
+      trim: { label: "Trim hat (8-way POV)", kind: 'hat', group: "Grip head", view: 'front', inputs: ["hat1_up", "hat1_right", "hat1_down", "hat1_left"], ax: 0.528361403508772, ay: 0.08, bx: 0.875, by: 0.05 },
+      hatD: { label: "Hat D (4-way + push)", kind: 'hat', group: "Grip head", view: 'front', inputs: ["button32", "button33", "button34", "button35", "button31"], ax: 0.5, ay: 0.172, bx: 0.875, by: 0.2718661257606491 },
+      hatE: { label: "Hat E (4-way + push)", kind: 'hat', group: "Grip head", view: 'front', inputs: ["button37", "button38", "button39", "button40", "button36"], ax: 0.5576842105263158, ay: 0.16, bx: 0.875, by: 0.16093306288032455 },
+      tms: { label: "Hat (4-way + push)", kind: 'hat', group: "Grip", view: 'front', inputs: ["button10", "button11", "button12", "button13", "button9"], ax: 0.48942456140350876, ay: 0.29, bx: 0.125, by: 0.5195131845841785 },
+      nws: { label: "Front button", kind: 'button', group: "Grip", view: 'side', inputs: ["button6"], ax: 0.47584267948450665, ay: 0.7111010079796145, bx: 0.1252808945902278, by: 0.8411397854372185 },
+      dms: { label: "Hat (4-way + push)", kind: 'hat', group: "Grip", view: 'side', inputs: ["button15", "button16", "button17", "button18", "button14"], ax: 0.5803289869608826, ay: 0.48800000000000004, bx: 0.125, by: 0.43668181818181817 },
+      trig: { label: "Trigger (stage 1 / 2)", kind: 'switch', group: "Grip", view: 'side', inputs: ["button4", "button5"], ax: 0.5415887662988966, ay: 0.506, bx: 0.115, by: 0.5573181818181818 },
+      wheel: { label: "Wheel / EX trigger (5-way)", kind: 'switch', group: "Grip", view: 'side', inputs: ["button1", "button2", "button41", "button42", "button3"], ax: 0.670912738214644, ay: 0.551, bx: 0.885, by: 0.48402517482517493 },
+      wheela: { label: "Wheel / EX trigger (analog)", kind: 'axis', group: "Grip", view: 'side', inputs: ["rotz"], ax: 0.6743309929789368, ay: 0.56, bx: 0.885, by: 0.6200000000000001 },
+      paddle: { label: "Paddle (stage 1 / 2)", kind: 'switch', group: "Grip", view: 'side', inputs: ["button7", "button8"], ax: 0.6065356068204614, ay: 0.749, bx: 0.8679775280898876, by: 0.751836045261126 },
+      xy: { label: "Stick X / Y", kind: 'axis', group: "Axes", view: 'front', inputs: ["x", "y"], ax: 0.5576842105263158, ay: 0.42, bx: 0.885, by: 0.42557809330628804 },
+      bkeys: { label: "Base keys (left) 49-52", kind: 'buttons', group: "Base", view: 'front', inputs: ["button49", "button50", "button51", "button52"], ax: 0.418280701754386, ay: 0.64, bx: 0.115, by: 0.6883671399594321 },
+      bkeysr: { label: "Base keys (right) 53-56", kind: 'buttons', group: "Base", view: 'front', inputs: ["button53", "button54", "button55", "button56"], ax: 0.6105614035087719, ay: 0.583, bx: 0.885, by: 0.5735091277890467 },
+      wl: { label: "Slider wheel (left)", kind: 'axis', group: "Base", view: 'front', inputs: ["slider1"], ax: 0.5624912280701755, ay: 0.68, bx: 0.115, by: 0.7941835699797161 },
+      wlb: { label: "Slider wheel (zones)", kind: 'switch', group: "Base", view: 'front', inputs: ["button57", "button58", "button59"], ax: 0.5648947368421052, ay: 0.69, bx: 0.115, by: 0.9 },
+      wr: { label: "Dial wheel (right)", kind: 'axis', group: "Base", view: 'front', inputs: ["slider2"], ax: 0.6442105263157896, ay: 0.635, bx: 0.885, by: 0.6913793103448277 },
+      wrb: { label: "Dial wheel (zones)", kind: 'switch', group: "Base", view: 'front', inputs: ["button60", "button61", "button62"], ax: 0.6466140350877194, ay: 0.645, bx: 0.885, by: 0.8092494929006087 },
+      paddlea: { label: "Paddle lever", kind: 'axis', group: undefined, view: 'side', inputs: ["slider1"], ax: 0.6028090059087517, ay: 0.7471357980803838, bx: 0.8432584612557058, by: 0.9241766887486563 },
+    };
+    assert.deepEqual(va.callouts.map((c) => c.id), Object.keys(expect), 'same 22 callouts, export order');
+    for (const c of va.callouts) {
+      const e = expect[c.id];
+      assert.equal(c.label, e.label, c.id); assert.equal(c.kind, e.kind, c.id); assert.equal(c.group, e.group, c.id); assert.equal(c.view, e.view, c.id);
+      assert.deepEqual(c.inputs, e.inputs, c.id);
+      assert.deepEqual([c.anchor.x, c.anchor.y, c.box.x, c.box.y], [e.ax, e.ay, e.bx, e.by], `${c.id}: anchor + box`);
+    }
+    assert.equal(DEVICE_PHOTO_LAYOUTS['builtin-moza-ab6-viperace'], undefined, 'not in DEVICE_PHOTO_LAYOUTS (exact path)');
+  });
   t('URSA Combat: callouts keep Federico export anchor+box fractions (no withPhotoLayout re-box)', () => {
     const u = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-ursa-combat')!;
     assert.ok(u);
@@ -1441,14 +1488,16 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     // WinCtrl grips: the WinCtrl template's grip numbers (minus the paddle axis, which shares S1 with the base left lever)
     for (const [v, wc] of [[ca, 'builtin-winctrl-carrierace'], [va, 'builtin-winctrl-viperace']] as const) {
       const w = ALL.find((x) => x.id === wc)!;
-      for (const cw of w.callouts.filter((x) => x.id !== 'paddlea')) assert.deepEqual(ins(v, cw.id), cw.inputs, `${v.id}/${cw.id}: as on ${wc}`);
-      assert.ok(!v.callouts.some((x) => x.id === 'paddlea'), `${v.id}: no separate paddle axis`);
+      for (const cw of w.callouts.filter((x) => x.id !== 'paddlea' || v === va)) assert.deepEqual(ins(v, cw.id), cw.inputs, `${v.id}/${cw.id}: as on ${wc}`);
     }
+    assert.ok(!ca.callouts.some((x) => x.id === 'paddlea'), 'CarrierAce on AB6: no separate paddle axis');
+    // ViperAce on AB6: Federico added the paddle lever (S1, like the WinCtrl template; it shares S1 with the base left lever, see the notes)
+    assert.deepEqual(va.callouts.filter((x) => x.inputs.includes('slider1')).map((x) => x.id), ['wl', 'paddlea'], 'ViperAce on AB6: S1 = base left lever or paddle lever');
     assert.deepEqual(nums(ca), [...seq(1, 27, [19]), ...seq(49, 62)], 'CarrierAce on AB6: grip 1-27 (19 = POV trim) + base 49-62');
     assert.deepEqual(axes(ca), ['slider1', 'slider2', 'x', 'y']);
     assert.deepEqual(nums(va), [...seq(1, 42, [19]), ...seq(49, 62)], 'ViperAce EX on AB6: grip 1-42 (19 = POV trim) + base 49-62');
-    assert.deepEqual(axes(va), ['rotx', 'roty', 'rotz', 'slider1', 'slider2', 'x', 'y']);
-    assert.deepEqual([mh, ca, va].map((v) => v.callouts.length), [19, 16, 21]);
+    assert.deepEqual(axes(va), ['rotx', 'roty', 'rotz', 'slider1', 'slider1', 'slider2', 'x', 'y']);
+    assert.deepEqual([mh, ca, va].map((v) => v.callouts.length), [19, 16, 22]);
   });
   t('slots: removing drops only the profile\'s bindings on that slot (cleared defaults stay cleared); ensureUsedSlots re-adds used numbers', () => {
     const rb = {
