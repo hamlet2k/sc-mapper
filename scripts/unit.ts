@@ -861,7 +861,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(btn(by('tm-twcs')), seq(1, 14), 'TWCS: 1-14');
     assert.deepEqual(btn(by('virpil-alpha-prime')), seq(1, 32), 'Alpha Prime: 1-32');
     assert.deepEqual(btn(by('virpil-vmax-prime')), seq(1, 51), 'VMAX Prime: 1-51 (no shift)');
-    assert.deepEqual(btn(by('winctrl-carrierace')), seq(1, 27, [19]), 'CarrierAce: 1-27 (19 = POV trim)');
+    assert.deepEqual(btn(by('winctrl-carrierace')), seq(1, 27), 'CarrierAce: 1-27 (19 = trim hat push, confirmed by Federico)');
     assert.deepEqual(btn(by('winctrl-viperace')), seq(1, 42), 'ViperAce: 1-42 (19 = trim hat push, confirmed by Federico)');
     assert.deepEqual(btn(by('winctrl-orion')), [...seq(1, 62, [45, 46, 47, 48, 49]), ...seq(65, 111)], 'Orion: grips 1-62, panel 65-111');
     assert.deepEqual(btn(by('winctrl-ursa-combat')), seq(1, 81, [26]), 'URSA MINOR Combat: 1-81 (26 unused)');
@@ -1493,7 +1493,7 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.ok(!ca.callouts.some((x) => x.id === 'paddlea'), 'CarrierAce on AB6: no separate paddle axis');
     // ViperAce on AB6: Federico added the paddle lever (S1, like the WinCtrl template; it shares S1 with the base left lever, see the notes)
     assert.deepEqual(va.callouts.filter((x) => x.inputs.includes('slider1')).map((x) => x.id), ['wl', 'paddlea'], 'ViperAce on AB6: S1 = base left lever or paddle lever');
-    assert.deepEqual(nums(ca), [...seq(1, 27, [19]), ...seq(49, 62)], 'CarrierAce on AB6: grip 1-27 (19 = POV trim) + base 49-62');
+    assert.deepEqual(nums(ca), [...seq(1, 27), ...seq(49, 62)], 'CarrierAce on AB6: grip 1-27 (19 = trim hat push) + base 49-62');
     assert.deepEqual(axes(ca), ['slider1', 'slider2', 'x', 'y']);
     assert.deepEqual(nums(va), [...seq(1, 42), ...seq(49, 62)], 'ViperAce EX on AB6: grip 1-42 (19 = trim hat push) + base 49-62');
     assert.deepEqual(axes(va), ['rotx', 'roty', 'rotz', 'slider1', 'slider1', 'slider2', 'x', 'y']);
