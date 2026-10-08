@@ -2085,4 +2085,62 @@ console.log('\npress to bind (Devices, Edit mode)');
   });
 }
 
+console.log('\nlive row highlight (which bound actions fire)');
+{
+  const lr = await import('../src/lib/liveRows');
+  const { splitCombo } = await import('../src/lib/templates');
+  const L = (active: string[], values: Record<string, number> = {}) => ({ active: new Set(active), values });
+  type E = { id: string; input: string };
+  const key = (e: E) => { const { main, prefix } = splitCombo(e.input); return { main, prefix }; };
+  const ids = (s: Set<E>) => [...s].map((e) => e.id).sort();
+  // a 2-stage trigger callout (button1 + button6) listing several actions per input
+  const trig: E[] = [{ id: 'qd', input: 'button1' }, { id: 'fire', input: 'button1' }, { id: 'stage2', input: 'button6' }, { id: 'kp', input: 'button6' }];
+  t('only the rows of the pressed input fire, not the whole callout', () => {
+    assert.deepEqual(ids(lr.firingRows(trig, key, L(['button6']))), ['kp', 'stage2']);
+    assert.deepEqual(ids(lr.firingRows(trig, key, L(['button1', 'button6']))), ['fire', 'kp', 'qd', 'stage2']);
+    assert.equal(lr.firingRows(trig, key, L([])).size, 0);
+    assert.equal(lr.firingRows(trig, key, L(['button2'])).size, 0);
+  });
+  t('hat directions: only the pushed direction (a diagonal lights both of its parts)', () => {
+    const hat: E[] = ['up', 'right', 'down', 'left'].map((d) => ({ id: d, input: `hat1_${d}` }));
+    assert.deepEqual(ids(lr.firingRows(hat, key, L(['hat1_right']))), ['right']);
+    assert.deepEqual(ids(lr.firingRows(hat, key, L(['hat1_up', 'hat1_left']))), ['left', 'up']);
+  });
+  t('modifier layers: plain rows fire alone; with the layer held only its rows fire (most specific wins)', () => {
+    const a: E[] = [{ id: 'jump', input: 'a' }, { id: 'interact', input: 'a' }, { id: 'lookBehind', input: 'shoulderl+a' }];
+    assert.deepEqual(ids(lr.firingRows(a, key, L(['a']))), ['interact', 'jump']);
+    assert.deepEqual(ids(lr.firingRows(a, key, L(['a', 'shoulderl']))), ['lookBehind']);
+    assert.equal(lr.firingRows(a, key, L(['shoulderl'])).size, 0, 'holding only the layer button fires nothing on A');
+    // LB held but no LB layer bound on this input: the plain rows still fire
+    assert.deepEqual(ids(lr.firingRows([{ id: 'x', input: 'x' }], key, L(['x', 'shoulderl']))), ['x']);
+  });
+  t('keyboard modifiers on device bindings: fire only while the key is held', () => {
+    const rows: E[] = [{ id: 'plain', input: 'button3' }, { id: 'alt', input: 'lalt+button3' }];
+    assert.deepEqual(ids(lr.firingRows(rows, key, L(['button3']))), ['plain']);
+    assert.deepEqual(ids(lr.firingRows(rows, key, L(['button3']), new Set(['lalt']))), ['alt']);
+    assert.deepEqual(ids(lr.firingRows(rows, key, L(['button3']), new Set(['ralt']))), ['plain']);
+  });
+  t('gamepad stick: axis rows on any move, direction rows only when pushed that way (Y up is negative)', () => {
+    const ls: E[] = [{ id: 'yaw', input: 'thumblx' }, { id: 'panL', input: 'thumbl_left' }, { id: 'panR', input: 'thumbl_right' }, { id: 'thr', input: 'thumbly' }, { id: 'up', input: 'thumbl_up' }];
+    assert.deepEqual(ids(lr.firingRows(ls, key, L(['thumblx'], { thumblx: -0.8, thumbly: 0 }))), ['panL', 'yaw']);
+    assert.deepEqual(ids(lr.firingRows(ls, key, L(['thumblx'], { thumblx: 0.8, thumbly: 0 }))), ['panR', 'yaw']);
+    assert.deepEqual(ids(lr.firingRows(ls, key, L(['thumbly'], { thumblx: 0, thumbly: -0.6 }))), ['thr', 'up']);
+    assert.equal(lr.inputHeld('thumbl_left', L([], { thumblx: -0.9 })), false, 'a direction needs its axis to count as moved');
+    assert.equal(lr.inputHeld('thumbl_left', L(['thumblx'], { thumblx: -0.1 })), false, 'below the threshold');
+  });
+  t('analog trigger rows ride on the trigger button', () => {
+    const lt: E[] = [{ id: 'btn', input: 'triggerl_btn' }, { id: 'axis', input: 'triggerl' }];
+    assert.deepEqual(ids(lr.firingRows(lt, key, L(['triggerl_btn']))), ['axis', 'btn']);
+  });
+  t('compact lists: firing rows never hide behind "+N more"', () => {
+    const xs = ['a1', 'a2', 'a3', 'a4', 'b1', 'b2'];
+    const on = (set: string[]) => (x: string) => set.includes(x);
+    assert.deepEqual(lr.liveFirst(xs, on([]), 3), { shown: ['a1', 'a2', 'a3'], hidden: 3, hiddenLive: 0 });
+    assert.deepEqual(lr.liveFirst(xs, on(['a2']), 3), { shown: ['a1', 'a2', 'a3'], hidden: 3, hiddenLive: 0 }, 'already in sight: order kept');
+    assert.deepEqual(lr.liveFirst(xs, on(['b1', 'b2']), 3), { shown: ['b1', 'b2', 'a1'], hidden: 3, hiddenLive: 0 });
+    assert.deepEqual(lr.liveFirst(xs, on(['a1', 'a3', 'a4', 'b2']), 3), { shown: ['a1', 'a3', 'a4'], hidden: 3, hiddenLive: 1 });
+    assert.deepEqual(lr.liveFirst(['x'], on(['x']), 3), { shown: ['x'], hidden: 0, hiddenLive: 0 });
+  });
+}
+
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);

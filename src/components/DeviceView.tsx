@@ -5,7 +5,7 @@ import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { isController, slotDeviceName, slotId, type GameSlot, type SlotMap } from '../lib/slots';
 import { AUTO_TEMPLATE, autoSlotTemplate, resolveSlotTemplate } from '../lib/slotTemplates';
 import { formatInput, searchSpec } from '../lib/inputs';
-import { usePadHits, type PressHit } from '../lib/listen';
+import { useHeldKeyMods, usePadHits, type PressHit } from '../lib/listen';
 import { browserName } from '../lib/browser';
 import { CHROMIUM_BUTTON_CAP } from '../lib/capture';
 import { pressBindTarget } from '../lib/pressBind';
@@ -16,7 +16,7 @@ import {
   type Callout, type DeviceIdentity, type DeviceTemplate,
 } from '../lib/templates';
 import type { Binding, Row, Slot } from '../lib/types';
-import { CalloutBody, DeviceCanvas, MULTI_VIEW_MIN_W, TONE_STROKE, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
+import { CalloutBody, DeviceCanvas, LIVE_ROW, MULTI_VIEW_MIN_W, TONE_STROKE, firingEntries, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
 import { DROP_HINT, GamePathHint } from './GameState';
 import { Ico } from './icons';
 import { Tip } from './Tooltip';
@@ -170,6 +170,8 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   const rawLive = useLiveInputs(opt.pad);
   // Settings → Highlight on press off: presses don't light callouts or move the panel (the editor has its own capture)
   const live = highlight ? rawLive : NO_ACTIVE;
+  // keyboard modifiers held: a binding with one (lalt+…) lights as firing only while it is held
+  const keyMods = useHeldKeyMods(highlight && !!opt.pad);
   // find by pressing aimed at this slot: the pressed input(s)
   const chipInputs = useMemo(() => (chip && chip.slot === slot && chip.instance === instance ? chip.inputs.map((i) => splitCombo(i).main) : []), [chip, slot, instance]);
   // multi-view photo templates: a pressed control brings the photo with its marker into sight (not while the editor is open)
@@ -525,14 +527,14 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
         <div ref={canvasRef} className={`min-w-0 flex-1 scrollbar-thin ${stickyHeadings ? 'overflow-x-clip' : 'overflow-auto'}`} data-print-area>
           <div className="mb-1 hidden font-display text-lg font-bold text-black print:block">{slot.toUpperCase()}{instance} · {ident.name ?? tpl.name}</div>
           <DeviceCanvas template={shownTpl} stateOf={stateOf} selected={selected} onSelect={(id) => selectByClick(id)} pulse={pulse} stickyHeadings={stickyHeadings}
-            renderLabel={(c, s) => <CalloutBody c={c} s={s} entriesFor={(i) => index.get(i) ?? []} live={live} />} />
+            renderLabel={(c, s) => <CalloutBody c={c} s={s} entriesFor={(i) => index.get(i) ?? []} live={live} keyMods={keyMods} />} />
         </div>
         {/* the inspector: sticks under the slot bar + Groups line beside the pictures (own scroll when taller than the room) */}
         <aside className={`space-y-3 scrollbar-thin print:hidden ${sidePanel ? 'sticky w-80 shrink-0 overflow-y-auto' : 'w-full'}`}
           data-testid="device-side-panel" data-sticky={sidePanel ? '1' : undefined}
           style={sidePanel ? { top: stick.page + PANEL_STICK_GAP, maxHeight: stick.panel || undefined } : undefined}>
           {selCallout ? (
-            <InputPanel key={selCallout.id} c={selCallout} slot={slot} instance={instance} index={index} rows={rows} live={live}
+            <InputPanel key={selCallout.id} c={selCallout} slot={slot} instance={instance} index={index} rows={rows} live={live} keyMods={keyMods}
               editMode={!!editMode} onEdit={onEdit} onRemove={onRemove} onBind={onBind} onShowInList={onShowInList} onClose={() => selectByClick(null)}
               bindReq={bindReq?.id === selCallout.id ? bindReq : null} armed={armed === 'callout'} onPress={() => arm('callout')} scrollOnFocus={!sidePanel} />
           ) : (
@@ -591,8 +593,8 @@ function Legend() {
   return <span className="ml-auto flex gap-2">{item('#4fd8ff', 'active')}{item(TONE_STROKE.custom, 'customized')}{item(TONE_STROKE.conflict, 'conflict')}{item(TONE_STROKE.bound, 'default')}{item(TONE_STROKE.unbound, 'unbound')}</span>;
 }
 
-function InputPanel({ c, slot, instance, index, rows, live, editMode, onEdit, onRemove, onBind, onShowInList, onClose, bindReq, armed, onPress, scrollOnFocus }: {
-  c: Callout; slot: 'js' | 'gp'; instance: number; index: Map<string, Entry[]>; rows: Row[]; live: Live; editMode: boolean;
+function InputPanel({ c, slot, instance, index, rows, live, keyMods, editMode, onEdit, onRemove, onBind, onShowInList, onClose, bindReq, armed, onPress, scrollOnFocus }: {
+  c: Callout; slot: 'js' | 'gp'; instance: number; index: Map<string, Entry[]>; rows: Row[]; live: Live; keyMods: ReadonlySet<string>; editMode: boolean;
   onEdit: (row: Row) => void; onRemove: (row: Row, b: Binding) => void; onBind: (row: Row, slot: Slot, instance: number, input: string) => void;
   onShowInList: (spec: string) => void; onClose: () => void;
   /** press to bind landed on this callout: preset the target to that input and focus the action search */
@@ -660,6 +662,8 @@ function InputPanel({ c, slot, instance, index, rows, live, editMode, onEdit, on
       <ul className="mt-2 space-y-2">
         {inputs.map((i) => {
           const es = index.get(i) ?? [];
+          // the actions that fire right now light up like their rows on the callout
+          const firing = firingEntries(es, live, keyMods);
           return (
             <li key={i} data-input={i}>
               <div className="flex items-center gap-1.5">
@@ -669,9 +673,9 @@ function InputPanel({ c, slot, instance, index, rows, live, editMode, onEdit, on
               {!es.length ? <div className="mt-0.5 text-[11px] text-slate-600">not bound</div> : (
                 <ul className="mt-1 space-y-0.5">
                   {es.map((e, k) => (
-                    <li key={k} className="flex items-center gap-1.5 rounded bg-white/[0.03] px-1.5 py-1">
+                    <li key={k} data-row-live={firing.has(e) ? '1' : undefined} data-row-input={e.b.input} className={`flex items-center gap-1.5 rounded px-1.5 py-1 transition-colors duration-150 ${firing.has(e) ? LIVE_ROW : 'bg-white/[0.03]'}`}>
                       <span className="min-w-0 flex-1">
-                        <span className={`block truncate ${e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-200'}`}>{e.conflict && <Ico name="alert" className="mr-0.5" />}{e.prefix && <span className="font-mono text-[10px] text-hud/70">{e.prefix}+ </span>}{e.row.label}</span>
+                        <span className={`block truncate ${firing.has(e) ? 'font-semibold text-[#e6fbff]' : e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-200'}`}>{e.conflict && <Ico name="alert" className="mr-0.5" />}{e.prefix && <span className="font-mono text-[10px] text-hud/70">{e.prefix}+ </span>}{e.row.label}</span>
                         <span className="block truncate text-[10px] text-slate-500">{e.row.mapLabel}{e.b.mode ? ` · ${e.b.mode}` : ''}{e.b.custom ? ' · customized' : ''}</span>
                       </span>
                       {editMode && <>

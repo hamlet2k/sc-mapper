@@ -1,5 +1,5 @@
 // Turning live input (controllers, keyboard, mouse) into exact Star Citizen inputs, for press-to-search and live highlight.
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { beyondCap, comboFrom, GAME_BUTTON_CAP, gamepadInput, joystickInput, PadTracker, scKeyFromCode, snapshot, type PadEvent } from './capture';
 import { getPads, padLabel, type PadInfo, type PadLike } from './devices';
 import { bindKey, comboLabel, formatInput, isModifier } from './inputs';
@@ -112,3 +112,32 @@ export function useKeyHits(active: boolean, mode: 'capture' | 'passive', onHit: 
     return () => { window.removeEventListener('keydown', down, capture); window.removeEventListener('keyup', up, capture); window.removeEventListener('blur', blur); };
   }, [active, mode]);
 }
+
+/**
+ * Keyboard modifiers held right now (lalt, rctrl, lshift …) while `active`, for the live row highlight: a binding with a keyboard
+ * modifier fires only while it is held. Watches only (never swallows keys); cleared when the window loses the focus.
+ */
+export function useHeldKeyMods(active: boolean): ReadonlySet<string> {
+  const [mods, setMods] = useState<ReadonlySet<string>>(NO_KEY_MODS);
+  useEffect(() => {
+    if (!active) return;
+    const set = (name: string | undefined, on: boolean) => {
+      if (!name || !isModifier(name)) return;
+      setMods((m) => {
+        if (m.has(name) === on) return m;
+        const n = new Set(m);
+        if (on) n.add(name); else n.delete(name);
+        return n.size ? n : NO_KEY_MODS;
+      });
+    };
+    const down = (e: KeyboardEvent) => set(scKeyFromCode(e.code), true);
+    const up = (e: KeyboardEvent) => set(scKeyFromCode(e.code), false);
+    const blur = () => setMods(NO_KEY_MODS);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); setMods(NO_KEY_MODS); };
+  }, [active]);
+  return active ? mods : NO_KEY_MODS;
+}
+const NO_KEY_MODS: ReadonlySet<string> = new Set();

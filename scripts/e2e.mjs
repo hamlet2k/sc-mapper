@@ -977,6 +977,98 @@ await page.waitForTimeout(200);
   await page.setViewportSize({ width: 1680, height: 1000 });
   await page.waitForTimeout(300);
 }
+{ // ===================== live row highlight: the actions bound to the pressed input light up inside its callout =====================
+  console.log('\nlive row highlight (Devices)');
+  const closePanel = async () => { if (await ip.count()) { await ip.getByRole('button', { name: 'Close' }).click(); await page.waitForTimeout(150); } };
+  if (await page.getByTestId('edit-bar').isVisible().catch(() => false)) { await page.getByTestId('edit-toggle').click(); await page.waitForTimeout(200); }
+  await closePanel();
+  const liveRows = (loc) => loc.locator('[data-row-live="1"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-row-input') ?? e.getAttribute('data-dir')));
+  // screenshots: the callout centred; crop = a region around it at full resolution (the whole window otherwise)
+  const shoot = async (callout, name, crop = true) => {
+    await callout.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+    await page.mouse.move(5, 995);
+    await page.waitForTimeout(250);
+    const b = await callout.boundingBox();
+    const W = 1000, H = 560, vw = page.viewportSize().width, vh = page.viewportSize().height;
+    const clip = b && crop ? { x: Math.max(0, Math.min(vw - W, b.x + b.width / 2 - W / 2)), y: Math.max(0, Math.min(vh - H, b.y + b.height / 2 - H / 2)), width: W, height: H } : undefined;
+    await page.screenshot({ path: shots + name, ...(clip ? { clip } : {}) });
+  };
+  // generic stick, 2-stage trigger (button1 + button2): button1 has 13+ actions, so button2's would hide behind "+N more"
+  const trig = dv.locator('[data-callout="trig"]');
+  check((await liveRows(trig)).length === 0 && (await trig.locator('[data-row-input]').first().getAttribute('data-row-input')) === 'button1', 'at rest: no row lit, the trigger callout lists button1\'s actions first');
+  await page.evaluate(() => window.__btn(1, 1, true));
+  await page.waitForTimeout(250);
+  const l2 = await liveRows(trig);
+  check((await trig.getAttribute('data-active')) === '1' && l2.length === 3 && l2.every((i) => i === 'button2'), `stage 2 (button2) pressed: only its action rows light, moved up from behind "+N more" (${l2.join(', ')})`);
+  check((await trig.locator('[data-row-input]').count()) === 3 && /^\+\d+ more/.test(await trig.locator('[data-row-input] ~ div').last().innerText().catch(() => '')), 'the callout keeps its size: 3 rows, then "+N more"');
+  await page.evaluate(() => window.__btn(1, 1, false));
+  await page.waitForTimeout(250);
+  check((await liveRows(trig)).length === 0 && (await trig.getAttribute('data-active')) === null && (await trig.locator('[data-row-input]').first().getAttribute('data-row-input')) === 'button1', 'released: rows back to normal, original order');
+  // hat: the pushed direction's cell is marked firing, the others not
+  await page.evaluate(() => window.__axis(1, 9, 1 / 7)); // hat down
+  await page.waitForTimeout(250);
+  const lh = await liveRows(dv.locator('[data-callout="hat1"]'));
+  check(lh.join() === 'hat1_down', `hat 1 pushed down: only its down cell fires (${lh.join(', ')})`);
+  await page.evaluate(() => window.__axis(1, 9, 9 / 7));
+  await page.waitForTimeout(200);
+  // photo template (Warthog stick): trigger stage 2 (button6) on a multi-input callout, then a single-button callout, then the inspector
+  await dv.getByTestId('template-select').selectOption('builtin-tm-warthog-stick');
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=device-canvas-view] img')].some((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(500);
+  const wt = dv.locator('[data-callout="trig"]');
+  await page.evaluate(() => window.__btn(1, 5, true));
+  await page.waitForTimeout(300);
+  const lw = await liveRows(wt);
+  check((await wt.getAttribute('data-active')) === '1' && lw.length > 0 && lw.every((i) => i === 'button6') && (await wt.locator('[data-row-input="button1"]').count()) > 0 && (await wt.locator('[data-row-input="button1"][data-row-live]').count()) === 0,
+    `Warthog photo view: trigger stage 2 (button6) pressed: only button6's rows light, button1's stay normal (${lw.join(', ')})`);
+  await shoot(wt, '195-press-rows-multi-input.png');
+  await page.evaluate(() => window.__btn(1, 5, false));
+  await page.waitForTimeout(250);
+  const nws = dv.locator('[data-callout="nws"]');
+  await page.evaluate(() => window.__btn(1, 2, true));
+  await page.waitForTimeout(300);
+  const ln = await liveRows(nws), nn = await nws.locator('[data-row-input]').count(), more = await nws.locator('[data-more-live]').innerText().catch(() => '');
+  check(ln.length > 0 && ln.length === nn && ln.every((i) => i === 'button3') && (nn < 3 || /^\+\d+ more · \d+ firing$/.test(more)), `single-button callout (Nosewheel steering, button3) pressed: all ${nn} rows shown light, "+N more" counts the hidden ones that fire (${more || 'no more line'})`);
+  await shoot(nws, '196-press-rows-single-button.png');
+  await page.evaluate(() => window.__btn(1, 2, false));
+  await page.waitForTimeout(250);
+  await wt.click();
+  await page.waitForTimeout(250);
+  await page.evaluate(() => window.__btn(1, 5, true));
+  await page.waitForTimeout(300);
+  const li = await liveRows(ip);
+  check(await ip.isVisible() && li.length === await ip.locator('li[data-input="button6"] [data-row-input]').count() && li.length > 0 && li.every((i) => i === 'button6') && (await ip.locator('li[data-input="button1"] [data-row-live]').count()) === 0,
+    `inspector: the pressed input's action rows light there too, the other input's don't (${li.length} rows)`);
+  await shoot(wt, '197-press-rows-inspector.png', false);
+  await page.evaluate(() => window.__btn(1, 5, false));
+  await page.waitForTimeout(250);
+  check((await liveRows(ip)).length === 0 && (await liveRows(wt)).length === 0, 'released: the inspector rows clear too');
+  await closePanel();
+  await dv.getByTestId('template-select').selectOption('builtin-stick');
+  await page.waitForTimeout(300);
+  // gamepad defaults: LB (shoulderl) is a modifier layer. A alone fires A's actions; LB + A fires only the LB layer's
+  await slotChip('gp1');
+  await page.waitForTimeout(300);
+  const ga = dv.locator('[data-callout="a"]');
+  await page.evaluate(() => window.__btn(0, 0, true));
+  await page.waitForTimeout(250);
+  const la = await liveRows(ga);
+  check(la.length === 3 && la.every((i) => i === 'a'), `gamepad A pressed: plain A rows light, not the LB+A one (${la.join(', ')})`);
+  await page.evaluate(() => window.__btn(0, 4, true));
+  await page.waitForTimeout(250);
+  const lab = await liveRows(ga), llb = await liveRows(dv.locator('[data-callout="lb"]'));
+  check(lab.join() === 'shoulderl+a' && llb.length > 0 && llb.every((i) => i === 'shoulderl'), `LB + A: only the LB layer's row on A lights (moved up from the end), LB's own rows light (${lab.join(', ')} | ${llb.join(', ')})`);
+  await shoot(ga, '198-press-rows-modifier-layer.png');
+  await page.evaluate(() => { window.__btn(0, 0, false); window.__btn(0, 4, false); window.__axis(0, 0, -0.8); });
+  await page.waitForTimeout(250);
+  const ls = await liveRows(dv.locator('[data-callout="ls"]'));
+  check(ls.length > 0 && ls.every((i) => i === 'thumblx' || i === 'thumbl_left'), `left stick pushed left: the X axis / left-direction rows light, not right or Y (${ls.join(', ')})`);
+  await page.evaluate(() => window.__axis(0, 0, 0));
+  await page.waitForTimeout(250);
+  check((await dv.locator('[data-row-live="1"]').count()) === 0, 'at rest: no row lit anywhere');
+  await slotChip('js1');
+  await page.waitForTimeout(300);
+}
 {
   const [d] = await Promise.all([page.waitForEvent('download'), dv.getByTestId('device-png').click()]);
   const f = '/tmp/' + d.suggestedFilename();

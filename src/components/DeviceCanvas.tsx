@@ -1,7 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { isHatRest, snapshot } from '../lib/capture';
 import { getPads, type PadInfo } from '../lib/devices';
-import { BUILTIN_PHOTO_RE, calloutTitle, coveredInputs, imageSrc, inputRole, liveInputs, shortInput, viewTemplate, type Callout, type DeviceTemplate, type Pt } from '../lib/templates';
+import { firingRows, liveFirst } from '../lib/liveRows';
+import { BUILTIN_PHOTO_RE, calloutTitle, coveredInputs, imageSrc, inputRole, liveInputs, shortInput, splitCombo, viewTemplate, type Callout, type DeviceTemplate, type Pt } from '../lib/templates';
 import type { Binding, Row } from '../lib/types';
 import { Ico } from './icons';
 
@@ -315,18 +316,31 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
   );
 }
 
-function ActionLine({ e, role }: { e: Entry; role?: string }) {
+/** a bound action's row firing right now (its input pressed, its modifier layer held): tinted row + bright text and a hud bar on
+ *  its left, the same accent as the pressed callout. Same padding either way, so lighting up never shifts the label. */
+export const LIVE_ROW = 'bg-hud/25 !text-[#e6fbff] shadow-[inset_2px_0_0_var(--color-hud)]';
+/** which of these entries fire right now (see firingRows) */
+export const firingEntries = (es: readonly Entry[], live: Live, keyMods?: ReadonlySet<string>) =>
+  firingRows(es, (e) => ({ main: splitCombo(e.b.input).main, prefix: e.prefix }), live, keyMods);
+
+function ActionLine({ e, role, on }: { e: Entry; role?: string; on?: boolean }) {
   return (
-    <div className={`max-w-[180px] truncate ${e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-300'}`} title={`${e.row.label} · ${e.row.mapLabel}${e.prefix ? ` · with ${e.prefix}` : ''}${e.b.mode ? ` · ${e.b.mode}` : ''}${e.conflict ? ' · conflict' : ''}`}>
-      {role && <span className="mr-1 font-mono text-slate-500">{role}</span>}
-      {e.prefix && <span className="mr-0.5 font-mono text-[9px] text-hud/70">{e.prefix}+</span>}
+    <div data-row-live={on ? '1' : undefined} data-row-input={e.b.input} className={`-mx-0.5 max-w-[184px] truncate rounded-sm px-0.5 transition-colors duration-150 ${e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-300'} ${on ? LIVE_ROW : ''}`} title={`${e.row.label} · ${e.row.mapLabel}${e.prefix ? ` · with ${e.prefix}` : ''}${e.b.mode ? ` · ${e.b.mode}` : ''}${e.conflict ? ' · conflict' : ''}${on ? ' · firing now' : ''}`}>
+      {role && <span className={`mr-1 font-mono ${on ? 'text-hud2' : 'text-slate-500'}`}>{role}</span>}
+      {e.prefix && <span className={`mr-0.5 font-mono text-[9px] ${on ? 'text-hud2' : 'text-hud/70'}`}>{e.prefix}+</span>}
       {e.conflict && <Ico name="alert" className="mr-0.5 h-[1em] w-[1em]" />}{e.row.label}
     </div>
   );
 }
+/** "+N more" under a compact list; names how many of the hidden rows fire right now (when more fire than fit) */
+function More({ n, live }: { n: number; live: number }) {
+  return <div className={live ? 'text-hud2' : 'text-slate-500'} data-more-live={live || undefined}>+{n} more{live ? ` · ${live} firing` : ''}</div>;
+}
 
-/** body of a callout label: title, then per kind the bound actions (hat as a 5-way cross, axis with its live value) */
-export function CalloutBody({ c, s, entriesFor, live }: { c: Callout; s: CalloutState; entriesFor: (input: string) => Entry[]; live: Live }) {
+/** body of a callout label: title, then per kind the bound actions (hat as a 5-way cross, axis with its live value). keyMods: the
+ *  keyboard modifiers held (rows with a keyboard modifier light only while it is held) */
+export function CalloutBody({ c, s, entriesFor, live, keyMods }: { c: Callout; s: CalloutState; entriesFor: (input: string) => Entry[]; live: Live; keyMods?: ReadonlySet<string> }) {
+  const firing = s.active ? firingEntries(coveredInputs(c).flatMap(entriesFor), live, keyMods) : NO_FIRING;
   const head = (
     <div className="flex items-baseline gap-1 whitespace-nowrap">
       <b className={`font-mono ${s.active ? 'text-white' : 'text-hud2'}`}>{calloutTitle(c)}</b>
@@ -338,11 +352,13 @@ export function CalloutBody({ c, s, entriesFor, live }: { c: Callout; s: Callout
     const cell = (k: number) => {
       const i = c.inputs[k];
       if (!i) return k < c.inputs.length ? <span className="text-center font-mono text-slate-600" data-unassigned="1" title="no button number yet">{inputRole(c, k)}?</span> : <span />;
-      const e = entriesFor(i)[0];
+      const es = entriesFor(i);
       const on = live.active.has(i);
+      // pressed: the action that fires (e.g. the LB layer's while LB is held), else the first one bound
+      const e = (on ? es.find((x) => firing.has(x)) : undefined) ?? es[0];
       return (
-        <span data-dir={i} data-active={on ? '1' : undefined} className={`flex min-w-0 items-center justify-center gap-0.5 truncate rounded px-0.5 ${on ? 'bg-hud text-black' : e ? (e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-300') : 'text-slate-600'}`} title={i + (e ? ` · ${entriesFor(i).map((x) => x.row.label).join(', ')}` : '')}>
-          <span className="font-mono">{inputRole(c, k)}{/^button\d+$/.test(i) ? shortInput(i) : ''}</span><span className="truncate">{e ? e.row.label : ''}</span>
+        <span data-dir={i} data-active={on ? '1' : undefined} className={`flex min-w-0 items-center justify-center gap-0.5 truncate rounded px-0.5 ${on ? 'bg-hud text-black' : e ? (e.conflict ? 'text-alert' : e.b.custom ? 'text-mod' : 'text-slate-300') : 'text-slate-600'}`} data-row-live={on && firing.has(e) ? '1' : undefined} title={i + (e ? ` · ${es.map((x) => `${x.prefix ? `${x.prefix}+` : ''}${x.row.label}`).join(', ')}` : '')}>
+          <span className="font-mono">{inputRole(c, k)}{/^button\d+$/.test(i) ? shortInput(i) : ''}</span><span className="truncate">{e ? `${e.prefix ? `${e.prefix}+` : ''}${e.row.label}` : ''}</span>
         </span>
       );
     };
@@ -364,6 +380,7 @@ export function CalloutBody({ c, s, entriesFor, live }: { c: Callout; s: Callout
         {c.inputs.map((i) => {
           const v = live.values[i];
           const es = [...entriesFor(i), ...coveredInputs({ inputs: [i] }).slice(1).flatMap(entriesFor)];
+          const rows = liveFirst(es, (e) => firing.has(e), 2);
           return (
             <div key={i} className="mt-0.5">
               <div className="flex items-center gap-1">
@@ -373,8 +390,8 @@ export function CalloutBody({ c, s, entriesFor, live }: { c: Callout; s: Callout
                   {v !== undefined && <span className="absolute top-[-2px] h-2.5 w-1 rounded bg-hud" style={{ left: `calc(${((v + 1) / 2) * 100}% - 2px)` }} />}
                 </span>
               </div>
-              {es.slice(0, 2).map((e, k) => <ActionLine key={k} e={e} />)}
-              {es.length > 2 && <div className="text-slate-500">+{es.length - 2} more</div>}
+              {rows.shown.map((e, k) => <ActionLine key={k} e={e} on={firing.has(e)} />)}
+              {rows.hidden > 0 && <More n={rows.hidden} live={rows.hiddenLive} />}
             </div>
           );
         })}
@@ -386,14 +403,15 @@ export function CalloutBody({ c, s, entriesFor, live }: { c: Callout; s: Callout
   // buttons: show the real DI numbers only (not invented 1..n row indices — those confuse when inputs are non-consecutive)
   const chipLabel = (i: string, k: number) => c.kind === 'buttons' ? shortInput(i) : `${inputRole(c, k)} ${shortInput(i)}`;
   const all = c.inputs.flatMap((i, k) => coveredInputs({ inputs: [i] }).flatMap(entriesFor).map((e) => ({ e, role: c.kind === 'buttons' ? shortInput(i) : multi ? inputRole(c, k) : undefined, i })));
+  const rows = liveFirst(all, ({ e }) => firing.has(e), 3);
   return (
     <div className="min-w-[90px]">
       {head}
       {multi && <div className="flex max-w-[150px] flex-wrap gap-0.5">{c.inputs.map((i, k) => <span key={k} data-dir={i || undefined} data-active={live.active.has(i) ? '1' : undefined} className={`rounded px-1 font-mono text-[9px] ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-slate-400'}`}>{chipLabel(i, k)}</span>)}</div>}
-      {all.slice(0, 3).map(({ e, role }, k) => <ActionLine key={k} e={e} role={role} />)}
-      {all.length > 3 && <div className="text-slate-500">+{all.length - 3} more</div>}
+      {rows.shown.map(({ e, role }, k) => <ActionLine key={k} e={e} role={role} on={firing.has(e)} />)}
+      {rows.hidden > 0 && <More n={rows.hidden} live={rows.hiddenLive} />}
       {!all.length && none}
     </div>
   );
 }
-
+const NO_FIRING: ReadonlySet<Entry> = new Set();
