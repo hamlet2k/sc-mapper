@@ -301,7 +301,7 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
       {t.callouts.map((c) => {
         const s = stateOf(c);
         return (
-          <div key={c.id} data-callout={c.id} data-active={s.active ? '1' : undefined} data-dim={s.dim ? '1' : undefined} data-tone={s.tone}
+          <div key={c.id} data-callout={c.id} data-active={s.active ? '1' : undefined} data-dim={s.dim ? '1' : undefined} data-tone={s.tone} data-selected={selected === c.id ? '1' : undefined}
             onPointerDown={start(c.id, 'box')} onClick={(e) => e.stopPropagation()}
             className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 ${editable ? 'cursor-move' : 'cursor-pointer'} ${s.dim ? 'opacity-30' : ''}`}
             style={{ left: `${bx(c) * 100}%`, top: `${by(c) * 100}%` }}>

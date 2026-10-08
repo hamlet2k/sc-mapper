@@ -33,11 +33,12 @@ export function padHit(info: PadInfo, e: PadEvent): PressHit | undefined {
 
 /**
  * Calls onHit for every new controller press / hat push / axis move while `active`. The loop reads describe/onHit through refs
- * so re-renders never restart it (that would re-baseline the axes).
+ * so re-renders never restart it (that would re-baseline the axes). One hit per frame: the first device's, or with `prefer`,
+ * the first hit it accepts when several devices report in the same frame.
  */
-export function usePadHits(active: boolean, describe: (l: readonly PadLike[]) => PadInfo[], onHit: (h: PressHit) => void) {
-  const ref = useRef({ describe, onHit });
-  useEffect(() => { ref.current = { describe, onHit }; }, [describe, onHit]);
+export function usePadHits(active: boolean, describe: (l: readonly PadLike[]) => PadInfo[], onHit: (h: PressHit) => void, prefer?: (h: PressHit) => boolean) {
+  const ref = useRef({ describe, onHit, prefer });
+  useEffect(() => { ref.current = { describe, onHit, prefer }; }, [describe, onHit, prefer]);
   useEffect(() => {
     if (!active) return;
     const tracker = new PadTracker();
@@ -47,12 +48,16 @@ export function usePadHits(active: boolean, describe: (l: readonly PadLike[]) =>
       if (list.length) {
         const infos = ref.current.describe(list);
         const evs = tracker.update(infos.map((d, i) => ({ key: d.key, state: snapshot(list[i]) })), now);
+        const hits: PressHit[] = [];
         for (const d of infos) {
           const e = evs.get(d.key) ?? [];
           const pick = e.find((x) => x.kind === 'button') ?? e.find((x) => x.kind === 'hat') ?? e.find((x) => x.kind === 'axis');
           const h = pick && padHit(d, pick);
-          if (h) { ref.current.onHit(h); break; }
+          if (h) hits.push(h);
         }
+        const { prefer: pf } = ref.current;
+        const h = (pf && hits.find(pf)) || hits[0];
+        if (h) ref.current.onHit(h);
       }
       raf = requestAnimationFrame(loop);
     };

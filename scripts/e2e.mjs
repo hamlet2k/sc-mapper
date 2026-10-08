@@ -867,6 +867,116 @@ check((await page.getByTestId('sidebar-slots').locator('[data-slot-row="js1"]').
 check((await dv.locator('[data-callout="b5"]').getAttribute('data-dim')) === null && (await dv.locator('[data-callout="trig"]').getAttribute('data-dim')) === '1' && /Pressed js1_button5/.test(await dv.getByTestId('device-search-status').innerText()), 'the pressed control is picked out, the rest dimmed');
 await page.getByTestId('press-chip').getByRole('button', { name: 'Remove input filter' }).click();
 await page.waitForTimeout(200);
+{ // ===================== press to bind (Devices, Edit mode only) =====================
+  console.log('\npress to bind (Devices)');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(300);
+  const pbBtn = dv.getByTestId('press-bind'), armedBar = dv.getByTestId('press-bind-armed');
+  const isArmed = async () => (await armedBar.count()) === 1;
+  const hold = async (on, off) => { await page.evaluate(on); await page.waitForTimeout(160); await page.evaluate(off); await page.waitForTimeout(220); };
+  const closePanel = async () => { if (await ip.count()) { await ip.getByRole('button', { name: 'Close' }).click(); await page.waitForTimeout(150); } };
+  const focusedTestId = () => page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName);
+  // view mode: no press-to-bind anywhere
+  if (await page.getByTestId('edit-bar').isVisible().catch(() => false)) { await page.getByTestId('edit-toggle').click(); await page.waitForTimeout(200); }
+  await closePanel();
+  check(await pbBtn.count() === 0 && await dv.getByTestId('press-bind-empty').count() === 0, 'view mode: no "Press to bind" button (toolbar or panel)');
+  await page.getByTestId('edit-toggle').click();
+  await page.waitForTimeout(200);
+  check(await pbBtn.isVisible() && await dv.getByTestId('device-panel-empty').getByTestId('press-bind-empty').isVisible(), 'Edit mode: "Press to bind" in the slot bar and in the empty inspector');
+  // arm, then a resting / slightly moved axis must not fire: z rests at -1 (a parked throttle), nudged by 0.3
+  await page.evaluate(() => window.__axis(1, 2, -1));
+  await page.waitForTimeout(150);
+  await pbBtn.click();
+  await page.waitForTimeout(250);
+  check(await isArmed() && /Press a button or hat, or move an axis on JS1 · VKBsim Gladiator EVO R…/.test((await armedBar.innerText()).replace(/\s+/g, ' ')) && /Esc to cancel/.test(await armedBar.innerText()),
+    `armed: indicator names the device and Esc (${(await armedBar.innerText()).replace(/\s+/g, ' ').slice(0, 90)})`);
+  check((await pbBtn.getAttribute('aria-pressed')) === 'true' && /Listening/.test(await dv.getByTestId('device-panel-empty').innerText()), 'armed: the toolbar button and the empty inspector say it is listening');
+  check(await dv.getByTestId('press-bind-cap').isVisible(), 'armed on a 32-button device in Chrome: the 32-button limit is mentioned');
+  await page.evaluate(() => window.__axis(1, 2, -0.7));
+  await page.waitForTimeout(400);
+  check(await isArmed() && await ip.count() === 0, 'an axis at rest (and a small nudge) does not trigger');
+  await page.mouse.move(700, 600);
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: shots + '190-press-bind-armed.png' });
+  // keys are not captured here: a hint, still armed, nothing bound
+  await page.keyboard.press('KeyA');
+  await page.waitForTimeout(150);
+  check(await isArmed() && /Keys aren't bound on this page/.test(await dv.getByTestId('press-bind-note').innerText()), 'a key press while armed is not captured (hint, still listening)');
+  // a press on another device: ignored with a hint
+  await hold(() => window.__btn(2, 3, true), () => window.__btn(2, 3, false));
+  check(await isArmed() && /That was JS2 \(VKBsim Gladiator EVO L\); this page shows JS1/.test(await dv.getByTestId('press-bind-note').innerText()) && await ip.count() === 0,
+    `a press on js2 is ignored and named (${await dv.getByTestId('press-bind-note').innerText().catch(() => '')})`);
+  // Esc cancels
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  check(!(await isArmed()) && (await pbBtn.getAttribute('aria-pressed')) === 'false', 'Esc cancels listening');
+  await page.evaluate(() => window.__axis(1, 2, 0));
+  await page.waitForTimeout(150);
+  // arm from the empty inspector, press button 7 (thumb button rear): its callout opens with the target preset, search focused
+  await dv.getByTestId('press-bind-empty').click();
+  await page.waitForTimeout(250);
+  await hold(() => window.__btn(1, 6, true), () => window.__btn(1, 6, false));
+  await page.waitForTimeout(200);
+  check(!(await isArmed()) && await ip.isVisible() && /Thumb button \(rear\)/i.test(await ip.innerText()) && (await ip.getByTestId('bind-target-fixed').innerText()) === 'button7' && await ip.getByTestId('bind-target-pressed').isVisible(),
+    'pressing button 7: the Thumb button (rear) panel opens with "Bind an action to button7" (marked pressed)');
+  check((await focusedTestId()) === 'bind-search', `the action search has the focus (${await focusedTestId()})`);
+  const b7 = dv.locator('[data-callout="b7"]');
+  check((await b7.getAttribute('data-selected')) === '1', 'the pressed control\'s callout is selected (highlighted)');
+  await page.keyboard.type('cycle');
+  await page.waitForTimeout(250);
+  await page.mouse.move(700, 600);
+  await page.screenshot({ path: shots + '191-press-bind-panel.png' });
+  const pick = (await ip.getByTestId('bind-results').locator('button').first().locator('span').first().innerText()).trim();
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(300);
+  check(pick && (await b7.innerText()).includes(pick) && /^(custom|conflict)$/.test(await b7.getAttribute('data-tone')), `Enter binds the top result ("${pick}") to js1_button7 and it shows on the callout (${await b7.getAttribute('data-tone')})`);
+  check((await ip.innerText()).includes(pick), 'the bound action is listed in the panel');
+  await page.screenshot({ path: shots + '192-press-bind-bound.png' });
+  // an input no callout shows (z axis on the generic stick): a panel for the raw input, bindable
+  await pbBtn.click();
+  await page.waitForTimeout(250);
+  await hold(() => window.__axis(1, 2, 0.9), () => window.__axis(1, 2, 0));
+  check(await ip.isVisible() && /js1_z/.test(await ip.innerText()) && (await ip.getByTestId('bind-target-fixed').innerText()) === 'z' && (await focusedTestId()) === 'bind-search',
+    'moving an axis no callout shows (z): a panel for js1_z opens, bindable, search focused');
+  await page.keyboard.type('throttle');
+  await page.waitForTimeout(250);
+  await ip.getByTestId('bind-results').locator('button').first().click();
+  await page.waitForTimeout(300);
+  check(await dv.getByTestId('device-overflow').locator('[data-overflow="z"]').count() === 1, 'binding the raw z axis lists it under "Bound, not on the picture"');
+  await page.screenshot({ path: shots + '193-press-bind-raw-axis.png' });
+  // the panel's press button picks one input of a multi-input callout (hat 1: push it right)
+  await dv.locator('[data-callout="hat1"]').click();
+  await page.waitForTimeout(200);
+  check((await ip.getByTestId('bind-target').inputValue()) === 'hat1_up', 'hat 1 panel: the target starts on hat1_up');
+  await ip.getByTestId('panel-press-bind').click();
+  await page.waitForTimeout(250);
+  check(await isArmed() && (await armedBar.getAttribute('data-scope')) === 'callout' && /Press one of Hat 1/i.test((await armedBar.innerText()).replace(/\s+/g, ' ')), 'the panel\'s press button arms for this callout\'s inputs');
+  await hold(() => window.__axis(1, 9, -3 / 7), () => window.__axis(1, 9, 9 / 7));
+  check(!(await isArmed()) && (await ip.getByTestId('bind-target').inputValue()) === 'hat1_right' && (await focusedTestId()) === 'bind-search', 'pushing the hat right sets the target to hat1_right and focuses the search');
+  { // the hat's panel is taller than its room: the bind section is brought up inside the panel, in the window
+    const sb = await ip.getByTestId('bind-search').boundingBox(), tb = await ip.getByTestId('bind-target').boundingBox();
+    const hb = await dv.locator('[data-callout="hat1"]').boundingBox(), heads = await page.evaluate(() => Math.max(...[...document.querySelectorAll('[data-sticky-head]')].map((h) => h.getBoundingClientRect().bottom)));
+    check(sb && tb && tb.y >= 0 && sb.y + sb.height <= 900, `the target picker and the search are in sight (search at ${Math.round(sb?.y ?? -1)}px)`);
+    check(hb && hb.y >= heads - 1 && hb.y + 10 < 900, `the hat 1 callout stays in sight under the sticky lines (${Math.round(hb?.y ?? -1)}px, lines end ${Math.round(heads)}px)`);
+    await page.keyboard.type('strafe');
+    await page.waitForTimeout(300);
+    const lb = await ip.getByTestId('bind-results').locator('li').last().boundingBox();
+    check(lb && lb.y + lb.height <= 900 + 0.5, `typed right after the press: the results are in sight too (last one ends at ${Math.round((lb?.y ?? 0) + (lb?.height ?? 0))}px)`);
+  }
+  await page.mouse.move(700, 600);
+  await page.screenshot({ path: shots + '194-press-bind-hat-target.png' });
+  // turning Edit off while armed stops listening
+  await pbBtn.click();
+  await page.waitForTimeout(150);
+  await page.getByTestId('edit-toggle').click();
+  await page.waitForTimeout(200);
+  check(!(await isArmed()) && await pbBtn.count() === 0, 'leaving Edit mode stops listening and hides the button');
+  await page.getByTestId('edit-toggle').click();
+  await page.waitForTimeout(200);
+  await closePanel();
+  await page.setViewportSize({ width: 1680, height: 1000 });
+  await page.waitForTimeout(300);
+}
 {
   const [d] = await Promise.all([page.waitForEvent('download'), dv.getByTestId('device-png').click()]);
   const f = '/tmp/' + d.suggestedFilename();

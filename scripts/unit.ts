@@ -2054,4 +2054,35 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
   });
 }
 
+console.log('\npress to bind (Devices, Edit mode)');
+{
+  const pb = await import('../src/lib/pressBind');
+  const callouts = [
+    { id: 'trig', inputs: ['button1'] },
+    { id: 'hat', inputs: ['hat1_up', 'hat1_right', 'hat1_down', 'hat1_left'] },
+    { id: 'ls', inputs: ['thumblx', 'thumbly'] },
+    { id: 'lt', inputs: ['triggerl_btn'] },
+    { id: 'dup', inputs: ['button1', 'button2'] },
+  ];
+  t('a press on this slot picks the callout that shows it, with the exact input', () => {
+    assert.deepEqual(pb.pressBindTarget(callouts, 'js', 1, { slot: 'js', instance: 1, inputs: ['hat1_right'] }), { kind: 'hit', calloutId: 'hat', input: 'hat1_right' });
+    assert.deepEqual(pb.pressBindTarget(callouts, 'js', 1, { slot: 'js', instance: 1, inputs: ['button1'] }), { kind: 'hit', calloutId: 'trig', input: 'button1' });
+  });
+  t('the selected callout wins when two show the same input', () => {
+    assert.deepEqual(pb.pressBindTarget(callouts, 'js', 1, { slot: 'js', instance: 1, inputs: ['button1'] }, 'dup'), { kind: 'hit', calloutId: 'dup', input: 'button1' });
+  });
+  t('an input no callout shows: raw input (callout null)', () => {
+    assert.deepEqual(pb.pressBindTarget(callouts, 'js', 1, { slot: 'js', instance: 1, inputs: ['button47'] }), { kind: 'hit', calloutId: null, input: 'button47' });
+  });
+  t('another device (or instance) is reported, not picked', () => {
+    assert.deepEqual(pb.pressBindTarget(callouts, 'js', 1, { slot: 'js', instance: 2, inputs: ['button1'], device: 'EVO L' }), { kind: 'other', slot: 'js', instance: 2, device: 'EVO L' });
+    assert.equal(pb.pressBindTarget(callouts, 'js', 1, { slot: 'gp', instance: 1, inputs: ['a'] }).kind, 'other');
+  });
+  t('gamepad forms: the first form a callout covers wins (stick axis / direction, analog trigger)', () => {
+    assert.deepEqual(pb.pressBindTarget(callouts, 'gp', 1, { slot: 'gp', instance: 1, inputs: ['thumblx', 'thumbl_right'] }), { kind: 'hit', calloutId: 'ls', input: 'thumblx' });
+    assert.deepEqual(pb.pressBindTarget([{ id: 'r', inputs: ['triggerr_btn'] }], 'gp', 1, { slot: 'gp', instance: 1, inputs: ['triggerr'] }), { kind: 'hit', calloutId: 'r', input: 'triggerr' });
+    assert.deepEqual(pb.pressBindTarget([], 'gp', 1, { slot: 'gp', instance: 1, inputs: ['thumbrx', 'thumbr_left'] }), { kind: 'hit', calloutId: null, input: 'thumbrx' });
+  });
+}
+
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);

@@ -834,7 +834,7 @@ export default function App() {
               <span className="text-slate-400">
                 {view === 'list' && <>Click a binding to rebind it, <b className="text-slate-200">+</b> to add one, hover <Ico name="close" className="h-3 w-3" /> to unbind, or click an action name for the full editor.</>}
                 {view === 'keyboard' && <>Click a key to inspect it. Rebind or unbind from the inspector, or search an action to bind to that key.</>}
-                {view === 'devices' && <>Click a callout, then rebind, unbind or search an action to bind to that control.</>}
+                {view === 'devices' && <>Click a callout (or use <b className="text-slate-200">Press to bind</b> and press the control on the device), then rebind, unbind or search an action to bind to that control.</>}
                 {view === 'conflicts' && <>Edit or unbind a conflicting binding from its card. The input chip still opens these actions in the List.</>}
                 {' '}Saved to <b className="text-mod">{profile ? profile.name : 'a new profile (created on first edit)'}</b>.
               </span>
@@ -1010,6 +1010,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
           <li><b className="text-slate-200">Edit</b> (List view toolbar): click any binding to rebind it, <b>+</b> to add one, the cross to unbind, or an action name for the full editor (activation mode, taps, reset). Ctrl+Z undoes.</li>
           <li>Keyboard, mouse, gamepads and joysticks/HOTAS are captured live. Controllers use the browser&apos;s Gamepad API; press a button first so the browser reveals them. <b className="text-slate-200">Game slots &amp; controllers</b> (in the profile panel) lists the game slots (kb1, mo1, js1, js2…, gp1) with the hardware and template for each, and has a live input tester.</li>
           <li><b className="text-slate-200">Find by pressing</b> (the target icon inside the search box): press a controller button, hat or axis, or a key, and the current view narrows to that exact input (on Devices it jumps to that control). With <b>Highlight on press</b> on (Settings), pressing an input while you&apos;re not searching or editing briefly highlights its bindings, keys, conflict groups or device callouts.</li>
+          <li><b className="text-slate-200">Press to bind</b> (Devices view, with Edit on): click it, then press a button, push a hat or move an axis on the shown device. That control opens in the inspector with its exact input ready, and you type the action to bind (Enter binds the top match). Esc cancels.</li>
           <li><b className="text-slate-200">Axis settings &amp; curves</b> (the button on each joystick / gamepad slot in the Devices view): invert, exponent and custom response curves per control, and deadzone / saturation per axis, read from and written back to your file.</li>
           <li><b className="text-slate-200">Export</b> (profile panel) writes <code>layout_&lt;name&gt;_exported.xml</code> for the mappings folder above (load via Options → Keybindings → Control Profiles, or the console: <CopyText text="pp_RebindKeys layout_<name>_exported.xml" kind="command" testid="help-cmd-rebind" className="rounded bg-black/40 px-1 text-hud/90" />, with your file name) or a full <code>actionmaps.xml</code>. Only changes from the defaults are written.</li>
         </ul>

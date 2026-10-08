@@ -1,11 +1,14 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ChromiumBanner, ChromiumButtonNotice } from './ChromiumBanner';
 import { createPortal } from 'react-dom';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { isController, slotDeviceName, slotId, type GameSlot, type SlotMap } from '../lib/slots';
 import { AUTO_TEMPLATE, autoSlotTemplate, resolveSlotTemplate } from '../lib/slotTemplates';
 import { formatInput, searchSpec } from '../lib/inputs';
-import type { PressHit } from '../lib/listen';
+import { usePadHits, type PressHit } from '../lib/listen';
+import { browserName } from '../lib/browser';
+import { CHROMIUM_BUTTON_CAP } from '../lib/capture';
+import { pressBindTarget } from '../lib/pressBind';
 import { parseQuery, scoreRow } from '../lib/search';
 import {
   DUP_ORDER_GUESSES, calloutFor, calloutTitle, cloneTemplate, coveredInputs, exportTemplates, identityKey, inputRole, matchFor, matchScore, maxButton, newTemplate,
@@ -20,6 +23,7 @@ import { Tip } from './Tooltip';
 import { TemplateEditor } from './TemplateEditor';
 import { useFocusPressedView } from './useFocusPressedView';
 import { useSwapViews } from './useSwapViews';
+import { useEscape } from './useEscape';
 
 /** a game slot of the active profile (slots.ts) with the connected controller filling it, if any */
 export interface SlotOption { gs: GameSlot; pad?: PadInfo }
@@ -89,6 +93,12 @@ const SIDE_PANEL_MIN_W = MULTI_VIEW_MIN_W + PANEL_GAP + PANEL_W;
 const PANEL_STICK_GAP = 8;
 
 const NO_ACTIVE: Live = { active: new Set<string>(), values: {} };
+/** press to bind: open callout `id` with "Bind an action to" set to `input` and the search focused (n: one per press) */
+interface BindReq { id: string; input: string; n: number }
+/** the bottom of the sticky lines (slot bar, Groups line) in the scrolling <main>: what's above it is covered */
+const stickyBottom = (mr: DOMRect) => Math.max(mr.top, ...[...document.querySelectorAll('[data-sticky-head]')].map((h) => h.getBoundingClientRect().bottom));
+/** room kept under the action search for its results when a press brings it into sight */
+const BIND_RESULTS_ROOM = 220;
 
 /** visual view of one game slot: a controller's picture with every control's bindings (live highlight, click to edit), or the keyboard */
 export function DeviceView(props: Props) {
@@ -220,6 +230,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
     ? { id: selected, ...calloutFor(selected.slice(6)), inputs: [selected.slice(6)], anchor: { x: 0, y: 0 }, box: { x: 0, y: 0 } }
     : tpl.callouts.find((c) => c.id === selected);
 
+
   const withLink = (t: DeviceTemplate): DeviceTemplate => (ident.vendor || ident.name ? { ...t, slot, match: [matchFor(ident, !!opt.pad?.dup)] } : { ...t, slot });
   const saveTemplate = async (t: DeviceTemplate) => {
     try {
@@ -303,6 +314,57 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
     return () => ro.disconnect();
   }, []);
   const sidePanel = rowW === 0 || rowW >= SIDE_PANEL_MIN_W;
+  /** a pressed control's callout: scrolled (instantly, as little as needed) into the room under the sticky lines. Done before
+   *  the inspector positions its bind section, which then keeps this callout in sight. */
+  function bringIntoView(id: string) {
+    const el = document.querySelector<HTMLElement>(`[data-testid=device-slot-view] [data-callout="${CSS.escape(id)}"]`);
+    const main = document.getElementById('main');
+    if (!el || !main) return;
+    const r = el.getBoundingClientRect(), mr = main.getBoundingClientRect(), top = stickyBottom(mr);
+    if (r.top < top + PANEL_STICK_GAP) main.scrollTop -= top + PANEL_STICK_GAP - r.top;
+    else if (r.bottom > mr.bottom - PANEL_STICK_GAP) main.scrollTop += Math.min(r.bottom - mr.bottom + PANEL_STICK_GAP, r.top - top - PANEL_STICK_GAP);
+  }
+  const chromiumCap = browserName().chromium && (tplMax > CHROMIUM_BUTTON_CAP || (opt.pad?.buttons ?? 0) >= CHROMIUM_BUTTON_CAP);
+
+  // ---- press to bind (Edit mode only): the next button / hat / axis on THIS slot's device picks its control (or the raw
+  // input when no callout shows it), opens it here with "Bind an action to" set to that exact input, and focuses the search.
+  // 'device' = armed from the toolbar / empty panel; 'callout' = armed from the panel's target picker (same behaviour).
+  const [armed, setArmed] = useState<null | 'device' | 'callout'>(null);
+  const [armNote, setArmNote] = useState<string | null>(null);
+  const [bindReq, setBindReq] = useState<BindReq | null>(null);
+  const disarm = useCallback(() => { setArmed(null); setArmNote(null); }, []);
+  const arm = (scope: 'device' | 'callout') => { setArmNote(null); setArmed((a) => (a === scope ? null : scope)); };
+  if (armed && !editMode) { setArmed(null); setArmNote(null); } // leaving Edit mode stops listening
+  useEscape(disarm, !!armed);
+  const slotName = `${slot}${instance}`.toUpperCase();
+  const isThisSlot = useCallback((h: PressHit) => h.slot === slot && h.instance === instance, [slot, instance]);
+  const onArmHit = (h: PressHit) => {
+    const r = pressBindTarget(tpl.callouts, slot, instance, h, selected);
+    if (r.kind === 'other') {
+      setArmNote(`That was ${r.slot.toUpperCase()}${r.instance}${r.device ? ` (${r.device})` : ''}; this page shows ${slotName}. Press on ${opt.name ?? slotName}, or pick ${r.slot}${r.instance} in the Game slots list to bind that device. Still listening…`);
+      return;
+    }
+    disarm();
+    const id = r.calloutId ?? `input:${r.input}`;
+    setSelected(id);
+    setBindReq((b) => ({ id, input: r.input, n: (b?.n ?? 0) + 1 }));
+    if (r.calloutId && sidePanel) bringIntoView(r.calloutId);
+  };
+  usePadHits(!!armed, describe, onArmHit, isThisSlot);
+  // keys don't bind on this page (it binds device inputs): Tab / Esc / typing in a field behave as usual, other keys get a hint
+  useEffect(() => {
+    if (!armed) return;
+    const down = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || ['Escape', 'Tab', 'Shift', 'Control', 'Alt', 'Meta', 'AltGraph'].includes(e.key)) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName) || t.isContentEditable)) return;
+      if (t?.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
+      setArmNote(`Keys aren't bound on this page: it binds ${slotName}'s buttons, hats and axes (keyboard keys are bound in the Keyboard view). Still listening…`);
+    };
+    window.addEventListener('keydown', down);
+    return () => window.removeEventListener('keydown', down);
+  }, [armed, slotName]);
+  const selectByClick = (id: string | null) => { setSelected(id); setBindReq(null); if (armed) disarm(); };
   // multi-page templates: the page headings stick under the Groups line. CSS sticky needs every ancestor up to <main> to not
   // scroll, so the picture column clips horizontally (overflow-x: clip) instead of scrolling; only when it is narrower than
   // the canvas' minimum width does it scroll again (and the headings stay on their pictures)
@@ -371,7 +433,15 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
             <input ref={importRef} type="file" accept=".json,application/json" className="hidden" data-testid="template-import-file"
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
           </span>
-          <span className="ml-auto flex" data-testid="slot-axis-wrap">
+          <span className="ml-auto flex items-center gap-2" data-testid="slot-axis-wrap">
+          {editMode && (
+            <Tip label={armed ? 'Listening: press a control on the device (Esc cancels)' : `Press to bind: press a button, hat or axis on ${slotName} to pick that control and bind an action to it`}>
+            <button type="button" onClick={() => arm('device')} aria-pressed={!!armed} data-testid="press-bind" aria-label={`Press to bind: press a control on ${slotName} to bind an action to it`}
+              className={`flex items-center gap-1.5 rounded border px-2.5 py-1 font-display text-[11px] font-semibold uppercase tracking-wider transition ${armed ? 'border-mod bg-mod/25 text-mod shadow-[0_0_14px_-4px_var(--color-mod)]' : 'border-mod/50 bg-mod/10 text-mod hover:bg-mod/20'}`}>
+              <Ico name="press" className={`h-3.5 w-3.5 ${armed ? 'animate-pulse' : ''}`} /> {armed ? 'Listening…' : 'Press to bind'}
+            </button>
+            </Tip>
+          )}
           <Tip label={axisLocked ? `Not available for ${slot}${instance}: Star Citizen only keeps axis settings for js1–js${axisLimit.js} / gp1 (see below)` : `Invert, exponent, custom response curves${slot === 'js' ? ' and deadzone / saturation' : ''} for ${slot}${instance} only`}>
           <button type="button" onClick={() => !axisLocked && onOpenAxis(opt.gs)} aria-disabled={axisLocked || undefined} disabled={axisLocked} data-testid="slot-axis-settings"
             aria-label={`Axis settings & curves for ${slot}${instance}`} aria-describedby={axisLocked ? 'axis-locked-msg' : undefined}
@@ -393,6 +463,22 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
               <button type="button" onClick={onOpenControllers} data-testid="axis-reorder" className="flex items-center gap-1 rounded border border-edge px-2 py-0.5 text-slate-300 hover:border-mod/60 hover:text-mod"><Ico name="slots" className="h-3 w-3" /> Game slots &amp; controllers</button>
             </span>
             <span className="flex basis-full items-center gap-1.5 text-[10px] text-slate-500" data-testid="axis-path">Fresh export from <GamePathHint /></span>
+          </div>
+        )}
+        {armed && (
+          <div role="status" aria-live="polite" data-testid="press-bind-armed" data-scope={armed}
+            className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-mod/60 bg-mod/10 px-3 py-1.5 text-[11px] text-slate-200">
+            <span className="flex items-center gap-1.5 font-display text-xs font-bold uppercase tracking-[0.2em] text-mod"><Ico name="press" className="h-4 w-4 animate-pulse" /> Press to bind</span>
+            <span className="min-w-0 flex-1">
+              {armed === 'callout' && selCallout && !selCallout.id.startsWith('input:')
+                ? <>Press one of <b>{calloutTitle(selCallout)}</b>&apos;s inputs (or any other control) on </>
+                : <>Press a <b>button</b> or <b>hat</b>, or move an <b>axis</b> on </>}
+              <b className="text-mod">{slotName} · {opt.name ?? 'this device'}</b>… <span className="text-slate-400">(<b>Esc</b> to cancel)</span>
+              {!opt.pad && <span className="text-mod"> Not visible to the browser yet: the first press wakes it up and already counts.</span>}
+              {chromiumCap && <span className="text-slate-400" data-testid="press-bind-cap"> This browser can&apos;t see buttons above {CHROMIUM_BUTTON_CAP}: click their callout instead (or open the page in Firefox).</span>}
+            </span>
+            <button type="button" onClick={disarm} data-testid="press-bind-cancel" className="rounded border border-edge px-2 py-0.5 text-slate-300 hover:border-hud/60">Cancel</button>
+            {armNote && <span className="flex basis-full items-center gap-1.5 text-mod" data-testid="press-bind-note"><Ico name="info" className="h-3 w-3" /> {armNote}</span>}
           </div>
         )}
       </section>
@@ -438,7 +524,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
       <div ref={rowRef} className={`flex min-h-0 flex-1 gap-3 ${sidePanel ? 'items-start' : 'flex-col'}`} data-testid="device-row" data-layout={sidePanel ? 'side' : 'stacked'}>
         <div ref={canvasRef} className={`min-w-0 flex-1 scrollbar-thin ${stickyHeadings ? 'overflow-x-clip' : 'overflow-auto'}`} data-print-area>
           <div className="mb-1 hidden font-display text-lg font-bold text-black print:block">{slot.toUpperCase()}{instance} · {ident.name ?? tpl.name}</div>
-          <DeviceCanvas template={shownTpl} stateOf={stateOf} selected={selected} onSelect={(id) => setSelected(id)} pulse={pulse} stickyHeadings={stickyHeadings}
+          <DeviceCanvas template={shownTpl} stateOf={stateOf} selected={selected} onSelect={(id) => selectByClick(id)} pulse={pulse} stickyHeadings={stickyHeadings}
             renderLabel={(c, s) => <CalloutBody c={c} s={s} entriesFor={(i) => index.get(i) ?? []} live={live} />} />
         </div>
         {/* the inspector: sticks under the slot bar + Groups line beside the pictures (own scroll when taller than the room) */}
@@ -447,8 +533,20 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
           style={sidePanel ? { top: stick.page + PANEL_STICK_GAP, maxHeight: stick.panel || undefined } : undefined}>
           {selCallout ? (
             <InputPanel key={selCallout.id} c={selCallout} slot={slot} instance={instance} index={index} rows={rows} live={live}
-              editMode={!!editMode} onEdit={onEdit} onRemove={onRemove} onBind={onBind} onShowInList={onShowInList} onClose={() => setSelected(null)} />
-          ) : <p className="rounded border border-edge/60 bg-black/20 p-3 text-xs text-slate-400">Click a callout to see and change what that control does.</p>}
+              editMode={!!editMode} onEdit={onEdit} onRemove={onRemove} onBind={onBind} onShowInList={onShowInList} onClose={() => selectByClick(null)}
+              bindReq={bindReq?.id === selCallout.id ? bindReq : null} armed={armed === 'callout'} onPress={() => arm('callout')} scrollOnFocus={!sidePanel} />
+          ) : (
+            <div className="rounded border border-edge/60 bg-black/20 p-3 text-xs text-slate-400" data-testid="device-panel-empty">
+              {armed
+                ? <p className="flex items-center gap-1.5 text-mod"><Ico name="press" className="h-4 w-4 animate-pulse" /> Listening: press the control on {slotName} you want to bind…</p>
+                : <p>Click a callout to see and change what that control does.</p>}
+              {editMode && !armed && (
+                <p className="mt-2 flex flex-wrap items-center gap-1.5">Or press it on the device:
+                  <button type="button" onClick={() => arm('device')} data-testid="press-bind-empty" className="flex items-center gap-1 rounded border border-mod/50 bg-mod/10 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20"><Ico name="press" className="h-3 w-3" /> Press to bind</button>
+                </p>
+              )}
+            </div>
+          )}
           <section className="rounded border border-edge/60 bg-black/20 p-3" data-testid="device-overflow">
             <h4 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Bound, not on the picture ({overflow.length})</h4>
             {!overflow.length ? <p className="mt-1 text-[11px] text-slate-500">Every bound input of {slot.toUpperCase()}{instance} has a callout.</p> : (
@@ -458,7 +556,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
                   const tone: Tone = es.some((e) => e.conflict) ? 'conflict' : es.some((e) => e.b.custom) ? 'custom' : 'bound';
                   return (
                     <li key={i}>
-                      <button type="button" data-overflow={i} onClick={() => setSelected(`input:${i}`)} className={`w-full rounded border px-2 py-1 text-left text-[11px] hover:border-hud/60 ${live.active.has(i) ? 'border-hud bg-hud/20' : 'border-edge/60'} ${selected === `input:${i}` ? 'ring-1 ring-mod/70' : ''}`}>
+                      <button type="button" data-overflow={i} onClick={() => selectByClick(`input:${i}`)} className={`w-full rounded border px-2 py-1 text-left text-[11px] hover:border-hud/60 ${live.active.has(i) ? 'border-hud bg-hud/20' : 'border-edge/60'} ${selected === `input:${i}` ? 'ring-1 ring-mod/70' : ''}`}>
                         <span className="font-mono font-bold" style={{ color: TONE_STROKE[tone] === TONE_STROKE.bound ? '#8be9ff' : TONE_STROKE[tone] }}>{shortInput(i)}</span>
                         <span className="ml-2 text-slate-300">{es.map((e) => e.row.label).join(', ')}</span>
                       </button>
@@ -493,20 +591,64 @@ function Legend() {
   return <span className="ml-auto flex gap-2">{item('#4fd8ff', 'active')}{item(TONE_STROKE.custom, 'customized')}{item(TONE_STROKE.conflict, 'conflict')}{item(TONE_STROKE.bound, 'default')}{item(TONE_STROKE.unbound, 'unbound')}</span>;
 }
 
-function InputPanel({ c, slot, instance, index, rows, live, editMode, onEdit, onRemove, onBind, onShowInList, onClose }: {
+function InputPanel({ c, slot, instance, index, rows, live, editMode, onEdit, onRemove, onBind, onShowInList, onClose, bindReq, armed, onPress, scrollOnFocus }: {
   c: Callout; slot: 'js' | 'gp'; instance: number; index: Map<string, Entry[]>; rows: Row[]; live: Live; editMode: boolean;
   onEdit: (row: Row) => void; onRemove: (row: Row, b: Binding) => void; onBind: (row: Row, slot: Slot, instance: number, input: string) => void;
   onShowInList: (spec: string) => void; onClose: () => void;
+  /** press to bind landed on this callout: preset the target to that input and focus the action search */
+  bindReq: BindReq | null; armed: boolean; onPress: () => void;
+  /** stacked layout (the panel under the pictures): focusing the search scrolls the panel into sight */
+  scrollOnFocus: boolean;
 }) {
   const own = c.inputs.filter(Boolean), missing = c.inputs.length - own.length;
   const inputs = [...own, ...coveredInputs(c).slice(own.length).filter((i) => index.has(i))];
-  const [target, setTarget] = useState(own[0] ?? '');
+  // a pressed input the callout only covers (a gamepad stick direction, an analog trigger) is offered as a target too
+  const [extra, setExtra] = useState<string | null>(bindReq && !own.includes(bindReq.input) ? bindReq.input : null);
+  const bindable = extra && !own.includes(extra) ? [...own, extra] : own;
+  const [target, setTarget] = useState(bindReq?.input ?? own[0] ?? '');
+  const [pressed, setPressed] = useState<string | null>(bindReq?.input ?? null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  // another press landing on this (already open) callout: retarget during render (no extra effect pass)
+  const [seenReq, setSeenReq] = useState(bindReq?.n ?? 0);
+  if (bindReq && bindReq.n !== seenReq) {
+    setSeenReq(bindReq.n);
+    if (!own.includes(bindReq.input)) setExtra(bindReq.input);
+    setTarget(bindReq.input);
+    setPressed(bindReq.input);
+  }
+  useEffect(() => {
+    if (!bindReq) return;
+    const el = searchRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: !scrollOnFocus });
+    // beside the pictures: bring the bind section (plus room for its results) into sight under the sticky lines. The page scrolls
+    // only as far as needed, then the sticky inspector scrolls inside itself (it has its own scroll when taller than its room)
+    const box = scrollOnFocus ? null : el.closest<HTMLElement>('[data-testid=device-side-panel]');
+    const sec = el.closest<HTMLElement>('[data-testid=bind-section]');
+    const main = document.getElementById('main');
+    if (box && sec && main) {
+      const mr = main.getBoundingClientRect();
+      const heads = stickyBottom(mr);
+      let r = sec.getBoundingClientRect();
+      const callout = document.querySelector<HTMLElement>('[data-testid=device-slot-view] [data-callout][data-selected="1"]')?.getBoundingClientRect();
+      const d = Math.min(r.bottom + BIND_RESULTS_ROOM - mr.bottom, r.top - heads - PANEL_STICK_GAP, callout ? callout.top - heads - PANEL_STICK_GAP : Infinity);
+      if (d > 0) main.scrollTop += d;
+      r = sec.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      if (r.top < b.top || r.bottom + BIND_RESULTS_ROOM > Math.min(b.bottom, mr.bottom)) box.scrollTop += r.top - b.top - PANEL_STICK_GAP;
+    }
+  }, [bindReq?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const [q, setQ] = useState('');
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (t.length < 2) return [];
     return rows.filter((r) => !r.hidden && `${r.label} ${r.action} ${r.mapLabel}`.toLowerCase().includes(t)).slice(0, 8);
   }, [q, rows]);
+  // results under a search typed right after a press: keep them in sight (the inspector scrolls inside first)
+  const resultsRef = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (results.length && document.activeElement === searchRef.current) resultsRef.current?.lastElementChild?.scrollIntoView({ block: 'nearest' });
+  }, [results.length]);
   return (
     <section className="rounded border border-hud/40 bg-black/30 p-3 text-xs" data-testid="input-panel">
       <div className="flex items-baseline gap-2">
@@ -544,19 +686,30 @@ function InputPanel({ c, slot, instance, index, rows, live, editMode, onEdit, on
           );
         })}
       </ul>
-      {editMode && own.length > 0 && <div className="mt-3 border-t border-edge/50 pt-2">
-        <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+      {editMode && bindable.length > 0 && <div className="mt-3 border-t border-edge/50 pt-2" data-testid="bind-section">
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
           Bind an action to
-          {own.length > 1 ? (
-            <select value={target} onChange={(e) => setTarget(e.target.value)} aria-label="Input to bind" className="rounded border border-edge bg-panel2 px-1 py-0.5 font-mono text-[11px] text-slate-200">
-              {own.map((i) => <option key={i} value={i}>{i}</option>)}
+          {bindable.length > 1 ? (
+            <select value={target} onChange={(e) => setTarget(e.target.value)} aria-label="Input to bind" data-testid="bind-target"
+              className={`rounded border bg-panel2 px-1 py-0.5 font-mono text-[11px] text-slate-200 ${pressed === target ? 'border-ok/70' : 'border-edge'}`}>
+              {bindable.map((i) => <option key={i} value={i}>{i}</option>)}
             </select>
-          ) : <code className="text-hud/90">{target}</code>}
+          ) : <code className="text-hud/90" data-testid="bind-target-fixed">{target}</code>}
+          {bindable.length > 1 && (
+            <Tip label={armed ? 'Listening: press one of these inputs on the device (Esc cancels)' : 'Pick the input by pressing it on the device'}>
+              <button type="button" onClick={onPress} aria-pressed={armed} aria-label="Pick the input to bind by pressing it on the device" data-testid="panel-press-bind"
+                className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold ${armed ? 'border-mod bg-mod/25 text-mod' : 'border-mod/40 text-mod/90 hover:bg-mod/15'}`}>
+                <Ico name="press" className={`h-3 w-3 ${armed ? 'animate-pulse' : ''}`} /> {armed ? 'listening…' : 'press'}
+              </button>
+            </Tip>
+          )}
+          {pressed && pressed === target && <span className="flex items-center gap-0.5 text-[10px] text-ok" data-testid="bind-target-pressed"><Ico name="check" className="h-3 w-3" /> pressed</span>}
         </div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="search actions…" aria-label="Search actions to bind"
+        <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder="search actions…" aria-label="Search actions to bind" data-testid="bind-search"
+          onKeyDown={(e) => { if (e.key === 'Enter' && results[0]) { onBind(results[0], slot, instance, target); setQ(''); } }}
           className="mt-1 w-full rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600" />
         {results.length > 0 && (
-          <ul className="mt-1 space-y-0.5" data-testid="bind-results">
+          <ul ref={resultsRef} className="mt-1 space-y-0.5" data-testid="bind-results">
             {results.map((r) => (
               <li key={r.id}>
                 <button type="button" onClick={() => { onBind(r, slot, instance, target); setQ(''); }} className="w-full truncate rounded px-1.5 py-1 text-left hover:bg-hud/10">
