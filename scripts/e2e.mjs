@@ -1085,6 +1085,65 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await dv.getByTestId('template-select').selectOption('');
   await page.waitForTimeout(300);
 }
+{ // the inspector (side panel) sticks under the slot bar + Groups line while a template's photo pages scroll by (1440x900)
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await dv.getByTestId('template-select').selectOption('builtin-moza-ab6-viperace');
+  await page.waitForTimeout(800);
+  const side = dv.locator('[data-testid=device-canvas-view][data-view=side]');
+  check(await side.count() === 1 && (await dv.getByTestId('device-row').getAttribute('data-layout')) === 'side', 'AB6 + ViperAce at 1440x900: two photo pages, the inspector beside them');
+  // scroll the second photo up under the sticky lines (twice: the lines only stop moving once they stick)
+  const toSide = () => page.evaluate(() => {
+    const m = document.getElementById('main');
+    for (let i = 0; i < 3; i++) {
+      const grp = document.querySelector('[data-testid=device-groups-line]').getBoundingClientRect();
+      m.scrollBy(0, document.querySelector('[data-testid=device-canvas-view][data-view=side]').getBoundingClientRect().top - grp.bottom - 30);
+    }
+  });
+  await toSide();
+  await page.waitForTimeout(300);
+  await side.locator('[data-callout="nws"]').click();
+  await page.waitForTimeout(300);
+  const panelState = () => page.evaluate(() => {
+    const a = document.querySelector('[data-testid=device-side-panel]'), r = a.getBoundingClientRect();
+    const heads = [...document.querySelectorAll('[data-sticky-head]')].map((h) => h.getBoundingClientRect().bottom);
+    const row = document.querySelector('[data-testid=device-row]').getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(40, r.height / 2));
+    const cs = getComputedStyle(a);
+    return { top: r.top, bottom: r.bottom, h: r.height, headsBottom: Math.max(...heads), rowBottom: row.bottom, vh: innerHeight, mainBottom: document.getElementById('main').getBoundingClientRect().bottom,
+      onTop: !!hit && a.contains(hit), pos: cs.position, overflowY: cs.overflowY, sh: a.scrollHeight, ch: a.clientHeight, scrolled: document.getElementById('main').scrollTop,
+      sideTop: document.querySelector('[data-testid=device-canvas-view][data-view=side]').getBoundingClientRect().top, text: a.querySelector('[data-testid=input-panel]')?.innerText ?? '' };
+  });
+  const p1 = await panelState();
+  check(p1.scrolled > 300 && p1.sideTop < 400 && p1.pos === 'sticky' && p1.top >= p1.headsBottom - 0.5 && p1.top - p1.headsBottom < 16 && p1.bottom <= p1.vh && p1.onTop,
+    `scrolled ${p1.scrolled}px to the second photo: the inspector sticks right under the sticky lines (${(p1.top - p1.headsBottom).toFixed(1)}px below them), whole box in the window (${Math.round(p1.top)}–${Math.round(p1.bottom)} of ${p1.vh}), nothing over it`);
+  check(/front button/i.test(p1.text), `clicking a callout on the lower photo shows it in the inspector, in sight (${p1.text.split('\n')[0]})`);
+  await page.screenshot({ path: shots + '184-sticky-panel-e2e.png' });
+  // taller than the room under the sticky lines: capped there, scrolls inside
+  await dv.getByTestId('device-side-panel').evaluate((a) => { const d = document.createElement('div'); d.id = 'tall-filler'; d.style.height = '2000px'; a.appendChild(d); });
+  await page.waitForTimeout(300);
+  await toSide();
+  await page.waitForTimeout(200);
+  const p2 = await panelState();
+  check(p2.overflowY === 'auto' && p2.sh > p2.ch + 500 && p2.top >= p2.headsBottom - 0.5 && p2.bottom <= p2.mainBottom + 0.5 && p2.bottom <= p2.vh,
+    `a taller inspector is capped to the room under the sticky lines (${Math.round(p2.h)}px, ${Math.round(p2.top)}–${Math.round(p2.bottom)}) and scrolls inside (${p2.sh} > ${p2.ch})`);
+  await dv.getByTestId('device-side-panel').evaluate((a) => a.querySelector('#tall-filler').remove());
+  // it stops at the end of its own device row: content after the row (spacer) scrolls it away with the row
+  await page.evaluate(() => { const d = document.createElement('div'); d.id = 'after-spacer'; d.style.height = '1500px'; document.getElementById('main').appendChild(d); });
+  await page.evaluate(() => { const m = document.getElementById('main'), row = document.querySelector('[data-testid=device-row]').getBoundingClientRect(); m.scrollBy(0, row.bottom - 330); });
+  await page.waitForTimeout(300);
+  const p3 = await panelState();
+  check(p3.bottom <= p3.rowBottom + 0.5 && p3.top < p3.headsBottom, `scrolled past the device row: the inspector stays inside it (bottom ${Math.round(p3.bottom)} ≤ row end ${Math.round(p3.rowBottom)}) and leaves with it`);
+  await page.evaluate(() => document.getElementById('after-spacer').remove());
+  // too narrow for the picture beside the inspector: the inspector goes under the pictures and doesn't stick
+  await page.setViewportSize({ width: 700, height: 900 });
+  await page.waitForTimeout(400);
+  const p4 = await panelState();
+  check((await dv.getByTestId('device-row').getAttribute('data-layout')) === 'stacked' && p4.pos === 'static' && p4.top >= p4.sideTop, `narrow (700px): the inspector stacks under the pictures, not sticky (${p4.pos})`);
+  await page.setViewportSize({ width: 1680, height: 1000 });
+  await page.evaluate(() => document.getElementById('main').scrollTo(0, 0));
+  await dv.getByTestId('template-select').selectOption('');
+  await page.waitForTimeout(300);
+}
 { // CarrierAce UFC + HUD: Federico's WinCtrl diagrams (UFC 1-41 incl. top toggles 33-38, HUD 65-83 + X/Y/Z/Dial)
   await dv.getByTestId('template-select').selectOption('builtin-winctrl-carrierace-ufc-hud');
   await page.waitForTimeout(600);
@@ -1699,7 +1758,8 @@ console.log('\nrefresh game state (drop a reshuffled export)');
     check(s3[1].stuck && Math.abs(s3[1].dTop) < 1, `Groups line grown to ${gh}px: the heading still sticks right under it (${s3[1].dTop.toFixed(1)}px)`);
     await rp.getByTestId('device-groups-line').evaluate((e) => { e.style.paddingBottom = ''; });
     // a window too narrow for the canvas: the picture column scrolls sideways again and the headings stay on their pictures
-    await rp.setViewportSize({ width: 760, height: 1000 });
+    // (430 px: below ~750 px of room the inspector goes under the pictures, so the picture gets the whole width until then)
+    await rp.setViewportSize({ width: 430, height: 1000 });
     await rp.waitForTimeout(400);
     check((await rp.locator('[data-page-heading]').count()) === 0 && (await rp.locator('[data-testid=device-view] [data-view-caption]').count()) === s3.length, 'narrow window: no sticky headings, captions back on the pictures');
     await rp.setViewportSize({ width: 1680, height: 1000 });

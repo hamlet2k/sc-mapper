@@ -81,6 +81,12 @@ function IconButton({ icon, label, onClick, testid }: { icon: Parameters<typeof 
 }
 /** opaque backgrounds for the sticky lines (the canvas and its callouts scroll underneath) */
 const STICKY_BAR_BG = 'linear-gradient(180deg, #0c1828, #08111d)';
+/** the inspector column beside the picture (w-80) and the gap between them (gap-3) */
+const PANEL_W = 320, PANEL_GAP = 12;
+/** narrower than this the picture (min MULTI_VIEW_MIN_W) can't sit beside the inspector: the inspector goes under it */
+const SIDE_PANEL_MIN_W = MULTI_VIEW_MIN_W + PANEL_GAP + PANEL_W;
+/** the inspector sticks this far under the Groups line, and stops this far above the bottom of the scroll area */
+const PANEL_STICK_GAP = 8;
 
 const NO_ACTIVE: Live = { active: new Set<string>(), values: {} };
 
@@ -253,28 +259,50 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   const barRef = useRef<HTMLElement>(null);
   const lineRef = useRef<HTMLDivElement>(null);
   const groupsRef = useRef<HTMLDivElement>(null);
-  // page: where the per-page headings of multi-page templates stick (right under the Groups line, whatever its height)
-  const [stick, setStick] = useState({ bar: 0, groups: 0, page: 0 });
+  // page: where the per-page headings of multi-page templates stick (right under the Groups line, whatever its height);
+  // panel: the inspector's room when it sticks beside the picture (the scroll area's height under the sticky lines)
+  const [stick, setStick] = useState({ bar: 0, groups: 0, page: 0, panel: 0 });
   useLayoutEffect(() => {
     const bar = barRef.current, line = lineRef.current, groupsLine = groupsRef.current;
     if (!bar || !line) return;
+    let sp: HTMLElement | null = bar.parentElement;
+    while (sp && !/(auto|scroll)/.test(getComputedStyle(sp).overflowY)) sp = sp.parentElement;
     const measure = () => {
       // sticky offsets count from the scroll container's padding edge: take its top padding out so the line meets the very top
-      let sp: HTMLElement | null = bar.parentElement;
-      while (sp && !/(auto|scroll)/.test(getComputedStyle(sp).overflowY)) sp = sp.parentElement;
-      const pad = sp ? parseFloat(getComputedStyle(sp).paddingTop) || 0 : 0;
+      const cs = sp ? getComputedStyle(sp) : null;
+      const pad = cs ? parseFloat(cs.paddingTop) || 0 : 0;
+      const padBottom = cs ? parseFloat(cs.paddingBottom) || 0 : 0;
       const hide = 0; // round 9: no slot chips above the line any more, the whole bar sticks
       const groups = bar.offsetHeight - hide - pad;
-      const next = { bar: -hide - pad, groups, page: groups + (groupsLine?.offsetHeight ?? 0) };
-      setStick((s) => (s.bar === next.bar && s.groups === next.groups && s.page === next.page ? s : next));
+      const page = groups + (groupsLine?.offsetHeight ?? 0);
+      // stuck, the inspector's top is pad + page + gap below the scroll area's top; it may reach down to its bottom padding
+      const panel = sp ? Math.max(160, Math.floor(sp.clientHeight - pad - page - PANEL_STICK_GAP - Math.max(padBottom, PANEL_STICK_GAP))) : 0;
+      const next = { bar: -hide - pad, groups, page, panel };
+      setStick((s) => (s.bar === next.bar && s.groups === next.groups && s.page === next.page && s.panel === next.panel ? s : next));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(measure);
     ro.observe(bar, { box: 'border-box' });
     if (groupsLine) ro.observe(groupsLine, { box: 'border-box' }); // its wrapping (and padding) moves the page headings
+    if (sp) ro.observe(sp); // the window's height: the inspector's room
     return () => ro.disconnect();
   }, []);
+  // the picture + inspector row: side by side (the inspector sticks under the sticky lines while the pictures scroll, and
+  // stops at the end of the row), or, too narrow for both, the inspector under the pictures (not sticky)
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [rowW, setRowW] = useState(0);
+  useLayoutEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+    const m = () => setRowW(el.clientWidth);
+    m();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(m);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const sidePanel = rowW === 0 || rowW >= SIDE_PANEL_MIN_W;
   // multi-page templates: the page headings stick under the Groups line. CSS sticky needs every ancestor up to <main> to not
   // scroll, so the picture column clips horizontally (overflow-x: clip) instead of scrolling; only when it is narrower than
   // the canvas' minimum width does it scroll again (and the headings stay on their pictures)
@@ -407,13 +435,16 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
           <span className="text-slate-600">switches by itself when you press a control that only the other one has</span>
         </div>
       ))}
-      <div className="flex min-h-0 flex-1 gap-3">
+      <div ref={rowRef} className={`flex min-h-0 flex-1 gap-3 ${sidePanel ? 'items-start' : 'flex-col'}`} data-testid="device-row" data-layout={sidePanel ? 'side' : 'stacked'}>
         <div ref={canvasRef} className={`min-w-0 flex-1 scrollbar-thin ${stickyHeadings ? 'overflow-x-clip' : 'overflow-auto'}`} data-print-area>
           <div className="mb-1 hidden font-display text-lg font-bold text-black print:block">{slot.toUpperCase()}{instance} · {ident.name ?? tpl.name}</div>
           <DeviceCanvas template={shownTpl} stateOf={stateOf} selected={selected} onSelect={(id) => setSelected(id)} pulse={pulse} stickyHeadings={stickyHeadings}
             renderLabel={(c, s) => <CalloutBody c={c} s={s} entriesFor={(i) => index.get(i) ?? []} live={live} />} />
         </div>
-        <aside className="w-80 shrink-0 space-y-3 overflow-y-auto scrollbar-thin print:hidden">
+        {/* the inspector: sticks under the slot bar + Groups line beside the pictures (own scroll when taller than the room) */}
+        <aside className={`space-y-3 scrollbar-thin print:hidden ${sidePanel ? 'sticky w-80 shrink-0 overflow-y-auto' : 'w-full'}`}
+          data-testid="device-side-panel" data-sticky={sidePanel ? '1' : undefined}
+          style={sidePanel ? { top: stick.page + PANEL_STICK_GAP, maxHeight: stick.panel || undefined } : undefined}>
           {selCallout ? (
             <InputPanel key={selCallout.id} c={selCallout} slot={slot} instance={instance} index={index} rows={rows} live={live}
               editMode={!!editMode} onEdit={onEdit} onRemove={onRemove} onBind={onBind} onShowInList={onShowInList} onClose={() => setSelected(null)} />
