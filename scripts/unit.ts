@@ -2143,4 +2143,169 @@ console.log('\nlive row highlight (which bound actions fire)');
   });
 }
 
+
+// ---------------------------------------------------------------- shared controller files (.sckeymap.json): pack / unpack, slot remap, merge vs replace
+console.log('\nshared controller files');
+{
+  const sh = await import('../src/lib/share');
+  const { cleanTemplate } = await import('../src/lib/templates');
+  const sample = parseActionMaps(readFileSync('public/samples/actionmaps.xml', 'utf8'), 'actionmaps.xml');
+  const js1 = { slot: 'js' as const, instance: 1 }, js2 = { slot: 'js' as const, instance: 2 };
+  const game = { branch: defaults.meta.branch, version: defaults.meta.version, channel: defaults.meta.channel };
+  const builtin = { version: 1 as const, id: 'builtin-stick', name: 'Generic stick', builtin: true, slot: 'js' as const, aspect: 1.6, match: [], callouts: [] };
+  const px = 'data:image/webp;base64,' + 'A'.repeat(4000);
+  const custom = cleanTemplate({ id: 'my-warthog', name: 'My Warthog', slot: 'js', views: [{ id: 'front', label: 'Front', image: px, width: 1000, height: 800 }, { id: 'side', label: 'Side', image: '/device-photos/tm-warthog-stick.webp', width: 900, height: 900 }],
+    match: [{ vendor: '044F', product: '0402' }], callouts: [{ id: 'trig', kind: 'switch', inputs: ['button1', 'button6'], label: 'Trigger', anchor: { x: 0.4, y: 0.3 }, box: { x: 0.1, y: 0.2 }, view: 'front' }] });
+  const device = { kind: 'js' as const, name: 'Joystick - HOTAS Warthog', vendor: '044F', product: '0402', buttons: 19, gameProduct: ' Joystick - HOTAS Warthog  {0402044F-0000-0000-0000-504944564944}', sourceSlot: 'js1' };
+  const bindings = sh.slotBindings(sample.rebinds, idx, defaults, js1);
+  const roundTrip = (o: Record<string, unknown>) => sh.parseShared(JSON.stringify(o));
+  const errOf = (text: string) => { try { sh.parseShared(text); return ''; } catch (e) { assert.ok(e instanceof sh.ShareFileError, 'a ShareFileError'); return (e as Error).message; } };
+
+  t('a slot\'s bindings are stored without the jsN_ prefix, game defaults and modifier combos included, other slots left out', () => {
+    assert.ok(bindings.length > 20);
+    assert.ok(bindings.every((b) => !/^(js|gp|kb|mo)\d_/.test(b.input)), 'no device prefix');
+    const pitch = bindings.find((b) => b.action === 'v_pitch')!;
+    assert.deepEqual([pitch.input, pitch.default], ['y', undefined], 'the profile\'s own js1_y');
+    assert.ok(bindings.some((b) => b.default && b.action === 'v_autoland' && b.input === 'button12'), 'a kept game default, flagged');
+    assert.ok(!bindings.some((b) => b.action === 'v_strafe_lateral'), 'js2\'s bindings are not on js1');
+    assert.equal(bindings.find((b) => b.action === 'v_pitch')!.label, 'Pitch');
+    const withCombo = ed.setGroup(sample.rebinds, idx.get('spaceship_movement/v_space_brake'), 'spaceship_movement', 'v_space_brake', 'js', [{ slot: 'js', instance: 1, input: 'lalt+button3' }, { slot: 'js', instance: 2, input: 'button4' }]);
+    const c = sh.slotBindings(withCombo, idx, defaults, js1).filter((b) => b.action === 'v_space_brake');
+    assert.deepEqual(c.map((b) => b.input), ['lalt+button3'], 'keyboard-modifier + button combo kept, js2 binding of the same action not');
+  });
+  t('pack: built-in template by id; custom template in full with its embedded photo; metadata', () => {
+    const a = sh.packController({ title: '  Dogfight  ', note: 'trim hat = strafe', now: new Date('2026-10-08T08:00:00Z'), game, device, template: builtin, bindings });
+    assert.equal(a.format, 'sc-keymap-shared-controller'); assert.equal(a.version, 1); assert.equal(a.title, 'Dogfight');
+    assert.deepEqual(a.template, { kind: 'builtin', id: 'builtin-stick', name: 'Generic stick' });
+    assert.equal(a.exportedAt, '2026-10-08T08:00:00.000Z'); assert.equal(a.game.version, defaults.meta.version);
+    const b = sh.packController({ game, device, template: custom, bindings });
+    assert.equal(b.template.kind, 'custom');
+    const text = sh.serializeShared(b);
+    assert.ok(text.includes(px), 'the embedded WebP travels in the file');
+    assert.deepEqual(sh.templatePictures(custom), { embedded: 1, bytes: px.length, builtinRefs: 1 });
+    assert.equal(sh.shareFileName(a), 'joystick-hotas-warthog--dogfight.sckeymap.json');
+    assert.ok(sh.looksShared(text));
+  });
+  t('unpack: a file round-trips (bindings, device, custom template, axis settings)', () => {
+    const axis = { groups: [{ name: 'flight_move_pitch', attrs: [['invert', '1']] as [string, string][] }, { name: 'flight_move_yaw', attrs: [] as [string, string][], curve: { attrs: [] as [string, string][], points: [['0', '0'], ['0.5', '0.3'], ['1', '1']] as [string, string][] } }], axes: [{ input: 'x', deadzone: 0.02 }] };
+    const pk = sh.packController({ title: 'T', game, device, template: custom, bindings, axis });
+    const back = sh.parseShared(sh.serializeShared(pk));
+    assert.deepEqual(back.bindings, pk.bindings);
+    assert.deepEqual(back.device, device);
+    assert.deepEqual(back.axis, axis);
+    assert.equal(back.template.kind, 'custom');
+    if (back.template.kind === 'custom') { assert.equal(back.template.template.views![0].image, px); assert.equal(back.template.template.callouts[0].label, 'Trigger'); }
+  });
+  t('version and format validation: friendly errors for wrong, corrupt and newer files', () => {
+    const ok = sh.packController({ game, device, template: builtin, bindings });
+    assert.match(errOf('{"format":"sc-keymap-shared-controller","version":1'), /isn.t valid JSON/);
+    assert.match(errOf('<ActionMaps/>'), /isn.t valid JSON/);
+    assert.match(errOf(JSON.stringify({ ...ok, version: 2 })), /newer version of SC Keymap \(format v2; this page reads v1\)/);
+    assert.match(errOf(JSON.stringify({ ...ok, version: 0 })), /damaged/);
+    assert.match(errOf(JSON.stringify({ format: 'sc-mapper-device-templates', version: 1, templates: [] })), /template file/);
+    assert.match(errOf(JSON.stringify({ hello: 1 })), /Not a shared controller/);
+    assert.match(errOf(JSON.stringify({ ...ok, device: { name: 'x' } })), /joystick or a gamepad/);
+    assert.match(errOf(JSON.stringify({ ...ok, template: { kind: 'builtin', id: '../../etc' } })), /template is missing/);
+    assert.match(errOf(JSON.stringify({ ...ok, bindings: [{ map: 1 }] })), /none of its bindings/);
+    assert.equal(errOf(JSON.stringify(ok)), '');
+  });
+  t('unpack sanitizes: bad inputs / names dropped, prefixed inputs refused, axis attributes checked, no raw XML', () => {
+    const pk = roundTrip({ ...sh.packController({ game, device, template: builtin, bindings: [] }),
+      bindings: [{ map: 'spaceship_movement', action: 'v_pitch', input: 'Y' }, { map: 'spaceship_movement', action: 'v_roll', input: 'js1_x"/><evil' }, { map: 'a b', action: 'v', input: 'x' }, { map: 'spaceship_movement', action: 'v_pitch', input: 'y' }],
+      axis: { groups: [{ name: 'flight_move_pitch', attrs: [['invert', '1'], ['on<x', '1'], ['exponent', 'x'.repeat(100)]], extra: ['<script/>'] }, { name: '<bad>', attrs: [] }], axes: [{ input: 'x', deadzone: 5 }, { input: 'y', saturation: 0.9 }] } });
+    assert.deepEqual(pk.bindings.map((b) => b.input), ['y'], 'lower-cased, deduplicated, the injection and the bad map name dropped');
+    assert.deepEqual(pk.axis!.groups, [{ name: 'flight_move_pitch', attrs: [['invert', '1']] }]);
+    assert.deepEqual(pk.axis!.axes, [{ input: 'y', saturation: 0.9 }], 'out-of-range deadzone dropped');
+  });
+  const prof = (rb: Record<string, Record<string, any[]>>) => rb as any;
+  const target = sh.slotBindings(sample.rebinds, idx, defaults, js2);
+  t('slot remap: a js1 file applied to js2 writes js2_ inputs, keeps js1 (other slot) bindings and defaults', () => {
+    const p = sh.planImport(sample.rebinds, idx, bindings, js2, 'merge');
+    const pitch = p.rebinds.spaceship_movement.v_pitch;
+    assert.ok(pitch.some((r: any) => r.slot === 'js' && r.instance === 2 && r.input === 'y'), 'v_pitch on js2_y');
+    assert.ok(pitch.some((r: any) => r.instance === 1 && r.input === 'y'), 'the importer\'s own js1_y stays');
+    const autoland = p.rebinds.spaceship_movement.v_autoland;
+    assert.deepEqual(autoland.map((r: any) => `js${r.instance}_${r.input}`).sort(), ['js1_button12', 'js2_button12'], 'a js1 game default kept explicitly next to the new js2 binding');
+    assert.equal(p.applied.length, bindings.length); assert.equal(p.skipped.length, 0);
+    const xml = buildExport(defaults, ed.withRebinds(sample, p.rebinds), { format: 'actionmaps', name: 'x' });
+    assert.match(xml, /<action name="v_toggle_qdrive_engagement">[\s\S]*?input="js2_button1"/);
+    assert.match(xml, /<joystick instance="2"|type="joystick" instance="2"/);
+  });
+  t('merge: the file wins on its inputs and actions on the target slot; the rest of the slot stays; counts', () => {
+    // js2 has afterburner=button2, space_brake=button4, strafe_lateral=x, … ; the file uses button4 (noise launch) and x (roll) etc.
+    const p = sh.planImport(sample.rebinds, idx, bindings, js2, 'merge');
+    const on2 = (map: string, action: string) => (p.rebinds[map]?.[action] ?? []).filter((r: any) => r.slot === 'js' && r.instance === 2).map((r: any) => r.input);
+    assert.deepEqual(on2('spaceship_movement', 'v_space_brake'), [], 'js2_button4 overwritten (the file binds button4)');
+    assert.deepEqual(on2('spaceship_movement', 'v_strafe_lateral'), [], 'js2_x overwritten (the file binds x)');
+    assert.deepEqual(on2('spaceship_movement', 'v_toggle_landing_system'), ['button13'], 'an input the file does not use stays');
+    assert.ok(p.removed.some((r) => r.action === 'v_space_brake' && r.input === 'button4'));
+    assert.equal(p.added + p.unchanged, p.applied.length);
+    const keepSame = sh.planImport(sample.rebinds, idx, [{ map: 'spaceship_movement', action: 'v_toggle_landing_system', input: 'button20' }], js2, 'merge');
+    assert.deepEqual((keepSame.rebinds.spaceship_movement.v_toggle_landing_system as any[]).filter((r) => r.instance === 2).map((r) => r.input), ['button20'], 'same action: moves to the file\'s input');
+    assert.deepEqual(keepSame.removed.map((r) => r.input), ['button13']);
+    // the target slot's other actions and the keyboard are untouched
+    assert.deepEqual(keepSame.rebinds.seat_general, sample.rebinds.seat_general);
+    assert.deepEqual(keepSame.touched, [{ map: 'spaceship_movement', action: 'v_toggle_landing_system' }]);    // a game default the file carries claims its input but doesn't push out the importer's own binding of that action
+    const dflt = sh.planImport(sample.rebinds, idx, [{ map: 'spaceship_movement', action: 'v_toggle_landing_system', input: 'button12', default: true }], js2, 'merge');
+    assert.deepEqual((dflt.rebinds.spaceship_movement.v_toggle_landing_system as any[]).filter((r) => r.instance === 2).map((r) => r.input).sort(), ['button12', 'button13'], 'default: added next to the own binding');
+    assert.deepEqual(dflt.removed, []);
+  });
+  t('replace: every binding on the target slot is cleared first (defaults included), then the file applies', () => {
+    const p = sh.planImport(sample.rebinds, idx, bindings, js2, 'replace');
+    const after = sh.slotBindings(p.rebinds, idx, defaults, js2);
+    const sig = (l: { map: string; action: string; input: string }[]) => l.map((b) => `${b.map}/${b.action}=${b.input}`).sort();
+    assert.deepEqual(sig(after), sig(bindings), 'js2 now has exactly the file\'s bindings');
+    assert.equal(p.removed.length, target.filter((b) => !bindings.some((x) => x.map === b.map && x.action === b.action && x.input === b.input)).length);
+    assert.ok(p.removed.some((r) => r.action === 'v_toggle_landing_system'), 'replace also drops inputs the file does not use');
+    const self = sh.planImport(sample.rebinds, idx, bindings, js1, 'replace');
+    assert.equal(self.touched.length, 0, 'replacing js1 with its own export changes nothing');
+    assert.equal(self.unchanged, bindings.length);
+    // replace into an empty js1 of a fresh profile clears the js1 defaults the file doesn't have
+    const only = sh.planImport({}, idx, [{ map: 'spaceship_movement', action: 'v_pitch', input: 'y' }], js1, 'replace');
+    assert.deepEqual(only.rebinds.spaceship_movement.v_autoland, [{ slot: 'js', instance: 1, input: '' }], 'a cleared game default (js1_ ) as the game writes it');
+  });
+  t('unknown actions (another game version) are skipped and listed', () => {
+    const extra = [...bindings, { map: 'spaceship_movement', action: 'v_warp_drive_2077', input: 'button18', label: 'Warp drive' }, { map: 'future_map', action: 'x', input: 'button19' }];
+    const p = sh.planImport(prof({}), idx, extra, js2, 'merge');
+    assert.deepEqual(p.skipped.map((b) => b.action), ['v_warp_drive_2077', 'x']);
+    assert.equal(p.applied.length, bindings.length);
+    assert.ok(!p.rebinds.spaceship_movement.v_warp_drive_2077 && !p.rebinds.future_map, 'nothing written for them');
+  });
+  t('axis settings: merge keeps the slot\'s other groups, replace clears them; deadzones go under the device model', () => {
+    const s0 = (sample.settings)!;
+    const axis = { groups: [{ name: 'flight_move_pitch', attrs: [['exponent', '2']] as [string, string][] }], axes: [{ input: 'x', deadzone: 0.05 }] };
+    const prod = ' VKBsim Gladiator EVO L    {3201231D-0000-0000-0000-504944564944}';
+    const m = sh.applyAxisSettings(s0, js2, prod, axis, 'merge');
+    assert.deepEqual(dvo.groupValues(m.settings, 'joystick', 2, 'flight_move_pitch')?.exponent, 2);
+    assert.ok(dvo.groupValues(m.settings, 'joystick', 2, 'flight_move_strafe_vertical')?.curve, 'merge keeps js2\'s curve');
+    assert.equal(dvo.axisValues(m.settings, prod).x.deadzone, 0.05);
+    const r = sh.applyAxisSettings(s0, js2, prod, axis, 'replace');
+    assert.equal(dvo.groupValues(r.settings, 'joystick', 2, 'flight_move_strafe_vertical'), undefined, 'replace clears it');
+    assert.equal(dvo.groupValues(r.settings, 'joystick', 1, 'flight_move_pitch')?.invert, true, 'js1 untouched');
+    const fresh = sh.applyAxisSettings({ blocks: [] }, { slot: 'js', instance: 3 }, ' X {00010002-0000-0000-0000-504944564944}', axis, 'merge');
+    assert.equal(dvo.blockProduct(dvo.optionsBlock(fresh.settings, 'joystick', 3)!), ' X {00010002-0000-0000-0000-504944564944}');
+    const none = sh.applyAxisSettings({ blocks: [] }, js2, undefined, axis, 'merge');
+    assert.equal(none.axes, 0, 'no product name: deadzones skipped');
+    const back = sh.slotAxisSettings(m.settings, js2, prod)!;
+    assert.ok(back.groups.some((g) => g.name === 'flight_move_pitch') && back.axes.some((a) => a.input === 'x' && a.deadzone === 0.05), 'export reads them back');
+  });
+  t('template dedupe and default target slot', () => {
+    const stored = { ...custom, id: 'other-id', updatedAt: 123 };
+    assert.equal(sh.sameTemplate([stored], custom)?.id, 'other-id', 'identical content, other id: reused');
+    assert.equal(sh.sameTemplate([{ ...stored, name: 'Renamed' }], custom), undefined);
+    const opts = [
+      { slot: 'js' as const, instance: 1, ident: { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200' }, connected: true },
+      { slot: 'js' as const, instance: 2, ident: { name: 'Joystick - HOTAS Warthog', vendor: '044f', productId: '0402' }, connected: false },
+      { slot: 'js' as const, instance: 3, ident: { name: 'Joystick - HOTAS Warthog', vendor: '044F', productId: '0402' }, connected: true },
+    ];
+    assert.deepEqual(sh.defaultTarget(opts, device, js1), { slot: 'js', instance: 3 }, 'the connected USB match wins');
+    assert.deepEqual(sh.defaultTarget(opts.slice(0, 2), device, js1), { slot: 'js', instance: 2 }, 'then a remembered USB match');
+    assert.deepEqual(sh.defaultTarget(opts.slice(0, 1), device, js1), js1, 'else the shown slot');
+    assert.equal(sh.defaultTarget(opts, { ...device, kind: 'gp' }, js1), null, 'no gamepad slot: a new one');
+    assert.equal(sh.deviceMatch(opts[0].ident, device), 'none');
+    assert.equal(sh.deviceMatch({ name: 'Joystick - HOTAS Warthog' }, { kind: 'js', name: 'Joystick - HOTAS Warthog' }), 'name', 'no USB id on one side: by name');
+    assert.equal(sh.deviceMatch(undefined, device), 'unknown');
+  });
+}
+
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);

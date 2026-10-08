@@ -307,8 +307,10 @@ const SWAP_RE = /^[A-Za-z0-9 _-]{1,24}$/;
 
 /* ------------------------------------------------------------- JSON */
 export const TEMPLATE_FILE_FORMAT = 'sc-mapper-device-templates';
+/** a template as written into a file (template export, shared controller files): no built-in flag, no lazy picture loader */
+export const templateForFile = ({ builtin: _b, loadImage: _l, ...t }: DeviceTemplate): DeviceTemplate => ({ ...t, format: 'sc-mapper-device-template' });
 export function exportTemplates(list: DeviceTemplate[]): string {
-  return JSON.stringify({ format: TEMPLATE_FILE_FORMAT, version: 1, templates: list.map(({ builtin: _b, loadImage: _l, ...t }) => ({ ...t, format: 'sc-mapper-device-template' })) }, null, 1);
+  return JSON.stringify({ format: TEMPLATE_FILE_FORMAT, version: 1, templates: list.map(templateForFile) }, null, 1);
 }
 const KINDS = new Set(CALLOUT_KINDS.map((k) => k.kind));
 const INPUT_RE = /^[a-z][a-z0-9_]{0,24}$/;
@@ -320,7 +322,8 @@ function cleanInputRegions(v: unknown, n: number): { inputRegions?: string[] } {
   if (!v.every((x) => x === '' || (typeof x === 'string' && REGION_RE.test(x)))) return {};
   return v.some((x) => x) ? { inputRegions: v as string[] } : {};
 }
-function cleanTemplate(o: unknown, i: number): DeviceTemplate {
+/** validate and sanitize one template object read from a file (throws a readable error) */
+export function cleanTemplate(o: unknown, i = 0): DeviceTemplate {
   if (!o || typeof o !== 'object') throw new Error(`Template ${i + 1} is not an object`);
   const t = o as Record<string, unknown>;
   if (typeof t.name !== 'string' || !t.name.trim()) throw new Error(`Template ${i + 1} has no name`);

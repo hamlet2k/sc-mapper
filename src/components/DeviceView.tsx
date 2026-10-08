@@ -12,10 +12,11 @@ import { pressBindTarget } from '../lib/pressBind';
 import { parseQuery, scoreRow } from '../lib/search';
 import {
   DUP_ORDER_GUESSES, calloutFor, calloutTitle, cloneTemplate, coveredInputs, exportTemplates, identityKey, inputRole, matchFor, matchScore, maxButton, newTemplate,
-  calloutView, imageSrc, parseTemplates, resolveTemplateImage, templateViews, shortInput, splitCombo, templateGroups, templateVariants, GRIPS_GROUP, unassignedCount, useTemplateImage, useTemplates,
+  calloutView, imageSrc, parseTemplates, resolveTemplateImage, templateViews, shortInput, splitCombo, templateGroups, templateVariants, GRIPS_GROUP, unassignedCount, useTemplateImage, type useTemplates,
   type Callout, type DeviceIdentity, type DeviceTemplate,
 } from '../lib/templates';
 import type { Binding, Row, Slot } from '../lib/types';
+import { looksShared } from '../lib/share';
 import { CalloutBody, DeviceCanvas, LIVE_ROW, MULTI_VIEW_MIN_W, TONE_STROKE, firingEntries, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
 import { DROP_HINT, GamePathHint } from './GameState';
 import { Ico } from './icons';
@@ -65,6 +66,14 @@ interface Props {
   onBind: (row: Row, slot: Slot, instance: number, input: string) => void;
   onShowInList: (spec: string) => void;
   notify: (kind: 'ok' | 'err', text: string) => void;
+  /** device templates (App owns them: the shared-controller import installs templates too) */
+  templates: ReturnType<typeof useTemplates>;
+  /** Share controller: open the export dialog for this slot with its template */
+  onShare: (gs: GameSlot, template: DeviceTemplate, pad?: PadInfo) => void;
+  /** Import shared controller: pick a .sckeymap.json */
+  onImportShared: () => void;
+  /** a shared controller file picked in the template import: open its import preview instead */
+  onSharedText: (text: string, name: string) => void;
 }
 
 export const DEVICE_SEL_KEY = 'sc-mapper:device-view';
@@ -103,7 +112,7 @@ const BIND_RESULTS_ROOM = 220;
 /** visual view of one game slot: a controller's picture with every control's bindings (live highlight, click to edit), or the keyboard */
 export function DeviceView(props: Props) {
   const { slots, chip, onOpenControllers, selKey, onSelect, compact } = props;
-  const T = useTemplates();
+  const T = props.templates;
   // the profile's joystick / gamepad slots (what goes into the export); keyboard and mouse live in the Keyboard view.
   // The slot is picked in the profile card's Game slots list (round 9); narrow layouts get a dropdown in the line instead.
   const options = useMemo(() => slots.filter(({ gs }) => isController(gs)).map(({ gs, pad }): DevOption => {
@@ -116,7 +125,7 @@ export function DeviceView(props: Props) {
     const o = options.find((x) => x.slot === chip.slot && x.instance === chip.instance);
     if (o) onSelect(o.key);
   }, [chip]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!options.length) return <NoSlots onOpenControllers={onOpenControllers} hasKm={slots.length > 0} />;
+  if (!options.length) return <NoSlots onOpenControllers={onOpenControllers} onImportShared={props.onImportShared} hasKm={slots.length > 0} />;
   const shown = shownDeviceSlot(slots, selKey)!;
   const opt = options.find((o) => o.key === deviceSlotKey(shown.gs))!;
   const chosen = resolveSlotTemplate(T.templates, props.slotMap, opt.gs, opt.pad, T.picks);
@@ -140,19 +149,21 @@ export function DeviceView(props: Props) {
   );
 }
 
-function NoSlots({ onOpenControllers, hasKm }: { onOpenControllers: () => void; hasKm: boolean }) {
+function NoSlots({ onOpenControllers, onImportShared, hasKm }: { onOpenControllers: () => void; onImportShared: () => void; hasKm: boolean }) {
   return (
     <div className="hud-panel hud-corners mx-auto mt-8 max-w-xl rounded-lg p-8 text-center" data-testid="device-view-empty">
       <div className="font-display text-xl font-bold uppercase tracking-[0.2em] text-hud2">No joysticks or gamepads yet</div>
       <p className="mt-2 text-sm text-slate-400">This view shows the joysticks, HOTAS and gamepads that go into your export, each on its game slot (js1, js2, gp1…).
         {hasKm ? ' Keyboard and mouse bindings are in the Keyboard view.' : ''} Import your <code>actionmaps.xml</code> to have them matched for you, or add slots by hand.</p>
       <button type="button" onClick={onOpenControllers} data-testid="open-controllers" className="mt-4 inline-flex items-center gap-2 rounded border border-hud/60 bg-hud/15 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wider text-hud2 hover:bg-hud/25"><Ico name="slots" className="h-4 w-4" /> Game slots &amp; controllers</button>
+      <p className="mt-4 text-xs text-slate-500">Got a controller someone shared with you?
+        <button type="button" onClick={onImportShared} data-testid="share-import-empty" className="ml-1.5 inline-flex items-center gap-1 rounded border border-edge px-2 py-0.5 text-slate-300 hover:border-hud/60 hover:text-hud2"><Ico name="import" className="h-3 w-3" /> Import shared controller</button></p>
     </div>
   );
 }
 
 type Chosen = ReturnType<typeof resolveSlotTemplate>;
-function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, onRefresh, highlight, scroll, query, chip, editMode, onEdit, onRemove, onBind, onShowInList, notify }:
+function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, onRefresh, highlight, scroll, query, chip, editMode, onEdit, onRemove, onBind, onShowInList, notify, onShare, onImportShared, onSharedText }:
   Props & { opt: DevOption; chosen: Chosen; T: ReturnType<typeof useTemplates>; strip: ReactNode }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
@@ -245,7 +256,9 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   };
   const importFile = async (f: File) => {
     try {
-      const list = parseTemplates(await f.text());
+      const text = await f.text();
+      if (looksShared(text)) { onSharedText(text, f.name); return; } // a shared controller picked here: its own import preview
+      const list = parseTemplates(text);
       for (const t of list) await T.save(t);
       notify('ok', `Imported ${list.length} template${list.length === 1 ? '' : 's'}: ${list.map((t) => t.name).join(', ')}`);
     } catch (e) { notify('err', `Template import failed: ${(e as Error).message}`); }
@@ -434,6 +447,16 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
             </span>
             <input ref={importRef} type="file" accept=".json,application/json" className="hidden" data-testid="template-import-file"
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
+          </span>
+          <span className="-ml-2 flex items-center gap-2" data-testid="share-wrap">
+            <span className="h-5 w-px bg-edge" aria-hidden="true" />
+            <span className={ICON_GROUP} role="group" aria-label="Share" data-testid="share-tools">
+              <Tip label={`Share controller: one file with this template and every ${slot}${instance} binding, for someone else to import`}>
+                <button type="button" onClick={() => onShare(opt.gs, chosen.template, opt.pad)} data-testid="share-controller" aria-label={`Share controller: export ${slot}${instance}'s template and bindings as a file`}
+                  className="flex h-7 items-center gap-1.5 px-2 font-display text-[11px] font-semibold uppercase tracking-wider text-slate-300 transition hover:bg-hud/10 hover:text-hud2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-hud"><Ico name="share" className="h-4 w-4" /> Share</button>
+              </Tip>
+              <IconButton icon="import" label="Import a shared controller (.sckeymap.json)" onClick={onImportShared} testid="share-import-btn" />
+            </span>
           </span>
           <span className="ml-auto flex items-center gap-2" data-testid="slot-axis-wrap">
           {editMode && (

@@ -2907,6 +2907,186 @@ console.log('\ndrop overlay in Firefox (Gecko)');
   }
 }
 
+// ---- share controller: export one device (template + bindings + axis settings) as a .sckeymap.json file, import it into
+// another profile's js2 with Merge and with Replace, check the preview, undo and the actionmaps.xml export (js2_ prefix)
+console.log('\nshare controller (Warthog: export js1, import into a friend\'s js2)');
+{
+  const cs = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1, acceptDownloads: true });
+  await cs.addInitScript(() => {
+    const btns = (n) => Array.from({ length: n }, () => ({ pressed: false, touched: false, value: 0 }));
+    const pads = [
+      { index: 0, id: 'Joystick - HOTAS Warthog (Vendor: 044f Product: 0402)', mapping: '', connected: true, buttons: btns(19), axes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 9 / 7], timestamp: 0 },
+      { index: 1, id: 'Throttle - HOTAS Warthog (Vendor: 044f Product: 0404)', mapping: '', connected: true, buttons: btns(32), axes: [0, 0, -1, -1, 0, 0, 0, 0, 0, 9 / 7], timestamp: 0 },
+      { index: 2, id: 'VKBsim Gladiator EVO R (Vendor: 231d Product: 0200)', mapping: '', connected: true, buttons: btns(32), axes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 9 / 7], timestamp: 0 },
+    ];
+    let shown = false;
+    window.__btn = (i, b, on) => { pads[i].buttons[b] = { pressed: on, touched: on, value: on ? 1 : 0 }; pads[i].timestamp++; if (on) shown = true; };
+    navigator.getGamepads = () => [0, 1, 2, 3].map((i) => (shown && pads[i] ? Object.freeze({ ...pads[i], axes: [...pads[i].axes], buttons: pads[i].buttons.map((b) => ({ ...b })) }) : null));
+  });
+  const sp = await cs.newPage();
+  sp.on('pageerror', (e) => errors.push('[share] ' + String(e)));
+  await sp.goto(url, { waitUntil: 'networkidle' });
+  await sp.evaluate(() => localStorage.clear());
+  await sp.reload({ waitUntil: 'networkidle' });
+  await sp.evaluate(() => window.__btn(0, 0, true));
+  await sp.waitForTimeout(300);
+  await sp.evaluate(() => window.__btn(0, 0, false));
+  const asIs = async () => { await sp.waitForTimeout(700); if (await sp.getByTestId('import-shift').isVisible().catch(() => false)) { await sp.getByTestId('import-as-is').click(); await sp.waitForTimeout(500); } };
+  await sp.locator('input[type=file]').first().setInputFiles('scripts/fixtures/share-warthog.xml');
+  await asIs();
+  await sp.locator('[data-view-tab=devices]').click();
+  await sp.waitForTimeout(600);
+  const shown = () => sp.getByTestId('device-slot-view').getAttribute('data-slot');
+  const side = sp.getByTestId('sidebar-slots');
+  if ((await shown()) !== 'js1') { await side.locator('[data-slot-row="js1"]').click(); await sp.waitForTimeout(500); }
+  // the toolbar: Share sits with Print / Save image, outside the template line (whose buttons stay icon-only)
+  const shareBtn = sp.getByTestId('share-controller');
+  const tb = { share: await shareBtn.isVisible(), text: (await shareBtn.innerText().catch(() => '')).trim(), imp: await sp.getByTestId('share-import-btn').isVisible(), inLine: await sp.getByTestId('template-line').getByTestId('share-controller').count(), print: await sp.getByTestId('share-wrap').evaluate((w) => !!w.previousElementSibling?.querySelector('[data-testid=template-line]') || w.previousElementSibling?.dataset.testid === 'template-line') };
+  check(tb.share && /^Share$/i.test(tb.text) && tb.imp && tb.inLine === 0 && tb.print, `Devices toolbar: a "Share" button and an import button right after the template / PNG / Print buttons (${JSON.stringify(tb)})`);
+  await shareBtn.hover();
+  await sp.waitForTimeout(500);
+  {
+    const bar = await sp.getByTestId('share-wrap').boundingBox();
+    await sp.screenshot({ path: shots + '199-share-controller-button.png', clip: { x: Math.max(0, bar.x - 760), y: Math.max(0, bar.y - 40), width: 1100, height: 150 } });
+  }
+  await shareBtn.click();
+  const sx = sp.getByTestId('share-export');
+  await sx.waitFor();
+  const sumB = (await sp.getByTestId('share-sum-bindings').innerText()).replace(/\s+/g, ' ');
+  const sumT = await sp.getByTestId('share-sum-template').innerText();
+  const sumA = await sp.getByTestId('share-sum-axis').innerText();
+  check(/^Bindings\s*78 on JS1 \(24 yours, 54 game defaults\)/i.test(sumB) && /with a modifier/.test(sumB), `export dialog: binding summary (${sumB})`);
+  check(/HOTAS Warthog/.test(sumT) && /built-in/i.test(sumT), `export dialog: template is the built-in Warthog stick (${sumT.replace(/\s+/g, ' ')})`);
+  check(/2 tuned controls/.test(sumA) && /2 deadzone/.test(sumA), `export dialog: axis settings (${sumA.replace(/\s+/g, ' ')})`);
+  check(/\d (KB|MB|B)/.test(await sp.getByTestId('share-size').innerText()) && /none embedded/i.test(await sp.getByTestId('share-sum-photos').innerText()), `export dialog: photos line and a file size estimate (${await sp.getByTestId('share-size').innerText()})`);
+  await sp.getByTestId('share-title').fill('Warthog stick: DCS-style dogfight');
+  await sp.getByTestId('share-note').fill('TMS = targeting, DMS = pins, CMS = countermeasures. Pinky (button 4) is decoupled, LAlt+pinky is G-safe.');
+  await sp.waitForTimeout(200);
+  await sp.screenshot({ path: shots + '200-share-controller-export.png' });
+  const [sd] = await Promise.all([sp.waitForEvent('download'), sp.getByTestId('share-download').click()]);
+  const sfile = '/tmp/' + sd.suggestedFilename();
+  await sd.saveAs(sfile);
+  const pack = JSON.parse(readFileSync(sfile, 'utf8'));
+  const pb = (input) => pack.bindings.filter((b) => b.input === input).map((b) => b.action);
+  check(sd.suggestedFilename() === 'joystick-hotas-warthog--warthog-stick-dcs-style-dogfight.sckeymap.json', `download named after the device and title (${sd.suggestedFilename()})`);
+  check(pack.format === 'sc-keymap-shared-controller' && pack.version === 1 && pack.device.kind === 'js' && pack.device.vendor === '044F' && pack.device.product === '0402' && pack.device.sourceSlot === 'js1' && pack.title === 'Warthog stick: DCS-style dogfight' && !!pack.exportedAt,
+    `file: format v1, device ${pack.device.name} ${pack.device.vendor}:${pack.device.product}, was js1, title, date`);
+  check(pack.template.kind === 'builtin' && pack.template.id === 'builtin-tm-warthog-stick', `file: the built-in template goes by id (${pack.template.id})`);
+  check(pack.bindings.length === 78 && pack.bindings.every((b) => !/^js\d/.test(b.input)) && pb('button2').includes('v_weapon_toggle_launch_missile') && pb('lalt+button4').includes('v_ifcs_toggle_gforce_safety') && pb('hat1_up').includes('v_strafe_up'),
+    'file: 78 slot-agnostic bindings (no jsN), incl. button2 = missiles, lalt+button4 = G-safety, hat1_up = strafe up');
+  check(pack.axis?.groups?.length === 2 && pack.axis.axes.some((a) => a.input === 'x' && a.deadzone === 0.02), 'file: axis settings (pitch / roll exponent, x / y deadzones)');
+  await sp.waitForTimeout(300);
+  check(!(await sx.isVisible()) && /Saved/.test(await sp.locator('.fixed.bottom-5').innerText().catch(() => '')), 'the dialog closes and a toast confirms the file');
+  // add an action this game version doesn't know: it is listed and skipped on import
+  pack.bindings.push({ map: 'spaceship_movement', action: 'v_made_up_future_action', input: 'button18' });
+  const sfile2 = '/tmp/warthog-plus-unknown.sckeymap.json';
+  writeFileSync(sfile2, JSON.stringify(pack));
+
+  // the friend's profile: VKB on js1, a Warthog stick on js2 with bindings of their own
+  await sp.locator('input[type=file]').first().setInputFiles('scripts/fixtures/share-friend.xml');
+  await asIs();
+  await sp.locator('[data-view-tab=devices]').click();
+  await side.locator('[data-slot-row="js1"]').click();
+  await sp.waitForTimeout(500);
+  // errors: a newer format version, a template file, broken JSON
+  const toastText = () => sp.locator('.fixed.bottom-5').innerText().catch(() => '');
+  await sp.getByTestId('share-import-file').setInputFiles({ name: 'new.sckeymap.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...pack, version: 2 })) });
+  await sp.waitForTimeout(400);
+  const tNewer = await toastText();
+  await sp.getByTestId('share-import-file').setInputFiles({ name: 'broken.sckeymap.json', mimeType: 'application/json', buffer: Buffer.from('{"format":"sc-keymap-shared-con') });
+  await sp.waitForTimeout(400);
+  const tBroken = await toastText();
+  check(/newer version/.test(tNewer) && /v2/.test(tNewer) && /not valid JSON|damaged|corrupt/i.test(tBroken) && !(await sp.getByTestId('share-import').isVisible()), `friendly errors: newer version ("${tNewer.slice(0, 60)}…") and broken file ("${tBroken.slice(0, 50)}…")`);
+  // preview: defaults to js2 (the slot whose device matches 044F:0402), Merge, counts, skipped action
+  const [chooser] = await Promise.all([sp.waitForEvent('filechooser'), sp.getByTestId('share-import-btn').click()]);
+  await chooser.setFiles(sfile2);
+  const si = sp.getByTestId('share-import');
+  await si.waitFor();
+  const slotSel = sp.getByTestId('share-import-slot');
+  const counts = async () => (await sp.getByTestId('share-import-counts').innerText()).replace(/\s+/g, ' ');
+  check((await slotSel.inputValue()) === 'js2' && (await sp.getByTestId('share-import-match').getAttribute('data-match')) === 'usb', `preview: target defaults to js2, the slot whose Warthog matches the USB id (${(await slotSel.locator('option:checked').innerText())})`);
+  check((await sp.getByTestId('share-import-title').innerText()) === 'Warthog stick: DCS-style dogfight' && /TMS = targeting/.test(await sp.getByTestId('share-import-note').innerText()) && await sp.getByTestId('share-import-thumb').first().isVisible(),
+    'preview: title, note and the template thumbnail');
+  const mergeCounts = await counts();
+  check((await sp.getByTestId('share-import-mode').locator('[aria-checked=true]').getAttribute('data-mode')) === 'merge' && /Applied 78 bindings/i.test(mergeCounts) && /Overwritten 2 existing/i.test(mergeCounts) && /Skipped 1 skipped/i.test(mergeCounts),
+    `preview (Merge): ${mergeCounts}`);
+  check(await sp.locator('[data-share-row="button18"][data-skipped="1"]').count() === 1 && /skipped \(unknown action\)/.test(await sp.locator('[data-share-row="button18"]').innerText()) && await sp.getByTestId('share-import-list').locator('tr[data-share-row]').count() === 79,
+    'preview: the incoming table lists all 79 rows, the unknown action is marked "skipped (unknown action)"');
+  await sp.getByTestId('share-import-mode').locator('[data-mode=replace]').click();
+  const replCounts = await counts();
+  check(/Removed 3 existing/i.test(replCounts) && /Replace into JS2/i.test(await sp.getByTestId('share-import-confirm').innerText()), `preview (Replace): ${replCounts}`);
+  await slotSel.selectOption('js1');
+  const mis = await sp.getByTestId('share-import-match').getAttribute('data-match');
+  check(mis === 'none' && /not Joystick - HOTAS Warthog/.test(await sp.getByTestId('share-import-match').innerText()), 'preview: picking js1 (a VKB) warns the device doesn\'t match');
+  await slotSel.selectOption('js2');
+  await sp.getByTestId('share-import-mode').locator('[data-mode=merge]').click();
+  await sp.waitForTimeout(150);
+  await sp.screenshot({ path: shots + '201-share-import-preview.png' });
+  await sp.getByTestId('share-import-confirm').click();
+  await sp.waitForTimeout(700);
+  const doneToast = await toastText();
+  check(!(await si.isVisible()) && /js2|JS2/.test(doneToast) && /Undo/.test(doneToast) && (await shown()) === 'js2', `merge: the dialog closes, js2 is shown, toast with Undo ("${doneToast.replace(/\s+/g, ' ')}")`);
+  await sp.waitForTimeout(500);
+  await sp.screenshot({ path: shots + '202-share-imported-device.png' });
+  // the actionmaps export carries the bindings with the js2 prefix
+  const exportXml = async () => {
+    await sp.getByTestId('profile-export').click();
+    await sp.getByTestId('export-dialog').waitFor();
+    await sp.getByText('actionmaps.xml', { exact: false }).first().click().catch(() => {});
+    const [d] = await Promise.all([sp.waitForEvent('download'), sp.getByTestId('export-download').click()]);
+    const f = '/tmp/share-' + Date.now() + '-' + d.suggestedFilename();
+    await d.saveAs(f);
+    await sp.keyboard.press('Escape');
+    await sp.waitForTimeout(300);
+    return readFileSync(f, 'utf8');
+  };
+  const inputsOf = (xml, action) => [...(xml.match(new RegExp(`<action name="${action}">([\\s\\S]*?)</action>`))?.[1] ?? '').matchAll(/input="([^"]*)"/g)].map((m) => m[1]);
+  const merged = await exportXml();
+  check(inputsOf(merged, 'v_weapon_toggle_launch_missile').includes('js2_button2') && inputsOf(merged, 'v_ifcs_toggle_gforce_safety').includes('js2_lalt+button4') && inputsOf(merged, 'v_strafe_up').includes('js2_hat1_up') && inputsOf(merged, 'v_target_cycle_hostile_fwd').includes('js2_button7'),
+    'merge → export: js2_button2 (missiles), js2_lalt+button4 (G-safety), js2_hat1_up, js2_button7');
+  check(!inputsOf(merged, 'v_space_brake').includes('js2_button2') && !inputsOf(merged, 'v_weapon_gimbals_state_toggle').includes('js2_button16') && inputsOf(merged, 'v_weapon_gimbals_state_toggle').includes('js2_button5') && inputsOf(merged, 'v_toggle_landing_system').includes('js2_button19') && inputsOf(merged, 'v_toggle_landing_system').includes('js2_button12'),
+    'merge: the conflicting js2_button2 (space brake) and the old gimbals input are overwritten, js2_button19 (landing) stays next to the file\'s default js2_button12');
+  check(inputsOf(merged, 'v_pitch').includes('js1_y') && inputsOf(merged, 'v_pitch').includes('js2_y') && inputsOf(merged, 'v_weapon_countermeasure_decoy_launch').includes('js1_button3') && !/made_up_future/.test(merged),
+    'merge: js1 (the VKB) keeps its bindings; the unknown action is not exported');
+  check(/<options type="joystick" instance="2"[^>]*>[\s\S]*?flight_move_pitch exponent="1.5"/.test(merged) && /<deviceoptions name=" ?Joystick - HOTAS Warthog[^"]*">[\s\S]*?input="x" deadzone="0.02"/.test(merged),
+    'merge: the axis settings land on js2 (exponent) and the Warthog\'s deadzones');
+  // undo: one step brings js2 back
+  await sp.keyboard.press('Control+z');
+  await sp.waitForTimeout(500);
+  const undone = await exportXml();
+  check(inputsOf(undone, 'v_space_brake').includes('js2_button2') && !inputsOf(undone, 'v_weapon_toggle_launch_missile').includes('js2_button2') && !/instance="2"[^>]*>[\s\S]{0,200}flight_move_pitch exponent/.test(undone),
+    'undo: one step restores js2\'s own bindings and axis settings');
+  // replace: js2 is cleared first, then holds exactly the file's layout
+  await sp.getByTestId('share-import-file').setInputFiles(sfile2);
+  await si.waitFor();
+  await sp.getByTestId('share-import-mode').locator('[data-mode=replace]').click();
+  await sp.getByTestId('share-import-confirm').click();
+  await sp.waitForTimeout(700);
+  const replaced = await exportXml();
+  const js2Count = (replaced.match(/input="js2_[^"]+"/g) ?? []).length;
+  check(inputsOf(replaced, 'v_weapon_toggle_launch_missile').includes('js2_button2') && !inputsOf(replaced, 'v_toggle_landing_system').includes('js2_button19') && !inputsOf(replaced, 'v_space_brake').includes('js2_button2') && inputsOf(replaced, 'v_pitch').includes('js1_y'),
+    `replace → export: js2 has the file's bindings, js2_button19 (landing) is gone, js1 untouched (${js2Count} js2_ inputs)`);
+  // drop a shared file on the page: the preview opens
+  const dropped = await sp.evaluate(async (text) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([text], 'dropped.sckeymap.json', { type: 'application/json' }));
+    const ev = (type) => new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(ev('dragenter'));
+    await new Promise((r) => setTimeout(r, 120));
+    const hint = !!document.querySelector('[data-testid=drop-overlay]') && /sckeymap/.test(document.querySelector('[data-testid=drop-overlay]').innerText);
+    const zone = document.querySelector('[data-drop-zone="import"]') ?? document.body;
+    zone.dispatchEvent(ev('dragover'));
+    zone.dispatchEvent(ev('drop'));
+    return hint;
+  }, readFileSync(sfile, 'utf8'));
+  await sp.waitForTimeout(500);
+  check(dropped && await si.isVisible() && /dropped\.sckeymap\.json/.test(await si.innerText()), 'drag & drop: the overlay mentions .sckeymap.json and a dropped share file opens the preview');
+  await sp.keyboard.press('Escape');
+  await sp.waitForTimeout(300);
+  check(!(await si.isVisible()), 'Escape closes the preview without importing');
+  await cs.close();
+}
+
 // persistence
 await page.reload({ waitUntil: 'networkidle' });
 log('profile after reload:', await page.locator('#profile option:checked').innerText());

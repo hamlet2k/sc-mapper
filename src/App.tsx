@@ -12,16 +12,24 @@ import { KeyboardView } from './components/KeyboardView';
 import { DEVICE_SEL_KEY, DeviceView, deviceSlotKey, shownDeviceSlot, type SlotOption } from './components/DeviceView';
 import { AxisSettingsModal, settingsInstances } from './components/DeviceSettings';
 import { Sidebar, type MapCount } from './components/Sidebar';
+import { ShareExportDialog, ShareImportDialog, type ImportTarget, type TemplateInfo } from './components/ShareDialogs';
 import { findConflicts } from './lib/conflicts';
 import { GROUPS } from './lib/groups';
-import { getPads, loadAssign, usePads, type PadKind } from './lib/devices';
-import { blockInstance, blockType, settingsOf, swapOptionInstances, type DeviceSettings } from './lib/devopts';
+import { getPads, loadAssign, padLabel, usePads, type PadInfo, type PadKind } from './lib/devices';
+import { blockInstance, blockProduct, blockType, optionsBlock, settingsOf, swapOptionInstances, type DeviceSettings } from './lib/devopts';
 import type { ExportDevice } from './lib/exporter';
 import {
   DEFAULTS_SLOT_KEY, addSlot, assignHardware, autoMatchHardware, copySlotBindings, dropSlotBindings, emptySlotMap, ensureUsedSlots, hardwareOf,
-  isController, knownHardware, loadSlotStore, neighbourSlot, padAssign, planCopy, removeSlot, reservedJs, saveSlotStore, seedSlots, setSlotTemplate, slotBindingCount,
-  slotDeviceName, slotId, slotProduct, swapProfileDevices, swapSlotBindings, swapSlots, type GameSlot, type SlotMap, type SlotStore,
+  isController, knownHardware, loadSlotStore, neighbourSlot, nextInstance, padAssign, planCopy, removeSlot, reservedJs, saveSlotStore, seedSlots, setSlotTemplate, slotBindingCount,
+  slotDeviceName, slotId, slotIdentity, slotProduct, swapProfileDevices, swapSlotBindings, swapSlots, type GameSlot, type SlotMap, type SlotStore,
 } from './lib/slots';
+import {
+  applyAxisSettings, defaultTarget, deviceMatch, looksShared, parseShared, planImport, sameTemplate, slotAxisSettings, slotBindings,
+  type ImportMode, type PackInput, type SharedController, type SlotRef,
+} from './lib/share';
+import { resolveSlotTemplate } from './lib/slotTemplates';
+import { parseProfileProduct } from './lib/devices';
+import { parseTemplates, uid, useTemplates, type DeviceTemplate } from './lib/templates';
 import { hitKeys, hitLabel, hitSpecs, useKeyHits, usePadHits, type PressHit } from './lib/listen';
 import { comboFrom, scMouseButton, scWheel } from './lib/capture';
 import { ChromiumBanner } from './components/ChromiumBanner';
@@ -123,7 +131,7 @@ export default function App() {
   const [selGroup, setSelGroup] = useState<string | null>(null);
   const [selMap, setSelMap] = useState<string | null>(null);
   const [view, setView] = useState<View>('list');
-  const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string; action?: { label: string; run: () => void } } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [dropZone, setDropZone] = useState<DropZone>('refresh');
   const [help, setHelp] = useState(false);
@@ -142,6 +150,12 @@ export default function App() {
   const [moInst, setMoInst] = useState(1);
   // which js / gp slot the Devices view shows (picked in the profile card's Game slots list; remembered across reloads)
   const [devSel, setDevSel] = useState(() => localStorage.getItem(DEVICE_SEL_KEY) ?? '');
+  // device templates (user + built-in): shared by the Devices view and the shared-controller import
+  const T = useTemplates();
+  // ---- shared controller files (.sckeymap.json): export dialog for one slot, import preview
+  const [shareOut, setShareOut] = useState<{ slotLabel: string; input: Omit<PackInput, 'title' | 'note'> } | null>(null);
+  const [shareIn, setShareIn] = useState<{ pack: SharedController; file: string } | null>(null);
+  const shareFileRef = useRef<HTMLInputElement>(null);
   const selectDevice = useCallback((k: string) => { setDevSel(k); localStorage.setItem(DEVICE_SEL_KEY, k); }, []);
   const [undo, setUndo] = useState<UndoEntry[]>([]);
   // ---- press-to-search and live highlight
@@ -169,7 +183,7 @@ export default function App() {
     if (moInst > 1 && !slotMap.slots.some((s) => s.slot === 'mo' && s.instance === moInst)) setMoInst(1);
   }, [slotMap, kbInst, moInst]);
   const slotPads = useMemo(() => ({ assign: padAssign(slotMap), reserved: reservedJs(slotMap) }), [slotMap]);
-  const { pads, describe: describePads } = usePads(!!capture || exportOpen || !!devicesOpen || pressMode || view === 'devices' || !!slotMap.pendingMatch, profile?.devices, slotPads);
+  const { pads, describe: describePads } = usePads(!!capture || exportOpen || !!devicesOpen || pressMode || view === 'devices' || !!shareIn || !!slotMap.pendingMatch, profile?.devices, slotPads);
   const storeRef = useRef(store);
   // hardware auto-match of a fresh import: runs once, as soon as the browser shows controllers (they appear after a press)
   useEffect(() => {
@@ -563,7 +577,7 @@ export default function App() {
   const onPickSlotTemplate = useCallback((gs: GameSlot, id: string | null) => updateSlots((m) => setSlotTemplate(m, gs, id)), [updateSlots]);
 
   const hot = useRef({ capture: false, undo: undoLast });
-  useLayoutEffect(() => { hot.current = { capture: !!capture || !!editorId || exportOpen || !!devicesOpen || settingsOpen || !!axisFor, undo: undoLast }; }, [capture, editorId, exportOpen, devicesOpen, settingsOpen, axisFor, undoLast]);
+  useLayoutEffect(() => { hot.current = { capture: !!capture || !!editorId || exportOpen || !!devicesOpen || settingsOpen || !!axisFor || !!shareOut || !!shareIn, undo: undoLast }; }, [capture, editorId, exportOpen, devicesOpen, settingsOpen, axisFor, shareOut, shareIn, undoLast]);
 
   // ---- press-to-search: the next controller input / key / mouse button becomes an exact input filter
   const onPressHit = useCallback((h: PressHit) => {
@@ -574,7 +588,7 @@ export default function App() {
   usePadHits(pressMode, describePads, onPressHit);
   useKeyHits(pressMode, 'capture', onPressHit, stopPress);
   // ---- live highlight: when nothing else is listening, pressing an input flashes its bindings
-  const passiveOn = view !== 'devices' && highlightOn && !query && !chip && !pressMode && !(editMode && vf.edit) && !capture && !editorId && !exportOpen && !devicesOpen && !settingsOpen && !axisFor && !help;
+  const passiveOn = view !== 'devices' && highlightOn && !query && !chip && !pressMode && !(editMode && vf.edit) && !capture && !editorId && !exportOpen && !devicesOpen && !settingsOpen && !axisFor && !help && !shareOut && !shareIn;
   const onFlash = useCallback((h: PressHit) => {
     setFlash(null);
     requestAnimationFrame(() => setFlash({ hit: h, keys: hitKeys(h), at: Date.now() }));
@@ -595,7 +609,7 @@ export default function App() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 5000);
+    const t = setTimeout(() => setToast(null), toast.action ? 9000 : 5000);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -633,6 +647,8 @@ export default function App() {
       e.preventDefault(); end();
       const files = e.dataTransfer?.files;
       if (!files?.length) return;
+      // a .json file: a shared controller (opens its import preview) or device templates, wherever it lands
+      if (/\.json$/i.test(files[0].name) || files[0].type === 'application/json') { void jsonRef.current(files[0]); setDropZone('refresh'); return; }
       // with a profile active, a dropped file refreshes the game state unless it lands on "Import as profile"
       if (storeRef.current.activeId && zoneOf(e) === 'refresh') void refreshRef2.current(files[0]);
       else void importFiles(files);
@@ -654,6 +670,141 @@ export default function App() {
   }, [importFiles]);
   const refreshRef2 = useRef(refreshGameState);
   useLayoutEffect(() => { refreshRef2.current = refreshGameState; }, [refreshGameState]);
+
+  // ---- shared controller: export one slot, import a file onto a slot ---------------------------------------
+  /** the Product name the game keeps a slot's axis settings under (as the Axis settings dialog finds it) */
+  const settingsProduct = (prof: Profile | null, gs: { slot: 'js' | 'gp'; instance: number }, slotGs?: GameSlot, pad?: PadInfo) => {
+    const blk = optionsBlock(settingsOf(prof), gs.slot === 'gp' ? 'gamepad' : 'joystick', gs.instance);
+    const pd = prof?.devices.find((d) => d.slot === gs.slot && d.instance === gs.instance);
+    return (blk && blockProduct(blk)) || pd?.rawProduct || pd?.product || (slotGs ? slotGs.gameRawProduct ?? slotGs.gameProduct ?? slotProduct(slotGs, pad) : undefined);
+  };
+  const openShare = useCallback((gs: GameSlot, template: DeviceTemplate, pad?: PadInfo) => {
+    if (!isController(gs)) return;
+    const prof = curProfile();
+    const t = { slot: gs.slot, instance: gs.instance };
+    const ident = slotIdentity(gs, pad);
+    const product = settingsProduct(prof, t, gs, pad);
+    const gameProduct = gs.gameRawProduct ?? (pad?.product || gs.hw?.product) ?? gs.gameProduct;
+    setShareOut({
+      slotLabel: slotId(gs).toUpperCase(),
+      input: {
+        game: { branch: DEFAULTS.meta.branch, version: DEFAULTS.meta.version, channel: DEFAULTS.meta.channel },
+        device: {
+          kind: t.slot, ...(ident.name || slotDeviceName(gs) ? { name: (pad?.name ?? slotDeviceName(gs) ?? ident.name)! } : {}),
+          ...(ident.vendor && ident.productId ? { vendor: ident.vendor.toUpperCase().padStart(4, '0'), product: ident.productId.toUpperCase().padStart(4, '0') } : {}),
+          ...(ident.buttons ? { buttons: ident.buttons } : {}), ...(gameProduct ? { gameProduct } : {}), sourceSlot: slotId(gs),
+        },
+        template,
+        bindings: slotBindings(prof?.rebinds ?? {}, IDX, DEFAULTS, t),
+        axis: t.instance <= AXIS_LIMIT[t.slot] ? slotAxisSettings(settingsOf(prof), t, product) : undefined,
+      },
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** a shared controller file picked or dropped: parse it and open the import preview (friendly error otherwise) */
+  const openSharedText = useCallback((text: string, name: string) => {
+    try { setShareIn({ pack: parseShared(text), file: name }); }
+    catch (e) { setToast({ kind: 'err', text: `${name}: ${(e as Error).message}` }); }
+  }, []);
+  const importJson = async (f: File) => {
+    const text = await readXmlFile(f);
+    if (looksShared(text) || /\.sckeymap\.json$/i.test(f.name)) { openSharedText(text, f.name); return; }
+    try {
+      const list = parseTemplates(text);
+      for (const t of list) await T.save(t);
+      setToast({ kind: 'ok', text: `Imported ${list.length} template${list.length === 1 ? '' : 's'}: ${list.map((t) => t.name).join(', ')}` });
+    } catch (e) { setToast({ kind: 'err', text: `${f.name}: not a shared controller or template file (${(e as Error).message})` }); }
+  };
+  const jsonRef = useRef(importJson);
+  useLayoutEffect(() => { jsonRef.current = importJson; });
+  const shareTargets: ImportTarget[] = useMemo(() => {
+    if (!shareIn) return [];
+    const kind = shareIn.pack.device.kind;
+    const list: ImportTarget[] = slotMap.slots.filter((s) => s.slot === kind).map((gs) => {
+      const pad = gs.hw ? pads.find((p) => p.key === gs.hw!.key) : undefined;
+      const id = slotIdentity(gs, pad);
+      const name = pad ? padLabel(pad) : slotDeviceName(gs);
+      const ident = { name: id.name, vendor: id.vendor, productId: id.productId };
+      const m = deviceMatch(ident, shareIn.pack.device);
+      return { slot: kind, instance: gs.instance, ident, connected: !!pad, name, axisOk: gs.instance <= AXIS_LIMIT[kind],
+        label: `${slotId(gs)} · ${name ?? 'no device'}${pad ? ' (connected)' : ''}${m === 'usb' || m === 'name' ? ' · matches' : ''}` };
+    });
+    const n = nextInstance(slotMap, kind);
+    list.push({ slot: kind, instance: n, connected: false, isNew: true, axisOk: n <= AXIS_LIMIT[kind], label: `${kind}${n} · new slot` });
+    return list;
+  }, [shareIn, slotMap, pads]);
+  const shareInitial = useMemo(() => {
+    if (!shareIn) return null;
+    const shown = shownDeviceSlot(deviceSlots, devSel)?.gs;
+    return defaultTarget(shareTargets.filter((t) => !t.isNew), shareIn.pack.device, shown && isController(shown) ? { slot: shown.slot, instance: shown.instance } : undefined)
+      ?? shareTargets.find((t) => t.isNew) ?? null;
+  }, [shareIn, shareTargets]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sharePlan = useCallback((t: SlotRef, mode: ImportMode) => planImport(profile?.rebinds ?? {}, IDX, shareIn?.pack.bindings ?? [], t, mode), [profile, shareIn]);
+  const shareTemplate: TemplateInfo = useMemo(() => {
+    const st = shareIn?.pack.template;
+    if (!st) return { status: 'builtin' };
+    if (st.kind === 'builtin') { const t = T.templates.find((x) => x.id === st.id); return t ? { status: 'builtin', template: t } : { status: 'builtin-missing' }; }
+    const same = sameTemplate(T.user, st.template);
+    return same ? { status: 'custom-installed', template: st.template, installedName: same.name } : { status: 'custom-new', template: st.template };
+  }, [shareIn, T.user, T.templates.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const confirmShared = async (t: SlotRef & { isNew?: boolean }, mode: ImportMode) => {
+    if (!shareIn) return;
+    const { pack } = shareIn;
+    setShareIn(null);
+    // 1. the template: a built-in is referenced; a custom one joins the user's templates (an identical one already there is reused)
+    let tplId: string | undefined, tplNote = '';
+    try {
+      if (pack.template.kind === 'custom') {
+        const inc = pack.template.template;
+        const same = sameTemplate(T.user, inc);
+        if (same) tplId = same.id;
+        else {
+          const v = await T.save({ ...inc, id: T.templates.some((x) => x.id === inc.id) ? uid() : inc.id, name: T.user.some((x) => x.name === inc.name) ? `${inc.name} (shared)`.slice(0, 80) : inc.name });
+          tplId = v.id; tplNote = ` · template “${v.name}” added`;
+        }
+      } else { const bid = pack.template.id; if (T.templates.some((x) => x.id === bid)) tplId = bid; else tplNote = ` · template “${pack.template.name}” not in this version (automatic kept)`; }
+    } catch (e) { setToast({ kind: 'err', text: `Could not save the shared template: ${(e as Error).message}` }); return; }
+    // 2. bindings, slot (template, device name) and axis settings: one undo step (the meta snapshot restores slots + settings)
+    const prof = curProfile();
+    const map0 = slotMapRef.current;
+    const meta = { devices: prof?.devices ?? [], settings: settingsOf(prof), slots: map0 };
+    const plan = planImport(prof?.rebinds ?? {}, IDX, pack.bindings, t, mode);
+    const sid = `${t.slot}${t.instance}`;
+    const what = pack.title ?? pack.device.name ?? pack.template.name;
+    applyEdit(`Import “${what}” into ${sid} (${mode})`, plan.touched, () => plan.rebinds, { meta });
+    const existing = map0.slots.find((s) => s.slot === t.slot && s.instance === t.instance);
+    const takeName = !existing || (!existing.hw && !existing.gameProduct);
+    const d = pack.device;
+    updateSlots((m) => {
+      let m2 = m;
+      if (!m2.slots.some((s) => s.slot === t.slot && s.instance === t.instance)) m2 = addSlot(m2, t.slot, t.instance);
+      if (takeName && (d.gameProduct || d.name)) {
+        const name = d.name ?? parseProfileProduct(d.gameProduct!).name;
+        m2 = { ...m2, slots: m2.slots.map((s) => (s.slot === t.slot && s.instance === t.instance && !s.hw && !s.gameProduct ? { ...s, gameProduct: name, ...(d.gameProduct && d.gameProduct !== name ? { gameRawProduct: d.gameProduct } : {}) } : s)) };
+      }
+      const gs = m2.slots.find((s) => s.slot === t.slot && s.instance === t.instance)!;
+      if (tplId) {
+        const pad = gs.hw ? pads.find((p) => p.key === gs.hw!.key) : undefined;
+        if (resolveSlotTemplate(T.templates, m2, gs, pad, T.picks).template.id !== tplId) m2 = setSlotTemplate(m2, gs, tplId);
+      }
+      return m2;
+    });
+    let axisNote = '';
+    const cur = curProfile();
+    if (pack.axis && cur && t.instance <= AXIS_LIMIT[t.slot]) {
+      const pad = existing?.hw ? pads.find((p) => p.key === existing.hw!.key) : undefined;
+      const product = settingsProduct(cur, t, existing, pad) || (takeName ? d.gameProduct : undefined);
+      const r = applyAxisSettings(settingsOf(cur), t, product, pack.axis, mode);
+      patchProfile(cur.id, { settings: r.settings });
+      if (r.groups || r.axes) axisNote = ` · axis settings (${r.groups} control${r.groups === 1 ? '' : 's'}${r.axes ? `, ${r.axes} deadzone / saturation` : ''})`;
+    }
+    selectDevice(deviceSlotKey({ slot: t.slot, instance: t.instance }));
+    setView('devices');
+    setToast({
+      kind: 'ok',
+      text: `Imported “${what}” into ${sid}: ${plan.applied.length} binding${plan.applied.length === 1 ? '' : 's'}${plan.removed.length ? `, ${plan.removed.length} ${mode === 'merge' ? 'overwritten' : 'removed'}` : ''}${plan.skipped.length ? `, ${plan.skipped.length} skipped (unknown action)` : ''}${tplNote}${axisNote}. Ctrl+Z undoes it.`,
+      action: { label: 'Undo', run: () => { undoLast(); } },
+    });
+  };
 
   /** filter the list by one exact input, e.g. "js1_button5" or "kb1_lalt+n" (device + instance + full combo) */
   const pickInput = useCallback((spec: string) => {
@@ -726,6 +877,8 @@ export default function App() {
               className="flex h-8 w-8 items-center justify-center rounded border border-edge text-slate-300 hover:border-hud/60 hover:text-hud2"><Ico name="help" className="h-4 w-4" /></button>
             <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" multiple hidden
               onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
+            <input ref={shareFileRef} type="file" accept=".json,application/json" hidden data-testid="share-import-file"
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readXmlFile(f).then((t) => openSharedText(t, f.name)); }} />
             <input ref={refreshRef} type="file" accept=".xml,text/xml,application/xml" hidden data-testid="refresh-file"
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void refreshGameState(f); }} />
           </div>
@@ -887,7 +1040,8 @@ export default function App() {
           {view === 'devices' && <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads}
             slots={deviceSlots} slotMap={slotMap} selKey={devSel} onSelect={selectDevice} compact={!wide} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => setDevicesOpen('slots')} highlight={highlightOn} scroll={highlightOn && scrollOn}
             query={dq} chip={chip} onOpenAxis={(gs) => setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance })} axisLimit={AXIS_LIMIT} onRefresh={() => refreshRef.current?.click()}
-            editMode={editMode} onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })} />}
+            editMode={editMode} onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })}
+            templates={T} onShare={openShare} onImportShared={() => shareFileRef.current?.click()} onSharedText={openSharedText} />}
           {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} hasProfile={!!profile} flash={flash?.keys}
             editMode={editMode} onEdit={onEditRow} onRemove={onRemoveCell} />}
         </main>
@@ -908,6 +1062,7 @@ export default function App() {
       {toast && (
         <div className={`fixed bottom-5 right-5 z-50 max-w-md rounded-lg border px-4 py-3 text-sm shadow-xl backdrop-blur ${toast.kind === 'ok' ? 'border-ok/50 bg-panel/95 text-ok' : 'border-alert/60 bg-panel/95 text-alert'}`}>
           {toast.text}
+          {toast.action && <button type="button" onClick={() => { toast.action!.run(); }} data-testid="toast-action" className="ml-2 rounded border border-current px-2 py-0.5 text-xs font-semibold hover:bg-white/10">{toast.action.label}</button>}
         </div>
       )}
       {help && <HelpModal onClose={() => setHelp(false)} />}
@@ -939,6 +1094,10 @@ export default function App() {
           profile={profile} settings={settingsOf(profile)} tree={DEFAULTS.optionTrees?.[type]} pads={pads} onChange={applySettings}
           type={type} instance={axisFor.instance} product={gs?.gameRawProduct ?? gs?.gameProduct ?? pad?.product} />;
       })()}
+      {shareOut && <ShareExportDialog slotLabel={shareOut.slotLabel} input={shareOut.input} onClose={() => setShareOut(null)}
+        onSaved={(file, pack) => { setShareOut(null); setToast({ kind: 'ok', text: `Saved ${file}: ${pack.bindings.length} bindings${pack.template.kind === 'custom' ? ' + your template' : ''}${pack.axis ? ' + axis settings' : ''}. Send it to whoever has this device; they import it on their Devices page.` }); }} />}
+      {shareIn && <ShareImportDialog pack={shareIn.pack} fileName={shareIn.file} targets={shareTargets} initial={shareInitial} plan={sharePlan} templateInfo={shareTemplate}
+        gameVersion={DEFAULTS.meta.version} onConfirm={(t, mode) => void confirmShared(t, mode)} onCancel={() => setShareIn(null)} />}
       {settingsOpen && <SettingsModal settings={appSettings} onChange={setAppSettings} onClose={() => setSettingsOpen(false)} meta={meta} versionLabel={versionLabel} />}
     </div>
   );

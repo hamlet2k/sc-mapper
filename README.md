@@ -52,6 +52,9 @@ loads. Everything runs in your browser: your files are never uploaded.
   Uploaded pictures can have their background removed in the browser (U²-Net, nothing uploaded) and be framed like
   the built-in photos.
 - Templates **export and import as JSON** with the picture embedded, so you can share them.
+- **Share controller**: one `.sckeymap.json` file per device with its template (custom ones with their photos), every
+  binding on that slot (all modes, modifier combos) and its axis curves / deadzones. A friend imports it onto whatever
+  slot holds the same device (Merge or Replace, with a preview), then exports their actionmaps.xml as usual.
 - **Game slots & controllers**: which hardware is js1, js2, gp1… and which template each one uses. Pick hardware by
   pressing one of its buttons, move mappings between slots, and copy bindings from one slot to another.
 - **Input tester**: every connected controller's buttons and axes live, with the Star Citizen input each one maps to.

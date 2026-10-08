@@ -99,6 +99,7 @@ export function DropOverlay({ withRefresh, zone }: { withRefresh: boolean; zone:
       <div className={box(true)} data-drop-zone="import">
         <div className="glow-text font-display text-3xl font-bold uppercase tracking-[0.3em] text-hud2">Drop to import</div>
         <div className="mt-2 font-mono text-xs text-slate-400">actionmaps.xml · layout_*_exported.xml</div>
+        <div className="mt-1 font-mono text-[11px] text-slate-500">or a shared controller (*.sckeymap.json)</div>
       </div>
     </div>
   );
@@ -114,6 +115,7 @@ export function DropOverlay({ withRefresh, zone }: { withRefresh: boolean; zone:
         <Ico name="import" className="h-8 w-8 text-slate-300" />
         <div className="mt-3 font-display text-xl font-bold uppercase tracking-[0.2em] text-slate-200">Import as profile</div>
         <p className="mt-2 text-xs text-slate-400">Adds the file&apos;s bindings as a new profile.</p>
+        <p className="mt-3 text-[11px] text-slate-500" data-testid="drop-share-hint">A shared controller (<span className="font-mono">*.sckeymap.json</span>) dropped anywhere opens its import preview.</p>
       </div>
     </div>
   );
