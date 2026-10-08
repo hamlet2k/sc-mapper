@@ -98,6 +98,10 @@ gamepad (modern dual-stick layout).
 Is your device missing or numbered differently? [Open an issue](https://github.com/hamlet2k/sc-mapper/issues/new), or
 export your own template as JSON and attach it.
 
+**Template feed for other apps:** the built-in templates (pictures, callouts, match rules, button numbers; no bindings) are published
+as versioned JSON at [`/templates/index.json`](https://sc-mapper.vercel.app/templates/index.json), with CORS enabled. See
+[docs/template-feed.md](docs/template-feed.md).
+
 ## How to use
 
 1. **Export your bindings from Star Citizen.** In game: *Options → Keybindings → Advanced Controls Customization →

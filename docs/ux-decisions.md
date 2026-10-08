@@ -723,3 +723,11 @@ Federico: "Can one person map everything and share it with another person so the
   - **On confirm:** an identical custom template is reused; otherwise it is installed (" (shared)" is appended if the name is taken). The template is assigned to the slot only when the slot wouldn't pick it already. The bindings land under the chosen jsN_/gpN_. Axis settings apply when the slot is within the game's js1–js8 / gp1 limit (deadzones need a device name; a new or empty slot takes the file's device name and Product, so the export names it). It is **one undo step** (bindings, slot map, axis settings), with a toast that has an Undo button. An installed custom template stays in the library after undo (harmless, and it may be wanted).
 - **Tests.** Unit: pack / parse round trip, sanitizing, version and type errors, slot remap, merge vs replace, defaults in merge, unknown actions, axis settings, template dedupe, default target. E2e (Warthog stick, `scripts/fixtures/share-warthog.xml` → a friend's `share-friend.xml` with the stick on js2): export summary and file contents, error toasts, the preview defaulting to js2 by USB id, the mismatch warning, Merge → actionmaps export with `js2_` inputs, undo, Replace, and the drop.
 - Screenshots: `199-share-controller-button.png`, `200-share-controller-export.png`, `201-share-import-preview.png`, `202-share-imported-device.png`.
+
+## Template feed (Oct 8, 2026)
+
+The built-in templates' hardware definitions are published as a versioned JSON feed (`/templates/index.json` + `/templates/<id>.json`)
+so DCS Mapper (Federico's local DCS World mapper) can reuse them. It is generated at build time from the same template objects, and
+default bindings stay out of it. Each file is in the "Export template" shape, so it imports into SC Keymap as is. No UI change. One
+side effect: the template import now keeps callout labels up to 80 characters (was 60), because the CarrierAce PTO 2 built-in has a
+65-character label that an export → import used to cut. Details: [template-feed.md](template-feed.md).

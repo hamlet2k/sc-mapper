@@ -93,5 +93,13 @@ app uses what can be confirmed and labels the rest as conservative:
 - Browser-reserved shortcuts (Ctrl+W/T/N, some OS keys) can't be captured. Type them in manual entry instead.
 - Exported files are tested against the format of real game-written files, not loaded into a running game client.
 
+## Template feed
+`npm run build` also writes the public template feed into `dist/templates/` (`index.json`, one `<id>.json` per built-in template,
+`art/<id>.svg` for the generated drawings). It is generated from the built-in template objects by the `template-feed` plugin in
+`vite.config.ts` (`src/lib/templateFeed.ts` + `scripts/template-feed.ts`), so it is never edited by hand and not committed. The build
+fails if a template references a missing photo. URLs, schema, input-name conventions (with the SC → DCS table), caching and the
+version policy: [template-feed.md](template-feed.md).
+
 ## Deploy
 The app is a static Vite build (`dist/`), so it can go to Vercel as-is: framework preset "Vite", build `npm run build`, output `dist`.
+`vercel.json` only adds headers (CORS `*` and short `Cache-Control` on `/templates/*` and `/device-photos/*`). It has no rewrites.

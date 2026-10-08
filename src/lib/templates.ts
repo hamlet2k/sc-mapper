@@ -313,6 +313,8 @@ export function exportTemplates(list: DeviceTemplate[]): string {
   return JSON.stringify({ format: TEMPLATE_FILE_FORMAT, version: 1, templates: list.map(templateForFile) }, null, 1);
 }
 const KINDS = new Set(CALLOUT_KINDS.map((k) => k.kind));
+/** longest callout label an imported template keeps (the built-ins' longest is 65: CarrierAce PTO 2 “SELECT JETT (…)”) */
+export const CALLOUT_LABEL_MAX = 80;
 const INPUT_RE = /^[a-z][a-z0-9_]{0,24}$/;
 /** an SVG path made of plain commands and numbers only (no references, no markup) */
 export const REGION_RE = /^[MLHVCSQTAZmlhvcsqtaz0-9.,\s-]{1,6000}$/;
@@ -362,7 +364,7 @@ export function cleanTemplate(o: unknown, i = 0): DeviceTemplate {
     if (!inputs.length) throw new Error(`Template “${t.name}”: callout ${j + 1} has no valid input`);
     return {
       id: typeof q.id === 'string' && q.id ? q.id.slice(0, 40) : uid(), kind, inputs,
-      ...(typeof q.label === 'string' && q.label.trim() ? { label: q.label.trim().slice(0, 60) } : {}),
+      ...(typeof q.label === 'string' && q.label.trim() ? { label: q.label.trim().slice(0, CALLOUT_LABEL_MAX) } : {}),
       ...(typeof q.group === 'string' && q.group.trim() ? { group: q.group.trim().slice(0, 40) } : {}),
       anchor: pt(q.anchor), box: pt(q.box ?? q.anchor),
       ...(typeof q.region === 'string' && REGION_RE.test(q.region) ? { region: q.region } : {}),

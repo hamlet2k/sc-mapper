@@ -2308,4 +2308,117 @@ console.log('\nshared controller files');
   });
 }
 
+// ---------------------------------------------------------------- public template feed (/templates/*.json, docs/template-feed.md)
+console.log('\ntemplate feed');
+{
+  const fd = await import('../src/lib/templateFeed');
+  const { generateTemplateFeed, sha256 } = await import('./template-feed');
+  const { parseTemplates } = await import('../src/lib/templates');
+  const { BUILTIN_TEMPLATES } = await import('../src/lib/builtinTemplates');
+  const { DEVICE_TEMPLATES } = await import('../src/lib/deviceTemplates');
+  const { DEVICE_PHOTO_SIZES } = await import('../src/lib/devicePhotoSizes');
+  const a = await generateTemplateFeed({ generatedAt: '2026-01-01T00:00:00.000Z', commit: 'abc123' });
+  const b = await generateTemplateFeed({ generatedAt: '2026-02-02T00:00:00.000Z', commit: null });
+  const builtins = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+  const read = (path: string) => JSON.parse(a.files.get(path.slice(1))!);
+  t('every built-in template is in the feed (index entry + file), nothing else', () => {
+    assert.deepEqual(a.problems, [], 'no problems (photos present, pictures usable)');
+    assert.ok(builtins.length >= 37, `${builtins.length} built-ins`);
+    assert.deepEqual(a.index.templates.map((e) => e.id), builtins.map((x) => x.id), 'same ids, same order');
+    assert.equal(a.index.count, builtins.length);
+    assert.equal(new Set(a.index.templates.map((e) => e.id)).size, builtins.length, 'ids unique');
+    for (const e of a.index.templates) {
+      assert.equal(e.file, `/templates/${e.id}.json`);
+      const f = read(e.file);
+      assert.equal(f.format, 'sc-mapper-device-template'); assert.equal(f.version, 1); assert.equal(f.id, e.id); assert.equal(f.builtin, true);
+      const src = builtins.find((x) => x.id === e.id)!;
+      assert.equal(f.variantOf, src.variantOf, `${e.id}: variantOf kept`); assert.equal(e.variantOf, src.variantOf);
+      assert.deepEqual(e.match, src.match); assert.equal(e.slot, src.slot); assert.equal(e.brand, src.brand);
+    }
+    assert.deepEqual(a.index.templates.filter((e) => e.variantOf).map((e) => e.id), ['builtin-moza-ab6-mh16', 'builtin-moza-ab6-carrierace', 'builtin-moza-ab6-viperace']);
+    assert.ok(a.index.templates.filter((e) => e.variantOf).every((e) => !e.match.length), 'grip variants have no match rules');
+    const idx = read('/templates/index.json');
+    assert.equal(idx.format, 'sc-mapper-template-feed'); assert.equal(idx.formatVersion, 1); assert.equal(idx.inputNaming, 'star-citizen');
+    assert.equal(idx.generatedAt, '2026-01-01T00:00:00.000Z'); assert.equal(idx.commit, 'abc123'); assert.ok(idx.appVersion);
+  });
+  t('deterministic: per-template files and hashes do not depend on build time / commit; hash = sha256 of the file bytes', () => {
+    const tplFiles = (f: Map<string, string>) => [...f].filter(([k]) => k !== 'templates/index.json');
+    assert.deepEqual(tplFiles(a.files), tplFiles(b.files));
+    assert.deepEqual(a.index.templates, b.index.templates); assert.deepEqual(a.index.photos, b.index.photos);
+    assert.notEqual(a.files.get('templates/index.json'), b.files.get('templates/index.json'), 'only the index carries generatedAt / commit');
+    for (const e of a.index.templates) {
+      const body = a.files.get(e.file.slice(1))!;
+      assert.equal(e.hash, sha256(body), e.id); assert.equal(e.bytes, Buffer.byteLength(body), e.id);
+      assert.ok(!/generatedAt|updatedAt|"commit"/.test(body), `${e.id}: no timestamps`);
+    }
+    // key order is canonical, not construction order
+    assert.equal(fd.stableJson({ callouts: [], z: 1, id: 'x', format: 'f', name: 'n' }), fd.stableJson({ name: 'n', format: 'f', id: 'x', z: 1, callouts: [] }));
+    assert.deepEqual(Object.keys(JSON.parse(fd.stableJson({ callouts: [], z: 1, id: 'x', format: 'f' }))), ['format', 'id', 'callouts', 'z']);
+    assert.throws(() => fd.stableJson({ loadImage: () => 'x' }), /function/);
+    const tpl = builtins.find((x) => x.id === 'builtin-tm-twcs')!;
+    const shuffled = Object.fromEntries(Object.entries(tpl).reverse()) as typeof tpl;
+    assert.equal(fd.stableJson(fd.feedTemplate(shuffled)), a.files.get('templates/builtin-tm-twcs.json'), 'same template, other key order: same bytes');
+  });
+  t('no functions, runtime fields or data: URLs in the feed except the generated art pictures (intended)', () => {
+    for (const [path, body] of a.files) {
+      if (path.endsWith('.svg')) { assert.ok(body.startsWith('<svg') && body.includes('viewBox'), `${path}: an SVG`); continue; }
+      assert.ok(!/loadImage|updatedAt|=>|function\s*\(/.test(body), `${path}: no runtime-only fields`);
+      const o = JSON.parse(body);
+      const strings: [string, string][] = [];
+      const walk = (v: unknown, at: string) => { if (typeof v === 'string') strings.push([at, v]); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, `${at}.${k}`); };
+      walk(o, '$');
+      const dataUrls = strings.filter(([, s]) => s.startsWith('data:'));
+      if (path === 'templates/index.json') { assert.deepEqual(dataUrls, [], 'index: none'); continue; }
+      const entry = a.index.templates.find((e) => e.file === `/${path}`)!;
+      if (entry.art) {
+        assert.deepEqual(dataUrls.map(([at]) => at), ['$.image'], `${path}: only the picture`);
+        assert.ok(dataUrls[0][1].startsWith('data:image/svg+xml'));
+        assert.equal(fd.svgFromDataUrl(dataUrls[0][1])!.trim(), a.files.get(entry.art.url.slice(1))!.trim(), `${path}: art file = embedded picture`);
+      } else assert.deepEqual(dataUrls, [], `${path}: photo template without data: URLs`);
+    }
+    assert.deepEqual(a.index.templates.filter((e) => e.art).map((e) => e.id), ['builtin-stick', 'builtin-throttle', 'builtin-gamepad'], 'generated art = the generic templates');
+    for (const e of a.index.templates.filter((x) => x.art)) assert.deepEqual([e.art!.width / e.art!.height, e.photos], [read(e.file).aspect, []]);
+  });
+  t('photos: absolute paths to files in public/device-photos, sizes from devicePhotoSizes, hashed', () => {
+    const used = new Set<string>();
+    for (const e of a.index.templates) {
+      const f = read(e.file);
+      assert.deepEqual(e.photos, [...new Set((f.views ?? []).map((v: { image: string }) => v.image))], `${e.id}: photos = its views' pictures`);
+      for (const u of e.photos) { used.add(u); assert.ok(/^\/device-photos\/[a-z0-9-]+\.webp$/.test(u), u); }
+      if (!e.art) assert.ok(e.photos.length, `${e.id}: has photos`);
+    }
+    assert.deepEqual(Object.keys(a.index.photos), [...used].sort(), 'photo table = every photo used, sorted');
+    for (const [u, p] of Object.entries(a.index.photos)) {
+      const file = `public${u}`;
+      assert.ok(existsSync(file), file);
+      const key = u.slice('/device-photos/'.length, -'.webp'.length);
+      assert.deepEqual([p.width, p.height], DEVICE_PHOTO_SIZES[key].slice(0, 2), u);
+      assert.equal(p.hash, sha256(readFileSync(file)), u); assert.equal(p.bytes, readFileSync(file).length, u);
+    }
+  });
+  t('round trip: every feed file imports through the app’s own template import and gives back the same template', () => {
+    const strip = (x: Record<string, unknown>) => { const { id: _i, updatedAt: _u, builtin: _b, variantOf: _v, loadImage: _l, format: _f, ...rest } = x; return JSON.parse(JSON.stringify(rest)); };
+    for (const e of a.index.templates) {
+      const list = parseTemplates(a.files.get(e.file.slice(1))!);
+      assert.equal(list.length, 1, e.id);
+      const src = builtins.find((x) => x.id === e.id)!;
+      const expected = strip({ ...src, ...(src.views?.length || src.image ? {} : { image: read(e.file).image }) });
+      assert.deepEqual(strip(list[0] as unknown as Record<string, unknown>), expected, `${e.id}: equivalent after import`);
+      assert.ok(!list[0].builtin && !list[0].id.startsWith('builtin-'), `${e.id}: imports as a user template of its own`);
+    }
+  });
+  t('vercel.json: CORS (*) and Cache-Control on /templates/* and /device-photos/*, no rewrites', () => {
+    const v = JSON.parse(readFileSync('vercel.json', 'utf8'));
+    assert.equal(v.rewrites, undefined, 'no SPA rewrite (static files keep being served as such)');
+    const rule = (src: string) => v.headers.find((h: { source: string }) => h.source === src)?.headers as { key: string; value: string }[] | undefined;
+    for (const src of ['/templates/index.json', '/templates/((?!index\\.json).*)', '/device-photos/(.*)']) {
+      const h = rule(src);
+      assert.ok(h, src);
+      assert.equal(h!.find((x) => x.key === 'Access-Control-Allow-Origin')?.value, '*', src);
+      assert.ok(/max-age=\d+/.test(h!.find((x) => x.key === 'Cache-Control')?.value ?? ''), src);
+    }
+    assert.ok(/must-revalidate/.test(rule('/templates/index.json')!.find((x) => x.key === 'Cache-Control')!.value));
+  });
+}
+
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);
