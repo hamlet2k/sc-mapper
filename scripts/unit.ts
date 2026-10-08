@@ -862,7 +862,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(btn(by('virpil-alpha-prime')), seq(1, 32), 'Alpha Prime: 1-32');
     assert.deepEqual(btn(by('virpil-vmax-prime')), seq(1, 51), 'VMAX Prime: 1-51 (no shift)');
     assert.deepEqual(btn(by('winctrl-carrierace')), seq(1, 27, [19]), 'CarrierAce: 1-27 (19 = POV trim)');
-    assert.deepEqual(btn(by('winctrl-viperace')), seq(1, 42, [19]), 'ViperAce: 1-42 (19 = POV trim)');
+    assert.deepEqual(btn(by('winctrl-viperace')), seq(1, 42), 'ViperAce: 1-42 (19 = trim hat push, confirmed by Federico)');
     assert.deepEqual(btn(by('winctrl-orion')), [...seq(1, 62, [45, 46, 47, 48, 49]), ...seq(65, 111)], 'Orion: grips 1-62, panel 65-111');
     assert.deepEqual(btn(by('winctrl-ursa-combat')), seq(1, 81, [26]), 'URSA MINOR Combat: 1-81 (26 unused)');
     assert.deepEqual(btn(by('moza-ab6')), seq(1, 62, Array.from({ length: 19 }, (_, i) => 30 + i)), 'AB6 + MHG: grip 1-29, base 49-62');
@@ -1180,7 +1180,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       wpn: { label: "Weapon release", kind: 'button', group: "Grip head", view: 'front', inputs: ["button20"], ax: 0.48077192982456146, ay: 0.112, bx: 0.115, by: 0.05 },
       mini: { label: "Ministick", kind: 'axis', group: "Side module", view: 'front', inputs: ["rotx", "roty"], ax: 0.45192982456140357, ay: 0.20700000000000002, bx: 0.115, by: 0.2789756592292089 },
       minib: { label: "Ministick (digital + press)", kind: 'hat', group: "Side module", view: 'front', inputs: ["button27", "button28", "button29", "button30", "button26"], ax: 0.45433333333333337, ay: 0.215, bx: 0.125, by: 0.4206338742393509 },
-      trim: { label: "Trim hat (8-way POV)", kind: 'hat', group: "Grip head", view: 'front', inputs: ["hat1_up", "hat1_right", "hat1_down", "hat1_left"], ax: 0.528361403508772, ay: 0.08, bx: 0.875, by: 0.05 },
+      trim: { label: "Trim hat (8-way POV)", kind: 'hat', group: "Grip head", view: 'front', inputs: ["hat1_up", "hat1_right", "hat1_down", "hat1_left", "button19"], ax: 0.528361403508772, ay: 0.08, bx: 0.875, by: 0.05 },
       hatD: { label: "Hat D (4-way + push)", kind: 'hat', group: "Grip head", view: 'front', inputs: ["button32", "button33", "button34", "button35", "button31"], ax: 0.5, ay: 0.172, bx: 0.875, by: 0.2718661257606491 },
       hatE: { label: "Hat E (4-way + push)", kind: 'hat', group: "Grip head", view: 'front', inputs: ["button37", "button38", "button39", "button40", "button36"], ax: 0.5576842105263158, ay: 0.16, bx: 0.875, by: 0.16093306288032455 },
       tms: { label: "Hat (4-way + push)", kind: 'hat', group: "Grip", view: 'front', inputs: ["button10", "button11", "button12", "button13", "button9"], ax: 0.48942456140350876, ay: 0.29, bx: 0.125, by: 0.5195131845841785 },
@@ -1495,7 +1495,7 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.deepEqual(va.callouts.filter((x) => x.inputs.includes('slider1')).map((x) => x.id), ['wl', 'paddlea'], 'ViperAce on AB6: S1 = base left lever or paddle lever');
     assert.deepEqual(nums(ca), [...seq(1, 27, [19]), ...seq(49, 62)], 'CarrierAce on AB6: grip 1-27 (19 = POV trim) + base 49-62');
     assert.deepEqual(axes(ca), ['slider1', 'slider2', 'x', 'y']);
-    assert.deepEqual(nums(va), [...seq(1, 42, [19]), ...seq(49, 62)], 'ViperAce EX on AB6: grip 1-42 (19 = POV trim) + base 49-62');
+    assert.deepEqual(nums(va), [...seq(1, 42), ...seq(49, 62)], 'ViperAce EX on AB6: grip 1-42 (19 = trim hat push) + base 49-62');
     assert.deepEqual(axes(va), ['rotx', 'roty', 'rotz', 'slider1', 'slider1', 'slider2', 'x', 'y']);
     assert.deepEqual([mh, ca, va].map((v) => v.callouts.length), [19, 16, 22]);
   });
