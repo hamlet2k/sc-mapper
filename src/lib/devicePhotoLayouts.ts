@@ -359,38 +359,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       rev75: { view: 'boeing', x: 0.685, y: 0.637 },
     },
   },
-  'builtin-virpil-vmax-prime': {
-    views: [{ id: 'left', label: 'Left grip', photo: 'virpil-vmax-prime-front' }, { id: 'panel', label: 'Panel', photo: 'virpil-vmax-prime-panel' }, { id: 'grip', label: 'Right grip', photo: 'virpil-vmax-prime-panel' }],
-    anchors: {
-      wl9: { view: 'left', x: 0.155, y: 0.086 },
-      wl9b: { view: 'left', x: 0.165, y: 0.1 },
-      h4: { view: 'left', x: 0.195, y: 0.244 },
-      b3: { view: 'left', x: 0.305, y: 0.316 },
-      b1: { view: 'left', x: 0.471, y: 0.27 },
-      rot2: { view: 'left', x: 0.632, y: 0.27 },
-      rot2b: { view: 'left', x: 0.645, y: 0.285 },
-      paddle: { view: 'left', x: 0.27, y: 0.356 },
-      keys: { view: 'panel', x: 0.35, y: 0.477 },
-      apu: { view: 'panel', x: 0.23, y: 0.558 },
-      apub: { view: 'panel', x: 0.19, y: 0.506 },
-      jett: { view: 'panel', x: 0.494, y: 0.529 },
-      e1: { view: 'panel', x: 0.414, y: 0.58 },
-      e2: { view: 'panel', x: 0.475, y: 0.632 },
-      t1: { view: 'panel', x: 0.537, y: 0.56 },
-      t2: { view: 'panel', x: 0.58, y: 0.58 },
-      t3: { view: 'panel', x: 0.316, y: 0.627 },
-      t4: { view: 'panel', x: 0.356, y: 0.644 },
-      t5: { view: 'panel', x: 0.394, y: 0.7 },
-      lthr: { view: 'left', x: 0.28, y: 0.14 },
-      rthr: { view: 'grip', x: 0.65, y: 0.15 },
-      b17: { view: 'grip', x: 0.47, y: 0.086 },
-      h10: { view: 'grip', x: 0.85, y: 0.138 },
-      mini: { view: 'grip', x: 0.834, y: 0.255 },
-      minib: { view: 'grip', x: 0.84, y: 0.265 },
-      h18: { view: 'grip', x: 0.776, y: 0.31 },
-      b16: { view: 'grip', x: 0.724, y: 0.282 },
-    },
-  },
+  // builtin-virpil-vmax-prime: exact callouts via photoTplExactViews (2026-10-09 export).
   'builtin-winctrl-orion': {
     views: [{ id: 'panel', label: 'Panel', photo: 'winctrl-orion-right' }, { id: 'rgrip', label: 'Right grip', photo: 'winctrl-orion-right' }, { id: 'left', label: 'Left grip + top row', photo: 'winctrl-orion-left' }],
     anchors: {
@@ -443,21 +412,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
   // ---- photo-only / new devices from Federico's exports (2026-10-06) ----
   // Photo-only templates (empty callouts) still show the picture so users can Customize a copy and place their own.
   // builtin-winctrl-orion-pedals: exact callouts via photoTplExact (Federico's export) — not listed here so withPhotoLayout does not re-box them.
-  // WinCtrl CarrierAce MFD: anchors on the product photo (3/4 shot), numbering per the WinCtrl diagram; group markers at the centre of each bezel bank / rocker.
-  'builtin-winctrl-carrierace-mfd-l': {
-    views: [{ id: 'main', label: 'MFD', photo: 'winctrl-carrierace-mfd-l' }],
-    anchors: {
-      left: { view: 'main', x: 0.112, y: 0.46, side: 'L' },
-      gain: { view: 'main', x: 0.135, y: 0.74, side: 'L' },
-      bottom: { view: 'main', x: 0.43, y: 0.82, side: 'L' },
-      cont: { view: 'main', x: 0.665, y: 0.90, side: 'R' },
-      right: { view: 'main', x: 0.72, y: 0.55, side: 'R' },
-      sym: { view: 'main', x: 0.695, y: 0.23, side: 'R' },
-      top: { view: 'main', x: 0.40, y: 0.21, side: 'L' },
-      dayngt: { view: 'main', x: 0.205, y: 0.17, side: 'L' },
-      brt: { view: 'main', x: 0.455, y: 0.165, side: 'R' },
-    },
-  },
+  // builtin-winctrl-carrierace-mfd-l: exact callouts via photoTplExactViews (2026-10-09 export).
   // WinCtrl CarrierAce PTO 2: anchors on the product photo (3/4 shot) at each switch / lever; numbering per Federico's WinCtrl diagram.
   'builtin-winctrl-carrierace-pto2': {
     views: [{ id: 'main', label: 'PTO 2', photo: 'winctrl-carrierace-pto2' }],
@@ -478,38 +433,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       wfold: { view: 'main', x: 0.664, y: 0.846, side: 'R' },
     },
   },
-  // WinCtrl CarrierAce UFC + HUD: anchors on the two product photos; numbering + axes per Federico's SimAppPro diagrams.
-  // Top toggles 33-38 sit on the UFC top edge (the rear diagram has no matching product photo; left → right from the front).
-  'builtin-winctrl-carrierace-ufc-hud': {
-    views: [{ id: 'ufc', label: 'UFC', photo: 'winctrl-carrierace-ufc' }, { id: 'hud', label: 'HUD', photo: 'winctrl-carrierace-hud' }],
-    anchors: {
-      ip: { view: 'ufc', x: 0.125, y: 0.238, side: 'L' },
-      adf: { view: 'ufc', x: 0.137, y: 0.309, side: 'L' },
-      vol1: { view: 'ufc', x: 0.127, y: 0.408, side: 'L' },
-      comm1: { view: 'ufc', x: 0.161, y: 0.612, side: 'L' },
-      keypad: { view: 'ufc', x: 0.274, y: 0.462, side: 'L' },
-      fn: { view: 'ufc', x: 0.410, y: 0.680, side: 'L' },
-      opt: { view: 'ufc', x: 0.408, y: 0.462, side: 'R' },
-      brt: { view: 'ufc', x: 0.674, y: 0.413, side: 'R' },
-      emcon: { view: 'ufc', x: 0.672, y: 0.496, side: 'R' },
-      vol2: { view: 'ufc', x: 0.664, y: 0.588, side: 'R' },
-      comm2: { view: 'ufc', x: 0.674, y: 0.811, side: 'R' },
-      tgl1: { view: 'ufc', x: 0.181, y: 0.073, side: 'L' },
-      tgl2: { view: 'ufc', x: 0.420, y: 0.131, side: 'R' },
-      tgl3: { view: 'ufc', x: 0.688, y: 0.219, side: 'R' },
-      rej: { view: 'hud', x: 0.098, y: 0.377, side: 'L' },
-      hbrt: { view: 'hud', x: 0.190, y: 0.424, side: 'L' },
-      hdg: { view: 'hud', x: 0.103, y: 0.541, side: 'L' },
-      aoa: { view: 'hud', x: 0.244, y: 0.536, side: 'L' },
-      daynight: { view: 'hud', x: 0.313, y: 0.457, side: 'L' },
-      alt: { view: 'hud', x: 0.366, y: 0.564, side: 'L' },
-      blk: { view: 'hud', x: 0.420, y: 0.489, side: 'R' },
-      att: { view: 'hud', x: 0.479, y: 0.615, side: 'R' },
-      vid: { view: 'hud', x: 0.547, y: 0.536, side: 'R' },
-      bal: { view: 'hud', x: 0.649, y: 0.596, side: 'R' },
-      crs: { view: 'hud', x: 0.747, y: 0.792, side: 'R' },
-    },
-  },
+  // builtin-winctrl-carrierace-ufc-hud: exact callouts via photoTplExactViews (2026-10-09 export).
   'builtin-azeron-keypad': {
     views: [{ id: 'main', label: 'Azeron', photo: 'azeron-keypad-main' }],
     anchors: {},
