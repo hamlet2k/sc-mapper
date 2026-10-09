@@ -122,6 +122,18 @@ round-trips every file through it).
   (viewBox `0 0 1000 1000/aspect`) and drawn translated to the anchor. `inputRegions` has one path per input (`''` = none).
 - **An empty input `''`** keeps the place of a control whose number the device does not fix (e.g. user-configured firmware). Show it as
   unassigned.
+- **Input count limit (shared contract): a callout has at most 32 inputs, whatever its kind.** Each kind also has its natural size:
+  `button` 1, `hat` 4 or 5, `axis` 1 or 2, `encoder` 2 or 3, `buttons` 2 to 32 (long rows: ICP / UFC keypads, MFD bezels),
+  `switch` 2 to 8 as built in the editors (SC Keymap and DCS Mapper); a file with a longer switch (up to 32) is still valid. A template
+  with a callout of more than 32 inputs is **invalid**: SC Keymap rejects the whole file on import (template import, shared
+  controller files) with a visible error naming the callout ("callout 4 (UFC keypad) has 33 inputs; a callout can have at most
+  32"); it never cuts the list, which would silently drop buttons. Clients should apply the same rule (reject or flag such a callout
+  visibly, never truncate). `inputRegions`, when present, has at most one entry per input (so at most 32 as well).
+- **"Fill range" syntax (template editors, shared with DCS Mapper).** Comma-separated tokens, each a button number or a range
+  `first-last`: `1-20`, descending `42-34` (button42, button41 … button34, in that order), `1-9, 12, 15-17`. Whitespace around tokens
+  and dashes is ignored; numbers are 1 to 128; the result is written as `buttonN` inputs, in the typed order (a number listed twice is
+  kept once). More than 32 buttons (8 for a switch), fewer than 2, or an invalid token (`x`, `1-5-9`, `5 8`) is refused with a message
+  and changes nothing.
 
 Per-template files are deterministic: a stable key order and no timestamps, so a hash changes only when the template itself changes.
 

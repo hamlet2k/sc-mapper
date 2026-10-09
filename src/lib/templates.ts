@@ -103,6 +103,10 @@ export const MAX_IMAGE_SIDE = 1600;
 export const BLANK_ASPECT = 1.6;
 /** most views (pages) a template can have; older files had at most 6, so every exported template still imports */
 export const MAX_VIEWS = 12;
+/** most inputs one callout can have (a button row / multi-position switch: e.g. an ICP keypad, a UFC, an MFD bezel's ~20 push
+ * buttons). Part of the template file contract (docs/template-feed.md): a file with a longer callout is rejected on import, never
+ * cut. The other kinds keep their natural sizes (hat 5, axis 2, encoder 3, button 1). */
+export const MAX_CALLOUT_INPUTS = 32;
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
@@ -127,6 +131,36 @@ export function calloutFor(input: string): { kind: CalloutKind; inputs: string[]
   }
   return { kind: 'button', inputs: [input] };
 }
+/** most positions a Multi-position switch gets in the editor (real rotaries / selectors; same as DCS Mapper). Button rows go to
+ * MAX_CALLOUT_INPUTS. The import limit is MAX_CALLOUT_INPUTS for every kind. */
+export const MAX_SWITCH_POSITIONS = 8;
+/** most inputs the editor lets a callout of this kind have (rows and switches; other kinds have fixed sizes) */
+export const editorMaxInputs = (kind: CalloutKind) => (kind === 'switch' ? MAX_SWITCH_POSITIONS : MAX_CALLOUT_INPUTS);
+/**
+ * Button numbers typed into the editor's "Fill range" box (same syntax as DCS Mapper): comma-separated tokens, each a number or
+ * a range: "1-20", descending "42-34" (button42..button34 in that order), "1-9, 12, 15-17". Whitespace around tokens and dashes
+ * is ignored ("5 8", a space inside a token, is refused rather than guessed). Writes joystick button inputs (button1..button128),
+ * at most `max` (MAX_CALLOUT_INPUTS), at least 2; a number listed twice is kept once. Returns the inputs, or a readable error.
+ */
+export function parseButtonRange(text: string, max = MAX_CALLOUT_INPUTS, noun = 'buttons'): { inputs: string[] } | { error: string } {
+  const s = text.trim();
+  if (!s) return { error: 'Type the first and last button number, e.g. 1-20' };
+  const nums: number[] = [];
+  for (const raw of s.split(',')) {
+    const p = raw.trim();
+    if (!p) continue; // "1-3,,5" / trailing comma
+    const m = /^(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?$/.exec(p);
+    if (!m) return { error: `“${p}” is not a button number or range (e.g. 1-20, 42-34, 1-9, 12)` };
+    const a = Number(m[1]), b = m[2] === undefined ? a : Number(m[2]);
+    if (a < 1 || b < 1 || a > 128 || b > 128) return { error: `“${p}”: button numbers go from 1 to 128` };
+    const n = Math.abs(b - a) + 1;
+    for (let k = 0; k < n; k++) nums.push(a <= b ? a + k : a - k);
+  }
+  const uniq = [...new Set(nums)];
+  if (uniq.length > max) return { error: `At most ${max} ${noun} per callout (${s} is ${uniq.length})` };
+  if (uniq.length < 2) return { error: `Needs at least 2 ${noun} (use a Button callout for one)` };
+  return { inputs: uniq.map((n) => `button${n}`) };
+}
 /** inputs of a callout that have no number yet ('') */
 export const unassignedCount = (c: Pick<Callout, 'inputs'>) => c.inputs.filter((i) => !i).length;
 /** highest button number a template uses (0 = none): above 32, Chromium browsers cannot show them */
@@ -145,7 +179,7 @@ export function inputsForKind(kind: CalloutKind, prev: string[], slot: 'js' | 'g
   if (kind === 'axis') return [prev.find(isAxisInput) ?? (slot === 'gp' ? 'thumblx' : JS_AXES.find((a) => !used.has(a)) ?? 'x')];
   if (kind === 'encoder') { const a = btns[0] ?? nextBtn(); const b = btns[1] ?? nextFreeButton(slot, used, [a]); return btns[2] ? [a, b, btns[2]] : [a, b]; }
   const a = btns[0] ?? nextBtn(); const b = btns[1] ?? nextFreeButton(slot, used, [a]); const c = btns[2] ?? nextFreeButton(slot, used, [a, b]);
-  return btns.length > 3 ? btns : [a, b, c];
+  return btns.length > 3 ? btns.slice(0, editorMaxInputs(kind)) : [a, b, c];
 }
 export function nextFreeButton(slot: 'js' | 'gp', used: Set<string>, also: string[] = []): string {
   if (slot === 'gp') return GP_BUTTONS.find((b) => !used.has(b) && !also.includes(b)) ?? GP_BUTTONS[0];
@@ -320,7 +354,7 @@ const INPUT_RE = /^[a-z][a-z0-9_]{0,24}$/;
 export const REGION_RE = /^[MLHVCSQTAZmlhvcsqtaz0-9.,\s-]{1,6000}$/;
 /** per-input outlines: kept only when every entry is '' or a valid path and there is one per input at most */
 function cleanInputRegions(v: unknown, n: number): { inputRegions?: string[] } {
-  if (!Array.isArray(v) || !v.length || v.length > n) return {};
+  if (!Array.isArray(v) || !v.length || v.length > Math.min(n, MAX_CALLOUT_INPUTS)) return {};
   if (!v.every((x) => x === '' || (typeof x === 'string' && REGION_RE.test(x)))) return {};
   return v.some((x) => x) ? { inputRegions: v as string[] } : {};
 }
@@ -360,7 +394,11 @@ export function cleanTemplate(o: unknown, i = 0): DeviceTemplate {
     const q = (c ?? {}) as Record<string, unknown>;
     const kind = KINDS.has(q.kind as CalloutKind) ? (q.kind as CalloutKind) : 'button';
     // '' keeps the place of an input that is not assigned yet (device templates with user-configured numbering)
-    const inputs = Array.isArray(q.inputs) ? q.inputs.filter((x): x is string => typeof x === 'string' && (x === '' || INPUT_RE.test(x))).slice(0, 12) : [];
+    // more than MAX_CALLOUT_INPUTS: the file is invalid (cutting it would silently drop buttons of the row)
+    if (Array.isArray(q.inputs) && q.inputs.length > MAX_CALLOUT_INPUTS) {
+      throw new Error(`Template “${t.name}”: callout ${j + 1}${typeof q.label === 'string' && q.label.trim() ? ` (${q.label.trim().slice(0, 40)})` : ''} has ${q.inputs.length} inputs; a callout can have at most ${MAX_CALLOUT_INPUTS}`);
+    }
+    const inputs = Array.isArray(q.inputs) ? q.inputs.filter((x): x is string => typeof x === 'string' && (x === '' || INPUT_RE.test(x))) : [];
     if (!inputs.length) throw new Error(`Template “${t.name}”: callout ${j + 1} has no valid input`);
     return {
       id: typeof q.id === 'string' && q.id ? q.id.slice(0, 40) : uid(), kind, inputs,

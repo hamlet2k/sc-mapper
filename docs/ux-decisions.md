@@ -731,3 +731,35 @@ so DCS Mapper (Federico's local DCS World mapper) can reuse them. It is generate
 default bindings stay out of it. Each file is in the "Export template" shape, so it imports into SC Keymap as is. No UI change. One
 side effect: the template import now keeps callout labels up to 80 characters (was 60), because the CarrierAce PTO 2 built-in has a
 65-character label that an export → import used to cut. Details: [template-feed.md](template-feed.md).
+
+## Button rows up to 32 (Oct 8, 2026)
+
+Federico: "we need to have the ability to add more than 8 buttons in the button row call out", for templates of panels such as a
+ViperAce ICP keypad, the A-10C UFC, Apache MPD bezels (20+ push buttons) and Airbus panels.
+
+- **Limits (aligned with DCS Mapper):** `MAX_CALLOUT_INPUTS = 32` (`lib/templates.ts`) is the most inputs any callout can have, and
+  the most a Button row gets in the editor ("+ button", "Pick several from the device…", Fill range). A Multi-position switch stays at
+  8 positions in the editor (`MAX_SWITCH_POSITIONS`; real selectors don't go past that; turning a long row into a switch keeps the
+  first 8, undoable). The other kinds keep their natural sizes (hat 5, axis 2, encoder 3). 32 covers a full bezel and is Chromium's
+  per-device button cap; a bigger panel is several callouts. Import accepts up to 32 for every kind (an imported 12-position switch
+  still loads and edits; it just can't grow).
+- **Import never cuts any more.** It used to keep the first 12 inputs of a callout silently (template import, shared controller files, and
+  any feed file with a longer row). Now a callout with more than 32 inputs makes the file invalid: the import is refused with a toast naming the
+  callout ("callout 4 (UFC keypad) has 33 inputs; a callout can have at most 32"). Rejecting beats truncating: a cut row would map
+  the wrong buttons without telling anyone. The limit is part of the feed contract ([template-feed.md](template-feed.md)), DCS
+  Mapper mirrors it, and the feed build fails on a built-in over it.
+- **Fill range** (joystick slots, rows and switches), same syntax as DCS Mapper: `1-20`, descending `42-34` (button42..button34 in
+  that order), lists like `1-9, 12, 15-17`; whitespace is ignored, a duplicate kept once. Fill sets the inputs to `buttonN` in that
+  order. Over the cap (32 buttons / 8 positions), under 2, or an invalid token shows a red message under the box naming the problem
+  ("“x” is not a button number or range", "At most 32 buttons per callout (1-40 is 40)") and changes nothing. A space inside a token
+  (`5 8`) is refused rather than read as 58 or as 5-8. Gamepads don't get it (their buttons are names, not numbers). The per-input
+  fields, ▾ picker, press-to-set and × stay.
+- **Compact editor list:** above 8 inputs the fields go into two columns, labelled 1..N (P1..PN for an imported switch of over 8), with the bare button
+  number in the field (typing `12` still means button12), so a 32-key row is 16 lines instead of 32.
+- **On the device:** above 8 inputs the chips are an even 8-wide grid (20 keys = 3 lines, 32 = 4), only the pressed chip lights, and
+  the callout head sums consecutive buttons up as `1–20`. The action lines under it keep the usual 3 + "+N more" (pressed rows first).
+  The Orion's 10-button detent row gets the grid too.
+- **Tests.** Unit: 13/20/32-input rows (with per-input outlines) round trip, a 24-position switch imports, row → switch keeps 8, 33 rejected (file, `cleanTemplate`,
+  shared controller), `parseButtonRange` (ranges, descending, lists, whitespace, caps, invalid tokens), the multi-pick ranges, the feed check. E2e: "+ button" past 8, compact grid, Fill range over
+  the cap / invalid token / comma list / 1-32 / 1-20, the switch's 8-position cap and descending fill, the 20-button row on the Devices view (3 lines, inside the picture, `1–20`, only button 7's chip lit).
+- Screenshots: `203-button-row-20-editor.png`, `204-button-row-20-pressed.png`.

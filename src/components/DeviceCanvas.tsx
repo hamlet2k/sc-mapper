@@ -344,7 +344,7 @@ export function CalloutBody({ c, s, entriesFor, live, keyMods }: { c: Callout; s
   const head = (
     <div className="flex items-baseline gap-1 whitespace-nowrap">
       <b className={`font-mono ${s.active ? 'text-white' : 'text-hud2'}`}>{calloutTitle(c)}</b>
-      {c.label && <span className="font-mono text-[9px] text-slate-500">{c.inputs.every((i) => !i) ? 'no number yet' : c.inputs.length > 4 ? '' : c.inputs.map(shortInput).join(' ')}</span>}
+      {c.label && <span className="font-mono text-[9px] text-slate-500">{c.inputs.every((i) => !i) ? 'no number yet' : c.inputs.length > 4 ? runOf(c.inputs) : c.inputs.map(shortInput).join(' ')}</span>}
     </div>
   );
   const none = <div className="text-slate-600">unbound</div>;
@@ -404,10 +404,12 @@ export function CalloutBody({ c, s, entriesFor, live, keyMods }: { c: Callout; s
   const chipLabel = (i: string, k: number) => c.kind === 'buttons' ? shortInput(i) : `${inputRole(c, k)} ${shortInput(i)}`;
   const all = c.inputs.flatMap((i, k) => coveredInputs({ inputs: [i] }).flatMap(entriesFor).map((e) => ({ e, role: c.kind === 'buttons' ? shortInput(i) : multi ? inputRole(c, k) : undefined, i })));
   const rows = liveFirst(all, ({ e }) => firing.has(e), 3);
+  const long = multi && c.inputs.length > 8;
   return (
     <div className="min-w-[90px]">
       {head}
-      {multi && <div className="flex max-w-[150px] flex-wrap gap-0.5">{c.inputs.map((i, k) => <span key={k} data-dir={i || undefined} data-active={live.active.has(i) ? '1' : undefined} className={`rounded px-1 font-mono text-[9px] ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-slate-400'}`}>{chipLabel(i, k)}</span>)}</div>}
+      {/* long rows (keypads, MFD bezels, up to 32): an even 8-wide grid of chips, so 20-32 keys read as tidy lines */}
+      {multi && <div className={long ? 'grid w-[184px] grid-cols-8 gap-0.5' : 'flex max-w-[150px] flex-wrap gap-0.5'} data-chips={c.inputs.length}>{c.inputs.map((i, k) => <span key={k} data-dir={i || undefined} data-active={live.active.has(i) ? '1' : undefined} title={long ? `${c.kind === 'switch' ? `Position ${k + 1}` : `Button ${k + 1}`}: ${i || 'not set'}` : undefined} className={`rounded font-mono text-[9px] ${long ? 'px-0.5 text-center' : 'px-1'} ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-slate-400'}`}>{chipLabel(i, k)}</span>)}</div>}
       {rows.shown.map(({ e, role }, k) => <ActionLine key={k} e={e} role={role} on={firing.has(e)} />)}
       {rows.hidden > 0 && <More n={rows.hidden} live={rows.hiddenLive} />}
       {!all.length && none}
@@ -415,3 +417,10 @@ export function CalloutBody({ c, s, entriesFor, live, keyMods }: { c: Callout; s
   );
 }
 const NO_FIRING: ReadonlySet<Entry> = new Set();
+/** compact summary of a long row's buttons for the callout head: "1–20" when they are consecutive joystick buttons, else '' */
+function runOf(inputs: readonly string[]): string {
+  const n = inputs.map((i) => Number(/^button(\d+)$/.exec(i)?.[1] ?? NaN));
+  if (n.some((x) => !Number.isFinite(x))) return '';
+  const up = n.every((x, k) => !k || x === n[k - 1] + 1), down = n.every((x, k) => !k || x === n[k - 1] - 1);
+  return up || down ? `${n[0]}–${n[n.length - 1]}` : '';
+}

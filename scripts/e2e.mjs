@@ -3087,6 +3087,91 @@ console.log('\nshare controller (Warthog: export js1, import into a friend\'s js
   await cs.close();
 }
 
+// ---- button rows past 8: the editor adds up to 32 inputs per callout, "Fill range" sets them at once; the Devices view lays
+// 20 chips out in tidy lines and lights only the pressed one
+console.log('\nbutton rows up to 32 inputs, Fill range');
+{
+  const c10 = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1 });
+  const p10 = await c10.newPage();
+  p10.on('pageerror', (e) => errors.push('[rows] ' + String(e)));
+  p10.on('console', (m) => m.type() === 'error' && errors.push('[rows] ' + m.text()));
+  await p10.addInitScript(() => {
+    const pads = [{ index: 0, id: 'VKBsim Gladiator EVO R (Vendor: 231d Product: 0200)', mapping: '', connected: true, buttons: Array.from({ length: 32 }, () => ({ pressed: false, touched: false, value: 0 })), axes: [0, 0, 0, 0, 0, 0, 0, 0, 0, 9 / 7], timestamp: 0 }];
+    let revealed = false;
+    window.__btn = (i, b, on) => { pads[i].buttons[b] = { pressed: on, touched: on, value: on ? 1 : 0 }; pads[i].timestamp++; if (on) revealed = true; };
+    navigator.getGamepads = () => pads.map((p) => (revealed ? Object.freeze({ ...p, axes: Object.freeze([...p.axes]), buttons: Object.freeze(p.buttons.map((x) => Object.freeze({ ...x }))) }) : null));
+  });
+  await p10.goto(url, { waitUntil: 'networkidle' });
+  await p10.evaluate(() => window.__btn(0, 2, true));
+  await p10.waitForTimeout(120);
+  await p10.evaluate(() => window.__btn(0, 2, false));
+  await p10.getByTestId('open-slots').click();
+  await p10.getByTestId('hw-row').first().getByRole('button', { name: /as js\d+/ }).click();
+  await p10.keyboard.press('Escape');
+  await p10.locator('[data-view-tab=devices]').click();
+  await p10.waitForTimeout(800);
+  const dv10 = p10.getByTestId('device-view');
+  await p10.getByTestId('sidebar-slots').locator('[data-slot-row^="js"]').first().click();
+  await p10.waitForTimeout(500);
+  await dv10.getByTestId('template-new').click();
+  const ed = p10.getByTestId('template-editor');
+  await ed.getByTestId('device-canvas').click({ position: { x: 420, y: 160 } });
+  await p10.waitForTimeout(150);
+  const fields = ed.getByTestId('tpl-inputs').locator('input');
+  const nIn = () => fields.count();
+  const rf = ed.getByLabel('Fill range: first and last button number');
+  const fill = async (v) => { await rf.fill(v); await ed.getByTestId('tpl-range-fill-apply').click(); await p10.waitForTimeout(150); };
+  // a multi-position switch stays at 8 positions (same as DCS Mapper)
+  await ed.getByLabel('Callout type', { exact: true }).selectOption('switch');
+  check((await nIn()) === 3 && (await ed.getByTestId('tpl-range-fill').isVisible()), `switch starts with 3 positions and shows the Fill range box (${await nIn()})`);
+  await fill('1-9');
+  check((await nIn()) === 3 && /At most 8 positions per callout \(1-9 is 9\)/.test(await ed.getByTestId('tpl-range-fill-msg').innerText()), `switch: Fill range over 8 refused (${await ed.getByTestId('tpl-range-fill-msg').innerText()})`);
+  await fill('8-1');
+  const sv = await fields.evaluateAll((els) => els.map((e) => e.value));
+  check(sv.join() === '8,7,6,5,4,3,2,1'.split(',').map((n) => `button${n}`).join() && (await ed.getByTestId('tpl-add-input').count()) === 0 && /8 positions: the most/.test(await ed.getByTestId('tpl-inputs-max').innerText()), `switch: Fill range 8-1 = 8 positions, descending; "+ position" gone at 8 (${sv.join(' ')})`);
+  await ed.getByLabel('Callout type', { exact: true }).selectOption('buttons');
+  await ed.getByLabel('Callout name').fill('Left MPD bezel');
+  check((await nIn()) === 8 && (await ed.getByTestId('tpl-add-input').isVisible()), `button row (from the switch's 8): "+ button" available (${await nIn()})`);
+  for (let k = 0; k < 2; k++) await ed.getByTestId('tpl-add-input').click();
+  check((await nIn()) === 10 && (await ed.getByTestId('tpl-add-input').isVisible()), `"+ button" keeps adding past 8 (${await nIn()} buttons)`);
+  check((await ed.getByTestId('tpl-inputs').getAttribute('data-compact')) === '1', 'more than 8 buttons: the inputs switch to the compact two-column grid');
+  await fill('1-9, 12, x');
+  check((await nIn()) === 10 && /“x” is not a button number or range/.test(await ed.getByTestId('tpl-range-fill-msg').innerText()), 'Fill range: an invalid token is named, nothing changed');
+  await fill('1-9, 12, 15-17');
+  check((await fields.evaluateAll((els) => els.map((e) => e.value))).join(' ') === '1 2 3 4 5 6 7 8 9 12 15 16 17', 'Fill range: comma list 1-9, 12, 15-17');
+  await fill('1-40');
+  check((await nIn()) === 13 && /At most 32 buttons per callout \(1-40 is 40\)/.test(await ed.getByTestId('tpl-range-fill-msg').innerText()), `Fill range over the cap: clear message, nothing changed (${await ed.getByTestId('tpl-range-fill-msg').innerText()})`);
+  await fill('1-32');
+  check((await nIn()) === 32 && (await ed.getByTestId('tpl-add-input').count()) === 0 && (await ed.getByTestId('tpl-inputs-max').isVisible()), 'Fill range 1-32: 32 buttons, "+ button" replaced by the 32-max note');
+  await fill('1-20');
+  const vals = await fields.evaluateAll((els) => els.map((e) => e.value));
+  check(vals.length === 20 && vals.join(',') === Array.from({ length: 20 }, (_, k) => k + 1).join(','), `Fill range 1-20: buttons 1..20 in order (${vals.join(' ')})`);
+  check(/Left MPD bezel/.test(await ed.getByTestId('tpl-callouts').innerText()), 'the row is listed under its name');
+  await ed.getByTestId('callout-props').scrollIntoViewIfNeeded();
+  await p10.screenshot({ path: shots + '203-button-row-20-editor.png' });
+  await ed.getByTestId('tpl-save').click();
+  await p10.waitForTimeout(600);
+  const box = dv10.locator('[data-callout]').filter({ hasText: 'Left MPD bezel' });
+  const chips = box.locator('[data-chips] > span');
+  check((await box.count()) === 1 && (await chips.count()) === 20 && (await box.locator('[data-chips]').getAttribute('data-chips')) === '20', `Devices view: the row shows all 20 buttons (${await chips.count()})`);
+  const lines = new Set(await chips.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top))));
+  check(lines.size === 3, `20 chips wrap into 3 even lines of 8 (${lines.size} lines)`);
+  const cb = await dv10.getByTestId('device-canvas').first().boundingBox(), bb = await box.boundingBox();
+  check(bb.x >= cb.x - 1 && bb.x + bb.width <= cb.x + cb.width + 1 && bb.y >= cb.y - 1 && bb.y + bb.height <= cb.y + cb.height + 1, 'the 20-button callout box stays inside the picture');
+  check(/1–20/.test(await box.innerText()), 'its head sums the buttons up as 1–20');
+  await box.click();
+  await p10.waitForTimeout(200);
+  await p10.evaluate(() => window.__btn(0, 6, true)); // button7
+  await p10.waitForTimeout(300);
+  const lit = await box.locator('[data-chips] > span[data-active="1"]').evaluateAll((els) => els.map((e) => e.dataset.dir));
+  check((await box.getAttribute('data-active')) === '1' && lit.join() === 'button7', `pressing button 7 lights the callout and only its chip (${lit.join()})`);
+  await p10.screenshot({ path: shots + '204-button-row-20-pressed.png', clip: { x: cb.x - 8, y: cb.y - 40, width: 1680 - cb.x, height: 560 } });
+  await p10.evaluate(() => window.__btn(0, 6, false));
+  await p10.waitForTimeout(300);
+  check((await box.locator('[data-chips] > span[data-active="1"]').count()) === 0, 'release: no chip lit');
+  await c10.close();
+}
+
 // persistence
 await page.reload({ waitUntil: 'networkidle' });
 log('profile after reload:', await page.locator('#profile option:checked').innerText());

@@ -720,6 +720,58 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const copy = tp.cloneTemplate(back);
     assert.deepEqual(copy.views, back.views, 'a copy keeps its views');
   });
+  // long button rows (ICP keypads, UFCs, MFD bezels): up to MAX_CALLOUT_INPUTS inputs per callout, kept intact on import
+  const longRow = (n: number, extra: any = {}) => tpl('row-1', [], {
+    callouts: [{ id: 'osb', kind: 'buttons', label: 'Left MPD bezel', inputs: Array.from({ length: n }, (_, k) => `button${k + 1}`), anchor: { x: 0.3, y: 0.4 }, box: { x: 0.5, y: 0.8 }, ...extra }],
+  });
+  const src20 = () => Array.from({ length: 20 }, (_, k) => `button${k + 1}`);
+  t('long callouts: a 20- and a 32-input button row (with per-input outlines) export and re-import intact', () => {
+    assert.equal(tp.MAX_CALLOUT_INPUTS, 32);
+    for (const n of [13, 20, 32]) {
+      const src = longRow(n, { inputRegions: Array.from({ length: n }, (_, k) => (k % 3 ? `M${k} 0h10v10h-10z` : '')) });
+      const back = tp.parseTemplates(tp.exportTemplates([src as any]))[0];
+      assert.equal(back.callouts[0].inputs.length, n, `${n} inputs kept`);
+      assert.deepEqual(back.callouts[0].inputs, src.callouts[0].inputs);
+      assert.deepEqual(back.callouts[0].inputRegions, src.callouts[0].inputRegions, `${n} outlines kept`);
+      const again = tp.parseTemplates(tp.exportTemplates([back]))[0];
+      assert.deepEqual({ ...again, updatedAt: 0 }, { ...back, updatedAt: 0 }, 'stable on a second round trip');
+    }
+    const sw = tp.parseTemplates(JSON.stringify(tpl('sw-1', [], { callouts: [{ id: 's', kind: 'switch', inputs: Array.from({ length: 24 }, (_, k) => `button${k + 40}`), anchor: { x: 0.5, y: 0.5 }, box: { x: 0.5, y: 0.5 } }] })))[0];
+    assert.equal(sw.callouts[0].inputs.length, 24, 'a 24-position switch too');
+    assert.equal(sw.callouts[0].inputs.length, 24, 'the import limit is 32 for every kind (the editor caps switches at 8)');
+    assert.equal(tp.inputsForKind('switch', src20(), 'js', new Set()).length, 8, 'a 20-button row turned into a switch keeps 8 positions');
+    assert.equal(tp.inputsForKind('buttons', src20(), 'js', new Set()).length, 20);
+  });
+  t('long callouts: more than 32 inputs on a callout is an invalid file (readable error, never cut)', () => {
+    assert.throws(() => tp.parseTemplates(tp.exportTemplates([longRow(33) as any])), /callout 1 \(Left MPD bezel\) has 33 inputs; a callout can have at most 32/);
+    assert.throws(() => tp.cleanTemplate(longRow(40)), /has 40 inputs/);
+    // every other template in the same file is not imported either (the file is rejected as a whole, like any damaged template)
+    assert.throws(() => tp.parseTemplates(JSON.stringify([longRow(4), { ...longRow(33), id: 'row-2' }])), /at most 32/);
+    // inputRegions longer than the inputs are dropped (as before), whatever the count
+    assert.equal(tp.cleanTemplate(longRow(20, { inputRegions: Array.from({ length: 21 }, () => 'M0 0h1') })).callouts[0].inputRegions, undefined);
+  });
+  t('parseButtonRange: the editor\'s "Fill range" box (same syntax as DCS Mapper)', () => {
+    const ok = (s: string, max?: number) => { const r = tp.parseButtonRange(s, max); assert.ok('inputs' in r, `${s}: ${'error' in r ? r.error : ''}`); return (r as { inputs: string[] }).inputs; };
+    const err = (s: string, max?: number, noun?: string) => { const r = tp.parseButtonRange(s, max, noun); assert.ok('error' in r, s); return (r as { error: string }).error; };
+    const b = (...n: number[]) => n.map((x) => `button${x}`);
+    assert.deepEqual(ok('1-20'), Array.from({ length: 20 }, (_, k) => `button${k + 1}`));
+    assert.deepEqual(ok('42-34'), b(42, 41, 40, 39, 38, 37, 36, 35, 34), 'descending, in that order');
+    assert.deepEqual(ok('1-9, 12, 15-17'), b(1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 15, 16, 17), 'comma list');
+    assert.deepEqual(ok('  1 -  9 ,12,   15 - 17  '), ok('1-9,12,15-17'), 'whitespace ignored');
+    assert.deepEqual(ok('5–8'), b(5, 6, 7, 8), 'an en dash reads as a dash');
+    assert.deepEqual(ok('1-3,,5,'), b(1, 2, 3, 5), 'empty tokens skipped');
+    assert.deepEqual(ok('1-3,2-4'), b(1, 2, 3, 4), 'a number listed twice is kept once');
+    assert.equal(ok('1-32').length, 32);
+    assert.equal(ok('128-97').length, 32);
+    assert.match(err('1-33'), /At most 32 buttons per callout \(1-33 is 33\)/);
+    assert.match(err('1-20, 30-45'), /At most 32 .* is 36/);
+    assert.match(err('1-9', 8, 'positions'), /At most 8 positions per callout \(1-9 is 9\)/, 'switches: 8');
+    assert.match(err('7'), /at least 2 buttons/);
+    assert.match(err('  '), /e\.g\. 1-20/);
+    assert.match(err('0-4'), /“0-4”: button numbers go from 1 to 128/);
+    assert.match(err('120-130'), /1 to 128/);
+    for (const bad of ['a-b', '1-5-9', '5 8', 'button3', '1..4', '-3', '3-', '1;2']) assert.match(err(bad), /is not a button number or range/, bad);
+  });
   t('multi-view templates: old single-image files still load as one implicit view', () => {
     const old = JSON.stringify({ format: 'sc-mapper-device-template', version: 1, id: 'old-1', name: 'Old', slot: 'js', image: WEBP, aspect: 1.25, match: [],
       callouts: [{ id: 'c1', kind: 'button', inputs: ['button3'], anchor: { x: 0.2, y: 0.3 }, box: { x: 0.1, y: 0.3 }, view: 'front' }] });
@@ -2049,7 +2101,8 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.deepEqual(ip.pickEntries(gp, [], 'button').map((e) => e.input), cap.GP_BUTTONS, 'gamepads list the SC gamepad buttons');
     assert.deepEqual(ip.multiPickRange({ kind: 'hat', inputs: ['', '', '', ''] }, 'js'), { min: 4, max: 5 });
     assert.equal(ip.multiPickRange({ kind: 'hat', inputs: ['hat1_up'] }, 'js'), null, 'a POV hat is one choice');
-    assert.deepEqual(ip.multiPickRange({ kind: 'switch', inputs: ['button1', 'button2'] }, 'js'), { min: 2, max: 8 });
+    assert.deepEqual(ip.multiPickRange({ kind: 'switch', inputs: ['button1', 'button2'] }, 'js'), { min: 2, max: 8 }, 'switches: up to 8 positions');
+    assert.deepEqual(ip.multiPickRange({ kind: 'buttons', inputs: ['button1', 'button2'] }, 'js'), { min: 2, max: 32 }, 'button rows: up to MAX_CALLOUT_INPUTS');
     assert.equal(ip.multiPickRange({ kind: 'button', inputs: ['button1'] }, 'js'), null);
   });
 }
@@ -2195,6 +2248,14 @@ console.log('\nshared controller files');
     assert.deepEqual(back.axis, axis);
     assert.equal(back.template.kind, 'custom');
     if (back.template.kind === 'custom') { assert.equal(back.template.template.views![0].image, px); assert.equal(back.template.template.callouts[0].label, 'Trigger'); }
+  });
+  t('shared controller: a custom template with a 24-button row keeps every button; 33 is refused as damaged', () => {
+    const row = (n: number) => ({ ...custom, callouts: [...custom.callouts, { id: 'ufc', kind: 'buttons' as const, label: 'UFC keypad', inputs: Array.from({ length: n }, (_, k) => `button${k + 1}`), anchor: { x: 0.5, y: 0.5 }, box: { x: 0.5, y: 0.9 } }] });
+    const back = sh.parseShared(sh.serializeShared(sh.packController({ game, device, template: row(24), bindings })));
+    assert.ok(back.template.kind === 'custom' && back.template.template.callouts.find((c) => c.id === 'ufc')!.inputs.length === 24);
+    const bad = JSON.parse(sh.serializeShared(sh.packController({ game, device, template: row(4), bindings })));
+    bad.template.template.callouts.at(-1).inputs = Array.from({ length: 33 }, (_, k) => `button${k + 1}`);
+    assert.match(errOf(JSON.stringify(bad)), /damaged: .*has 33 inputs; a callout can have at most 32/);
   });
   t('version and format validation: friendly errors for wrong, corrupt and newer files', () => {
     const ok = sh.packController({ game, device, template: builtin, bindings });
@@ -2406,6 +2467,12 @@ console.log('\ntemplate feed');
       assert.deepEqual(strip(list[0] as unknown as Record<string, unknown>), expected, `${e.id}: equivalent after import`);
       assert.ok(!list[0].builtin && !list[0].id.startsWith('builtin-'), `${e.id}: imports as a user template of its own`);
     }
+  });
+  const longRowFeed = await fd.buildTemplateFeed({ generatedAt: 'x', commit: null, sha256 } as any, [{ ...builtins[0], id: 'builtin-long-row',
+    callouts: [{ id: 'kp', kind: 'buttons' as const, inputs: Array.from({ length: 33 }, (_, k) => `button${k + 1}`), anchor: { x: 0.5, y: 0.5 }, box: { x: 0.5, y: 0.5 } }] }]);
+  t('feed: built-ins stay within 32 inputs per callout; a longer callout is a build problem', () => {
+    for (const x of builtins) for (const c of x.callouts) assert.ok(c.inputs.length <= 32, `${x.id}/${c.id}: ${c.inputs.length} inputs`);
+    assert.ok(longRowFeed.problems.some((p) => /builtin-long-row: callout kp has 33 inputs \(at most 32\)/.test(p)), longRowFeed.problems.join('; '));
   });
   t('vercel.json: CORS (*) and Cache-Control on /templates/* and /device-photos/*, no rewrites', () => {
     const v = JSON.parse(readFileSync('vercel.json', 'utf8'));

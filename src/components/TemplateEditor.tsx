@@ -4,7 +4,7 @@ import { getPads, padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { deviceInputs, multiPickRange, pickEntries, usage, type DeviceInputs, type PickEntry } from '../lib/inputPicker';
 import { usePadHits, type PressHit } from '../lib/listen';
 import {
-  BLANK_ASPECT, CALLOUT_KINDS, HAT_DIRS, calloutFor, calloutTitle, coveredInputs, exportTemplates, freeBoxSpot, hatInputs, inputRole, inputsForKind,
+  BLANK_ASPECT, CALLOUT_KINDS, HAT_DIRS, editorMaxInputs, parseButtonRange, calloutFor, calloutTitle, coveredInputs, exportTemplates, freeBoxSpot, hatInputs, inputRole, inputsForKind,
   calloutView, loadImageFile, matchFor, matchScore, shortInput, templateViews, uid, usedInputs, viewTemplate, type Callout, type CalloutKind, type DeviceIdentity, type DeviceTemplate, type Pt,
 } from '../lib/templates';
 import { MAX_PAGES, addPage, deletePage, movePage, pageCallouts, pageLabel, renamePage, setPageImage } from '../lib/templatePages';
@@ -395,7 +395,7 @@ function MultiPicker({ d, entries, roles, min, max, initial, selfId, onApply, on
   const toggle = (i: string) => setPicked((p) => (p.includes(i) ? p.filter((x) => x !== i) : p.length < max ? [...p, i] : p));
   return (
     <div data-testid="input-picker-multi" data-source={d.from} className="rounded border border-hud/40 bg-panel2 p-1 text-[11px]" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
-      <div className="px-1 pb-1 text-[10px] text-slate-500">{pickHead(d)}. Tick in order: {Array.from({ length: max }, (_, i) => roles(i)).join(', ')}{min < max ? ` (${max - min > 1 ? 'more' : 'last'} optional)` : ''}.{initial.some(Boolean) ? ` Now: ${initial.filter(Boolean).join(', ')}.` : ''}</div>
+      <div className="px-1 pb-1 text-[10px] text-slate-500">{pickHead(d)}. Tick in order: {max > 8 ? `${roles(0)}, ${roles(1)}, ${roles(2)}… (${min} to ${max})` : `${Array.from({ length: max }, (_, i) => roles(i)).join(', ')}${min < max ? ` (${max - min > 1 ? 'more' : 'last'} optional)` : ''}`}.{initial.some(Boolean) ? ` Now: ${initial.filter(Boolean).join(', ')}.` : ''}</div>
       <div className="max-h-56 overflow-y-auto">
         {entries.map((e) => {
           const k = picked.indexOf(e.input), u = usedText(e, selfId);
@@ -511,26 +511,62 @@ function InputsEditor({ c, slot, devIn, callouts, pressTarget, setPressTarget, c
   }
   const labels = c.kind === 'encoder' ? ['Clockwise', 'Counter-clockwise', 'Push'] : c.kind === 'switch' ? c.inputs.map((_, i) => `Position ${i + 1}`) : c.kind === 'buttons' ? c.inputs.map((_, i) => `Button ${i + 1}`) : ['Input'];
   const role = (i: number) => (c.kind === 'encoder' ? ['clockwise', 'counter-clockwise', 'push'][i] : c.kind === 'switch' ? `position ${i + 1}` : `button ${i + 1}`);
+  const rowKind = c.kind === 'switch' || c.kind === 'buttons';
+  // long rows (keypads, MFD bezels: up to 32 buttons; a switch only when an imported one has over 8): two columns, "1".."32" as the label and the bare
+  // button number in the field, so 20+ inputs stay a short panel
+  const compact = rowKind && c.inputs.length > 8;
+  const shown = (x: string) => (compact && /^button\d+$/.test(x) ? shortInput(x) : x);
   return (
     <div className="space-y-1">
-      {c.inputs.map((x, i) => (
-        <div key={i} className="space-y-1">
-          <label className="flex items-center gap-2"><span className="w-28 shrink-0">{labels[i] ?? `Input ${i + 1}`}</span>
-            <input defaultValue={x} key={`${c.id}:${i}:${x}`} list={slot === 'gp' && !devIn ? 'tpl-gp-buttons' : undefined} aria-label={`${labels[i] ?? `Input ${i + 1}`} input`} placeholder="not set, e.g. button5"
-              onBlur={(e) => { const v = numIn(e.target.value); if (v !== x && (v === '' || INPUT_RE.test(v))) set(i, v); else e.target.value = x; }}
-              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
-            {pickBtn(i, (labels[i] ?? `input ${i + 1}`).toLowerCase())}
-            {pressBtn(i)}
-            {c.kind === 'encoder' && i === 2 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 2))} className="text-slate-500 hover:text-alert" aria-label="Remove push"><Ico name="close" /></button>}
-            {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length > 2 && <button type="button" onClick={() => onChange(c.inputs.filter((_, j) => j !== i))} className="text-slate-500 hover:text-alert" aria-label={`Remove ${c.kind === 'buttons' ? 'button' : 'position'} ${i + 1}`}><Ico name="close" /></button>}
-          </label>
-          {picker(i, x, (v) => set(i, v))}
-        </div>
-      ))}
-      {(c.kind === 'switch' || c.kind === 'buttons') && c.inputs.length < 8 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> {c.kind === 'buttons' ? 'button' : 'position'}</button>}
+      <div className={compact ? 'grid grid-cols-2 gap-x-2 gap-y-1' : 'space-y-1'} data-testid="tpl-inputs" data-compact={compact ? '1' : undefined}>
+        {c.inputs.map((x, i) => (
+          <div key={i} className={`space-y-1 ${compact && open === i ? 'col-span-2' : ''}`}>
+            <label className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`} title={compact ? labels[i] : undefined}>
+              <span className={compact ? 'w-6 shrink-0 text-right font-mono text-[10px] text-slate-500' : 'w-28 shrink-0'}>{compact ? inputRole(c, i) : labels[i] ?? `Input ${i + 1}`}</span>
+              <input defaultValue={shown(x)} key={`${c.id}:${i}:${x}:${compact ? 'c' : ''}`} list={slot === 'gp' && !devIn ? 'tpl-gp-buttons' : undefined} aria-label={`${labels[i] ?? `Input ${i + 1}`} input`} placeholder={compact ? 'not set' : 'not set, e.g. button5'}
+                onBlur={(e) => { const v = numIn(e.target.value); if (v !== x && (v === '' || INPUT_RE.test(v))) set(i, v); else e.target.value = shown(x); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
+              {pickBtn(i, (labels[i] ?? `input ${i + 1}`).toLowerCase())}
+              {pressBtn(i)}
+              {c.kind === 'encoder' && i === 2 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 2))} className="text-slate-500 hover:text-alert" aria-label="Remove push"><Ico name="close" /></button>}
+              {rowKind && c.inputs.length > 2 && <button type="button" onClick={() => onChange(c.inputs.filter((_, j) => j !== i))} className="text-slate-500 hover:text-alert" aria-label={`Remove ${c.kind === 'buttons' ? 'button' : 'position'} ${i + 1}`}><Ico name="close" /></button>}
+            </label>
+            {picker(i, x, (v) => set(i, v))}
+          </div>
+        ))}
+      </div>
+      {rowKind && (c.inputs.length < editorMaxInputs(c.kind)
+        ? <button type="button" data-testid="tpl-add-input" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> {c.kind === 'buttons' ? 'button' : 'position'}</button>
+        : <p className="text-[10px] text-slate-500" data-testid="tpl-inputs-max">{c.kind === 'buttons' ? `${editorMaxInputs(c.kind)} buttons: the most one row can have. Split the panel into several rows for more.` : `${editorMaxInputs(c.kind)} positions: the most a switch can have.`}</p>)}
+      {rowKind && slot === 'js' && <RangeFill kind={c.kind} n={c.inputs.length} onFill={onChange} />}
       {c.kind === 'encoder' && c.inputs.length === 2 && <button type="button" onClick={() => { const n = Math.max(0, ...c.inputs.map((x) => Number(/^button(\d+)$/.exec(x)?.[1] ?? 0))); onChange([...c.inputs, slot === 'gp' ? GP_BUTTONS[0] : `button${n + 1}`]); }} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> push</button>}
       {multi(role, (v) => onChange(v))}
       {slot === 'gp' && <datalist id="tpl-gp-buttons">{GP_BUTTONS.map((b) => <option key={b} value={b} />)}</datalist>}
+    </div>
+  );
+}
+
+/** button row / multi-position switch (joystick slots): set every input at once from a typed range, e.g. "1-20" -> button1..button20 */
+function RangeFill({ kind, n, onFill }: { kind: CalloutKind; n: number; onFill: (inputs: string[]) => void }) {
+  const [text, setText] = useState('');
+  const [msg, setMsg] = useState<{ err: boolean; text: string } | null>(null);
+  const what = kind === 'buttons' ? 'buttons' : 'positions';
+  const fill = () => {
+    const r = parseButtonRange(text, editorMaxInputs(kind), what);
+    if ('error' in r) { setMsg({ err: true, text: r.error }); return; }
+    onFill(r.inputs);
+    setMsg({ err: false, text: `${r.inputs.length} ${what}: ${shortInput(r.inputs[0])}…${shortInput(r.inputs[r.inputs.length - 1])}${n !== r.inputs.length ? ` (was ${n})` : ''}` });
+  };
+  return (
+    <div className="space-y-0.5 pt-1" data-testid="tpl-range-fill">
+      <label className="flex items-center gap-2">
+        <span className="shrink-0 text-slate-400">Fill range</span>
+        <input value={text} onChange={(e) => { setText(e.target.value); setMsg(null); }} placeholder="e.g. 1-20" aria-label="Fill range: first and last button number"
+          title={`Sets the ${what} to these joystick buttons, in order: 1-20, 42-34 (descending), 1-9, 12, 15-17 (at most ${editorMaxInputs(kind)})`}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); fill(); } }} className={`${field} w-24 min-w-0 flex-1 font-mono`} />
+        <button type="button" data-testid="tpl-range-fill-apply" onClick={fill} disabled={!text.trim()} className="rounded border border-hud/60 px-2 py-0.5 text-[11px] text-hud enabled:hover:bg-hud/10 disabled:opacity-40">Fill</button>
+      </label>
+      {msg && <p role={msg.err ? 'alert' : 'status'} data-testid="tpl-range-fill-msg" className={`text-[10px] ${msg.err ? 'text-alert' : 'text-slate-500'}`}>{msg.text}</p>}
     </div>
   );
 }

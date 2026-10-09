@@ -1,7 +1,7 @@
 /* Template editor: the inputs of the device a template is linked to, for picking a callout's input from a list (with which
  * callout already uses each one). Pure (unit-tested). */
 import { GP_AXES, GP_BUTTONS, JS_AXES, isHatRest } from './capture';
-import { HAT_DIRS, calloutTitle, matchScore, type Callout, type DeviceIdentity, type DeviceTemplate } from './templates';
+import { HAT_DIRS, calloutTitle, editorMaxInputs, matchScore, type Callout, type DeviceIdentity, type DeviceTemplate } from './templates';
 
 /** what is known about the device: from the connected device (Gamepad API: buttons, axes, hats from the axes' rest values)
  * or only the button count of a link rule (device not connected) */
@@ -57,7 +57,7 @@ export function pickEntries(d: DeviceInputs, callouts: readonly Callout[], kind:
 }
 /** how many inputs a multi-pick fills for a callout kind (min, max), or null when the kind takes one input per row */
 export function multiPickRange(c: Pick<Callout, 'kind' | 'inputs'>, slot: 'js' | 'gp'): { min: number; max: number } | null {
-  if (c.kind === 'switch' || c.kind === 'buttons') return { min: 2, max: 8 };
+  if (c.kind === 'switch' || c.kind === 'buttons') return { min: 2, max: editorMaxInputs(c.kind) };
   if (c.kind === 'encoder') return { min: 2, max: 3 };
   if (c.kind === 'hat' && slot === 'js' && !/^hat\d_/.test(c.inputs[0] ?? '')) return { min: 4, max: 5 }; // 4 buttons (+ push)
   return null;

@@ -6,7 +6,7 @@
 import { BUILTIN_TEMPLATES } from './builtinTemplates';
 import { DEVICE_TEMPLATES } from './deviceTemplates';
 import { DEVICE_PHOTO_SIZES } from './devicePhotoSizes';
-import { BUILTIN_PHOTO_RE, templateForFile, type DeviceTemplate, type TemplateMatch } from './templates';
+import { BUILTIN_PHOTO_RE, MAX_CALLOUT_INPUTS, templateForFile, type DeviceTemplate, type TemplateMatch } from './templates';
 
 export const FEED_FORMAT = 'sc-mapper-template-feed';
 /** bumped only for breaking changes (additive fields keep 1); see docs/template-feed.md */
@@ -98,7 +98,8 @@ const photoKey = (url: string) => /^\/device-photos\/(.+)\.[a-z]+$/.exec(url)?.[
 /**
  * The whole feed: file path (relative to the site root, no leading slash) -> content. Per-template files are deterministic (same
  * template -> same bytes -> same hash); only index.json carries the build time and commit. `problems` lists what a client could not
- * use (missing photo files, pictures that are neither a built-in photo nor generated SVG art): the build fails on any.
+ * use (missing photo files, pictures that are neither a built-in photo nor generated SVG art, callouts over MAX_CALLOUT_INPUTS
+ * inputs): the build fails on any.
  */
 export async function buildTemplateFeed(opts: FeedOptions, source?: DeviceTemplate[]): Promise<{ files: Map<string, string>; index: FeedIndex; problems: string[] }> {
   const list = source ?? (await feedSourceTemplates());
@@ -109,6 +110,7 @@ export async function buildTemplateFeed(opts: FeedOptions, source?: DeviceTempla
     const json = stableJson(ft);
     const bytes = new TextEncoder().encode(json).length;
     files.set(feedFile(t.id).slice(1), json);
+    for (const c of ft.callouts) if (c.inputs.length > MAX_CALLOUT_INPUTS) problems.push(`${t.id}: callout ${c.id} has ${c.inputs.length} inputs (at most ${MAX_CALLOUT_INPUTS})`);
     const pictures = ft.views?.length ? ft.views.map((v) => v.image) : ft.image && !ft.image.startsWith('data:') ? [ft.image] : [];
     const urls = [...new Set(pictures.filter((x): x is string => !!x))];
     for (const u of urls) {
