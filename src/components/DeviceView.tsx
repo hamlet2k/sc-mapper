@@ -19,7 +19,7 @@ import type { Binding, Row, Slot } from '../lib/types';
 import { looksShared } from '../lib/share';
 import { canSubmitTemplate } from '../lib/submitTemplate';
 import { exportTemplateFile } from '../lib/templateDownload';
-import { CalloutBody, DeviceCanvas, LIVE_ROW, MULTI_VIEW_MIN_W, TONE_STROKE, firingEntries, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
+import { CalloutBody, DeviceCanvas, LIVE_ROW, MULTI_VIEW_MIN_W, PAGE_HEADING_H, TONE_STROKE, firingEntries, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
 import { DROP_HINT, GamePathHint } from './GameState';
 import { Ico } from './icons';
 import { Tip } from './Tooltip';
@@ -289,7 +289,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   const groupsRef = useRef<HTMLDivElement>(null);
   // page: where the per-page headings of multi-page templates stick (right under the Groups line, whatever its height);
   // panel: the inspector's room when it sticks beside the picture (the scroll area's height under the sticky lines)
-  const [stick, setStick] = useState({ bar: 0, groups: 0, page: 0, panel: 0 });
+  const [stick, setStick] = useState({ bar: 0, groups: 0, page: 0, panel: 0, scrollInset: 0 });
   useLayoutEffect(() => {
     const bar = barRef.current, line = lineRef.current, groupsLine = groupsRef.current;
     if (!bar || !line) return;
@@ -305,8 +305,8 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
       const page = groups + (groupsLine?.offsetHeight ?? 0);
       // stuck, the inspector's top is pad + page + gap below the scroll area's top; it may reach down to its bottom padding
       const panel = sp ? Math.max(160, Math.floor(sp.clientHeight - pad - page - PANEL_STICK_GAP - Math.max(padBottom, PANEL_STICK_GAP))) : 0;
-      const next = { bar: -hide - pad, groups, page, panel };
-      setStick((s) => (s.bar === next.bar && s.groups === next.groups && s.page === next.page && s.panel === next.panel ? s : next));
+      const next = { bar: -hide - pad, groups, page, panel, scrollInset: pad + page + PANEL_STICK_GAP };
+      setStick((s) => (s.bar === next.bar && s.groups === next.groups && s.page === next.page && s.panel === next.panel && s.scrollInset === next.scrollInset ? s : next));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
@@ -399,7 +399,10 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   const stickyHeadings = (shownTpl.views?.length ?? 0) > 1 && canvasW >= MULTI_VIEW_MIN_W;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="device-slot-view" data-slot={`${slot}${instance}`} style={{ '--sticky-page-top': `${stick.page}px` } as CSSProperties}>
+    <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="device-slot-view" data-slot={`${slot}${instance}`} style={{
+      '--sticky-page-top': `${stick.page}px`,
+      '--device-scroll-top': `${stick.scrollInset + (stickyHeadings ? PAGE_HEADING_H : 0)}px`,
+    } as CSSProperties}>
       {/* ---- slot bar: slot chips, then hardware · template (+ template tools) · axis settings for the selected slot ---- */}
       <section ref={barRef} className="hud-panel sticky z-40 rounded-lg px-3 py-2.5 print:hidden" data-testid="device-slot-bar" data-sticky-head
         style={{ top: stick.bar, background: STICKY_BAR_BG }}>
@@ -547,7 +550,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
         </div>
       ))}
       <div ref={rowRef} className={`flex min-h-0 flex-1 gap-3 ${sidePanel ? 'items-start' : 'flex-col'}`} data-testid="device-row" data-layout={sidePanel ? 'side' : 'stacked'}>
-        <div ref={canvasRef} className={`min-w-0 flex-1 scrollbar-thin ${stickyHeadings ? 'overflow-x-clip' : 'overflow-auto'}`} data-print-area>
+        <div ref={canvasRef} className={`min-w-0 flex-1 scrollbar-thin ${stickyHeadings ? 'overflow-x-clip' : 'overflow-auto'}`} data-testid="device-canvas-wrap" data-print-area>
           <div className="mb-1 hidden font-display text-lg font-bold text-black print:block">{slot.toUpperCase()}{instance} · {ident.name ?? tpl.name}</div>
           <DeviceCanvas template={shownTpl} stateOf={stateOf} selected={selected} onSelect={(id) => selectByClick(id)} pulse={pulse} stickyHeadings={stickyHeadings}
             renderLabel={(c, s) => <CalloutBody c={c} s={s} entriesFor={(i) => index.get(i) ?? []} live={live} keyMods={keyMods} />} />
@@ -595,6 +598,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
       </div>
       {editing && createPortal(
         <TemplateEditor initial={editing} describe={describe} device={opt.pad ? { ident, pad: opt.pad } : { ident }} slotInstance={{ slot, instance }}
+          renderLabel={(c, s) => <CalloutBody c={c} s={s} entriesFor={(i) => index.get(i) ?? []} live={live} keyMods={keyMods} />}
           entriesFor={(i) => index.get(i) ?? []} onSave={saveTemplate} onCancel={() => setEditing(null)}
           onDelete={T.user.some((t) => t.id === editing.id) ? async () => { await T.remove(editing.id); setEditing(null); notify('ok', `Deleted template “${editing.name}”`); } : undefined}
           notify={notify} />,

@@ -1947,13 +1947,14 @@ console.log('\nrefresh game state (drop a reshuffled export)');
       const grp = document.querySelector('[data-testid=device-groups-line]').getBoundingClientRect();
       return [...document.querySelectorAll('[data-page-heading]')].map((h) => {
         const r = h.getBoundingClientRect(), page = h.parentElement.getBoundingClientRect();
+        const canvas = h.parentElement.querySelector('[data-testid=device-canvas-view]').getBoundingClientRect();
         // is the heading painted above the picture's callouts / lines? (hit-test it as if it took the pointer)
         h.style.pointerEvents = 'auto';
         const hitEl = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
         h.style.pointerEvents = '';
         const cs = getComputedStyle(h);
         return { id: h.dataset.pageHeading, text: h.textContent, stuck: h.dataset.stuck === '1', dTop: r.top - grp.bottom, visible: r.bottom > grp.bottom + 1, onTop: !!hitEl && h.contains(hitEl),
-          bg: cs.backgroundColor, z: Number(cs.zIndex), pageTop: page.top - grp.bottom, pageH: page.height, scroll: m.scrollTop };
+          bg: cs.backgroundColor, z: Number(cs.zIndex), pageTop: page.top - grp.bottom, pageH: page.height, clearOfCanvas: r.bottom <= canvas.top + 0.5, scroll: m.scrollTop };
       });
     });
     // twice: the sticky lines themselves only stop moving once they stick
@@ -1968,7 +1969,7 @@ console.log('\nrefresh game state (drop a reshuffled export)');
     await rp.evaluate(() => document.getElementById('main').scrollTo(0, 0));
     await rp.waitForTimeout(300);
     const s0 = await pageState();
-    check(s0.length >= 2 && s0.every((h) => !h.stuck && Math.abs(h.pageTop - (h.dTop)) < 1) && s0[0].bg === 'rgba(0, 0, 0, 0)', `URSA: ${s0.length} page headings (${s0.map((h) => h.text).join(' | ')}) sit on their pictures at rest, transparent`);
+    check(s0.length >= 2 && s0.every((h) => !h.stuck && h.clearOfCanvas && Math.abs(h.pageTop - (h.dTop)) < 1) && s0[0].bg === 'rgba(0, 0, 0, 0)', `URSA: ${s0.length} page headings (${s0.map((h) => h.text).join(' | ')}) sit above their canvases at rest, transparent and clear of callouts`);
     await scrollPage(0, 0.5);
     await rp.waitForTimeout(300);
     const s1 = await pageState();
@@ -3200,6 +3201,145 @@ console.log('\nbutton rows up to 32 inputs, Fill range');
   await p10.waitForTimeout(300);
   check((await box.locator('[data-chips] > span[data-active="1"]').count()) === 0, 'release: no chip lit');
   await c10.close();
+}
+
+// ---- Save preserves every page's callout layout, including the VIRPIL Panel (19) regression.
+console.log('\nphoto-template layout before and after Save');
+{
+  const layoutContext = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  const lp = await layoutContext.newPage();
+  lp.on('pageerror', (e) => errors.push('[layout] ' + String(e)));
+  lp.on('console', (m) => m.type() === 'error' && errors.push('[layout] ' + m.text()));
+  try {
+    await lp.goto(url, { waitUntil: 'networkidle' });
+    await lp.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+    await lp.locator('[data-view-tab=devices]').click();
+    await lp.getByTestId('sidebar-slots').locator('[data-slot-row="js1"]').click();
+    const fixturePath = new URL('./fixtures/vmax-panel.sc-template.json', import.meta.url).pathname;
+    const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')).templates[0];
+    await lp.getByTestId('template-import-file').setInputFiles(fixturePath);
+    await lp.getByTestId('template-select').locator(`option[value="${fixture.id}"]`).waitFor({ state: 'attached' });
+    await lp.getByTestId('template-select').selectOption(fixture.id);
+    await lp.locator('[data-testid=device-view] [data-view=panel] [data-callout=h10]').waitFor();
+    const layoutOf = ({ rootSel, viewId }) => {
+      const root = rootSel ? document.querySelector(rootSel) : document;
+      const canvas = root.querySelector(`[data-view="${CSS.escape(viewId)}"]`);
+      if (!canvas) return { error: `no ${viewId} canvas` };
+      const cr = canvas.getBoundingClientRect();
+      const tol = 0.5;
+      const vw = window.innerWidth, vh = window.innerHeight;
+      let scale = 1, transformed = false;
+      for (let el = canvas; el && el !== document.documentElement; el = el.parentElement) {
+        const tr = getComputedStyle(el).transform;
+        if (tr && tr !== 'none') { transformed = true; scale *= new DOMMatrix(tr).a; }
+      }
+      const place = (el) => {
+        const r = el.getBoundingClientRect();
+        const clips = [];
+        if (r.left < cr.left - tol || r.top < cr.top - tol || r.right > cr.right + tol || r.bottom > cr.bottom + tol) clips.push('canvas');
+        if (r.left < -tol || r.top < -tol || r.right > vw + tol || r.bottom > vh + tol) clips.push('viewport');
+        let p = el.parentElement;
+        while (p && p !== document.documentElement) {
+          const s = getComputedStyle(p);
+          const cx = ['auto', 'scroll', 'hidden', 'clip'].includes(s.overflowX);
+          const cy = ['auto', 'scroll', 'hidden', 'clip'].includes(s.overflowY);
+          if (cx || cy) {
+            const pr = p.getBoundingClientRect();
+            const over = {
+              l: cx ? Math.max(0, pr.left - r.left) : 0, r: cx ? Math.max(0, r.right - pr.right) : 0,
+              t: cy ? Math.max(0, pr.top - r.top) : 0, b: cy ? Math.max(0, r.bottom - pr.bottom) : 0,
+            };
+            if (over.l > tol || over.r > tol || over.t > tol || over.b > tol) clips.push(p.getAttribute('data-testid') || p.getAttribute('data-view') || p.id || 'overflow');
+          }
+          p = p.parentElement;
+        }
+        for (const bar of document.querySelectorAll('*')) {
+          if (getComputedStyle(bar).position !== 'sticky') continue;
+          // The editor is a modal above the Devices page's sticky controls.
+          if (root.matches?.('[data-testid=template-editor]') && !root.contains(bar)) continue;
+          if (bar.contains(canvas) || canvas.contains(bar)) continue;
+          const pr = bar.getBoundingClientRect();
+          if (pr.width < 2 || pr.height < 2) continue;
+          const ix = Math.min(r.right, pr.right) - Math.max(r.left, pr.left);
+          const iy = Math.min(r.bottom, pr.bottom) - Math.max(r.top, pr.top);
+          if (ix > tol && iy > tol) { clips.push(`sticky:${bar.getAttribute('data-testid') || bar.getAttribute('data-page-heading') || bar.id || bar.tagName}`); break; }
+        }
+        return {
+          x: (r.left + r.width / 2 - cr.left) / cr.width,
+          y: (r.top + r.height / 2 - cr.top) / cr.height,
+          w: r.width / cr.width, h: r.height / cr.height,
+          visible: clips.length === 0,
+          clips,
+        };
+      };
+      const callouts = [...canvas.querySelectorAll('[data-callout]')].map((el) => {
+        const id = el.getAttribute('data-callout');
+        const anchorEl = canvas.querySelector(`[data-anchor="${CSS.escape(id)}"]`) || canvas.querySelector(`[data-marker="${CSS.escape(id)}"]`);
+        const box = place(el);
+        const anchor = anchorEl ? place(anchorEl) : null;
+        return { id, box: { x: box.x, y: box.y, w: box.w, h: box.h }, anchor: anchor ? { x: anchor.x, y: anchor.y } : null, visible: box.visible, clips: box.clips };
+      });
+      const img = canvas.querySelector('img');
+      let photo = null;
+      if (img && img.naturalWidth) {
+        const s = Math.min(cr.width / img.naturalWidth, cr.height / img.naturalHeight);
+        const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+        photo = { x: (cr.width - dw) / 2 / cr.width, y: (cr.height - dh) / 2 / cr.height, w: dw / cr.width, h: dh / cr.height };
+      }
+      return { canvas: { w: cr.width, h: cr.height, layoutW: canvas.offsetWidth, layoutH: canvas.offsetHeight }, photo, callouts, scale, transformed };
+    };
+    const snapshot = async (rootSel, viewId) => {
+      const canvas = lp.locator(`${rootSel} [data-view="${viewId}"]`);
+      await canvas.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
+      await lp.waitForFunction(({ rootSel, viewId }) => {
+        const img = document.querySelector(rootSel).querySelector(`[data-view="${viewId}"] img`);
+        return img?.complete && img.naturalWidth > 0;
+      }, { rootSel, viewId });
+      await lp.waitForTimeout(400); // ResizeObserver / fit passes and sticky heading state
+      return lp.evaluate(layoutOf, { rootSel, viewId });
+    };
+    const closeEnough = (a, b, keys) => a && b && keys.every((k) => Math.abs(a[k] - b[k]) <= 0.005);
+    for (const vp of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }]) {
+      await lp.setViewportSize(vp);
+      await lp.waitForTimeout(400);
+      await lp.getByTestId('template-edit').click();
+      const editor = lp.getByTestId('template-editor');
+      await editor.waitFor();
+      const before = new Map();
+      for (const view of fixture.views) {
+        await editor.locator(`[data-view-tab="${view.id}"]`).click();
+        before.set(view.id, await snapshot('[data-testid=template-editor]', view.id));
+      }
+      await editor.getByTestId('tpl-save').click();
+      await editor.waitFor({ state: 'detached' });
+      for (const view of fixture.views) {
+        const ed = before.get(view.id);
+        const dev = await snapshot('[data-testid=device-view]', view.id);
+        const label = `${vp.width}×${vp.height} ${view.label}`;
+        const expected = fixture.callouts.filter((c) => (c.view ?? fixture.views[0].id) === view.id).map((c) => c.id).sort();
+        check(!ed.error && !dev.error, `${label}: both canvases exist`);
+        check(ed.canvas.layoutW === dev.canvas.layoutW && ed.canvas.layoutH === dev.canvas.layoutH,
+          `${label}: editor reuses the Devices layout size (${ed.canvas.layoutW}×${ed.canvas.layoutH})`);
+        check(dev.canvas.layoutH >= 440 && dev.canvas.layoutH <= 720, `${label}: layout height stays within 440–720 px`);
+        check(JSON.stringify(ed.callouts.map((c) => c.id).sort()) === JSON.stringify(expected)
+          && JSON.stringify(dev.callouts.map((c) => c.id).sort()) === JSON.stringify(expected), `${label}: every callout (${expected.length}) appears before and after Save`);
+        const em = new Map(ed.callouts.map((c) => [c.id, c]));
+        for (const c of dev.callouts) {
+          const e = em.get(c.id);
+          check(!!e && closeEnough(c.box, e.box, ['x', 'y', 'w', 'h']), `${label} ${c.id}: box position and size match the editor`);
+          check(!!e && closeEnough(c.anchor, e.anchor, ['x', 'y']), `${label} ${c.id}: anchor matches the editor`);
+          check(!!e?.visible, `${label} ${c.id}: editor box fully visible (${e?.clips.join(',') || 'no clipping'})`);
+          check(c.visible, `${label} ${c.id}: saved box fully visible (${c.clips.join(',') || 'no clipping'})`);
+        }
+        check(closeEnough(ed.photo, dev.photo, ['x', 'y', 'w', 'h']), `${label}: photo framing matches the editor`);
+        if (vp.width === 1920) {
+          check(!ed.transformed && !dev.transformed && ed.scale === 1 && dev.scale === 1, `${label}: wide window draws at scale 1 without a transform`);
+        }
+      }
+    }
+  } finally {
+    await layoutContext.close();
+  }
 }
 
 // persistence

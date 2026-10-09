@@ -6,6 +6,7 @@ import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 (globalThis as any).DOMParser = DOMParser;
 (globalThis as any).XMLSerializer = XMLSerializer;
 
+const cl = await import('../src/lib/calloutLayout');
 const cap = await import('../src/lib/capture');
 const { buildRows } = await import('../src/lib/merge');
 const { parseActionMaps } = await import('../src/lib/importer');
@@ -2533,5 +2534,81 @@ console.log('\ntemplate feed');
     assert.ok(/must-revalidate/.test(rule('/templates/index.json')!.find((x) => x.key === 'Cache-Control')!.value));
   });
 }
+
+t('callout layout keeps edge boxes inside and separates overlapping cards without changing template positions', () => {
+  const boxes = [
+    { id: 'left', x: 0, y: 0, w: 80, h: 40 },
+    { id: 'right', x: 1, y: 1, w: 80, h: 40 },
+    { id: 'a', x: 0.5, y: 0.5, w: 120, h: 60 },
+    { id: 'b', x: 0.5, y: 0.51, w: 120, h: 60 },
+  ];
+  const original = structuredClone(boxes), W = 500, H = 440;
+  const layout = cl.layoutCallouts(W, H, boxes);
+  assert.equal(layout.fits, true);
+  assert.deepEqual(boxes, original);
+  const rects = boxes.map((b) => {
+    const x = (b.x + (layout.nudges[`x:${b.id}`] ?? 0)) * W;
+    const y = (b.y + (layout.nudges[b.id] ?? 0)) * H;
+    const r = { left: x - b.w / 2, right: x + b.w / 2, top: y - b.h / 2, bottom: y + b.h / 2 };
+    assert.ok(r.left >= cl.CALLOUT_EDGE_PX && r.right <= W - cl.CALLOUT_EDGE_PX, b.id);
+    assert.ok(r.top >= cl.CALLOUT_EDGE_PX && r.bottom <= H - cl.CALLOUT_EDGE_PX, b.id);
+    return r;
+  });
+  assert.ok(rects[3].top >= rects[2].bottom + cl.CALLOUT_GAP_PX);
+  assert.deepEqual(cl.layoutCallouts(W, H, boxes), layout, 'repeatable layout');
+});
+
+t('callout layout leaves independent columns and empty pages alone; layout height stays capped', () => {
+  const boxes = [
+    { id: 'a', x: 0.2, y: 0.5, w: 80, h: 60 },
+    { id: 'b', x: 0.8, y: 0.5, w: 80, h: 60 },
+  ];
+  assert.deepEqual(cl.layoutCallouts(500, 440, boxes), { fits: true, nudges: {} });
+  assert.deepEqual(cl.layoutCallouts(500, 440, []), { fits: true, nudges: {} });
+  assert.equal(cl.chooseLayoutWidth(2000, 2, () => true, 440, 720), 1440);
+  assert.equal(cl.layoutCallouts(500, 440, [{ id: 'tall', x: 0.5, y: 0.5, w: 80, h: 500 }]).fits, false);
+});
+
+t('multi-view page layout: column width, minimum, grow, and nothing above the canvas top', () => {
+  const aspect = 2285 / 1182;
+  const minW = Math.round(aspect * 440);
+  const maxW = Math.round(aspect * 720);
+  const one = [{ id: 'a', x: 0.5, y: 0.5, w: 80, h: 36 }];
+  const fitOne = (w: number, h: number) => cl.layoutCallouts(w, h, one).fits;
+  assert.equal(cl.chooseLayoutWidth(1268, aspect, fitOne, 440, 720), 1268, 'a wide column that already fits is used as-is');
+  assert.equal(cl.chooseLayoutWidth(714, aspect, fitOne, 440, 720), minW, 'a narrow column lays out at aspect × 440');
+  assert.equal(cl.chooseLayoutWidth(714, aspect, fitOne, 440, 720), cl.chooseLayoutWidth(714, aspect, fitOne, 440, 720));
+  // twelve tall boxes on top of each other cannot fit at the minimum, so the width grows by ×1.15 up to the maximum
+  const fat = Array.from({ length: 12 }, (_, i) => ({ id: `b${i}`, x: 0.5, y: 0.1 + i * 0.01, w: 180, h: 80 }));
+  const seen: number[] = [];
+  const grown = cl.chooseLayoutWidth(714, aspect, (w, h) => { seen.push(w); return cl.layoutCallouts(w, h, fat).fits; }, 440, 720);
+  assert.equal(grown, cl.chooseLayoutWidth(714, aspect, (w, h) => cl.layoutCallouts(w, h, fat).fits, 440, 720), 'same boxes and same column give the same width');
+  assert.ok(grown > minW && grown <= maxW, `grew from the minimum toward the maximum (${grown})`);
+  assert.deepEqual(seen.slice(0, 3), [minW, Math.min(maxW, Math.round(minW * cl.LAYOUT_GROW)), Math.min(maxW, Math.round(Math.min(maxW, Math.round(minW * cl.LAYOUT_GROW)) * cl.LAYOUT_GROW))]);
+  // a step stops at the smallest width that fits, not at the full ×1.15 jump
+  const step = Math.round(minW * cl.LAYOUT_GROW);
+  const threshold = minW + 40;
+  assert.ok(threshold < step);
+  assert.equal(cl.chooseLayoutWidth(714, aspect, (w) => w >= threshold, 440, 720), threshold, 'stops at the first fitting width inside the step');
+  const past = step + 7;
+  assert.equal(cl.chooseLayoutWidth(714, aspect, (w) => w >= past, 440, 720), past, 'the next step stops at its own first fitting width');
+  // even at the maximum the top row stays inside; the lowest boxes overlap instead of being pushed out
+  const H = Math.round(maxW / aspect);
+  const laid = cl.layoutCallouts(maxW, H, fat);
+  for (const b of fat) {
+    const y = (b.y + (laid.nudges[b.id] ?? 0)) * H;
+    assert.ok(y - b.h / 2 >= -0.5, `${b.id} top ${y - b.h / 2}`);
+    if (b.h <= H - 4) assert.ok(y + b.h / 2 <= H + 0.5, `${b.id} bottom ${y + b.h / 2}`);
+  }
+  const tops = fat.map((b) => (b.y + (laid.nudges[b.id] ?? 0)) * H);
+  assert.ok(Math.min(...tops) < H / 2, 'the stack starts at the top');
+  // a box wider than the canvas does not fit, and growing stops at the maximum
+  const wide = [{ id: 'w', x: 0.5, y: 0.2, w: maxW + 40, h: 30 }];
+  assert.equal(cl.layoutCallouts(maxW, H, wide).fits, false);
+  assert.equal(cl.chooseLayoutWidth(minW, aspect, (w, h) => cl.layoutCallouts(w, h, wide).fits, 440, 720), maxW);
+  const wideLaid = cl.layoutCallouts(maxW, H, wide);
+  const wy = (wide[0].y + (wideLaid.nudges.w ?? 0)) * H;
+  assert.ok(wy - wide[0].h / 2 >= -0.5, 'a too-wide box is still not pushed above the top');
+});
 
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);

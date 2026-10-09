@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { GP_AXES, GP_BUTTONS, JS_AXES } from '../lib/capture';
 import { getPads, padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { deviceInputs, multiPickRange, pickEntries, usage, type DeviceInputs, type PickEntry } from '../lib/inputPicker';
@@ -20,6 +20,8 @@ interface Props {
   device: { ident: DeviceIdentity; pad?: PadInfo };
   slotInstance: { slot: 'js' | 'gp'; instance: number };
   entriesFor: (input: string) => Entry[];
+  /** Draw the same card, including live modifier state, as the Devices view. */
+  renderLabel?: (c: Callout, s: CalloutState) => ReactNode;
   onSave: (t: DeviceTemplate) => void;
   onCancel: () => void;
   onDelete?: () => void;
@@ -33,7 +35,7 @@ const numIn = (v: string) => { const t = v.trim().toLowerCase(); return /^\d{1,3
 const field = 'min-w-0 rounded border border-edge bg-panel2 px-1.5 py-0.5 text-xs text-slate-200';
 
 /** create / edit a device template: image, callouts (click or press to place, drag anchor and label), device link, export */
-export function TemplateEditor({ initial, describe, device, slotInstance, entriesFor, onSave, onCancel, onDelete, notify }: Props) {
+export function TemplateEditor({ initial, describe, device, slotInstance, entriesFor, renderLabel, onSave, onCancel, onDelete, notify }: Props) {
   const [t, setT] = useState<DeviceTemplate>(initial);
   const histRef = useRef<DeviceTemplate[]>([]);
   const [histLen, setHistLen] = useState(0);
@@ -289,7 +291,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
               tRef.current = next; setT(next);
             }}
             onCanvasClick={clickPlace ? (p) => addCallout(placeKind, inputsForKind(placeKind, [], tRef.current.slot, usedInputs(tRef.current)), p) : undefined}
-            renderLabel={(c, s) => <CalloutBody c={c} s={s} entriesFor={entriesFor} live={live} />} />
+            renderLabel={renderLabel ?? ((c, s) => <CalloutBody c={c} s={s} entriesFor={entriesFor} live={live} />)} />
           {!t.callouts.length && <p className="mt-2 text-xs text-slate-500">No callouts yet: click on the picture, or use “Press to place” and press each control of your device.</p>}
         </div>
         <aside className="w-80 shrink-0 space-y-3 overflow-y-auto border-l border-edge bg-panel/60 p-3 text-xs scrollbar-thin">
