@@ -4,12 +4,14 @@ import { getPads, padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { deviceInputs, multiPickRange, pickEntries, usage, type DeviceInputs, type PickEntry } from '../lib/inputPicker';
 import { usePadHits, type PressHit } from '../lib/listen';
 import {
-  BLANK_ASPECT, CALLOUT_KINDS, HAT_DIRS, editorMaxInputs, parseButtonRange, calloutFor, calloutTitle, coveredInputs, exportTemplates, freeBoxSpot, hatInputs, inputRole, inputsForKind,
+  BLANK_ASPECT, CALLOUT_KINDS, HAT_DIRS, editorMaxInputs, parseButtonRange, calloutFor, calloutTitle, coveredInputs, freeBoxSpot, hatInputs, inputRole, inputsForKind,
   calloutView, loadImageFile, matchFor, matchScore, shortInput, templateViews, uid, usedInputs, viewTemplate, type Callout, type CalloutKind, type DeviceIdentity, type DeviceTemplate, type Pt,
 } from '../lib/templates';
 import { MAX_PAGES, addPage, deletePage, movePage, pageCallouts, pageLabel, renamePage, setPageImage } from '../lib/templatePages';
 import { CalloutBody, DeviceCanvas, useLiveInputs, type CalloutState, type Entry } from './DeviceCanvas';
 import { Ico } from './icons';
+import { canSubmitTemplate } from '../lib/submitTemplate';
+import { exportTemplateFile } from '../lib/templateDownload';
 
 interface Props {
   initial: DeviceTemplate;
@@ -181,7 +183,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files?.[0]; if (f && !prep) setImage(f); }}>
       <div className="flex flex-wrap items-center gap-2 border-b border-edge bg-panel/90 px-4 py-2">
         <span className="font-display text-sm font-bold uppercase tracking-[0.2em] text-mod"><Ico name="edit" /> Device template</span>
-        <input value={t.name} onChange={(e) => { const next = { ...tRef.current, name: e.target.value }; tRef.current = next; setT(next); }} aria-label="Template name" className={`${field} w-56`} />
+        <input value={t.name} maxLength={80} onChange={(e) => { const next = { ...tRef.current, name: e.target.value }; tRef.current = next; setT(next); }} aria-label="Template name" className={`${field} w-56`} />
         <select value={t.slot} onChange={(e) => commit({ ...t, slot: e.target.value as 'js' | 'gp' })} aria-label="Device type" className={field}>
           <option value="js">Joystick / HOTAS</option><option value="gp">Gamepad</option>
         </select>
@@ -199,12 +201,26 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setImage(f); }} />
         <span className="ml-auto flex flex-wrap items-center gap-1.5">
           <button type="button" onClick={undo} disabled={!histLen} title="Undo (Ctrl+Z)" data-testid="tpl-undo" className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60 disabled:opacity-40"><Ico name="undo" /> Undo{histLen ? ` (${histLen})` : ''}</button>
-          <button type="button" onClick={() => { const a = document.createElement('a'); a.href = `data:application/json;charset=utf-8,${encodeURIComponent(exportTemplates([t]))}`; a.download = `${t.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'device'}.sc-template.json`; document.body.appendChild(a); a.click(); a.remove(); }}
-            className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60"><Ico name="export" /> Export JSON</button>
+          <button type="button" onClick={() => void exportTemplateFile(t, notify)} data-testid="tpl-export"
+            className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60"><Ico name="export" /> Export template</button>
+          {canSubmitTemplate(t) && <button type="button" onClick={() => void exportTemplateFile(t, notify, true)} data-testid="tpl-submit"
+            className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60"><Ico name="share" /> Submit to feed</button>}
           {onDelete && <button type="button" onClick={() => { if (confirm(`Delete the template “${t.name}”?`)) onDelete(); }} className="rounded border border-edge px-2 py-1 text-xs text-slate-400 hover:border-alert hover:text-alert">Delete template</button>}
           <button type="button" onClick={onCancel} className="rounded border border-edge px-2 py-1 text-xs text-slate-300 hover:border-hud/60">Cancel</button>
-          <button type="button" disabled={!canSave} onClick={() => onSave({ ...t, name: t.name.trim() })} data-testid="tpl-save" className="rounded border border-ok/60 bg-ok/10 px-3 py-1 text-xs font-semibold text-ok hover:bg-ok/20 disabled:opacity-40">Save</button>
+          <button type="button" disabled={!canSave} onClick={() => onSave({ ...t, name: t.name.trim(), author: t.author?.trim() || undefined })} data-testid="tpl-save" className="rounded border border-ok/60 bg-ok/10 px-3 py-1 text-xs font-semibold text-ok hover:bg-ok/20 disabled:opacity-40">Save</button>
         </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 border-b border-edge/60 bg-black/30 px-4 py-1.5 text-[11px] text-slate-400" data-testid="tpl-metadata">
+        {(['brand', 'author', 'notes'] as const).map((key) => (
+          <label key={key} className={`flex min-w-0 items-center gap-1 ${key === 'notes' ? 'flex-1' : ''}`}>
+            {key === 'brand' ? 'Brand' : key === 'author' ? 'Author' : 'Notes'}
+            <input value={t[key] ?? ''} maxLength={key === 'notes' ? 400 : 40} data-testid={`tpl-${key}`}
+              placeholder={key === 'author' ? 'your name or handle (optional)' : key === 'brand' ? 'device maker (optional)' : 'numbering or setup notes (optional)'}
+              onChange={(e) => { const next = { ...tRef.current, [key]: e.target.value }; tRef.current = next; setT(next); }}
+              onBlur={() => { const next = { ...tRef.current, [key]: tRef.current[key]?.trim() || undefined }; tRef.current = next; setT(next); }}
+              className={`${field} ${key === 'notes' ? 'w-full' : 'w-56'}`} />
+          </label>
+        ))}
       </div>
       <div className="flex flex-wrap items-center gap-2 border-b border-edge/60 bg-black/30 px-4 py-1.5 text-[11px] text-slate-400">
         <label className="flex items-center gap-1"><input type="checkbox" checked={clickPlace} onChange={(e) => setClickPlace(e.target.checked)} /> Click the picture to add a</label>

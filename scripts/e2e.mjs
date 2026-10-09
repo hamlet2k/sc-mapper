@@ -1084,6 +1084,7 @@ await page.waitForTimeout(300);
 console.log('\ntemplate editor');
 await dv.getByTestId('template-new').click();
 const te = page.getByTestId('template-editor');
+check((await dv.getByTestId('template-submit').count()) === 0, 'unchanged built-in template has no Submit to feed action');
 const tplCount = () => te.getByTestId('tpl-callouts').locator('li').count();
 check(await te.isVisible() && (await tplCount()) === 0, 'template editor opens with a blank canvas');
 check(/matches VKBsim Gladiator EVO R/.test(await te.getByTestId('tpl-link').innerText()), 'new template pre-linked to the selected device (USB 231D:0200)');
@@ -1158,9 +1159,38 @@ check((await tplCount()) === 4, 'Ctrl+Z brings it back');
   check(/Image loaded \(1600×1000/.test(toastTxt) && /^data:image\/(webp|jpeg|png)/.test(src ?? ''), `uploaded 2400×1500 PNG resized and stored (${toastTxt.split('\n')[0]})`);
 }
 await page.screenshot({ path: shots + '25-template-editor.png' });
+// The editor exports unsaved metadata; submission downloads identical bytes and opens an issue without contacting GitHub.
+await te.getByTestId('tpl-brand').fill('VKB');
+await te.getByTestId('tpl-author').fill('  Test Pilot  ');
+await te.getByTestId('tpl-notes').fill('Button numbers checked on my device.');
+await page.screenshot({ path: shots + '205-template-author-submit.png' });
+{
+  const [d] = await Promise.all([page.waitForEvent('download'), te.getByTestId('tpl-export').click()]);
+  const f = '/tmp/editor-template-export.json';
+  await d.saveAs(f);
+  const file = readFileSync(f, 'utf8');
+  check(JSON.parse(file).templates[0].author === 'Test Pilot', 'editor export keeps the trimmed author');
+  const issuePattern = 'https://github.com/hamlet2k/sc-mapper/issues/new**';
+  let issueRequest;
+  const request = new Promise((resolve) => { issueRequest = resolve; });
+  await ctx.route(issuePattern, async (route) => { issueRequest(route.request()); await route.abort(); });
+  const [submitted, popup] = await Promise.all([page.waitForEvent('download'), ctx.waitForEvent('page'), te.getByTestId('tpl-submit').click()]);
+  const req = await request;
+  const issueUrl = req.url();
+  check(issueUrl.startsWith('https://github.com/hamlet2k/sc-mapper/issues/new') && req.frame().page() === popup, 'Submit to feed opens the pre-filled GitHub issue in a new tab (request aborted)');
+  await submitted.saveAs('/tmp/editor-template-submitted.json');
+  check(readFileSync('/tmp/editor-template-submitted.json', 'utf8') === file && submitted.suggestedFilename() === d.suggestedFilename(), 'Submit to feed downloads exactly the same template file as Export template');
+  const params = new URL(issueUrl).searchParams;
+  check(params.get('body').includes('| Author | Test Pilot |') && !params.get('body').includes('data:image'), 'issue summary includes author and keeps the embedded photo out of the link');
+  writeFileSync(shots + '206-issue-preview.md', `${params.get('title')}\n\n${params.get('body')}\n`);
+  await popup.close();
+  await ctx.unroute(issuePattern);
+  check(/Template file downloaded\. Drag it into the GitHub issue/.test(await page.locator('.fixed.bottom-5.right-5').innerText()), 'submission toast tells the user to drag the downloaded file into the issue');
+}
 await te.getByTestId('tpl-save').click();
 await page.waitForTimeout(500);
 check(await te.count() === 0, 'template saved, editor closed');
+check((await dv.getByTestId('template-author').innerText()) === 'by Test Pilot' && await dv.getByTestId('template-submit').isVisible(), 'saved user template shows its author and Submit to feed action');
 check(/linked to this device \(USB 231D:0200\)/.test(await dv.getByTestId('device-status').innerText()), 'saved template auto-applies to the EVO R by USB id');
 check((await dv.locator('[data-callout]').count()) === 4 && (await dv.innerText()).includes('Decoy'), 'device view uses the new template (B3 shows its Decoy binding)');
 { // the 4-callout template has no callout for button 12, so that binding is listed beside the picture

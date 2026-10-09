@@ -79,6 +79,8 @@ export interface DeviceTemplate {
   callouts: Callout[];
   /** maker, for grouping in the template picker (built-in device templates; user templates are listed under “Your templates”) */
   brand?: string;
+  /** optional template creator's name or handle (up to 40 characters) */
+  author?: string;
   /** short note shown with the template, e.g. how the device numbers its buttons */
   notes?: string;
   /**
@@ -422,6 +424,7 @@ export function cleanTemplate(o: unknown, i = 0): DeviceTemplate {
     slot: t.slot === 'gp' ? 'gp' : 'js', ...(image ? { image } : {}), ...(views ? { views } : {}), aspect: Number.isFinite(aspect) && aspect > 0.2 && aspect < 5 ? aspect : BLANK_ASPECT,
     match, callouts, updatedAt: Number(t.updatedAt) || Date.now(),
     ...(typeof t.brand === 'string' && t.brand.trim() ? { brand: t.brand.trim().slice(0, 40) } : {}),
+    ...(typeof t.author === 'string' && t.author.trim() ? { author: t.author.trim().slice(0, 40) } : {}),
     ...(typeof t.notes === 'string' && t.notes.trim() ? { notes: t.notes.trim().slice(0, 400) } : {}),
   };
 }
@@ -592,7 +595,7 @@ export const cloneTemplate = (t: DeviceTemplate, name = `${t.name} (copy)`): Dev
   const { variantOf: _variant, ...rest } = t; // a copy is a template of its own, not a grip variant of a built-in
   return { ...structuredClone({ ...rest, builtin: undefined, loadImage: undefined }), id: uid(), name, builtin: undefined, loadImage: undefined };
 };
-// (a copy keeps `brand` and `notes`: harmless for user templates, which are always listed under “Your templates”)
+// (a copy keeps `brand`, `author` and `notes`: user templates are always listed under “Your templates”)
 
 /** where the label for a new callout goes: free slots down the left and right edges, nearest side first */
 export function freeBoxSpot(t: Pick<DeviceTemplate, 'callouts'>, anchor: Pt): Pt {

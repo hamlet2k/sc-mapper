@@ -113,6 +113,9 @@ round-trips every file through it).
   (object-fit: contain). The canvas is wider than the photo to leave room for the label columns. Templates without `views` have one
   picture in `image` and the canvas ratio `aspect`. In the feed, these are the generated-art templates, whose `image` is an embedded
   `data:image/svg+xml` URL (the same SVG as `art.url`).
+- **`author`** (optional): the template creator's name or handle, a non-empty string trimmed to at most 40 characters (like `brand`).
+  Import ignores non-string or blank values and unknown fields. Exports and `/templates/<id>.json` preserve it when present;
+  built-ins may omit it. This additive metadata uses the existing version 1 format, shared with DCS Mapper.
 - **Callouts.** `anchor` is the point on the device where the leader line starts. `box` is the centre of the label. Both are fractions
   (0..1) of the view's canvas. `view` is the id of the view the callout sits on (missing = the first view). `kind` is `button`, `hat`
   (inputs up, right, down, left, then an optional push), `axis` (one, or two for a mini-stick: x then y), `encoder` (clockwise,
@@ -136,6 +139,19 @@ round-trips every file through it).
   and changes nothing.
 
 Per-template files are deterministic: a stable key order and no timestamps, so a hash changes only when the template itself changes.
+
+## Submitting a template
+
+In the template editor, enter an optional **Author**, then use **Submit to feed** beside **Export template**. The same action is
+available on the Devices page for user templates and customized copies; unchanged built-ins are already in the feed.
+
+Submission downloads the same `<name>.sc-template.json` as export, with pictures embedded, and opens a pre-filled GitHub issue
+containing a short device summary. Drag the downloaded file into the issue before submitting it: a link cannot carry the file.
+Confirm the photo-sharing rights and check button numbers against the device with a press test. You can also export first and
+choose **Template submission** when opening an issue directly on GitHub.
+
+A maintainer reviews the file and its button numbering. Once accepted, it becomes a built-in template and appears in the shared
+feed. The photo is stored as a WebP under `/device-photos/` on the site; the feed references that photo rather than embedding it.
 
 ## Input names
 

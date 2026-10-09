@@ -16,7 +16,7 @@
     "pretest": "node scripts/ensure-data.mjs",
     "test": "tsx scripts/unit.ts && tsx scripts/selftest.ts public/samples/actionmaps.xml",
     "pretest:unit": "node scripts/ensure-data.mjs",
-    "test:unit": "tsx scripts/unit.ts && tsx scripts/bg-removal.ts",
+    "test:unit": "node --import tsx scripts/unit.ts && node --import tsx scripts/bg-removal.ts",
     "test:e2e": "node scripts/e2e.mjs",
     "test:fixtures": "node scripts/fetch-fixtures.mjs && tsx scripts/unit.ts"
   },

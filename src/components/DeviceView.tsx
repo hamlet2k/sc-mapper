@@ -11,12 +11,14 @@ import { CHROMIUM_BUTTON_CAP } from '../lib/capture';
 import { pressBindTarget } from '../lib/pressBind';
 import { parseQuery, scoreRow } from '../lib/search';
 import {
-  DUP_ORDER_GUESSES, calloutFor, calloutTitle, cloneTemplate, coveredInputs, exportTemplates, identityKey, inputRole, matchFor, matchScore, maxButton, newTemplate,
+  DUP_ORDER_GUESSES, calloutFor, calloutTitle, cloneTemplate, coveredInputs, identityKey, inputRole, matchFor, matchScore, maxButton, newTemplate,
   calloutView, imageSrc, parseTemplates, resolveTemplateImage, templateViews, shortInput, splitCombo, templateGroups, templateVariants, GRIPS_GROUP, unassignedCount, useTemplateImage, type useTemplates,
   type Callout, type DeviceIdentity, type DeviceTemplate,
 } from '../lib/templates';
 import type { Binding, Row, Slot } from '../lib/types';
 import { looksShared } from '../lib/share';
+import { canSubmitTemplate } from '../lib/submitTemplate';
+import { exportTemplateFile } from '../lib/templateDownload';
 import { CalloutBody, DeviceCanvas, LIVE_ROW, MULTI_VIEW_MIN_W, TONE_STROKE, firingEntries, useLiveInputs, type CalloutState, type Entry, type Live, type Tone } from './DeviceCanvas';
 import { DROP_HINT, GamePathHint } from './GameState';
 import { Ico } from './icons';
@@ -395,10 +397,6 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
     return () => ro.disconnect();
   }, []);
   const stickyHeadings = (shownTpl.views?.length ?? 0) > 1 && canvasW >= MULTI_VIEW_MIN_W;
-  const exportJson = async () => {
-    try { download(`${slug(tpl.name)}.sc-template.json`, `data:application/json;charset=utf-8,${encodeURIComponent(exportTemplates([await resolveTemplateImage(tpl)]))}`); }
-    catch (e) { notify('err', `Template export failed: ${(e as Error).message}`); }
-  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="device-slot-view" data-slot={`${slot}${instance}`} style={{ '--sticky-page-top': `${stick.page}px` } as CSSProperties}>
@@ -438,7 +436,8 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
                 : <IconButton icon="edit" label="Edit this template" onClick={() => setEditing(structuredClone(tpl))} testid="template-edit" />}
               <IconButton icon="filePlus" label="New template (draw your own device)" onClick={() => setEditing(withLink(newTemplate(slot, ident.name ?? 'My device')))} testid="template-new" />
               <IconButton icon="import" label="Import templates (.json)" onClick={() => importRef.current?.click()} testid="template-import" />
-              <IconButton icon="export" label="Export this template (.json)" onClick={() => void exportJson()} testid="template-export" />
+              <IconButton icon="export" label="Export this template (.json)" onClick={() => void exportTemplateFile(tpl, notify)} testid="template-export" />
+              {canSubmitTemplate(tpl) && <IconButton icon="share" label="Submit to feed" onClick={() => void exportTemplateFile(tpl, notify, true)} testid="template-submit" />}
             </span>
             <span className="h-5 w-px bg-edge" aria-hidden="true" />
             <span className={ICON_GROUP} role="group" aria-label="Picture" data-testid="picture-tools">
@@ -521,6 +520,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 print:hidden" data-testid="device-status">
         <span>Template <b className="text-slate-300">{tpl.name}</b>: {chosen.how === 'chosen' ? `picked by you for ${opt.gs.hw ? 'this device' : `${slot}${instance}`}` : chosen.how === 'guessed' ? `guessed: device ${ident.dup!.n} of ${ident.dup!.of} identical ${guessLabel(ident)} (the last is taken as the stick, the others as the throttle plugged into the base; pick another template if it is not)` : chosen.how === 'matched' ? `linked to this device (${describeMatch(tpl, ident)})` : 'generic (no template linked to this device yet: customize a copy to place the callouts on your own device)'}</span>
         {tpl.notes && <span className="flex items-center gap-1 text-slate-400" data-testid="template-notes"><Ico name="info" className="h-3 w-3" /> {tpl.notes}</span>}
+        {tpl.author && <span data-testid="template-author">by {tpl.author}</span>}
         <span className="flex items-center gap-1.5">{!opt.pad ? 'Connect the device (and press a button) for live highlight.' : highlight ? <><span className="h-1.5 w-1.5 rounded-full bg-ok" /><span className="text-ok">live: press or move a control and it lights up</span></> : <><span className="h-1.5 w-1.5 rounded-full bg-slate-500" />connected · highlight on press is off (Settings); grips still switch</>}</span>
         {filtering && <span className="text-mod" data-testid="device-search-status">{chipInputs.length ? `Pressed ${formatInput(slot, instance, chipInputs[0])}: ${matchCount ? 'selected below' : 'not on this picture (see the list on the right)'}` : `${matchCount} control${matchCount === 1 ? '' : 's'} match “${query.trim()}”`}</span>}
       </div>

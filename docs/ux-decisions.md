@@ -763,3 +763,15 @@ ViperAce ICP keypad, the A-10C UFC, Apache MPD bezels (20+ push buttons) and Air
   shared controller), `parseButtonRange` (ranges, descending, lists, whitespace, caps, invalid tokens), the multi-pick ranges, the feed check. E2e: "+ button" past 8, compact grid, Fill range over
   the cap / invalid token / comma list / 1-32 / 1-20, the switch's 8-position cap and descending fill, the 20-button row on the Devices view (3 lines, inside the picture, `1–20`, only button 7's chip lit).
 - Screenshots: `203-button-row-20-editor.png`, `204-button-row-20-pressed.png`.
+
+## Template author and feed submissions (Oct 8, 2026)
+
+Templates carry an optional author name or handle (trimmed, max 40 characters), with no version bump; exports and per-template
+feed files preserve it. The editor has a compact Brand / Author / Notes row, and Devices shows “by <author>” beside template notes.
+**Submit to feed** sits beside export for user templates and customized copies; read-only built-ins are already published, so the
+action is hidden. Both actions use one download path, resolving lazy art and embedding site photos for a portable file. Submission
+reserves a new tab during the click, then opens a GitHub issue containing only a short summary and two checks (photo rights and
+press-tested numbering). A toast tells the user to drag the download into the issue: the URL cannot carry the attachment. USB rules
+are listed compactly (a missing half is `*`); long combined name-match text is capped at 400 characters, with full rules in the file.
+Maintainer review turns accepted submissions into built-ins with WebP photos under `/device-photos/`. Screenshots: `205-template-author-submit.png`,
+and the generated sample issue text in `206-issue-preview.md`.

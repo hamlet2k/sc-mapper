@@ -530,6 +530,47 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
   });
   const moza = (buttons: number) => ({ name: 'MOZA AB6 FFB Base', vendor: '346E', productId: '1002', buttons, slot: 'js' as const });
   const tpl = (id: string, match: any[], extra: any = {}) => ({ version: 1 as const, id, name: id, slot: 'js' as const, aspect: 1.6, match, callouts: [], ...extra });
+  const submission = await import('../src/lib/submitTemplate');
+  t('template author: trimmed, capped, optional, unknown fields ignored; export round trip keeps it', () => {
+    const src = tpl('author-test', [], { author: '  Pilot Handle  ', unknown: 'ignored' });
+    const clean = tp.cleanTemplate(src);
+    assert.equal(clean.author, 'Pilot Handle');
+    assert.ok(!('unknown' in clean));
+    assert.equal(tp.cleanTemplate({ ...src, author: ' x'.repeat(50) }).author?.length, 40);
+    for (const author of ['', '   ', 42, false, {}, null, undefined]) assert.ok(!('author' in tp.cleanTemplate({ ...src, author })));
+    const file = JSON.parse(tp.exportTemplates([clean]));
+    assert.equal(file.version, 1); assert.equal(file.templates[0].author, 'Pilot Handle');
+    assert.equal(tp.parseTemplates(JSON.stringify(file))[0].author, 'Pilot Handle');
+  });
+  t('template submission: title, all USB rules, metadata and counts; photos and callout JSON never in URL', () => {
+    const src = tpl('submission', [{ vendor: '044f', product: 'b10a' }, { name: 'T.16000M' }, { vendor: '0x231d', product: '200' }, { vendor: '044f' }], {
+      name: 'T.16000M FCS stick', brand: 'Thrustmaster', author: 'Pilot Handle',
+      image: `data:image/webp;base64,${'A'.repeat(3_000_000)}`,
+      callouts: Array.from({ length: 400 }, (_, i) => ({ id: `c${i}`, kind: 'button', inputs: [`button${i % 128 + 1}`], anchor: { x: 0.5, y: 0.5 }, box: { x: 0.1, y: 0.1 } })),
+    });
+    const url = submission.templateSubmissionUrl(src, '0.1.0');
+    const params = new URL(url).searchParams;
+    const body = params.get('body')!;
+    assert.equal(params.get('title'), 'Template: Thrustmaster T.16000M FCS stick');
+    assert.equal(params.get('labels'), 'template submission');
+    assert.match(body, /044F:B10A, 231D:0200, 044F:\*/);
+    for (const s of ['t-16000m-fcs-stick.sc-template.json', 'A link cannot carry the file', 'Pilot Handle', 'T.16000M', '| Callouts | 400 |', '| Views / pictures | 1 / 1 |', '| Highest button number | 128 |', 'SC Mapper 0.1.0', '- [ ] Photo is my own', '- [ ] Button numbers checked']) assert.ok(body.includes(s), s);
+    assert.ok(!decodeURIComponent(url).includes('data:image'));
+    assert.ok(!body.includes('anchor') && !body.includes('callouts"'));
+    assert.ok(body.length < 2000 && url.length < 6000, `${body.length} body chars, ${url.length} URL chars`);
+    const bare = new URL(submission.templateSubmissionUrl(tpl('My stick', []), '1.2.3')).searchParams;
+    assert.equal(bare.get('title'), 'Template: My stick');
+    assert.match(bare.get('body')!, /\| Author \| — \|/); assert.match(bare.get('body')!, /USB vendor:product IDs \| none/);
+    const multi = { ...src, views: [{ id: 'a', label: 'Front', width: 1000, height: 1000, image: src.image }, { id: 'b', label: 'Blank', width: 1000, height: 1000 }] };
+    assert.match(new URL(submission.templateSubmissionUrl(multi, '1')).searchParams.get('body')!, /Views \/ pictures \| 2 \/ 1/);
+  });
+  t('template submission: built-ins hidden, editable copies and imported files eligible', () => {
+    const builtin = BUILTIN_TEMPLATES[0];
+    assert.equal(submission.canSubmitTemplate(builtin), false);
+    assert.equal(submission.canSubmitTemplate(tp.cloneTemplate(builtin)), true);
+    assert.equal(submission.canSubmitTemplate(tp.cleanTemplate({ ...builtin, loadImage: undefined })), true);
+    assert.equal(submission.canSubmitTemplate(tpl('builtin-looking-user-id', [])), true);
+  });
   t('template matching: USB id, name, button count tells the two MOZA bases apart; user beats built-in; fallbacks', () => {
     const a = tpl('moza-128', [{ vendor: '346e', product: '1002', buttons: 128 }]);
     const b = tpl('moza-133', [{ vendor: '346E', product: '1002', buttons: 133 }]);
@@ -2381,6 +2422,11 @@ console.log('\ntemplate feed');
   const a = await generateTemplateFeed({ generatedAt: '2026-01-01T00:00:00.000Z', commit: 'abc123' });
   const b = await generateTemplateFeed({ generatedAt: '2026-02-02T00:00:00.000Z', commit: null });
   const builtins = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+  t('feed template preserves optional author in per-template JSON and import', () => {
+    const file = fd.feedTemplate({ ...BUILTIN_TEMPLATES[0], author: 'Pilot Handle' });
+    assert.equal(JSON.parse(fd.stableJson(file)).author, 'Pilot Handle');
+    assert.equal(parseTemplates(fd.stableJson(file))[0].author, 'Pilot Handle');
+  });
   const read = (path: string) => JSON.parse(a.files.get(path.slice(1))!);
   t('every built-in template is in the feed (index entry + file), nothing else', () => {
     assert.deepEqual(a.problems, [], 'no problems (photos present, pictures usable)');

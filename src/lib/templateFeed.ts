@@ -52,7 +52,7 @@ export interface FeedOptions {
 /* ------------------------------------------------------------- deterministic JSON */
 /** preferred key order (any object level); other keys follow alphabetically. Keeps files readable and their bytes independent of how
  * the template objects happen to be built */
-const KEY_ORDER = ['format', 'version', 'id', 'name', 'brand', 'slot', 'kind', 'builtin', 'variantOf', 'notes', 'vendor', 'product', 'buttons', 'inputs',
+const KEY_ORDER = ['format', 'version', 'id', 'name', 'brand', 'author', 'slot', 'kind', 'builtin', 'variantOf', 'notes', 'vendor', 'product', 'buttons', 'inputs',
   'label', 'group', 'view', 'aspect', 'match', 'image', 'width', 'height', 'swap', 'x', 'y', 'anchor', 'box', 'region', 'inputRegions', 'views', 'callouts'];
 const RANK = new Map(KEY_ORDER.map((k, i) => [k, i]));
 function canonical(v: unknown, path: string): unknown {

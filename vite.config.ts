@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tsImport } from 'tsx/esm/api'
 import { defineConfig, type Plugin } from 'vite'
+import { readFileSync } from 'node:fs'
 
 type Feed = { files: Map<string, string>; problems: string[] }
 /** the public template feed (docs/template-feed.md), generated from the built-in template objects by scripts/template-feed.ts */
@@ -50,6 +51,7 @@ function templateFeed(): Plugin {
 }
 
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version) },
   plugins: [react(), tailwindcss(), templateFeed()],
   // the licences of the npm packages bundled into dist/ (React, onnxruntime-web, …), served as /third-party-licenses.md
   build: { license: { fileName: 'third-party-licenses.md' } },
