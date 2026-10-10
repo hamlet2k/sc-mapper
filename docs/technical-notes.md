@@ -29,7 +29,7 @@ pinned to 4.10.0 LIVE build 4.10.193.11644. `SC_DATA_REF` overrides that fallbac
 
 ### Updating for a new patch
 ```bash
-# Extract the four source files from your install (unp4k) into data/game/, then:
+# Full runbook: docs/game-data-update.md. Extract the four source files (unp4k) into data/game/, then:
 npm run data
 # Commit data/game/ with the updated provenance, version text and tests.
 # To explicitly try a mirror revision in data/raw/:
