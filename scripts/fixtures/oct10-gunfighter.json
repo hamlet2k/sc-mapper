@@ -1,0 +1,297 @@
+{
+  "aspect": 1.524022346368715,
+  "views": [
+    {
+      "id": "front",
+      "label": "Front",
+      "image": "/device-photos/vkb-gunfighter-mcg-front.webp",
+      "width": 1364,
+      "height": 895
+    },
+    {
+      "id": "thumb",
+      "label": "Right side",
+      "image": "/device-photos/vkb-gunfighter-mcg-thumb.webp",
+      "width": 1364,
+      "height": 901
+    }
+  ],
+  "callouts": [
+    {
+      "id": "apoff",
+      "kind": "button",
+      "inputs": [
+        "button4"
+      ],
+      "anchor": {
+        "x": 0.4334017003893491,
+        "y": 0.0798611111111111
+      },
+      "box": {
+        "x": 0.2936901527726067,
+        "y": 0.03208334181043837
+      },
+      "label": "AP OFF (red)",
+      "group": "Grip head",
+      "view": "front"
+    },
+    {
+      "id": "gca",
+      "kind": "axis",
+      "inputs": [
+        "rotz",
+        "slider1"
+      ],
+      "anchor": {
+        "x": 0.4445761278095089,
+        "y": 0.1543055640326606
+      },
+      "box": {
+        "x": 0.11203281120919269,
+        "y": 0.1909722222222222
+      },
+      "label": "GATE CONT ministick (analog)",
+      "group": "Grip head",
+      "view": "front"
+    },
+    {
+      "id": "manvr",
+      "kind": "hat",
+      "inputs": [
+        "button14",
+        "button15",
+        "button16",
+        "button17",
+        "button18"
+      ],
+      "anchor": {
+        "x": 0.4927610579920213,
+        "y": 0.1620833502875434
+      },
+      "box": {
+        "x": 0.8746942654512595,
+        "y": 0.18689616252821667
+      },
+      "label": "MANVR hat",
+      "group": "Grip",
+      "view": "front"
+    },
+    {
+      "id": "flip",
+      "kind": "switch",
+      "inputs": [
+        "button3",
+        "",
+        ""
+      ],
+      "anchor": {
+        "x": 0.5763302864284691,
+        "y": 0.28541666666666665
+      },
+      "box": {
+        "x": 0.8456880621953842,
+        "y": 0.2798611111111111
+      },
+      "label": "Flip trigger (click / stage 1 / stage 2)",
+      "group": "Grip",
+      "view": "thumb"
+    },
+    {
+      "id": "trig",
+      "kind": "switch",
+      "inputs": [
+        "button1",
+        "button2"
+      ],
+      "anchor": {
+        "x": 0.5396439385608847,
+        "y": 0.29208331637912327
+      },
+      "box": {
+        "x": 0.8103711129142149,
+        "y": 0.6596452328159645
+      },
+      "label": "Trigger (stage 1 / 2)",
+      "group": "Grip",
+      "view": "thumb"
+    },
+    {
+      "id": "reset",
+      "kind": "hat",
+      "inputs": [
+        "button10",
+        "button11",
+        "button12",
+        "button13",
+        "button9"
+      ],
+      "anchor": {
+        "x": 0.4715036656891495,
+        "y": 0.281
+      },
+      "box": {
+        "x": 0.13755696800044154,
+        "y": 0.4465277777777778
+      },
+      "label": "RESET hat",
+      "group": "Grip",
+      "view": "front"
+    },
+    {
+      "id": "brakea",
+      "kind": "axis",
+      "inputs": [
+        "button29"
+      ],
+      "anchor": {
+        "x": 0.43072014585232454,
+        "y": 0.44319445292154946
+      },
+      "box": {
+        "x": 0.1463081130355515,
+        "y": 0.7476388719346788
+      },
+      "label": "Brake lever (analog)",
+      "group": "Grip",
+      "view": "front"
+    },
+    {
+      "id": "lvl",
+      "kind": "button",
+      "inputs": [
+        ""
+      ],
+      "anchor": {
+        "x": 0.5422360703812316,
+        "y": 0.065
+      },
+      "box": {
+        "x": 0.1150079169944925,
+        "y": 0.05466592427616926
+      },
+      "label": "LVLNG",
+      "group": "Grip head",
+      "view": "thumb"
+    },
+    {
+      "id": "mmode",
+      "kind": "hat",
+      "inputs": [
+        "hat1_up",
+        "hat1_right",
+        "hat1_down",
+        "hat1_left",
+        ""
+      ],
+      "anchor": {
+        "x": 0.4768353524372213,
+        "y": 0.07319444020589193
+      },
+      "box": {
+        "x": 0.7707364421441527,
+        "y": 0.03319443596733941
+      },
+      "label": "MASTER MODE hat",
+      "group": "Grip head",
+      "view": "front"
+    },
+    {
+      "id": "dc",
+      "kind": "hat",
+      "inputs": [
+        "button19",
+        "button22",
+        "button21",
+        "button20",
+        "button23"
+      ],
+      "anchor": {
+        "x": 0.6110030389689954,
+        "y": 0.1909722222222222
+      },
+      "box": {
+        "x": 0.8791402014201253,
+        "y": 0.1398611280653212
+      },
+      "label": "DC hat",
+      "group": "Grip head",
+      "view": "thumb"
+    },
+    {
+      "id": "gun",
+      "kind": "button",
+      "inputs": [
+        ""
+      ],
+      "anchor": {
+        "x": 0.5331854838709676,
+        "y": 0.15
+      },
+      "box": {
+        "x": 0.1150079169944925,
+        "y": 0.1603340757238307
+      },
+      "label": "GUN button",
+      "group": "Grip",
+      "view": "thumb"
+    },
+    {
+      "id": "ring",
+      "kind": "button",
+      "inputs": [
+        "button7"
+      ],
+      "anchor": {
+        "x": 0.48181085043988275,
+        "y": 0.378
+      },
+      "box": {
+        "x": 0.8434822131202997,
+        "y": 0.38208334181043835
+      },
+      "label": "Ring-finger button",
+      "group": "Grip",
+      "view": "front"
+    },
+    {
+      "id": "xy",
+      "kind": "axis",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "anchor": {
+        "x": 0.5196900415550935,
+        "y": 0.4609722137451172
+      },
+      "box": {
+        "x": 0.8989061409490371,
+        "y": 0.5943055894639757
+      },
+      "label": "Stick X / Y",
+      "group": "Axes",
+      "view": "front"
+    },
+    {
+      "id": "6dmumr55",
+      "kind": "axis",
+      "inputs": [
+        "z"
+      ],
+      "anchor": {
+        "x": 0.5098450207775467,
+        "y": 0.6270833333333333
+      },
+      "box": {
+        "x": 0.8850501033536065,
+        "y": 0.8043055216471354
+      },
+      "view": "front",
+      "label": "Twist"
+    }
+  ],
+  "photoHashes": {
+    "/device-photos/vkb-gunfighter-mcg-front.webp": "90d9706eb0f5ed34359e1dfe595b12c7c84aaca8ddac2bb95ecd683e72bc617c",
+    "/device-photos/vkb-gunfighter-mcg-thumb.webp": "da5717ce1c63d5de6b23ac80b2fe920e752c6b568b7336b670e62cd4a6055845"
+  }
+}

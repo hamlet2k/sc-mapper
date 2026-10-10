@@ -899,16 +899,17 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[2].id]: { view: 'front', x: 1.5, y: 0.5 } } })), 'coordinates outside 0..1 rejected');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { views: [], anchors: {} })), 'empty layout rejected');
   });
-  t('device templates (41 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
+  t('device templates (42 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    assert.equal(DEVICE_TEMPLATES.length, 41, '35 existing + ICP, LEGEND, Rotor base and 3 grip variants');
+    assert.equal(DEVICE_TEMPLATES.length, 42, '41 existing + MT-50CM');
     assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
     // devices without published numbers: callout spots only (stick X / Y where obvious)
-    const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-vkb-gunfighter-mcg', 'builtin-vkb-stecs', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
+    const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-vkb-stecs', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
     const USB = new Set(['builtin-tm-warthog-stick', 'builtin-tm-warthog-throttle', 'builtin-tm-t16000m', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-winctrl-ursa-combat',
       'builtin-winctrl-orion-pedals', 'builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad', 'builtin-honeycomb-bravo',
-      'builtin-honeycomb-charlie', 'builtin-logitech-flight-rudder', 'builtin-mfg-crosswind', 'builtin-tm-tfrp', 'builtin-tm-tpr', 'builtin-vkb-t-rudder', 'builtin-winctrl-viperace-icp']);
+      'builtin-honeycomb-charlie', 'builtin-logitech-flight-rudder', 'builtin-mfg-crosswind', 'builtin-tm-tfrp', 'builtin-tm-tpr', 'builtin-vkb-t-rudder', 'builtin-winctrl-viperace-icp',
+      'builtin-vkb-gunfighter-mcg', 'builtin-virpil-mt50cm']);
     const PHOTO_ONLY = new Set(['builtin-azeron-keypad']);
     const ASPECTS = new Set<number>();
     for (const d of DEVICE_TEMPLATES) {
@@ -926,6 +927,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       if (d.id === 'builtin-logitech-x56-throttle') {
         assert.ok(open > 5, 'X56 export keeps partially assigned controls');
         assert.ok(d.callouts.some((c) => c.inputs.includes('button33')), 'X56 export adds known numbers');
+      } else if (d.id === 'builtin-vkb-gunfighter-mcg' || d.id === 'builtin-virpil-mt50cm') {
+        assert.equal(open, d.id === 'builtin-vkb-gunfighter-mcg' ? 5 : 2, `${d.id}: exported unassigned inputs preserved`);
       } else if (OPEN.has(d.id)) {
         assert.ok(open > 5 && d.callouts.flatMap((c) => c.inputs).filter((i) => /^button|^hat/.test(i)).length === 0, `${d.id}: buttons left unassigned`);
         assert.match(d.notes!, /Customize a copy/);
@@ -940,11 +943,12 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       for (const c of d.callouts) {
         if (!d.views) assert.ok(c.region && tp.REGION_RE.test(c.region), `${d.id}/${c.id}: glow region`);
         for (const pt of [c.anchor, c.box]) assert.ok(pt.x >= 0 && pt.x <= 1 && pt.y >= 0 && pt.y <= 1, `${d.id}/${c.id}`);
-        // Preserve the T-50CM4 export's adjacent ministick / press boxes (exact data pinned below).
+        // Preserve authored adjacent boxes (exact data pinned below).
         for (const o of d.callouts) if (o !== c && tp.calloutView(d, o) === tp.calloutView(d, c)
           // Authored layouts keep their exact label positions, pinned by the export fixture tests.
           && !['builtin-honeycomb-bravo', 'builtin-moza-mtp', 'builtin-logitech-x56-throttle', 'builtin-tm-twcs'].includes(d.id)
-          && !(d.id === 'builtin-virpil-t50cm4' && [c.id, o.id].sort().join(',') === 'mini,minib')) assert.ok(Math.abs(o.box.x - c.box.x) > 0.12 || Math.abs(o.box.y - c.box.y) > 0.03, `${d.id}: boxes ${c.id} / ${o.id} too close`);
+          && !(d.id === 'builtin-virpil-t50cm4' && [c.id, o.id].sort().join(',') === 'mini,minib')
+          && !(d.id === 'builtin-virpil-mt50cm' && [c.id, o.id].sort().join(',') === 'mtxi15i1,r9o62f2n')) assert.ok(Math.abs(o.box.x - c.box.x) > 0.12 || Math.abs(o.box.y - c.box.y) > 0.03, `${d.id}: boxes ${c.id} / ${o.id} too close`);
         if (c.inputRegions) assert.equal(c.inputRegions.length, c.inputs.length, `${d.id}/${c.id}: one outline per input`);
         if (c.kind === 'hat') assert.ok(c.inputs.length >= 4 && c.inputs.length <= 5, `${d.id}/${c.id}: hat = 4 directions (+ push)`);
       }
@@ -1098,6 +1102,55 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const saved = tp.parseTemplates(tp.exportTemplates([copy]))[0];
     assert.deepEqual(saved.callouts.find((c) => c.id === 'a2')!.inputs, ['button7']);
     assert.equal(tp.shortInput(''), '?');
+  });
+  t('Oct 10 Gunfighter MCG Pro and MT-50CM: exact exports, photos, USB and distinct model matching', () => {
+    const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+    for (const [file, id] of [['gunfighter', 'builtin-vkb-gunfighter-mcg'], ['mt50cm', 'builtin-virpil-mt50cm']]) {
+      const expected = JSON.parse(readFileSync(new URL(`./fixtures/oct10-${file}.json`, import.meta.url), 'utf8'));
+      const actual = DEVICE_TEMPLATES.find((x) => x.id === id)!;
+      assert.ok(actual, id);
+      assert.deepEqual({ aspect: actual.aspect, views: actual.views, callouts: actual.callouts },
+        { aspect: expected.aspect, views: expected.views, callouts: expected.callouts }, `${id}: every authored field`);
+      assert.equal(DEVICE_PHOTO_LAYOUTS[id], undefined, `${id}: bypass automatic placement`);
+      for (const [photo, hash] of Object.entries(expected.photoHashes)) {
+        assert.equal(createHash('sha256').update(readFileSync(new URL(`../public${photo}`, import.meta.url))).digest('hex'), hash, `${id}: exact exported WebP bytes`);
+      }
+    }
+    const gun = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-gunfighter-mcg')!;
+    const original = JSON.parse(readFileSync(new URL('./fixtures/vkb-gunfighter-mcg-pro.sc-template.json', import.meta.url), 'utf8')).templates[0];
+    assert.deepEqual(gun.callouts, original.callouts, 'Gunfighter: exact supplied export');
+    assert.equal(gun.name, 'VKB Gunfighter + MCG Pro');
+    assert.equal(gun.brand, 'VKB'); assert.equal(gun.category, 'stick');
+    assert.equal(gun.notes, original.notes, 'original built-in notes retained');
+    assert.deepEqual(gun.match, [{ name: 'Gunfighter' }, { vendor: '231D', product: '0125' }]);
+    assert.equal(tp.pickTemplate(all, { vendor: '231D', productId: '0125', slot: 'js' }).template.id, gun.id);
+    assert.equal(tp.pickTemplate(all, { name: 'VKBsim Gunfighter Modern Combat Pro', slot: 'js' }).template.id, gun.id);
+    const cm = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-virpil-mt50cm')!;
+    const cm4 = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-virpil-t50cm4')!;
+    assert.equal(cm.name, 'VIRPIL MongoosT-50CM throttle');
+    assert.equal(cm.brand, 'VIRPIL'); assert.equal(cm.category, 'throttle');
+    assert.equal(tp.maxButton(cm), 97); assert.match(cm.notes!, /Firefox/);
+    assert.deepEqual(cm.match, [{ vendor: '3344', product: '0192' },
+      { name: 'MT-50CM', nameBoundary: true }, { name: 'MongoosT-50CM', nameBoundary: true }]);
+    const usb = { vendor: '3344', productId: '0192', slot: 'js' as const };
+    assert.equal(tp.pickTemplate(all, usb).template.id, cm.id);
+    assert.equal(tp.matchScore(cm4, usb), 0, 'MT-50CM USB cannot match CM4');
+    const copy = tp.parseTemplates(tp.exportTemplates([{ ...cm, id: 'copy-cm', builtin: undefined }]))[0];
+    assert.deepEqual(copy.match, cm.match, 'name boundaries survive export/import and customized copies');
+    // CM3 has no built-in here; every existing CM3/CM4 template must also reject the MT-50CM USB.
+    for (const other of all.filter((x) => /t-?50cm[34]/i.test(x.name))) assert.equal(tp.matchScore(other, usb), 0, other.id);
+    for (const name of ['VPC Throttle MT-50CM', 'VPC MongoosT-50CM Throttle', 'VPC MT50CM Throttle', 'vpc throttle mt 50cm']) {
+      assert.equal(tp.pickTemplate(all, { name, slot: 'js' }).template.id, cm.id, name);
+    }
+    for (const model of ['MT-50CM', 'T-50CM', 'MongoosT-50CM']) for (const suffix of ['3', '4']) {
+      const device = { name: `VPC Throttle ${model}${suffix}`, slot: 'js' as const };
+      for (const candidate of [cm, copy]) assert.equal(tp.matchScore(candidate, device), 0, `${model}${suffix}: never MT-50CM`);
+      assert.equal(tp.pickTemplate(all, device).template.id, suffix === '4' ? cm4.id : 'builtin-throttle');
+    }
+    for (const name of ['VPC Throttle MT-50CM3', 'VPC Throttle MongoosT-50CM4']) {
+      assert.equal(tp.pickTemplate([...all].reverse(), { name, slot: 'js' }).template.id,
+        name.endsWith('4') ? cm4.id : 'builtin-throttle', 'matching is independent of template order');
+    }
   });
   t('Oct 9 photo templates: exact exported callouts and view sizes, safe VIRPIL matching', () => {
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
@@ -1432,8 +1485,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(r.image === 'data:image/svg+xml,<svg/>' && !(lazy as { image?: string }).image, 'picture resolves, template untouched');
     assert.equal((await tp.resolveTemplateImage(lazy)).image, r.image, 'cached'); assert.equal(calls, 1);
     const imgs = await Promise.all(DEVICE_TEMPLATES.map((x) => tp.resolveTemplateImage(x).then((y) => y.image ?? y.views!.map((v) => v.image).join()))); // (photo templates: their views' photos)
-    assert.equal(new Set(imgs).size, 41, 'one distinct set of pictures per device');
-    passed++; console.log('  ✓ device template pictures: all 41 photo templates (distinct), lazy pictures cached');
+    assert.equal(new Set(imgs).size, 42, 'one distinct set of pictures per device');
+    passed++; console.log('  ✓ device template pictures: all 42 photo templates (distinct), lazy pictures cached');
   }
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };
@@ -2530,7 +2583,7 @@ console.log('\nshared controller files');
   t('suggestions use a single category field on built-ins; never users or generic templates', () => {
     assert.ok(all.every((x) => x.category));
     assert.equal(all.filter((x) => x.category === 'pedals').length, 9);
-    assert.equal(all.filter((x) => x.builtin && x.brand && x.category === 'throttle').length, 11);
+    assert.equal(all.filter((x) => x.builtin && x.brand && x.category === 'throttle').length, 12);
     assert.deepEqual(sg.suggestedTemplates('pedals', all), all.filter((x) => x.category === 'pedals'));
     const collective = { ...tp.newTemplate('js', 'Future collective'), builtin: true, brand: 'Maker', category: 'collective' };
     assert.equal(all.filter((x) => x.category === 'collective').length, 4);

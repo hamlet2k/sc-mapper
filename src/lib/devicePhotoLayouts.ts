@@ -113,27 +113,6 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       en1: { view: 'front', x: 0.5, y: 0.835 },
     },
   },
-  // VKB Gunfighter Mk.IV + MCG Ultimate: names/positions per the UntoldForce MCGU map (same front photo); MANVR = hat under the head, DC = right-side hat (hidden on the front photo, PDF leader), flip = black lever below the red trigger; brake lever (analog) shares the lever.
-  'builtin-vkb-gunfighter-mcg': {
-    views: [{ id: 'front', label: 'Front', photo: 'vkb-gunfighter-mcg-front' }, { id: 'thumb', label: 'Right side', photo: 'vkb-gunfighter-mcg-thumb' }],
-    anchors: {
-      apoff: { view: 'front', x: 0.37, y: 0.075 },
-      mmode: { view: 'front', x: 0.431, y: 0.07 },
-      gc: { view: 'front', x: 0.387, y: 0.147 },
-      gca: { view: 'front', x: 0.393, y: 0.156 },
-      manvr: { view: 'front', x: 0.47, y: 0.165 },
-      trig: { view: 'front', x: 0.398, y: 0.27 },
-      flip: { view: 'front', x: 0.387, y: 0.303 },
-      reset: { view: 'front', x: 0.453, y: 0.281 },
-      ring: { view: 'front', x: 0.47, y: 0.378 },
-      brake: { view: 'front', x: 0.353, y: 0.435 },
-      brakea: { view: 'front', x: 0.36, y: 0.445 },
-      xy: { view: 'front', x: 0.514, y: 0.65 },
-      lvl: { view: 'thumb', x: 0.57, y: 0.065 },
-      gun: { view: 'thumb', x: 0.555, y: 0.15 },
-      dc: { view: 'thumb', x: 0.7, y: 0.21 },
-    },
-  },
   // VIRPIL Alpha Prime R: matched to the VIRPIL button map; the 'front' photo is the rear view. Lower trigger t4 estimated (hidden behind the trigger).
   'builtin-virpil-alpha-prime': {
     views: [{ id: 'back', label: 'Thumb side', photo: 'virpil-alpha-prime-back' }, { id: 'front', label: 'Rear', photo: 'virpil-alpha-prime-front' }],

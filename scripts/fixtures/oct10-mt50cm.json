@@ -1,0 +1,554 @@
+{
+  "aspect": 1.7707070707070707,
+  "views": [
+    {
+      "id": "main",
+      "label": "Panel Side Grip",
+      "image": "/device-photos/virpil-mt50cm-panel.webp",
+      "width": 1753,
+      "height": 990
+    },
+    {
+      "id": "p2",
+      "label": "Axis Front Grip",
+      "image": "/device-photos/virpil-mt50cm-front.webp",
+      "width": 1498,
+      "height": 846
+    }
+  ],
+  "callouts": [
+    {
+      "id": "qlij6yto",
+      "kind": "hat",
+      "inputs": [
+        "button17",
+        "button14",
+        "button15",
+        "button16",
+        "button13"
+      ],
+      "anchor": {
+        "x": 0.6756862386067708,
+        "y": 0.20986111958821616
+      },
+      "box": {
+        "x": 0.9009411980124081,
+        "y": 0.06319444444444444
+      },
+      "view": "main"
+    },
+    {
+      "id": "eopdbdd5",
+      "kind": "encoder",
+      "inputs": [
+        "button18",
+        "button19"
+      ],
+      "anchor": {
+        "x": 0.6708235318053003,
+        "y": 0.16041666666666668
+      },
+      "box": {
+        "x": 0.7516078455307904,
+        "y": 0.052083333333333336
+      },
+      "view": "main",
+      "label": "Wheel"
+    },
+    {
+      "id": "0ro528im",
+      "kind": "button",
+      "inputs": [
+        "button20"
+      ],
+      "anchor": {
+        "x": 0.6621960808249081,
+        "y": 0.2826388888888889
+      },
+      "box": {
+        "x": 0.9040784529143688,
+        "y": 0.2654166751437717
+      },
+      "view": "main"
+    },
+    {
+      "id": "4zijh859",
+      "kind": "hat",
+      "inputs": [
+        "button25",
+        "button22",
+        "button23",
+        "button24",
+        "button21"
+      ],
+      "anchor": {
+        "x": 0.6182745121974571,
+        "y": 0.22291666666666668
+      },
+      "box": {
+        "x": 0.40964706121706496,
+        "y": 0.03319443596733941
+      },
+      "view": "main"
+    },
+    {
+      "id": "tk1zfqgb",
+      "kind": "button",
+      "inputs": [
+        "button31"
+      ],
+      "anchor": {
+        "x": 0.5798431396484375,
+        "y": 0.25069444444444444
+      },
+      "box": {
+        "x": 0.2182745121974571,
+        "y": 0.09541666242811415
+      },
+      "view": "main"
+    },
+    {
+      "id": "bmxe1v63",
+      "kind": "hat",
+      "inputs": [
+        "button30",
+        "button27",
+        "button28",
+        "button29",
+        "button26"
+      ],
+      "anchor": {
+        "x": 0.6120000023935356,
+        "y": 0.29375
+      },
+      "box": {
+        "x": 0.9,
+        "y": 0.391
+      },
+      "view": "main"
+    },
+    {
+      "id": "4so3wydg",
+      "kind": "button",
+      "inputs": [
+        "button32"
+      ],
+      "anchor": {
+        "x": 0.5900392180798101,
+        "y": 0.3298611111111111
+      },
+      "box": {
+        "x": 0.9,
+        "y": 0.498
+      },
+      "view": "main"
+    },
+    {
+      "id": "cbyrrdn1",
+      "kind": "axis",
+      "inputs": [
+        "rotz"
+      ],
+      "anchor": {
+        "x": 0.35129410089231006,
+        "y": 0.38319443596733943
+      },
+      "box": {
+        "x": 0.09090196796492034,
+        "y": 0.7531944274902344
+      },
+      "view": "p2",
+      "label": "Lever"
+    },
+    {
+      "id": "sr5q7m2i",
+      "kind": "switch",
+      "inputs": [
+        "button43",
+        ""
+      ],
+      "anchor": {
+        "x": 0.5837647082758884,
+        "y": 0.5868055555555556
+      },
+      "box": {
+        "x": 0.9,
+        "y": 0.712
+      },
+      "view": "main",
+      "label": "T2"
+    },
+    {
+      "id": "gkvkfsko",
+      "kind": "switch",
+      "inputs": [
+        "button44",
+        ""
+      ],
+      "anchor": {
+        "x": 0.5476862769033395,
+        "y": 0.6201388888888889
+      },
+      "box": {
+        "x": 0.9,
+        "y": 0.819
+      },
+      "view": "main",
+      "label": "T3"
+    },
+    {
+      "id": "7n6pzk47",
+      "kind": "switch",
+      "inputs": [
+        "button93",
+        "button94",
+        "button95",
+        "button96",
+        "button97"
+      ],
+      "anchor": {
+        "x": 0.4904313749425551,
+        "y": 0.6368055555555555
+      },
+      "box": {
+        "x": 0.7635293758616728,
+        "y": 0.8754166497124566
+      },
+      "view": "main",
+      "label": "MODE"
+    },
+    {
+      "id": "f2485x4t",
+      "kind": "encoder",
+      "inputs": [
+        "button60",
+        "button59",
+        "button58"
+      ],
+      "anchor": {
+        "x": 0.4551372572954963,
+        "y": 0.7118055555555556
+      },
+      "box": {
+        "x": 0.5759215710209865,
+        "y": 0.9220833672417534
+      },
+      "view": "main",
+      "label": "E3"
+    },
+    {
+      "id": "mtxi15i1",
+      "kind": "encoder",
+      "inputs": [
+        "button57",
+        "button56",
+        "button55"
+      ],
+      "anchor": {
+        "x": 0.4269019631778493,
+        "y": 0.6729166666666667
+      },
+      "box": {
+        "x": 0.45356862984451596,
+        "y": 0.9331944783528646
+      },
+      "view": "main",
+      "label": "E2"
+    },
+    {
+      "id": "r9o62f2n",
+      "kind": "encoder",
+      "inputs": [
+        "button54",
+        "button53",
+        "button52"
+      ],
+      "anchor": {
+        "x": 0.39552941415824144,
+        "y": 0.6284722222222222
+      },
+      "box": {
+        "x": 0.3343529435700061,
+        "y": 0.9265277438693577
+      },
+      "view": "main",
+      "label": "E1"
+    },
+    {
+      "id": "p6b7xkpy",
+      "kind": "axis",
+      "inputs": [
+        "slider1"
+      ],
+      "anchor": {
+        "x": 0.6449411788641237,
+        "y": 0.3398611280653212
+      },
+      "box": {
+        "x": 0.8877646891276042,
+        "y": 0.10430556403266059
+      },
+      "view": "p2",
+      "label": "A2"
+    },
+    {
+      "id": "c2kh05ul",
+      "kind": "axis",
+      "inputs": [
+        "slider2"
+      ],
+      "anchor": {
+        "x": 0.685725492589614,
+        "y": 0.3798611111111111
+      },
+      "box": {
+        "x": 0.9059608250038297,
+        "y": 0.28208334181043837
+      },
+      "view": "p2",
+      "label": "A1"
+    },
+    {
+      "id": "5p5jsedd",
+      "kind": "switch",
+      "inputs": [
+        "button45",
+        "button46"
+      ],
+      "anchor": {
+        "x": 0.357882355334712,
+        "y": 0.48125
+      },
+      "box": {
+        "x": 0.07270587995940564,
+        "y": 0.6009722391764323
+      },
+      "view": "main",
+      "label": "T4"
+    },
+    {
+      "id": "a5ha4o2f",
+      "kind": "switch",
+      "inputs": [
+        "button47",
+        "button48"
+      ],
+      "anchor": {
+        "x": 0.38705883549708947,
+        "y": 0.5143055386013455
+      },
+      "box": {
+        "x": 0.12541177188648897,
+        "y": 0.7520833333333333
+      },
+      "view": "main",
+      "label": "T5"
+    },
+    {
+      "id": "yt7ylqz7",
+      "kind": "switch",
+      "inputs": [
+        "button49",
+        "button50"
+      ],
+      "anchor": {
+        "x": 0.41705883549708944,
+        "y": 0.5443055386013456
+      },
+      "box": {
+        "x": 0.23019609039905026,
+        "y": 0.8165278116861979
+      },
+      "view": "main",
+      "label": "T6"
+    },
+    {
+      "id": "d8bary6z",
+      "kind": "buttons",
+      "inputs": [
+        "button33",
+        "button34",
+        "button35",
+        "button36",
+        "button37",
+        "button38",
+        "button39",
+        "button40"
+      ],
+      "anchor": {
+        "x": 0.4629803945503983,
+        "y": 0.48541666666666666
+      },
+      "box": {
+        "x": 0.1,
+        "y": 0.28400000000000003
+      },
+      "view": "main",
+      "label": "B1-B8"
+    },
+    {
+      "id": "81twnl14",
+      "kind": "switch",
+      "inputs": [
+        "button42",
+        "button41"
+      ],
+      "anchor": {
+        "x": 0.5280784337660845,
+        "y": 0.53125
+      },
+      "box": {
+        "x": 0.9,
+        "y": 0.605
+      },
+      "view": "main",
+      "label": "T1"
+    },
+    {
+      "id": "og69opzs",
+      "kind": "axis",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "anchor": {
+        "x": 0.37121568866804533,
+        "y": 0.2965277777777778
+      },
+      "box": {
+        "x": 0.11349019368489584,
+        "y": 0.16986109415690104
+      },
+      "view": "p2",
+      "label": "Ministick"
+    },
+    {
+      "id": "gm59mkih",
+      "kind": "hat",
+      "inputs": [
+        "button10",
+        "button9",
+        "button8",
+        "button11",
+        "button7"
+      ],
+      "anchor": {
+        "x": 0.40180392396216297,
+        "y": 0.3284722222222222
+      },
+      "box": {
+        "x": 0.3381176398782169,
+        "y": 0.03
+      },
+      "view": "p2"
+    },
+    {
+      "id": "cn1mosed",
+      "kind": "axis",
+      "inputs": [
+        "z"
+      ],
+      "anchor": {
+        "x": 0.4386666690602022,
+        "y": 0.35625
+      },
+      "box": {
+        "x": 0.5395293950099571,
+        "y": 0.035416666666666666
+      },
+      "view": "p2",
+      "label": "Slide"
+    },
+    {
+      "id": "e9zw01gc",
+      "kind": "encoder",
+      "inputs": [
+        "button4",
+        "button6",
+        "button5"
+      ],
+      "anchor": {
+        "x": 0.4637647082758885,
+        "y": 0.3909722222222222
+      },
+      "box": {
+        "x": 0.6863529818665748,
+        "y": 0.052083333333333336
+      },
+      "view": "p2",
+      "label": "Rocker"
+    },
+    {
+      "id": "ptqvje86",
+      "kind": "button",
+      "inputs": [
+        "button3"
+      ],
+      "anchor": {
+        "x": 0.4904313749425551,
+        "y": 0.42986111111111114
+      },
+      "box": {
+        "x": 0.7785882568359375,
+        "y": 0.7765277438693576
+      },
+      "view": "p2"
+    },
+    {
+      "id": "y7dbqf07",
+      "kind": "switch",
+      "inputs": [
+        "button2",
+        "button1"
+      ],
+      "anchor": {
+        "x": 0.5625882376876532,
+        "y": 0.3840277777777778
+      },
+      "box": {
+        "x": 0.8676862769033394,
+        "y": 0.5454166836208767
+      },
+      "view": "p2",
+      "label": "Pinky"
+    },
+    {
+      "id": "qhgqpiei",
+      "kind": "axis",
+      "inputs": [
+        "rotx"
+      ],
+      "anchor": {
+        "x": 0.5084705906288297,
+        "y": 0.5326388888888889
+      },
+      "box": {
+        "x": 0.5953725418390012,
+        "y": 0.86875
+      },
+      "view": "p2",
+      "label": "Left Throttle"
+    },
+    {
+      "id": "tav9qoc6",
+      "kind": "axis",
+      "inputs": [
+        "roty"
+      ],
+      "anchor": {
+        "x": 0.4590588259229473,
+        "y": 0.4840277777777778
+      },
+      "box": {
+        "x": 0.30486276663985906,
+        "y": 0.8609722561306423
+      },
+      "view": "p2",
+      "label": "Right Throttle"
+    }
+  ],
+  "photoHashes": {
+    "/device-photos/virpil-mt50cm-panel.webp": "e665df6b56e8cf970fb1602afe67b4cf4b5e4168abf4dbdcd09eea1bbeb82485",
+    "/device-photos/virpil-mt50cm-front.webp": "5164f72bf0f748185f5ff9bc5c4e6c8cc8e338d588a1ec07468a1ced238b589f"
+  }
+}

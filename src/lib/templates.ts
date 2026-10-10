@@ -59,6 +59,8 @@ export interface TemplateMatch {
   vendor?: string; product?: string;
   /** part of the device name (case and punctuation ignored) */
   name?: string;
+  /** require the name fragment to end at a word boundary (e.g. MT-50CM must not match MT-50CM3) */
+  nameBoundary?: boolean;
   /** exact button count: tells apart devices sharing one USB id (e.g. two MOZA bases with 128 and 133 buttons) */
   buttons?: number;
 }
@@ -238,7 +240,10 @@ export function matchScore(t: Pick<DeviceTemplate, 'match' | 'slot'>, d: DeviceI
     if (m.name) {
       any = true;
       const a = norm(m.name), b = norm(d.name ?? '');
-      if (a && b.includes(a)) s += 5; else ok = false;
+      const matches = m.nameBoundary
+        ? new RegExp(`${a.split('').join('[^a-z0-9]*')}(?![a-z0-9])`, 'i').test(d.name ?? '')
+        : b.includes(a);
+      if (a && matches) s += 5; else ok = false;
     }
     if (m.buttons) {
       any = true;
@@ -421,7 +426,7 @@ export function cleanTemplate(o: unknown, i = 0): DeviceTemplate {
     const v = typeof q.vendor === 'string' && /^(0x)?[0-9a-f]{1,4}$/i.test(q.vendor) ? hex4(q.vendor) : undefined;
     const p = typeof q.product === 'string' && /^(0x)?[0-9a-f]{1,4}$/i.test(q.product) ? hex4(q.product) : undefined;
     const b = Number(q.buttons);
-    return { ...(v ? { vendor: v } : {}), ...(p ? { product: p } : {}), ...(typeof q.name === 'string' && q.name.trim() ? { name: q.name.trim().slice(0, 80) } : {}), ...(Number.isInteger(b) && b > 0 && b < 1000 ? { buttons: b } : {}) };
+    return { ...(v ? { vendor: v } : {}), ...(p ? { product: p } : {}), ...(typeof q.name === 'string' && q.name.trim() ? { name: q.name.trim().slice(0, 80), ...(q.nameBoundary === true ? { nameBoundary: true } : {}) } : {}), ...(Number.isInteger(b) && b > 0 && b < 1000 ? { buttons: b } : {}) };
   }).filter((m) => Object.keys(m).length);
   return {
     version: 1, id: typeof t.id === 'string' && t.id && !t.id.startsWith('builtin-') ? t.id.slice(0, 40) : uid(), name: t.name.trim().slice(0, 80),
