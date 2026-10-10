@@ -664,11 +664,12 @@ const MOZA_NOTE = 'Default numbering from the MOZA diagrams (1-based: button N =
 // MOZA AB6 + MHG: exact callouts from Federico's export (2026-10-06) — photoTplExact, not withPhotoLayout.
 photoTplExactViews({
   id: 'builtin-moza-ab6', category: 'stick', name: 'MOZA AB6/9 base + MHG grip', brand: 'MOZA',
-  notes: MOZA_NOTE + ' MHG 1-24, ministick 25-29, base 49-62. Positions from published export. 128+ buttons: Chrome / Edge cap at 32 — use Firefox.',
+  notes: MOZA_NOTE + ' MHG 1-24, ministick 25-29, base 49-62. Positions from published export. AB9 reference photo has an MH16 grip; choose that grip under Grips for this base. 128+ buttons: Chrome / Edge cap at 32 — use Firefox.',
   match: [{ vendor: '346E', product: '1002' }, { name: 'AB6' }, { name: 'MOZA AB6' }, { vendor: '346E', product: '1000' }, { name: 'AB9' }],
 }, [
   { id: 'front', label: 'Front', photo: 'moza-ab6-front', width: 1594, height: 990 },
   { id: 'back', label: 'Back', photo: 'moza-ab6-back', width: 1594, height: 990 },
+  { id: 'ab9', label: 'AB9 base (MH16 reference)', photo: 'moza-ab9-main', ...pageSizeForPhoto(DEVICE_PHOTO_SIZES['moza-ab9-main'][0], DEVICE_PHOTO_SIZES['moza-ab9-main'][1]) },
 ], [
   { id: 'b2', kind: 'button', inputs: b(2), label: 'Button 2', group: 'Grip head', view: 'front',
     anchor: { x: 0.4429657794676806, y: 0.11616457568739635 }, box: { x: 0.29884200810005684, y: 0.0521026303093653 } },
@@ -1308,6 +1309,115 @@ pedalTpl({
   match: [{ vendor: '231D', product: '011F' }, { name: 'VKBsim T-Rudder' }, { name: 'VKB T-Rudder' }, { name: 'T-Rudder Mk' }],
 }, 'vkb-t-rudder-main', [
   { id: 'rudder', input: 'rotx', label: 'Rudder', at: [0.47, 0.38], box: [PEDAL_L, 0.2] },
+]);
+
+/* ------------------------------------------------------------------ October 9 photo additions */
+// ICP numbering and axes: supplied SimAppPro diagram. USB 4098:BF30: the real Firefox device list in scripts/e2e.mjs.
+photoTpl({
+  id: 'builtin-winctrl-viperace-icp', category: 'panel', name: 'WinCtrl ViperAce ICP', brand: 'WinCtrl',
+  notes: WC_NOTE + ' ICP buttons 1–34 and axes X / Y / RX / RY from the supplied SimAppPro diagram. Chrome / Edge cap at 32 buttons — use Firefox for 33–34.',
+  match: [{ vendor: '4098', product: 'BF30' }, { name: 'ICP' }, { name: 'ViperAce ICP' }],
+}, [
+  c('modes', 'buttons', b(...range(1, 6)), 'COM / IFF / LIST / A-A / A-G', 'Keypad'),
+  c('row1', 'buttons', b(7, 8, 9, 10), '1 / 2 / 3 / RCL', 'Keypad'),
+  c('row2', 'buttons', b(11, 12, 13, 14), '4 / 5 / 6 / ENTR', 'Keypad'),
+  c('row3', 'buttons', b(15, 16, 17, 18), '7 / 8 / 9 / 0', 'Keypad'),
+  c('inc', 'switch', b(19, 20), 'Increment / decrement', 'Switches'),
+  c('dcs', 'hat', b(22, 23, 24, 25, 21), 'DCS (4-way + push)', 'Switches'),
+  c('drift', 'switch', b(26, 27, 28), 'DRIFT C/O / NORM / WARN RESET', 'Switches'),
+  c('wx', 'button', b(29), 'WX', 'Switches'),
+  c('flir', 'switch', b(30, 31), 'FLIR up / down', 'Switches'),
+  c('gain', 'switch', b(32, 33, 34), 'GAIN / LVL / AUTO', 'Switches'),
+  c('sym', 'axis', ['y'], 'SYM brightness', 'Axes'),
+  c('icpbrt', 'axis', ['roty'], 'ICP brightness', 'Axes'),
+  c('dedbrt', 'axis', ['x'], 'DED brightness', 'Axes'),
+  c('cont', 'axis', ['rotx'], 'Contrast', 'Axes'),
+]);
+
+pedalTpl({
+  id: 'builtin-virpil-r1-legend', category: 'pedals', name: 'VIRPIL R1-LEGEND Rudder Pedals', brand: 'VIRPIL',
+  notes: 'Same axis layout as R1-FALCON: left toe brake = slider1 (Slider), right toe brake = slider2 (Dial), rudder = z. No buttons. Matched by name only. The VPC Configurator can rename or move the axes: Customize a copy if your numbers differ.',
+  match: [{ name: 'R1-LEGEND' }, { name: 'R1 LEGEND' }],
+}, 'virpil-r1-legend-main', [
+  { id: 'ltoe', input: 'slider1', label: 'Left Toe Brake', at: [0.145, 0.345], box: [PEDAL_L, 0.28] },
+  { id: 'rtoe', input: 'slider2', label: 'Right Toe Brake', at: [0.72, 0.14], box: [PEDAL_R, 0.2] },
+  { id: 'rudder', input: 'z', label: 'Rudder', at: [0.49, 0.57], box: [PEDAL_R, 0.8] },
+]);
+
+// Always expose both base axes, including in the grip variants. X/Y are provisional axis-order assignments: no supplied
+// base diagram identifies their DirectInput names. The Plus idle button has no verified logical number, so keep it unassigned
+// (especially with a grip: assigning button1 here would collide with every supplied grip diagram).
+// The requested "Clutch" label denotes the Plus twist throttle axis; VIRPIL's clutch damper is mechanical, not another input.
+const ROTOR_NOTE = 'Default grip numbering: VIRPIL diagrams (button N = jsX_buttonN). VPC Configurator can renumber: Customize a copy. Base X/Y provisional (collective/Plus twist throttle). “Clutch” = twist throttle; damper/lock mechanical. Plus idle number unknown: assign in a copy.';
+const ROTOR_AXES: Spec[] = [
+  c('collective', 'axis', ['x'], 'Collective axis', 'Base'),
+  c('clutch', 'axis', ['y'], 'Clutch (TCS Plus only)', 'Base'),
+  c('idle', 'button', u(1), 'Engine idle (TCS Plus only)', 'Base'),
+];
+photoTpl({
+  id: 'builtin-virpil-rotor-tcs', category: 'collective', name: 'VIRPIL Rotor TCS / TCS Plus base', brand: 'VIRPIL',
+  notes: ROTOR_NOTE, match: [{ name: 'Rotor TCS' }],
+}, ROTOR_AXES);
+
+photoTpl({
+  id: 'builtin-virpil-rotor-tcs-dual', category: 'collective', name: 'VIRPIL Rotor TCS / TCS Plus + Dual grip', brand: 'VIRPIL',
+  variantOf: 'builtin-virpil-rotor-tcs', match: [],
+  notes: ROTOR_NOTE + ' Dual-SF: 1–47, cursor RX/RY; 46/47 = alternate action. Head button anchor estimated. >32 buttons: use Firefox (Chrome/Edge cap 32).',
+}, [
+  ...ROTOR_AXES,
+  c('b1', 'button', b(1), 'Head button', 'Upper grip'),
+  c('h2', 'hat', b(3, 4, 5, 6, 2), 'Upper thumb hat', 'Upper grip'),
+  c('h7', 'hat', b(8, 9, 10, 11, 7), 'GTM / F-P / ATH hat', 'Upper grip'),
+  c('cursor', 'axis', ['rotx', 'roty'], 'Cursor ministick', 'Upper grip'),
+  c('cursorb', 'button', b(12), 'Cursor press', 'Upper grip'),
+  c('h13', 'hat', b(14, 15, 16, 17, 13), 'LINK hat', 'Upper grip'),
+  c('b18', 'button', b(18), 'Upper front button', 'Upper grip'),
+  c('trig19', 'button', b(19), 'Upper trigger', 'Upper grip'),
+  c('b20', 'button', b(20), 'Upper side button', 'Upper grip'),
+  c('s21', 'switch', b(22, 21, 23), 'Upper rocker (up / push / down)', 'Upper grip'),
+  c('b24', 'button', b(24), 'Upper rear button', 'Upper grip'),
+  c('s25', 'switch', b(27, 25, 26), 'Lower rocker (left / push / right)', 'Lower grip'),
+  c('s28', 'switch', b(28, 29, 45), 'STOW / DEP switch (+ alternate)', 'Lower grip'),
+  c('h30', 'hat', b(31, 32, 33, 34, 30), 'EXT / RET hat', 'Lower grip'),
+  c('s35', 'switch', b(35, 46), 'PNVS button / alternate action', 'Lower grip'),
+  c('s36', 'switch', b(37, 36, 38), 'PNVS rocker (up / push / down)', 'Lower grip'),
+  c('s39', 'switch', b(40, 39, 41), 'NU rocker (up / push / down)', 'Lower grip'),
+  c('trig42', 'button', b(42), 'Lower trigger', 'Lower grip'),
+  c('s43', 'switch', b(43, 47), 'JETT / alternate action', 'Lower grip'),
+  c('b44', 'button', b(44), 'Lower rear button', 'Lower grip'),
+]);
+
+photoTpl({
+  id: 'builtin-virpil-rotor-tcs-sharka50', category: 'collective', name: 'VIRPIL Rotor TCS / TCS Plus + SharKa-50 grip', brand: 'VIRPIL',
+  variantOf: 'builtin-virpil-rotor-tcs', match: [],
+  notes: ROTOR_NOTE + ' SharKa-50 diagram: 1–12, 14–23 (13 not drawn). Hats: up/right/down/left/push.',
+}, [
+  ...ROTOR_AXES,
+  c('b1', 'button', b(1), 'Left push button', 'Grip'),
+  c('s2', 'switch', b(2, 3), 'Left toggle', 'Grip'),
+  c('h4', 'hat', b(5, 6, 7, 8, 4), 'Lower hat', 'Grip'),
+  c('h9', 'hat', b(10, 11, 12, 23, 9), 'Upper hat', 'Grip'),
+  c('s14', 'switch', b(15, 14, 16), 'Rocker (up / push / down)', 'Grip'),
+  c('s17', 'switch', b(17, 18), 'Middle toggle', 'Grip'),
+  c('b19', 'button', b(19), 'Red push button', 'Grip'),
+  c('b20', 'button', b(20), 'Right push button', 'Grip'),
+  c('s21', 'switch', b(21, 22), 'Right toggle', 'Grip'),
+]);
+
+photoTpl({
+  id: 'builtin-virpil-rotor-tcs-hawk60', category: 'collective', name: 'VIRPIL Rotor TCS / TCS Plus + Hawk-60 grip', brand: 'VIRPIL',
+  variantOf: 'builtin-virpil-rotor-tcs', match: [],
+  notes: ROTOR_NOTE + ' Hawk-60 diagram: 1–27. Side hat 2–6 partly hidden: anchor estimated at exposed edge.',
+}, [
+  ...ROTOR_AXES,
+  c('trig', 'button', b(1), 'Trigger', 'Grip'),
+  c('h2', 'hat', b(3, 4, 5, 6, 2), 'Side hat', 'Grip'),
+  c('h7', 'hat', b(8, 9, 10, 11, 7), 'EXT hat', 'Grip'),
+  c('s12', 'switch', b(13, 12, 14), 'ENG RPM (up / push / down)', 'Grip'),
+  c('b15', 'button', b(15), 'EMER REL / HOOK', 'Grip'),
+  c('h16', 'hat', b(17, 18, 19, 20, 16), 'SRCH LT / SVO hat', 'Grip'),
+  c('s21', 'switch', b(21, 22), 'STG toggle', 'Grip'),
+  c('h23', 'hat', b(24, 25, 26, 27, 23), 'LDG LT hat', 'Grip'),
 ]);
 
 export const DEVICE_TEMPLATES: DeviceTemplate[] = ALL;

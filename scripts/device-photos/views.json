@@ -40,12 +40,21 @@
     { "device": "moza-ab6-carrierace", "view": "front", "label": "Front (on AB6)", "src": "stick/moza/ab6-grips/federico-ab6-three-grips.png", "crop": [548, 100, 972, 1050] },
     { "device": "moza-ab6-carrierace", "view": "rear", "label": "Rear", "src": "stick/moza/ab6-grips/federico-carrierace-rear.jpg" },
     { "device": "moza-ab6-viperace", "view": "front", "label": "Front (on AB6)", "src": "stick/moza/ab6-grips/federico-ab6-three-grips.png", "crop": [972, 100, 1448, 1050] },
-    { "device": "honeycomb-charlie", "view": "main", "label": "Pedals", "src": "../../pedals/honeycomb/HC003073_CHARLIERUDDERPEDALS_2.webp" },
-    { "device": "logitech-flight-rudder", "view": "main", "label": "Pedals", "src": "../../pedals/logitech/flight-rudder-pedals-gallery-3.webp" },
-    { "device": "mfg-crosswind-v3", "view": "main", "label": "Pedals", "src": "../../pedals/mfg/mfg-crosswind-v3-base-clean.png" },
-    { "device": "tm-tfrp", "view": "main", "label": "Pedals", "src": "../../pedals/thrustmaster/tfrp/tfrp-rudder_1_1.webp" },
-    { "device": "tm-tpr", "view": "main", "label": "Pedals", "src": "../../pedals/thrustmaster/tpr/tpr_1000x100-3.webp" },
-    { "device": "virpil-r1-falcon", "view": "main", "label": "Pedals", "src": "../../pedals/virpil/vpc-305-001_04.jpg" },
-    { "device": "vkb-t-rudder", "view": "main", "label": "Pedals", "src": "../../pedals/vkb/T-Rudder_1200_03.webp", "crop": [0, 120, 600, 600] }
+    { "device": "honeycomb-charlie", "view": "main", "label": "Pedals", "src": "../../oct9b/pedals/honeycomb/charlie/HC003073_CHARLIERUDDERPEDALS_2.webp" },
+    { "device": "logitech-flight-rudder", "view": "main", "label": "Pedals", "src": "../../oct9b/pedals/logitech/flight-rudder-pedals-gallery-3.webp" },
+    { "device": "mfg-crosswind-v3", "view": "main", "label": "Pedals", "src": "../../oct9b/pedals/mfg/crosswindV3/mfg-crosswind-v3-base.jpg" },
+    { "device": "tm-tfrp", "view": "main", "label": "Pedals", "src": "../../oct9b/pedals/thrustmaster/tfrp/tfrp-rudder_1_1.webp" },
+    { "device": "tm-tpr", "view": "main", "label": "Pedals", "src": "../../oct9b/pedals/thrustmaster/tpr/tpr_1000x100-3.webp" },
+    { "device": "virpil-r1-falcon", "view": "main", "label": "Pedals", "src": "../../oct9b/pedals/virpil/R1-falcon/vpc-305-001_04.jpg" },
+    { "device": "vkb-t-rudder", "view": "main", "label": "Pedals", "src": "../../oct9b/pedals/vkb/T-Rudder/T-Rudder_1200_03.webp", "crop": [0, 120, 600, 480] },
+    { "device": "virpil-r1-legend", "view": "main", "label": "Main", "src": "../../oct9b/pedals/virpil/R1-Legend/vpc-305-002_01.jpg" },
+    { "device": "winctrl-viperace-icp", "view": "main", "label": "Main", "src": "../../oct9b/panels/winctrl/icp/QmZLCq6pvPsVLQx8HUpCJta2RpcWnRCbXhx6eKXjRfxgtu.png" },
+    { "device": "virpil-rotor-tcs", "view": "main", "label": "Main", "src": "../../oct9b/collectives/virpil/Rotor TCS/vpc-111-200_02.jpg" },
+    { "device": "virpil-rotor-tcs-plus", "view": "main", "label": "Main", "src": "../../oct9b/collectives/virpil/Rotor TCS Plus/vpc-112-001_01.jpg" },
+    { "device": "virpil-rotor-tcs-dual", "view": "front", "label": "Front", "src": "../../oct9b/collectives/virpil/dual/vpc-014_03.jpg" },
+    { "device": "virpil-rotor-tcs-dual", "view": "rear", "label": "Rear", "src": "../../oct9b/collectives/virpil/dual/vpc-014_06.jpg" },
+    { "device": "virpil-rotor-tcs-sharka50", "view": "main", "label": "Main", "src": "../../oct9b/collectives/virpil/shakra-50/vpc-011_02-e.jpg" },
+    { "device": "virpil-rotor-tcs-hawk60", "view": "main", "label": "Main", "src": "../../oct9b/collectives/virpil/hawk-60/vpc-012_01.jpg" },
+    { "device": "moza-ab9", "view": "main", "label": "Main", "src": "../../oct9b/stick/moza/ab9/10.jpg" }
   ]
 }

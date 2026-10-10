@@ -43,6 +43,17 @@ export interface DevicePhotoLayout {
 // Photo layouts (measured on the photos with grid overlays; controls hidden on every photo are placed at their best estimated spot).
 // Done: Thrustmaster HOTAS Warthog stick + throttle, T.16000M, TWCS, MOZA AB6 + MHG, VKB Gladiator SCG, VKB Gunfighter MCG, VIRPIL Alpha Prime, WinCtrl CarrierAce / ViperAce / Orion throttle / Orion pedals / URSA / CarrierAce MFD L+PTO 2+UFC+HUD, Azeron keypad, Logitech X56 stick + throttle, VKB STECS, MOZA MTP, MOZA MTQ, VIRPIL VMAX Prime, WinCtrl Orion (F-15EX), WinCtrl URSA MINOR Combat (measured with grid overlays, grips per the WinCtrl grip maps). All device templates now have a photo layout.
 // Thrustmaster HOTAS Warthog: measured on the photos with grid overlays (see the Thrustmaster manual for the control names).
+// October 9 Rotor bases: collective pivot on the plain base; Plus twist handle and idle button on the Plus photo.
+// Top rubber caps cover mechanical clutch adjustment screws; rear round caps are connectors, not button inputs.
+const ROTOR_BASE_VIEWS: PhotoLayoutView[] = [
+  { id: 'base', label: 'Rotor TCS base', photo: 'virpil-rotor-tcs-main' }, { id: 'plus', label: 'Rotor TCS Plus base', photo: 'virpil-rotor-tcs-plus-main' }
+];
+const ROTOR_BASE_ANCHORS: Record<string, PhotoAnchor> = {
+  collective: { view: 'base', x: 0.41952, y: 0.64141, side: 'L' },
+  clutch: { view: 'plus', x: 0.22849, y: 0.2977, side: 'L' },
+  idle: { view: 'plus', x: 0.12715, y: 0.08796, side: 'R' },
+};
+
 export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
   'builtin-tm-warthog-stick': {
     views: [{ id: 'thumb', label: 'Thumb side', photo: 'tm-warthog-stick-thumb' }, { id: 'side', label: 'Left side', photo: 'tm-warthog-stick-side' }],
@@ -418,6 +429,80 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       paddle: { view: 'side', x: 0.64, y: 0.66, side: 'R' },
       hatA: { view: 'rear', x: 0.78, y: 0.37, side: 'R' },
       rear: { view: 'rear', x: 0.7, y: 0.63, side: 'R' },
+    },
+  },
+
+  // October 9 supplied product photos and manufacturer diagrams. Dual head button / Hawk side hat: estimated.
+  'builtin-winctrl-viperace-icp': {
+    views: [{ id: 'main', label: 'ICP', photo: 'winctrl-viperace-icp-main' }],
+    anchors: {
+      modes: { view: 'main', x: 0.30781, y: 0.40629, side: 'R' },
+      row1: { view: 'main', x: 0.25038, y: 0.47622, side: 'L' },
+      row2: { view: 'main', x: 0.23583, y: 0.55594, side: 'L' },
+      row3: { view: 'main', x: 0.30015, y: 0.66084, side: 'L' },
+      inc: { view: 'main', x: 0.14165, y: 0.68671, side: 'L' },
+      dcs: { view: 'main', x: 0.23583, y: 0.73427, side: 'L' },
+      drift: { view: 'main', x: 0.33691, y: 0.78462, side: 'L' },
+      wx: { view: 'main', x: 0.5268, y: 0.59301, side: 'R' },
+      flir: { view: 'main', x: 0.50919, y: 0.69021, side: 'R' },
+      gain: { view: 'main', x: 0.46325, y: 0.82937, side: 'R' },
+      sym: { view: 'main', x: 0.11256, y: 0.4, side: 'L' },
+      icpbrt: { view: 'main', x: 0.07044, y: 0.6028, side: 'L' },
+      dedbrt: { view: 'main', x: 0.63093, y: 0.58951, side: 'R' },
+      cont: { view: 'main', x: 0.57427, y: 0.85175, side: 'R' },
+    },
+  },
+  'builtin-virpil-rotor-tcs': { views: ROTOR_BASE_VIEWS, anchors: ROTOR_BASE_ANCHORS },
+  'builtin-virpil-rotor-tcs-dual': {
+    views: [{ id: 'upper', label: 'Dual grip, upper controls', photo: 'virpil-rotor-tcs-dual-front' }, { id: 'lower', label: 'Dual grip, lower controls', photo: 'virpil-rotor-tcs-dual-front' }, { id: 'rear', label: 'Dual grip, rear controls', photo: 'virpil-rotor-tcs-dual-rear' }, ...ROTOR_BASE_VIEWS],
+    anchors: { ...ROTOR_BASE_ANCHORS,
+      b1: { view: 'rear', x: 0.6193, y: 0.07677, side: 'R' },
+      h2: { view: 'upper', x: 0.17668, y: 0.08333, side: 'L' },
+      h7: { view: 'upper', x: 0.18021, y: 0.17073, side: 'L' },
+      cursor: { view: 'upper', x: 0.28386, y: 0.10976, side: 'R' },
+      cursorb: { view: 'upper', x: 0.28504, y: 0.11789, side: 'R' },
+      h13: { view: 'upper', x: 0.34276, y: 0.12805, side: 'R' },
+      b18: { view: 'upper', x: 0.29682, y: 0.21037, side: 'L' },
+      trig19: { view: 'rear', x: 0.54692, y: 0.24848, side: 'R' },
+      b20: { view: 'upper', x: 0.42285, y: 0.25305, side: 'R' },
+      s21: { view: 'upper', x: 0.3934, y: 0.23577, side: 'L' },
+      b24: { view: 'rear', x: 0.50402, y: 0.43636, side: 'L' },
+      s25: { view: 'lower', x: 0.52768, y: 0.44817, side: 'L' },
+      s28: { view: 'lower', x: 0.61484, y: 0.41972, side: 'R' },
+      h30: { view: 'lower', x: 0.68551, y: 0.48577, side: 'R' },
+      s35: { view: 'lower', x: 0.53592, y: 0.5122, side: 'L' },
+      s36: { view: 'lower', x: 0.54888, y: 0.52541, side: 'L' },
+      s39: { view: 'lower', x: 0.59835, y: 0.52134, side: 'R' },
+      trig42: { view: 'rear', x: 0.6059, y: 0.66768, side: 'R' },
+      s43: { view: 'lower', x: 0.48645, y: 0.53963, side: 'L' },
+      b44: { view: 'rear', x: 0.38606, y: 0.83535, side: 'L' },
+    },
+  },
+  'builtin-virpil-rotor-tcs-sharka50': {
+    views: [{ id: 'grip', label: 'SharKa-50 grip', photo: 'virpil-rotor-tcs-sharka50-main' }, ...ROTOR_BASE_VIEWS],
+    anchors: { ...ROTOR_BASE_ANCHORS,
+      b1: { view: 'grip', x: 0.57374, y: 0.23188, side: 'L' },
+      s2: { view: 'grip', x: 0.64242, y: 0.15114, side: 'L' },
+      h4: { view: 'grip', x: 0.64747, y: 0.26605, side: 'L' },
+      h9: { view: 'grip', x: 0.71818, y: 0.15735, side: 'L' },
+      s14: { view: 'grip', x: 0.71111, y: 0.34472, side: 'L' },
+      s17: { view: 'grip', x: 0.81212, y: 0.24431, side: 'R' },
+      b19: { view: 'grip', x: 0.71515, y: 0.48551, side: 'R' },
+      b20: { view: 'grip', x: 0.78283, y: 0.39855, side: 'R' },
+      s21: { view: 'grip', x: 0.85354, y: 0.30952, side: 'R' },
+    },
+  },
+  'builtin-virpil-rotor-tcs-hawk60': {
+    views: [{ id: 'grip', label: 'Hawk-60 grip', photo: 'virpil-rotor-tcs-hawk60-main' }, ...ROTOR_BASE_VIEWS],
+    anchors: { ...ROTOR_BASE_ANCHORS,
+      trig: { view: 'grip', x: 0.41415, y: 0.49798, side: 'L' },
+      h2: { view: 'grip', x: 0.67742, y: 0.43737, side: 'R' },
+      h7: { view: 'grip', x: 0.44017, y: 0.24848, side: 'L' },
+      s12: { view: 'grip', x: 0.31946, y: 0.30505, side: 'L' },
+      b15: { view: 'grip', x: 0.26223, y: 0.17475, side: 'L' },
+      h16: { view: 'grip', x: 0.37565, y: 0.11414, side: 'R' },
+      s21: { view: 'grip', x: 0.50468, y: 0.13939, side: 'R' },
+      h23: { view: 'grip', x: 0.60146, y: 0.25657, side: 'R' },
     },
   },
 };
