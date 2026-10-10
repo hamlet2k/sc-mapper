@@ -94,9 +94,6 @@ export { CALLOUT_EDGE_PX, CALLOUT_GAP_PX } from '../lib/calloutLayout';
 /** single-picture canvases: label boxes have a fixed size in px, so the editor draws the picture at the width the Devices
  * view last showed (same aspect; a copy keeps it). */
 const shownWidth = new Map<string, number>();
-/** multi-view pages: the layout width (px, before any scale) the Devices view chose for that page. Set only by the
- * non-editable Devices view. The editor draws the page at this exact width, so both measure the same boxes. */
-const shownLayout = new Map<string, number>();
 const widthKey = (t: { aspect: number }, viewId?: string) => `${viewId ?? '-'}:${t.aspect.toFixed(4)}`;
 /** soft blend of a cut-out product photo into the dark UI: faint cyan rim, cyan glow and a drop shadow */
 const PHOTO_FILTER = 'drop-shadow(0 0 1px rgba(139,233,255,.45)) drop-shadow(0 0 18px rgba(79,216,255,.16)) drop-shadow(0 14px 22px rgba(0,0,0,.75))';
@@ -106,6 +103,30 @@ const VIGNETTE = 'radial-gradient(ellipse 75% 70% at 50% 50%, rgba(0,0,0,0) 55%,
 /** device picture(s) with callouts: classic templates one canvas; multi-view (photo) templates every view side by side (stacked when narrow) */
 export function DeviceCanvas(props: Props) {
   const { template: t, view, minWidth = 860 } = props;
+  // The editor shows one page at a time in a wider pane. Reuse the Devices page's actual column, including its
+  // side-by-side allocation, so both the layout width AND the final scale agree. Observe it while editing too.
+  const [deviceColumns, setDeviceColumns] = useState<Record<string, number>>({});
+  useLayoutEffect(() => {
+    if (!props.editable || !t.views?.length) return;
+    const wrap = document.querySelector<HTMLElement>('[data-testid=device-canvas-wrap]');
+    if (!wrap) return;
+    const frames = [...wrap.querySelectorAll<HTMLElement>('[data-testid=device-canvas-frame]')];
+    const measure = () => {
+      const next: Record<string, number> = {};
+      for (const frame of frames) {
+        const id = frame.querySelector<HTMLElement>('[data-view]')?.dataset.view;
+        if (id && frame.clientWidth) next[id] = frame.clientWidth;
+      }
+      setDeviceColumns((prev) => Object.keys(prev).length === Object.keys(next).length
+        && Object.entries(next).every(([id, w]) => prev[id] === w) ? prev : next);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap);
+    frames.forEach((frame) => ro.observe(frame));
+    return () => ro.disconnect();
+  }, [props.editable, t.id, !!t.views?.length]);
   if (!t.views?.length) return <ViewCanvas {...props} />;
   const views = view ? t.views.filter((v) => v.id === view).slice(0, 1) : t.views;
   const shown = views.length ? views : t.views.slice(0, 1);
@@ -116,8 +137,8 @@ export function DeviceCanvas(props: Props) {
       {shown.map((v) => {
         const a = v.width / v.height;
         const page = viewTemplate(t, v.id);
-        // the editor column is the layout width the Devices view recorded for this page (capped to the pane)
-        const locked = props.editable ? shownLayout.get(widthKey(page, v.id)) : undefined;
+        // Lock the displayed column, not the potentially larger canvas used to fit the callouts.
+        const locked = props.editable ? deviceColumns[v.id] : undefined;
         return (
           <div key={v.id} className="min-w-0" style={locked
             ? { flex: 'none', width: locked, maxWidth: '100%' }
@@ -192,8 +213,7 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
   // label stays readable. Done in the editor too, so the editor shows the boxes exactly where the Devices view will.
   const [nudge, setNudge] = useState<Record<string, number>>({});
   const frameRef = useRef<HTMLDivElement>(null);
-  const recorded0 = viewId && editable ? shownLayout.get(widthKey(t, viewId)) : undefined;
-  const [fit, setFit] = useState({ layoutW: recorded0 || (viewId ? Math.round(t.aspect * VIEW_MIN_H) : 0), scale: 1, frameH: 0 });
+  const [fit, setFit] = useState({ layoutW: viewId ? Math.round(t.aspect * VIEW_MIN_H) : 0, scale: 1, frameH: 0 });
   const relayout = useRef<() => void>(() => {});
   relayout.current = () => {
     const root = ref.current;
@@ -210,19 +230,10 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
       const frame = frameRef.current;
       const frameW = frame?.clientWidth ?? 0;
       if (!frameW) return;
-      const key = widthKey(t, viewId);
       const borderX = root.offsetWidth - W, borderY = root.offsetHeight - H;
       // fit is decided on the content box (the border stays 1 px whatever width we try)
       const fits = (w: number, h: number) => w - borderX >= 32 && h - borderY >= 32 && layoutCallouts(w - borderX, h - borderY, boxes).fits;
-      const recorded = editable ? shownLayout.get(key) : undefined;
-      // no record yet: the Devices column this page would get (the canvas wrap), else this column
-      let column = frameW;
-      if (editable && recorded === undefined) {
-        const wrap = document.querySelector<HTMLElement>('[data-testid=device-canvas-wrap]');
-        if (wrap && wrap.clientWidth > 0) column = wrap.clientWidth;
-      }
-      const layoutW = chooseLayoutWidth(recorded ?? column, t.aspect, fits, VIEW_MIN_H, VIEW_MAX_H);
-      if (!editable) shownLayout.set(key, layoutW);
+      const layoutW = chooseLayoutWidth(frameW, t.aspect, fits, VIEW_MIN_H, VIEW_MAX_H);
       // scale down only when the column is narrower than the layout width; scale 1 draws with no transform
       const scale = frameW + 0.5 < layoutW ? frameW / layoutW : 1;
       const frameH = scale === 1 ? 0 : Math.ceil(Math.round(layoutW / t.aspect) * scale);
@@ -249,7 +260,7 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
   const focused = !!viewId && pulse?.view === viewId;
   // Multi-view: lay out at the column width (never under aspect × VIEW_MIN_H). Grow toward aspect × VIEW_MAX_H by at
   // most LAYOUT_GROW per step, stopping at the smallest width in the step where the boxes stay inside. Scale the page
-  // down to the column; at scale 1 there is no transform. The editor reuses the width the Devices view recorded.
+  // down to the column; at scale 1 there is no transform. The editor reuses the Devices view's displayed column.
   const layoutW = viewId ? fit.layoutW : 0;
   const layoutH = layoutW ? Math.round(layoutW / t.aspect) : 0;
   const scaled = !!layoutW && fit.scale < 0.9995;

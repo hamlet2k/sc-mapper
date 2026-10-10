@@ -3204,7 +3204,7 @@ console.log('\nbutton rows up to 32 inputs, Fill range');
   await c10.close();
 }
 
-// ---- Save preserves every page's callout layout, including the VIRPIL Panel (19) regression.
+// ---- Save preserves every page's rendered photo and callout layout (VIRPIL Panel / VKB MCG Pro regressions).
 console.log('\nphoto-template layout before and after Save');
 {
   const layoutContext = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
@@ -3216,12 +3216,6 @@ console.log('\nphoto-template layout before and after Save');
     await lp.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
     await lp.locator('[data-view-tab=devices]').click();
     await lp.getByTestId('sidebar-slots').locator('[data-slot-row="js1"]').click();
-    const fixturePath = new URL('./fixtures/vmax-panel.sc-template.json', import.meta.url).pathname;
-    const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')).templates[0];
-    await lp.getByTestId('template-import-file').setInputFiles(fixturePath);
-    await lp.getByTestId('template-select').locator(`option[value="${fixture.id}"]`).waitFor({ state: 'attached' });
-    await lp.getByTestId('template-select').selectOption(fixture.id);
-    await lp.locator('[data-testid=device-view] [data-view=panel] [data-callout=h10]').waitFor();
     const layoutOf = ({ rootSel, viewId }) => {
       const root = rootSel ? document.querySelector(rootSel) : document;
       const canvas = root.querySelector(`[data-view="${CSS.escape(viewId)}"]`);
@@ -3269,6 +3263,7 @@ console.log('\nphoto-template layout before and after Save');
           x: (r.left + r.width / 2 - cr.left) / cr.width,
           y: (r.top + r.height / 2 - cr.top) / cr.height,
           w: r.width / cr.width, h: r.height / cr.height,
+          rect: { x: r.left - cr.left, y: r.top - cr.top, w: r.width, h: r.height },
           visible: clips.length === 0,
           clips,
         };
@@ -3278,16 +3273,21 @@ console.log('\nphoto-template layout before and after Save');
         const anchorEl = canvas.querySelector(`[data-anchor="${CSS.escape(id)}"]`) || canvas.querySelector(`[data-marker="${CSS.escape(id)}"]`);
         const box = place(el);
         const anchor = anchorEl ? place(anchorEl) : null;
-        return { id, box: { x: box.x, y: box.y, w: box.w, h: box.h }, anchor: anchor ? { x: anchor.x, y: anchor.y } : null, visible: box.visible, clips: box.clips };
+        return { id, box: { x: box.x, y: box.y, w: box.w, h: box.h }, rect: box.rect, anchor: anchor ? { x: anchor.x, y: anchor.y } : null, visible: box.visible, clips: box.clips };
       });
       const img = canvas.querySelector('img');
       let photo = null;
+      let photoRect = null;
       if (img && img.naturalWidth) {
-        const s = Math.min(cr.width / img.naturalWidth, cr.height / img.naturalHeight);
+        // object-contain draws inside the image element's content box, excluding the canvas border.
+        // Measure in rendered pixels after any ancestor scale, not just fractions that hide size differences.
+        const ir = img.getBoundingClientRect();
+        const s = Math.min(ir.width / img.naturalWidth, ir.height / img.naturalHeight);
         const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
-        photo = { x: (cr.width - dw) / 2 / cr.width, y: (cr.height - dh) / 2 / cr.height, w: dw / cr.width, h: dh / cr.height };
+        photoRect = { x: ir.left - cr.left + (ir.width - dw) / 2, y: ir.top - cr.top + (ir.height - dh) / 2, w: dw, h: dh };
+        photo = { x: photoRect.x / cr.width, y: photoRect.y / cr.height, w: dw / cr.width, h: dh / cr.height };
       }
-      return { canvas: { w: cr.width, h: cr.height, layoutW: canvas.offsetWidth, layoutH: canvas.offsetHeight }, photo, callouts, scale, transformed };
+      return { canvas: { w: cr.width, h: cr.height, layoutW: canvas.offsetWidth, layoutH: canvas.offsetHeight }, photo, photoRect, callouts, scale, transformed };
     };
     const snapshot = async (rootSel, viewId) => {
       const canvas = lp.locator(`${rootSel} [data-view="${viewId}"]`);
@@ -3300,41 +3300,54 @@ console.log('\nphoto-template layout before and after Save');
       return lp.evaluate(layoutOf, { rootSel, viewId });
     };
     const closeEnough = (a, b, keys) => a && b && keys.every((k) => Math.abs(a[k] - b[k]) <= 0.005);
-    for (const vp of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }]) {
-      await lp.setViewportSize(vp);
-      await lp.waitForTimeout(400);
-      await lp.getByTestId('template-edit').click();
-      const editor = lp.getByTestId('template-editor');
-      await editor.waitFor();
-      const before = new Map();
-      for (const view of fixture.views) {
-        await editor.locator(`[data-view-tab="${view.id}"]`).click();
-        before.set(view.id, await snapshot('[data-testid=template-editor]', view.id));
-      }
-      await editor.getByTestId('tpl-save').click();
-      await editor.waitFor({ state: 'detached' });
-      for (const view of fixture.views) {
-        const ed = before.get(view.id);
-        const dev = await snapshot('[data-testid=device-view]', view.id);
-        const label = `${vp.width}×${vp.height} ${view.label}`;
-        const expected = fixture.callouts.filter((c) => (c.view ?? fixture.views[0].id) === view.id).map((c) => c.id).sort();
-        check(!ed.error && !dev.error, `${label}: both canvases exist`);
-        check(ed.canvas.layoutW === dev.canvas.layoutW && ed.canvas.layoutH === dev.canvas.layoutH,
-          `${label}: editor reuses the Devices layout size (${ed.canvas.layoutW}×${ed.canvas.layoutH})`);
-        check(dev.canvas.layoutH >= 440 && dev.canvas.layoutH <= 720, `${label}: layout height stays within 440–720 px`);
-        check(JSON.stringify(ed.callouts.map((c) => c.id).sort()) === JSON.stringify(expected)
-          && JSON.stringify(dev.callouts.map((c) => c.id).sort()) === JSON.stringify(expected), `${label}: every callout (${expected.length}) appears before and after Save`);
-        const em = new Map(ed.callouts.map((c) => [c.id, c]));
-        for (const c of dev.callouts) {
-          const e = em.get(c.id);
-          check(!!e && closeEnough(c.box, e.box, ['x', 'y', 'w', 'h']), `${label} ${c.id}: box position and size match the editor`);
-          check(!!e && closeEnough(c.anchor, e.anchor, ['x', 'y']), `${label} ${c.id}: anchor matches the editor`);
-          check(!!e?.visible, `${label} ${c.id}: editor box fully visible (${e?.clips.join(',') || 'no clipping'})`);
-          check(c.visible, `${label} ${c.id}: saved box fully visible (${c.clips.join(',') || 'no clipping'})`);
+    const samePixels = (a, b, keys) => a && b && keys.every((k) => Math.abs(a[k] - b[k]) <= 2);
+    for (const fixtureName of ['vmax-panel', 'vkb-gunfighter-mcg-pro']) {
+      await lp.setViewportSize({ width: 1920, height: 1080 });
+      const fixturePath = new URL(`./fixtures/${fixtureName}.sc-template.json`, import.meta.url).pathname;
+      const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')).templates[0];
+      await lp.getByTestId('template-import-file').setInputFiles(fixturePath);
+      await lp.getByTestId('template-select').locator(`option[value="${fixture.id}"]`).waitFor({ state: 'attached' });
+      await lp.getByTestId('template-select').selectOption(fixture.id);
+      await lp.locator(`[data-testid=device-view] [data-view="${fixture.views[0].id}"] [data-callout]`).first().waitFor();
+      for (const vp of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }]) {
+        await lp.setViewportSize(vp);
+        await lp.waitForTimeout(400);
+        await lp.getByTestId('template-edit').click();
+        const editor = lp.getByTestId('template-editor');
+        await editor.waitFor();
+        const before = new Map();
+        for (const view of fixture.views) {
+          await editor.locator(`[data-view-tab="${view.id}"]`).click();
+          before.set(view.id, await snapshot('[data-testid=template-editor]', view.id));
         }
-        check(closeEnough(ed.photo, dev.photo, ['x', 'y', 'w', 'h']), `${label}: photo framing matches the editor`);
-        if (vp.width === 1920) {
-          check(!ed.transformed && !dev.transformed && ed.scale === 1 && dev.scale === 1, `${label}: wide window draws at scale 1 without a transform`);
+        await editor.getByTestId('tpl-save').click();
+        await editor.waitFor({ state: 'detached' });
+        for (const view of fixture.views) {
+          const ed = before.get(view.id);
+          const dev = await snapshot('[data-testid=device-view]', view.id);
+          const label = `${fixtureName} ${vp.width}×${vp.height} ${view.label}`;
+          const expected = fixture.callouts.filter((c) => (c.view ?? fixture.views[0].id) === view.id).map((c) => c.id).sort();
+          check(!ed.error && !dev.error, `${label}: both canvases exist`);
+          check(ed.canvas.layoutW === dev.canvas.layoutW && ed.canvas.layoutH === dev.canvas.layoutH,
+            `${label}: editor reuses the Devices layout size (${ed.canvas.layoutW}×${ed.canvas.layoutH})`);
+          check(samePixels(ed.canvas, dev.canvas, ['w', 'h']), `${label}: rendered canvas size matches the editor`);
+          check(dev.canvas.layoutH >= 440 && dev.canvas.layoutH <= 720, `${label}: layout height stays within 440–720 px`);
+          check(JSON.stringify(ed.callouts.map((c) => c.id).sort()) === JSON.stringify(expected)
+            && JSON.stringify(dev.callouts.map((c) => c.id).sort()) === JSON.stringify(expected), `${label}: every callout (${expected.length}) appears before and after Save`);
+          const em = new Map(ed.callouts.map((c) => [c.id, c]));
+          for (const c of dev.callouts) {
+            const e = em.get(c.id);
+            check(!!e && closeEnough(c.box, e.box, ['x', 'y', 'w', 'h']), `${label} ${c.id}: box position and size match the editor`);
+            check(!!e && samePixels(c.rect, e.rect, ['x', 'y', 'w', 'h']), `${label} ${c.id}: rendered box rect matches the editor within 2 px`);
+            check(!!e && closeEnough(c.anchor, e.anchor, ['x', 'y']), `${label} ${c.id}: anchor matches the editor`);
+            check(!!e?.visible, `${label} ${c.id}: editor box fully visible (${e?.clips.join(',') || 'no clipping'})`);
+            check(c.visible, `${label} ${c.id}: saved box fully visible (${c.clips.join(',') || 'no clipping'})`);
+          }
+          check(closeEnough(ed.photo, dev.photo, ['x', 'y', 'w', 'h']), `${label}: photo framing matches the editor`);
+          check(samePixels(ed.photoRect, dev.photoRect, ['x', 'y', 'w', 'h']), `${label}: rendered photo rect matches the editor within 2 px`);
+          if (vp.width === 1920) {
+            check(!ed.transformed && !dev.transformed && ed.scale === 1 && dev.scale === 1, `${label}: wide window draws at scale 1 without a transform`);
+          }
         }
       }
     }
