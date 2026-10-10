@@ -950,7 +950,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         // Preserve authored adjacent boxes (exact data pinned below).
         for (const o of d.callouts) if (o !== c && tp.calloutView(d, o) === tp.calloutView(d, c)
           // Authored layouts keep their exact label positions, pinned by the export fixture tests.
-          && !['builtin-honeycomb-bravo', 'builtin-moza-mtp', 'builtin-logitech-x56-throttle', 'builtin-tm-twcs'].includes(d.id)
+          && !['builtin-honeycomb-bravo', 'builtin-moza-mtp', 'builtin-logitech-x56-throttle', 'builtin-tm-twcs', 'builtin-winctrl-orion'].includes(d.id)
           && !(d.id === 'builtin-virpil-t50cm4' && [c.id, o.id].sort().join(',') === 'mini,minib')
           && !(d.id === 'builtin-virpil-mt50cm' && [c.id, o.id].sort().join(',') === 'mtxi15i1,r9o62f2n')) assert.ok(Math.abs(o.box.x - c.box.x) > 0.12 || Math.abs(o.box.y - c.box.y) > 0.03, `${d.id}: boxes ${c.id} / ${o.id} too close`);
         if (c.inputRegions) assert.equal(c.inputRegions.length, c.inputs.length, `${d.id}/${c.id}: one outline per input`);
@@ -974,7 +974,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(btn(by('virpil-vmax-prime')), seq(1, 51), 'VMAX Prime: 1-51 (no shift)');
     assert.deepEqual(btn(by('winctrl-carrierace')), seq(1, 27), 'CarrierAce: 1-27 (19 = trim hat push, confirmed by Federico)');
     assert.deepEqual(btn(by('winctrl-viperace')), seq(1, 42), 'ViperAce: 1-42 (19 = trim hat push, confirmed by Federico)');
-    assert.deepEqual(btn(by('winctrl-orion')), [...seq(1, 62, [45, 46, 47, 48, 49]), ...seq(65, 111)], 'Orion: grips 1-62, panel 65-111');
+    assert.deepEqual(btn(by('winctrl-orion')), [...seq(1, 62, [45, 46, 47, 48, 49]), ...seq(65, 111)], 'Orion: grips 1-62, panel 65-111, each button once after splitting button80');
     assert.deepEqual(btn(by('winctrl-ursa-combat')), seq(1, 81, [26]), 'URSA MINOR Combat: 1-81 (26 unused)');
     assert.deepEqual(btn(by('moza-ab6')), seq(1, 62, Array.from({ length: 19 }, (_, i) => 30 + i)), 'AB6 + MHG: grip 1-29, base 49-62');
     assert.deepEqual(btn(by('virpil-t50cm4')), seq(1, 46, [34, 35, 36, 37, 38, 39, 40]), 'T-50CM4: exported inputs, no shift layer');
@@ -1470,6 +1470,22 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       assert.equal(new Set(assigned).size, assigned.length, `${id}: no duplicate numbering`);
     }
   });
+  t('Oct 10 Orion: exact exported layout and photos, original built-in metadata', () => {
+    const expected = JSON.parse(readFileSync(new URL('./fixtures/oct10-orion.json', import.meta.url), 'utf8'));
+    const actual = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion')!;
+    assert.deepEqual({ aspect: actual.aspect, views: actual.views, callouts: actual.callouts },
+      { aspect: expected.aspect, views: expected.views, callouts: expected.callouts }, 'every authored field, including optional regions');
+    for (const [key, value] of Object.entries(expected.metadata)) assert.deepEqual(actual[key as keyof DeviceTemplate], value, `original ${key}`);
+    for (const [photo, hash] of Object.entries(expected.photoHashes)) {
+      assert.equal(createHash('sha256').update(readFileSync(new URL(`../public${photo}`, import.meta.url))).digest('hex'), hash, 'exact exported WebP bytes');
+    }
+    assert.equal(DEVICE_PHOTO_LAYOUTS[actual.id], undefined, 'bypass automatic re-boxing');
+    assert.equal(actual.callouts.length, 42);
+    assert.deepEqual(actual.views!.map((v) => v.id), ['panel', 'left'], 'export drops the third view');
+    assert.equal(new Set(actual.views!.map((v) => v.image)).size, 2, 'both existing photos are still used');
+    assert.deepEqual(actual.callouts.find((c) => c.id === 'aga')!.inputs, ['button81', 'button82']);
+    assert.deepEqual(actual.callouts.find((c) => c.id === '2hzsw5t4')!.inputs, ['button80'], 'button80 now has its own callout');
+  });
   t('MOZA AB6 + ViperAce EX: callouts keep Federico export anchor+box fractions (no withPhotoLayout re-box), same canvases', () => {
     const va = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-moza-ab6-viperace')!;
     assert.ok(va);
@@ -1537,7 +1553,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
   {
     // lazy pictures: a template with loadImage gets its picture on demand (cached afterwards); every device template now uses photos
     const d = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion')!;
-    assert.ok(!d.loadImage && d.views!.length === 3 && d.views!.every((v) => v.image!.startsWith('/device-photos/')), 'Orion uses its photo views');
+    assert.ok(!d.loadImage && d.views!.length === 2 && d.views!.every((v) => v.image!.startsWith('/device-photos/')), 'Orion uses its two exported photo views');
     assert.deepEqual(DEVICE_TEMPLATES.filter((x) => !x.views?.length).map((x) => x.id), [], 'every device template has a photo layout');
     let calls = 0;
     const lazy = { ...d, id: 'test-lazy-picture', views: undefined, loadImage: async () => { calls++; return 'data:image/svg+xml,<svg/>'; } };

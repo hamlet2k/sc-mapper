@@ -1,0 +1,864 @@
+{
+  "aspect": 1.6815450643776824,
+  "views": [
+    {
+      "id": "panel",
+      "label": "Panel",
+      "image": "/device-photos/winctrl-orion-right.webp",
+      "width": 1959,
+      "height": 1165
+    },
+    {
+      "id": "left",
+      "label": "Left grip + top row",
+      "image": "/device-photos/winctrl-orion-left.webp",
+      "width": 1966,
+      "height": 1216
+    }
+  ],
+  "callouts": [
+    {
+      "id": "lbar",
+      "kind": "switch",
+      "inputs": [
+        "button65",
+        "button66"
+      ],
+      "anchor": {
+        "x": 0.45051543245610504,
+        "y": 0.7443055894639757
+      },
+      "box": {
+        "x": 0.6189003121811909,
+        "y": 0.9565277947319879
+      },
+      "label": "Launch bar",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "hook",
+      "kind": "switch",
+      "inputs": [
+        "button67",
+        "button68"
+      ],
+      "anchor": {
+        "x": 0.41821304793210373,
+        "y": 0.720972188313802
+      },
+      "box": {
+        "x": 0.5034364261168385,
+        "y": 0.9643055386013455
+      },
+      "label": "Hook",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "wfold",
+      "kind": "switch",
+      "inputs": [
+        "button69",
+        "button70",
+        "button71",
+        "button72"
+      ],
+      "anchor": {
+        "x": 0.38178691011933524,
+        "y": 0.6831944783528646
+      },
+      "box": {
+        "x": 0.34536082474226804,
+        "y": 0.97
+      },
+      "label": "Wing fold (3 pos + push)",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "gear",
+      "kind": "switch",
+      "inputs": [
+        "button73",
+        "button74"
+      ],
+      "anchor": {
+        "x": 0.33092784553868665,
+        "y": 0.6509722391764323
+      },
+      "box": {
+        "x": 0.18659792241361953,
+        "y": 0.9365277608235677
+      },
+      "label": "Gear",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "pbrk",
+      "kind": "switch",
+      "inputs": [
+        "button75",
+        "button76"
+      ],
+      "anchor": {
+        "x": 0.3006872852233677,
+        "y": 0.6298611111111111
+      },
+      "box": {
+        "x": 0.11030927310694534,
+        "y": 0.8576388888888888
+      },
+      "label": "Parking brake",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "flap",
+      "kind": "switch",
+      "inputs": [
+        "button77",
+        "button78",
+        "button79"
+      ],
+      "anchor": {
+        "x": 0.26219932320191686,
+        "y": 0.5943055894639757
+      },
+      "box": {
+        "x": 0.0718212848676439,
+        "y": 0.7565277947319878
+      },
+      "label": "Flaps (3 pos)",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "hmd",
+      "kind": "encoder",
+      "inputs": [
+        "button83",
+        "button84",
+        "button85"
+      ],
+      "anchor": {
+        "x": 0.6248555014096047,
+        "y": 0.5531944274902344
+      },
+      "box": {
+        "x": 0.7338563271734362,
+        "y": 0.76875
+      },
+      "label": "HMD knob",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "roll",
+      "kind": "switch",
+      "inputs": [
+        "button86",
+        "button87",
+        "button88"
+      ],
+      "anchor": {
+        "x": 0.2890352220520674,
+        "y": 0.531
+      },
+      "box": {
+        "x": 0.08843928619813171,
+        "y": 0.6554167005750868
+      },
+      "label": "ROLL",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "pitch",
+      "kind": "switch",
+      "inputs": [
+        "button89",
+        "button90",
+        "button91"
+      ],
+      "anchor": {
+        "x": 0.3359877488514548,
+        "y": 0.568
+      },
+      "box": {
+        "x": 0.085136230871955,
+        "y": 0.7854166666666667
+      },
+      "label": "PITCH",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "adv",
+      "kind": "button",
+      "inputs": [
+        "button92"
+      ],
+      "anchor": {
+        "x": 0.39516079632465545,
+        "y": 0.562
+      },
+      "box": {
+        "x": 0.08777868521302126,
+        "y": 0.9131944444444444
+      },
+      "label": "ADV MODE",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "marm",
+      "kind": "switch",
+      "inputs": [
+        "button93",
+        "button94",
+        "button95"
+      ],
+      "anchor": {
+        "x": 0.47813169984686066,
+        "y": 0.622
+      },
+      "box": {
+        "x": 0.5455821735813635,
+        "y": 0.97
+      },
+      "label": "Master arm",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "jett",
+      "kind": "button",
+      "inputs": [
+        "button96"
+      ],
+      "anchor": {
+        "x": 0.5038591117917305,
+        "y": 0.68
+      },
+      "box": {
+        "x": 0.6466556867226207,
+        "y": 0.97
+      },
+      "label": "Jettison",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "aga",
+      "kind": "buttons",
+      "inputs": [
+        "button81",
+        "button82"
+      ],
+      "anchor": {
+        "x": 0.44089348127751826,
+        "y": 0.5143055386013455
+      },
+      "box": {
+        "x": 0.7687285118496295,
+        "y": 0.8743055555555556
+      },
+      "label": "Button · A/G · A/A",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "hdg",
+      "kind": "encoder",
+      "inputs": [
+        "button97",
+        "button98",
+        "button99"
+      ],
+      "anchor": {
+        "x": 0.3630015313935681,
+        "y": 0.649
+      },
+      "box": {
+        "x": 0.19149462749503252,
+        "y": 0.97
+      },
+      "label": "HDG knob",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "sldw",
+      "kind": "axis",
+      "inputs": [
+        "slider1"
+      ],
+      "anchor": {
+        "x": 0.45051543245610504,
+        "y": 0.42875001695421006
+      },
+      "box": {
+        "x": 0.06,
+        "y": 0.3654166751437717
+      },
+      "label": "Slider wheel",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "sldwb",
+      "kind": "switch",
+      "inputs": [
+        "button106",
+        "button107",
+        "button108"
+      ],
+      "anchor": {
+        "x": 0.45120275962803374,
+        "y": 0.42763888041178383
+      },
+      "box": {
+        "x": 0.07457043624825493,
+        "y": 0.41875
+      },
+      "label": "Slider wheel (buttons)",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "dialw",
+      "kind": "axis",
+      "inputs": [
+        "slider2"
+      ],
+      "anchor": {
+        "x": 0.35154640223971756,
+        "y": 0.5243055555555556
+      },
+      "box": {
+        "x": 0.06,
+        "y": 0.5387500339084201
+      },
+      "label": "Dial wheel",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "dialwb",
+      "kind": "switch",
+      "inputs": [
+        "button109",
+        "button110",
+        "button111"
+      ],
+      "anchor": {
+        "x": 0.35085907506778885,
+        "y": 0.5243055555555556
+      },
+      "box": {
+        "x": 0.06,
+        "y": 0.6020833333333333
+      },
+      "label": "Dial wheel (buttons)",
+      "group": "Panel",
+      "view": "left"
+    },
+    {
+      "id": "crs",
+      "kind": "encoder",
+      "inputs": [
+        "button100",
+        "button101",
+        "button102"
+      ],
+      "anchor": {
+        "x": 0.40223583460949464,
+        "y": 0.684
+      },
+      "box": {
+        "x": 0.3018166804293972,
+        "y": 0.97
+      },
+      "label": "CRS knob",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "lts",
+      "kind": "encoder",
+      "inputs": [
+        "button103",
+        "button104",
+        "button105"
+      ],
+      "anchor": {
+        "x": 0.44983154670750386,
+        "y": 0.717
+      },
+      "box": {
+        "x": 0.4253509294681565,
+        "y": 0.966527811686198
+      },
+      "label": "Panel lights",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "lthr",
+      "kind": "axis",
+      "inputs": [
+        "roty"
+      ],
+      "anchor": {
+        "x": 0.3876961189099917,
+        "y": 0.45208333333333334
+      },
+      "box": {
+        "x": 0.2819983484723369,
+        "y": 0.41097221374511717
+      },
+      "label": "Left lever",
+      "group": "Axes",
+      "view": "panel"
+    },
+    {
+      "id": "rthr",
+      "kind": "axis",
+      "inputs": [
+        "rotx"
+      ],
+      "anchor": {
+        "x": 0.4392237517579738,
+        "y": 0.4865277608235677
+      },
+      "box": {
+        "x": 0.17233689652308268,
+        "y": 0.5043055216471354
+      },
+      "label": "Right lever",
+      "group": "Axes",
+      "view": "panel"
+    },
+    {
+      "id": "lbtn",
+      "kind": "buttons",
+      "inputs": [
+        "button1",
+        "button2",
+        "button30",
+        "button31"
+      ],
+      "anchor": {
+        "x": 0.5563573673418707,
+        "y": 0.5131944444444444
+      },
+      "box": {
+        "x": 0.8003436740731046,
+        "y": 0.7331944783528646
+      },
+      "label": "Lever buttons",
+      "group": "Axes",
+      "view": "left"
+    },
+    {
+      "id": "b50",
+      "kind": "button",
+      "inputs": [
+        "button50"
+      ],
+      "anchor": {
+        "x": 0.5886598043015733,
+        "y": 0.21763890584309895
+      },
+      "box": {
+        "x": 0.5824742268041238,
+        "y": 0.03
+      },
+      "label": "Button 50",
+      "group": "Left grip",
+      "view": "left"
+    },
+    {
+      "id": "h51",
+      "kind": "hat",
+      "inputs": [
+        "button51",
+        "button52",
+        "button53",
+        "button54",
+        "button55"
+      ],
+      "anchor": {
+        "x": 0.6113401852112865,
+        "y": 0.23541666666666666
+      },
+      "box": {
+        "x": 0.7666666352052459,
+        "y": 0.03874999152289497
+      },
+      "label": "Hat (4-way + push)",
+      "group": "Left grip",
+      "view": "left"
+    },
+    {
+      "id": "b56",
+      "kind": "button",
+      "inputs": [
+        "button56"
+      ],
+      "anchor": {
+        "x": 0.6477662705883538,
+        "y": 0.2465277777777778
+      },
+      "box": {
+        "x": 0.9323024159854221,
+        "y": 0.05986111958821615
+      },
+      "label": "Button 56",
+      "group": "Left grip",
+      "view": "left"
+    },
+    {
+      "id": "t57",
+      "kind": "switch",
+      "inputs": [
+        "button57",
+        "button58",
+        "button59"
+      ],
+      "anchor": {
+        "x": 0.7151202434526686,
+        "y": 0.3076388888888889
+      },
+      "box": {
+        "x": 0.9213058104629779,
+        "y": 0.4031944274902344
+      },
+      "label": "Toggle (3 pos)",
+      "group": "Left grip",
+      "view": "left"
+    },
+    {
+      "id": "rz",
+      "kind": "axis",
+      "inputs": [
+        "rotz"
+      ],
+      "anchor": {
+        "x": 0.7096219406914466,
+        "y": 0.24208331637912325
+      },
+      "box": {
+        "x": 0.9103093098119363,
+        "y": 0.23208334181043838
+      },
+      "label": "RZ wheel",
+      "group": "Left grip",
+      "view": "left"
+    },
+    {
+      "id": "rzb",
+      "kind": "switch",
+      "inputs": [
+        "button60",
+        "button61",
+        "button62"
+      ],
+      "anchor": {
+        "x": 0.7109965950353039,
+        "y": 0.24097222222222223
+      },
+      "box": {
+        "x": 0.94,
+        "y": 0.30541665818956165
+      },
+      "label": "RZ wheel (buttons)",
+      "group": "Left grip",
+      "view": "left"
+    },
+    {
+      "id": "sw3",
+      "kind": "switch",
+      "inputs": [
+        "button3",
+        "button4",
+        "button5"
+      ],
+      "anchor": {
+        "x": 0.5363336085879439,
+        "y": 0.38874999152289497
+      },
+      "box": {
+        "x": 0.8917423314441836,
+        "y": 0.7020833333333333
+      },
+      "label": "Switch (3 pos)",
+      "group": "Right grip",
+      "view": "panel"
+    },
+    {
+      "id": "h6",
+      "kind": "hat",
+      "inputs": [
+        "button6",
+        "button7",
+        "button8",
+        "button9",
+        "button10"
+      ],
+      "anchor": {
+        "x": 0.5475639765366949,
+        "y": 0.3109722137451172
+      },
+      "box": {
+        "x": 0.8904211294739627,
+        "y": 0.5531944274902344
+      },
+      "label": "Hat (4-way + push)",
+      "group": "Right grip",
+      "view": "panel"
+    },
+    {
+      "id": "b11",
+      "kind": "button",
+      "inputs": [
+        "button11"
+      ],
+      "anchor": {
+        "x": 0.5099091659785301,
+        "y": 0.31430553860134547
+      },
+      "box": {
+        "x": 0.07588769107884755,
+        "y": 0.3898611280653212
+      },
+      "label": "Button 11",
+      "group": "Right grip",
+      "view": "panel"
+    },
+    {
+      "id": "h12",
+      "kind": "hat",
+      "inputs": [
+        "button12",
+        "button13",
+        "button14",
+        "button15",
+        "button16"
+      ],
+      "anchor": {
+        "x": 0.5051454823889739,
+        "y": 0.255
+      },
+      "box": {
+        "x": 0.13732451510567195,
+        "y": 0.27652778625488283
+      },
+      "label": "Hat (4-way + push)",
+      "group": "Right grip",
+      "view": "panel"
+    },
+    {
+      "id": "h17",
+      "kind": "hat",
+      "inputs": [
+        "button17",
+        "button18",
+        "button19",
+        "button20",
+        "button21"
+      ],
+      "anchor": {
+        "x": 0.5442609212105182,
+        "y": 0.22875001695421007
+      },
+      "box": {
+        "x": 0.8765482567835209,
+        "y": 0.28208334181043837
+      },
+      "label": "Hat (4-way + push)",
+      "group": "Right grip",
+      "view": "panel"
+    },
+    {
+      "id": "slide",
+      "kind": "switch",
+      "inputs": [
+        "button22",
+        "button23",
+        "button24"
+      ],
+      "anchor": {
+        "x": 0.540297264899231,
+        "y": 0.15541665818956163
+      },
+      "box": {
+        "x": 0.16969446738232866,
+        "y": 0.03
+      },
+      "label": "Slide (3 pos)",
+      "group": "Right grip",
+      "view": "panel"
+    },
+    {
+      "id": "wh5",
+      "kind": "switch",
+      "inputs": [
+        "button43",
+        "button25",
+        "button26",
+        "button27",
+        "button44"
+      ],
+      "anchor": {
+        "x": 0.5680429094788656,
+        "y": 0.0865277820163303
+      },
+      "box": {
+        "x": 0.8943848361858743,
+        "y": 0.03
+      },
+      "label": "Wheel (5-way)",
+      "group": "Right grip",
+      "view": "panel"
+    },
+    {
+      "id": "h28",
+      "kind": "hat",
+      "inputs": [
+        "button28",
+        "button29",
+        "button32",
+        "button33",
+        "button34"
+      ],
+      "anchor": {
+        "x": 0.45670100995355456,
+        "y": 0.16430553860134547
+      },
+      "box": {
+        "x": 0.1515463865090072,
+        "y": 0.06430555979410807
+      },
+      "label": "Hat (4-way + push)",
+      "group": "Right grip",
+      "view": "left"
+    },
+    {
+      "id": "mini",
+      "kind": "axis",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "anchor": {
+        "x": 0.502749151380611,
+        "y": 0.1931944529215495
+      },
+      "box": {
+        "x": 0.30618553554888855,
+        "y": 0.2731944613986545
+      },
+      "label": "Ministick",
+      "group": "Right grip",
+      "view": "left"
+    },
+    {
+      "id": "minib",
+      "kind": "hat",
+      "inputs": [
+        "button36",
+        "button37",
+        "button38",
+        "button39",
+        "button35"
+      ],
+      "anchor": {
+        "x": 0.502749151380611,
+        "y": 0.19763887193467883
+      },
+      "box": {
+        "x": 0.1384879567778807,
+        "y": 0.19430554707845052
+      },
+      "label": "Ministick (digital + press)",
+      "group": "Right grip",
+      "view": "left"
+    },
+    {
+      "id": "zw",
+      "kind": "axis",
+      "inputs": [
+        "z"
+      ],
+      "anchor": {
+        "x": 0.5419243881382894,
+        "y": 0.19763887193467883
+      },
+      "box": {
+        "x": 0.8463917630644598,
+        "y": 0.4943055894639757
+      },
+      "label": "Z wheel",
+      "group": "Right grip",
+      "view": "left"
+    },
+    {
+      "id": "zwb",
+      "kind": "switch",
+      "inputs": [
+        "button40",
+        "button41",
+        "button42"
+      ],
+      "anchor": {
+        "x": 0.5439862647826729,
+        "y": 0.19875000847710503
+      },
+      "box": {
+        "x": 0.8237113297190454,
+        "y": 0.5943055894639757
+      },
+      "label": "Z wheel (buttons)",
+      "group": "Right grip",
+      "view": "left"
+    },
+    {
+      "id": "2hzsw5t4",
+      "kind": "button",
+      "inputs": [
+        "button80"
+      ],
+      "anchor": {
+        "x": 0.42027492457648735,
+        "y": 0.5420833163791232
+      },
+      "box": {
+        "x": 0.6250858896786404,
+        "y": 0.82875001695421
+      },
+      "view": "left"
+    }
+  ],
+  "metadata": {
+    "id": "builtin-winctrl-orion",
+    "name": "WinCtrl Orion throttle (F-15EX grips, F/A-18 panel)",
+    "brand": "WinCtrl",
+    "notes": "Default numbering from the WinCtrl diagrams (1-based: button N = jsX_buttonN). SimAppPro can change it: if yours differs, use “Customize a copy”. Uses buttons up to 111: Chrome / Edge only report the first 32, use Firefox.",
+    "category": "throttle",
+    "match": [
+      {
+        "name": "F15EX HANDLE"
+      },
+      {
+        "name": "Orion Throttle Base II + F15EX"
+      }
+    ]
+  },
+  "photoHashes": {
+    "/device-photos/winctrl-orion-right.webp": "3332bd0134b59d7f5eda9a7c8ca28fb797408a770477fbdade1672048b4ea3ea",
+    "/device-photos/winctrl-orion-left.webp": "28be26e3740d376ca42765af6d9b4dba89f378dd880d103e30f03c1e0c5442be"
+  }
+}
