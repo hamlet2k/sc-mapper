@@ -1,6 +1,9 @@
 // Builds src/data/defaults.json from Star Citizen's real game files:
+//   Normally copied from committed data/game/ by ensure-data.mjs: Federico's
+//   4.10.2 LIVE install, build 4.10.196.36804 (Wed Oct 07 2026).
 //   data/raw/defaultProfile.xml   (Data/Libs/Config/defaultProfile.xml)
-//   data/raw/global.ini           (Data/Localization/english/global.ini) - optional, for labels
+//   data/raw/global.ini           (Data/Localization/english/global.ini) - optional, for labels;
+//                                data/game/ retains only the keys looked up below
 //   data/raw/build_manifest.json  (build_manifest.json) - game version info
 // Usage: node scripts/build-defaults.mjs
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -121,8 +124,8 @@ const out = {
     version: manifest.Version,
     buildDate: manifest.BuildDateStamp,
     channel: manifest.Tag === 'public' ? 'LIVE' : manifest.Tag,
-    source: 'Data/Libs/Config/defaultProfile.xml + Data/Localization/english/global.ini',
-    sourceUrl: 'https://github.com/x3nnnonn/StarCitizenDiff/tree/908b76a0485036161ba700d369c7d92aca1c847b/P4kContents/Data/Libs/Config',
+    source: 'Data/Libs/Config/defaultProfile.xml + Data/Localization/english/global.ini (extracted from the 4.10.2 LIVE client)',
+    sourceUrl: 'https://github.com/hamlet2k/sc-mapper/tree/main/data/game',
     generated: new Date().toISOString(),
   },
   maps,

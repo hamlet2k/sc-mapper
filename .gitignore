@@ -23,7 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
-# Generated / downloaded game data (rebuilt by scripts/ensure-data.mjs on dev/build)
+# data/game/ is committed; only its generated copies and outputs are ignored.
+# Rebuilt by scripts/ensure-data.mjs on dev/build.
 src/data/defaults.json
 src/lib/defaultStickArt.ts
 src/lib/defaultThrottleArt.ts

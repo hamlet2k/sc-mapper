@@ -1,0 +1,14 @@
+{
+    "Data": {
+        "Branch": "sc-alpha-4.10.2",
+        "BuildDateStamp": "Wed Oct 07 2026",
+        "BuildId": "711733b7-5053-4184-973d-6181e8ee9f32",
+        "BuildTimeStamp": "02:39:36 PM CST",
+        "Config": "shipping",
+        "Platform": "pc",
+        "RequestedP4ChangeNum": "12881860",
+        "Shelved_Change": "",
+        "Tag": "public",
+        "Version": "4.10.196.36804"
+    }
+}

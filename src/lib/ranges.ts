@@ -5,7 +5,7 @@
 //    Every deadzone the game wrote in the real files we test with is a multiple of 0.0099 (0.0099, 0.0198, 0.0297, 0.0495, 0.0792,
 //    0.2475), i.e. the in-game slider moves in 1 % steps scaled by 0.99. Highest seen: 0.2475. Saturation seen: 0.8405..0.9405.
 //    Players report that saturation 0 makes the setting disappear from the game's options screen (reddit r/starcitizen).
-//  * exponent: default 1.00 (wiki); defaultProfile.xml (4.10) sets 2.5 on two groups; real files use 1.0..2.5. The game turns an
+//  * exponent: default 1.00 (wiki); defaultProfile.xml (4.10.2) sets 2.5 on two groups; real files use 1.0..2.5. The game turns an
 //    exponent into curve points out = in^exponent (philchuang actionmaps.3.17.4.xml: 0.1 -> 0.0631 = 0.1^1.2).
 //  * curve points: in and out are 0..1 (defaultProfile.xml default curves use 0.1..0.9, game-written curves include 0,0 and 1,1).
 // Upper/lower limits the game's UI enforces are not in any file we could find, so where unconfirmed the app uses a conservative

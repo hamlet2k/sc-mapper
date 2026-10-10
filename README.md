@@ -70,8 +70,13 @@ loads. Everything runs in your browser: your files are never uploaded.
 - **Settings → Star Citizen folder**: set your install folder and channel (LIVE / PTU / EPTU / TECH-PREVIEW) and every
   path the app shows follows it, with a copy button.
 
-Default bindings come from the game's own `defaultProfile.xml`, currently **Star Citizen Alpha 4.10.0 LIVE**
-(build 4.10.193.11644).
+Default bindings come from the game's own `defaultProfile.xml`, currently **Star Citizen Alpha 4.10.2 LIVE**
+(build 4.10.196.36804, Wed Oct 07 2026), extracted from Federico's install and committed in `data/game/`.
+Dev and production builds copy these files into `data/raw/` and generate `src/data/defaults.json` without downloading game data.
+`global.ini` retains only localization keys used by the defaults builder; trimming it and removing a stray CDATA fragment
+from the player action map leave the generated bindings unchanged. When `data/game/` is absent, the builder falls back
+to the pinned StarCitizenDiff mirror (`SC_DATA_REF` overrides its revision). `npm run data:fetch` explicitly downloads
+mirror data; `npm run data` regenerates from the committed source.
 
 ## Supported hardware
 
@@ -145,11 +150,11 @@ npm test               # unit tests + parse/merge/search/conflict self-test on t
 npm run test:unit      # unit tests + background-removal test
 npm run test:e2e       # Playwright e2e against a running preview (Chrome; Firefox checks if installed)
 npm run test:fixtures  # download pinned real keybinding files and round-trip them
-npm run data           # rebuild src/data/defaults.json from data/raw/
-npm run data:fetch     # download the pinned game files and rebuild the defaults
+npm run data           # rebuild src/data/defaults.json from committed data/game/
+npm run data:fetch     # download mirror game files and rebuild the defaults
 ```
 
-`dev`, `build` and the test scripts download the pinned game data on first run (see
+`dev`, `build` and the test scripts generate defaults from the committed game data on first run (see
 [docs/technical-notes.md](docs/technical-notes.md#data-source)). The UX decisions behind the app are in
 [docs/ux-decisions.md](docs/ux-decisions.md).
 

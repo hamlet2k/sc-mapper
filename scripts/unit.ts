@@ -28,6 +28,27 @@ const t = (name: string, fn: () => void) => {
   try { fn(); passed++; console.log('  ✓', name); } catch (e) { console.error('  ✗', name); throw e; }
 };
 
+t('default data: 4.10.2 LIVE client origin and build', () => {
+  assert.equal(defaults.meta.branch, 'sc-alpha-4.10.2');
+  assert.equal(defaults.meta.version, '4.10.196.36804');
+  assert.equal(defaults.meta.buildDate, 'Wed Oct 07 2026');
+  assert.equal(defaults.meta.channel, 'LIVE');
+  assert.equal(defaults.meta.sourceUrl, 'https://github.com/hamlet2k/sc-mapper/tree/main/data/game');
+  assert.ok(defaults.meta.source.includes('extracted from the 4.10.2 LIVE client'));
+});
+t('default data: player actions survive extraction cleanup; empty labels stay hidden', () => {
+  assert.equal(defaults.maps.length, 50);
+  assert.equal(defaults.maps.flatMap((m: any) => m.actions).length, 1103);
+  const player = defaults.maps.find((m: any) => m.name === 'player');
+  assert.equal(player.actions.length, 144);
+  assert.equal(player.actions[0].name, 'moveleft');
+  assert.deepEqual(player.actions[0].d, [{ slot: 'kb', input: 'a' }]);
+  assert.equal(player.actions.at(-1).name, 'pc_conversation_option_select');
+  for (const name of ['restrain', 'takedown_lethal', 'break_conversation_effects', 'spectate_enterpuremode']) {
+    assert.equal(player.actions.find((a: any) => a.name === name)?.hidden, true, name);
+  }
+});
+
 // Every input name the game itself uses, from defaultProfile (bundled defaults) + a real exported layout if present
 const gameNames: Record<string, Set<string>> = { kb: new Set(), mo: new Set(), js: new Set(), gp: new Set() };
 for (const m of defaults.maps) for (const a of m.actions) for (const d of a.d) for (const x of d.input.split('+')) gameNames[d.slot].add(x);

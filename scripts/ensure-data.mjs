@@ -1,8 +1,9 @@
 // Makes sure src/data/defaults.json exists before dev/build/test, and (re)generates the default device art (src/lib/defaultStickArt.ts, defaultThrottleArt.ts, defaultGamepadArt.ts) and the
 // device-specific template art (src/lib/deviceArt/*.ts).
-// If it is missing, downloads the raw game files (pinned) into data/raw/ and runs build-defaults.
-// Raw source: x3nnnonn/StarCitizenDiff (extracted P4K files), sc-alpha-4.10.0 LIVE build 4.10.193.11644.
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+// If defaults are missing (or --force is passed), copies the committed data/game/ files into
+// data/raw/ and runs build-defaults. Source: Federico's 4.10.2 LIVE client, build 4.10.196.36804.
+// Only when data/game/ is absent, uses the pinned StarCitizenDiff mirror (SC_DATA_REF overrides it).
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 
 const REF = process.env.SC_DATA_REF || '908b76a0485036161ba700d369c7d92aca1c847b';
 const BASE = `https://raw.githubusercontent.com/x3nnnonn/StarCitizenDiff/${REF}`;
@@ -13,6 +14,7 @@ const FILES = {
   'build_manifest.json': 'build_manifest.json',
 };
 const out = new URL('../src/data/defaults.json', import.meta.url);
+const gameDir = new URL('../data/game/', import.meta.url);
 const rawDir = new URL('../data/raw/', import.meta.url);
 
 if (existsSync(out) && !process.argv.includes('--force')) {
@@ -22,6 +24,11 @@ if (existsSync(out) && !process.argv.includes('--force')) {
   mkdirSync(new URL('../src/data/', import.meta.url), { recursive: true });
   for (const [name, path] of Object.entries(FILES)) {
     const dest = new URL(name, rawDir);
+    if (existsSync(gameDir)) {
+      copyFileSync(new URL(name, gameDir), dest);
+      console.log(`[data] copied ${name} from data/game`);
+      continue;
+    }
     if (existsSync(dest)) continue;
     const res = await fetch(`${BASE}/${path}`);
     if (!res.ok) throw new Error(`[data] download failed ${res.status} for ${path}`);

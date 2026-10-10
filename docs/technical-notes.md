@@ -3,24 +3,37 @@
 Background for contributors: where the default data comes from, how Star Citizen's keybinding files are structured, and the known limits of reading controllers in a browser. For the UX decisions behind the app, see [ux-decisions.md](ux-decisions.md).
 
 ## Data source
-Default bindings and labels are extracted from the game files, mirrored in the community repo
-[x3nnnonn/StarCitizenDiff](https://github.com/x3nnnonn/StarCitizenDiff) at commit
-[`908b76a`](https://github.com/x3nnnonn/StarCitizenDiff/tree/908b76a0485036161ba700d369c7d92aca1c847b/P4kContents/Data/Libs/Config),
-which holds **sc-alpha-4.10.0 LIVE, build 4.10.193.11644** (built Sep 15 2026):
+Default bindings and labels are extracted from Federico's **sc-alpha-4.10.2 LIVE, build 4.10.196.36804**
+client (built Wed Oct 07 2026) and committed in
+[`data/game/`](https://github.com/hamlet2k/sc-mapper/tree/main/data/game):
 
 | File | Used for |
 | --- | --- |
 | `Data/Libs/Config/defaultProfile.xml` | every action map, action, and default kb/mouse/joystick/gamepad input |
+| `Data/Libs/Config/keybinding_localization.xml` | companion source file, retained with the extraction |
 | `Data/Localization/english/global.ini` | human-readable action and category labels |
 | `build_manifest.json` | game version shown in the UI |
 
-`npm run dev` / `npm run build` run `scripts/ensure-data.mjs` first. If `src/data/defaults.json` is missing, that script downloads
-those pinned files into `data/raw/` and runs `scripts/build-defaults.mjs` to generate it. The generated JSON is not committed.
+`npm run dev` / `npm run build` run `scripts/ensure-data.mjs` first. If `src/data/defaults.json` is missing (or `npm run data`
+forces regeneration), that script copies the committed files into `data/raw/` and runs `scripts/build-defaults.mjs`.
+The raw copies and generated JSON are not committed. Clean builds need no game-data downloads.
+
+`global.ini` is trimmed to the localization keys the builder looks up. A stray `<![CDATA[/> ... ]]>` fragment was removed
+from the player action map. Each change was verified to leave the generated JSON byte-identical except for `meta.generated`.
+All 50 maps and 1,103 actions (including all 144 player actions) match the 4.10.0 output; only 21 actions become hidden
+because their `UILabel` is now empty. Default inputs and option trees are unchanged.
+
+When `data/game/` is absent, `ensure-data.mjs` falls back to the community
+[StarCitizenDiff mirror](https://github.com/x3nnnonn/StarCitizenDiff/tree/908b76a0485036161ba700d369c7d92aca1c847b/P4kContents/Data/Libs/Config),
+pinned to 4.10.0 LIVE build 4.10.193.11644. `SC_DATA_REF` overrides that fallback revision.
 
 ### Updating for a new patch
 ```bash
+# Extract the four source files from your install (unp4k) into data/game/, then:
+npm run data
+# Commit data/game/ with the updated provenance, version text and tests.
+# To explicitly try a mirror revision in data/raw/:
 SC_DATA_REF=<newer StarCitizenDiff commit> npm run data:fetch
-# or extract the files from your own install (unp4k) into data/raw/ and run: npm run data
 ```
 
 ## How the file format works

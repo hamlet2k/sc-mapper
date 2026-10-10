@@ -245,7 +245,7 @@ function RangesInfo() {
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-[10px] text-slate-500">Sources: the game&apos;s defaultProfile.xml (4.10 LIVE), its shipped layouts, real game-written exports (pinned in the app&apos;s tests), and the Star Citizen Wiki &quot;Game Options&quot; defaults table. Deadzones written by the game are multiples of 0.0099 (1 % slider steps × 0.99).</p>
+      <p className="mt-2 text-[10px] text-slate-500">Sources: the game&apos;s defaultProfile.xml (4.10.2 LIVE), its shipped layouts, real game-written exports (pinned in the app&apos;s tests), and the Star Citizen Wiki &quot;Game Options&quot; defaults table. Deadzones written by the game are multiples of 0.0099 (1 % slider steps × 0.99).</p>
     </details>
   );
 }
