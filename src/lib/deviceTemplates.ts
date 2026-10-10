@@ -421,6 +421,91 @@ tpl('virpil-alpha-prime', {
   c('twist', 'axis', ['z'], 'Twist', 'Axes', { side: 'R' }),
   c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
 ]);
+// Supplied VIRPIL diagrams and product photos (2026-10-10). Anchors/boxes authored on the cutout.py photos.
+// Aeromax photos omit the optional throttle modules: SL/DL mark their mounting sides, not visible levers.
+photoTplExactViews({
+  id: 'builtin-virpil-cdt-aeromax', category: 'stick', name: 'VIRPIL VPC CDT-Aeromax', brand: 'VIRPIL',
+  notes: VPC_NOTE + ' Mode 1 shown; Mode 2 shifts buttons 13-24 to 25-36 (+12). Mode switch has no numbered inputs. SL/DL = optional base levers, absent from these photos; anchors mark mounting sides. RZ = brake, Z = twist. Above 32: use Firefox.',
+  match: [{ name: 'Aeromax' }],
+}, [
+  { id: 'front', label: 'Grip face and base', photo: 'virpil-cdt-aeromax-front', width: 1534, height: 1097 },
+  { id: 'side', label: 'Right side and base', photo: 'virpil-cdt-aeromax-side', width: 1484, height: 1037 },
+], [
+  { id: 'b13', kind: 'button', inputs: b(13), label: 'Head button (13 / 25)', group: 'Grip head', view: 'front',
+    anchor: { x: 0.39048, y: 0.10848 }, box: { x: 0.11, y: 0.065 } },
+  { id: 'h14', kind: 'hat', inputs: b(15, 16, 17, 18, 14), label: 'Top hat (Mode 1)', group: 'Grip head', view: 'front',
+    anchor: { x: 0.43220, y: 0.09845 }, box: { x: 0.89, y: 0.205 } },
+  { id: 'b19', kind: 'button', inputs: b(19), label: 'Head button (19 / 31)', group: 'Grip head', view: 'front',
+    anchor: { x: 0.46675, y: 0.08022 }, box: { x: 0.89, y: 0.085 } },
+  { id: 'mini', kind: 'axis', inputs: ['rotx', 'roty'], label: 'Ministick RX / RY', group: 'Grip head', view: 'front',
+    anchor: { x: 0.39831, y: 0.19690 }, box: { x: 0.11, y: 0.2 } },
+  { id: 'minib', kind: 'button', inputs: b(6), label: 'Ministick press', group: 'Grip head', view: 'front',
+    anchor: { x: 0.39831, y: 0.19690 }, box: { x: 0.11, y: 0.345 } },
+  { id: 'h20', kind: 'hat', inputs: b(21, 22, 23, 24, 20), label: 'Right hat (Mode 1)', group: 'Grip head', view: 'front',
+    anchor: { x: 0.48435, y: 0.15041 }, box: { x: 0.89, y: 0.335 } },
+  { id: 'mode', kind: 'switch', inputs: u(2), label: 'Mode 1 / Mode 2', group: 'Grip head', view: 'front',
+    anchor: { x: 0.46741, y: 0.19234 }, box: { x: 0.89, y: 0.48 } },
+  { id: 'h7', kind: 'hat', inputs: b(8, 9, 10, 11, 7), label: 'Thumb hat', group: 'Grip', view: 'front',
+    anchor: { x: 0.44394, y: 0.33728 }, box: { x: 0.11, y: 0.49 } },
+  { id: 'xy', kind: 'axis', inputs: ['x', 'y'], label: 'Stick X / Y', group: 'Base', view: 'front',
+    anchor: { x: 0.50261, y: 0.61987 }, box: { x: 0.11, y: 0.72 } },
+  { id: 'sl', kind: 'axis', inputs: ['slider1'], label: 'Left lever SL (optional)', group: 'Base', view: 'front',
+    anchor: { x: 0.40287, y: 0.79307 }, box: { x: 0.11, y: 0.915 } },
+  { id: 'dl', kind: 'axis', inputs: ['slider2'], label: 'Right lever DL (optional)', group: 'Base', view: 'side',
+    anchor: { x: 0.60714, y: 0.79074 }, box: { x: 0.89, y: 0.9 } },
+  { id: 'b5', kind: 'button', inputs: b(5), label: 'Side button', group: 'Grip head', view: 'side',
+    anchor: { x: 0.59704, y: 0.23529 }, box: { x: 0.89, y: 0.15 } },
+  { id: 'trigger', kind: 'switch', inputs: b(1, 2), label: 'Trigger (stage 1 / 2)', group: 'Grip', view: 'side',
+    anchor: { x: 0.58558, y: 0.34041 }, box: { x: 0.11, y: 0.3 } },
+  { id: 'flip', kind: 'switch', inputs: b(3, 4), label: 'Flip trigger (UP / DOWN)', group: 'Grip', view: 'side',
+    anchor: { x: 0.60580, y: 0.33173 }, box: { x: 0.89, y: 0.35 } },
+  { id: 'b12', kind: 'button', inputs: b(12), label: 'Side button 12', group: 'Grip', view: 'side',
+    anchor: { x: 0.52224, y: 0.38187 }, box: { x: 0.11, y: 0.48 } },
+  { id: 'brake', kind: 'axis', inputs: ['rotz'], label: 'Brake lever RZ', group: 'Grip', view: 'side',
+    anchor: { x: 0.63881, y: 0.43298 }, box: { x: 0.89, y: 0.55 } },
+  { id: 'twist', kind: 'axis', inputs: ['z'], label: 'Twist Z', group: 'Axes', view: 'side',
+    anchor: { x: 0.50404, y: 0.56606 }, box: { x: 0.11, y: 0.72 } },
+]);
+
+// The Flanker diagram uses alternate four-way caps; the supplied photos show stock caps at the same module positions.
+photoTplExactViews({
+  id: 'builtin-virpil-flanker', category: 'stick', name: 'VIRPIL Constellation Flanker', brand: 'VIRPIL',
+  notes: VPC_NOTE + ' Grip only; no base axes. Alternate four-way configuration shown; photos use stock caps at the same positions. Hats: up/right/down/left/depress. SR = slider1 brake; button 30 = lever click.',
+  match: [{ name: 'Flanker' }],
+}, [
+  { id: 'front', label: 'Grip face', photo: 'virpil-flanker-front', width: 1485, height: 1217 },
+  { id: 'side', label: 'Right side', photo: 'virpil-flanker-side', width: 1497, height: 1150 },
+], [
+  { id: 'b1', kind: 'button', inputs: b(1), label: 'Head button 1', group: 'Grip head', view: 'front',
+    anchor: { x: 0.41684, y: 0.12736 }, box: { x: 0.11, y: 0.07 } },
+  { id: 'h2', kind: 'hat', inputs: b(3, 4, 5, 6, 2), label: 'Top hat', group: 'Grip head', view: 'front',
+    anchor: { x: 0.49899, y: 0.14051 }, box: { x: 0.89, y: 0.22 } },
+  { id: 'b7', kind: 'button', inputs: b(7), label: 'Head button 7', group: 'Grip head', view: 'front',
+    anchor: { x: 0.53333, y: 0.09121 }, box: { x: 0.89, y: 0.08 } },
+  { id: 'mini', kind: 'axis', inputs: ['rotx', 'roty'], label: 'Ministick RX / RY', group: 'Grip head', view: 'front',
+    anchor: { x: 0.43165, y: 0.25308 }, box: { x: 0.11, y: 0.24 } },
+  { id: 'minib', kind: 'button', inputs: b(8), label: 'Ministick press', group: 'Grip head', view: 'front',
+    anchor: { x: 0.43165, y: 0.25308 }, box: { x: 0.11, y: 0.395 } },
+  { id: 'h9', kind: 'hat', inputs: b(10, 11, 12, 13, 9), label: 'MANVR hat', group: 'Grip head', view: 'front',
+    anchor: { x: 0.54141, y: 0.20214 }, box: { x: 0.89, y: 0.37 } },
+  { id: 'h20', kind: 'hat', inputs: b(21, 22, 23, 24, 20), label: 'TASK RESET hat', group: 'Grip', view: 'front',
+    anchor: { x: 0.54411, y: 0.40674 }, box: { x: 0.89, y: 0.55 } },
+  { id: 'b19', kind: 'button', inputs: b(19), label: 'Pinky button', group: 'Grip', view: 'front',
+    anchor: { x: 0.53939, y: 0.60394 }, box: { x: 0.11, y: 0.83 } },
+  { id: 'brakeb', kind: 'button', inputs: b(30), label: 'Brake lever click', group: 'Grip', view: 'front',
+    anchor: { x: 0.42357, y: 0.56697 }, box: { x: 0.11, y: 0.69 } },
+  { id: 'h14', kind: 'hat', inputs: b(15, 16, 17, 18, 14), label: 'Side hat (GN)', group: 'Grip head', view: 'side',
+    anchor: { x: 0.48163, y: 0.24348 }, box: { x: 0.11, y: 0.18 } },
+  { id: 'flip', kind: 'switch', inputs: b(25, 26), label: 'Flip trigger (UP / TRIGGER)', group: 'Grip', view: 'side',
+    anchor: { x: 0.63260, y: 0.36522 }, box: { x: 0.89, y: 0.32 } },
+  { id: 'trigger', kind: 'switch', inputs: b(27, 28), label: 'Trigger (stage 1 / 2)', group: 'Grip', view: 'side',
+    anchor: { x: 0.56179, y: 0.41304 }, box: { x: 0.89, y: 0.5 } },
+  { id: 'b29', kind: 'button', inputs: b(29), label: 'Autopilot trigger', group: 'Grip', view: 'side',
+    anchor: { x: 0.50568, y: 0.38957 }, box: { x: 0.11, y: 0.46 } },
+  { id: 'brakea', kind: 'axis', inputs: ['slider1'], label: 'Brake lever SR', group: 'Grip', view: 'side',
+    anchor: { x: 0.51102, y: 0.69739 }, box: { x: 0.89, y: 0.75 } },
+]);
+
 // Exact photos and callouts from Federico's export (2026-10-09); retain the built-in metadata.
 // T1 stays 30 / 32: the export's 30 / 31 duplicates T2's button 31.
 photoTplExactViews({

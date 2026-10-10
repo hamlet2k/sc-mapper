@@ -920,10 +920,10 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[2].id]: { view: 'front', x: 1.5, y: 0.5 } } })), 'coordinates outside 0..1 rejected');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { views: [], anchors: {} })), 'empty layout rejected');
   });
-  t('device templates (43 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
+  t('device templates (45 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    assert.equal(DEVICE_TEMPLATES.length, 43, '42 existing + Cougar MFD');
+    assert.equal(DEVICE_TEMPLATES.length, 45, '43 existing + Aeromax and Flanker');
     assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
     // devices without published numbers: callout spots only (stick X / Y where obvious)
     const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
@@ -954,6 +954,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         assert.equal(open, d.id === 'builtin-vkb-gunfighter-mcg' ? 1 : 2, `${d.id}: exported unassigned inputs preserved`);
       } else if (d.id === 'builtin-vkb-stecs') {
         assert.equal(open, 0, 'STECS: user-verified layout has every input assigned');
+      } else if (d.id === 'builtin-virpil-cdt-aeromax') {
+        assert.equal(open, 2, 'Aeromax: mode switch positions have no diagram input numbers');
       } else if (OPEN.has(d.id)) {
         assert.ok(open > 5 && d.callouts.flatMap((c) => c.inputs).filter((i) => /^button|^hat/.test(i)).length === 0, `${d.id}: buttons left unassigned`);
         assert.match(d.notes!, /Customize a copy/);
@@ -1128,6 +1130,63 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const saved = tp.parseTemplates(tp.exportTemplates([copy]))[0];
     assert.deepEqual(saved.callouts.find((c) => c.id === 'a2')!.inputs, ['button7']);
     assert.equal(tp.shortInput(''), '?');
+  });
+  t('VIRPIL Aeromax and Flanker: diagram numbering, axes, photo views and matching', () => {
+    const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+    const b = (...n: number[]) => n.map((i) => `button${i}`);
+    const get = (id: string) => DEVICE_TEMPLATES.find((d) => d.id === `builtin-virpil-${id}`)!;
+    const aero = get('cdt-aeromax'), flanker = get('flanker');
+    const control = (d: DeviceTemplate, id: string) => d.callouts.find((c) => c.id === id)!;
+    const inputs = (d: DeviceTemplate, id: string) => control(d, id).inputs;
+    for (const [d, name, match, count, last] of [
+      [aero, 'VIRPIL VPC CDT-Aeromax', 'Aeromax', 17, 24],
+      [flanker, 'VIRPIL Constellation Flanker', 'Flanker', 14, 30],
+    ] as const) {
+      assert.equal(d.name, name); assert.equal(d.brand, 'VIRPIL'); assert.equal(d.category, 'stick');
+      assert.deepEqual(d.match, [{ name: match }]);
+      assert.equal(tp.pickTemplate(all, { name: `VPC ${match}`, slot: 'js' }).template.id, d.id);
+      assert.equal(d.callouts.length, count);
+      assert.deepEqual(d.views!.map((v) => v.id), ['front', 'side']);
+      assert.equal(DEVICE_PHOTO_LAYOUTS[d.id], undefined, 'authored positions bypass automatic layout');
+      const buttons = d.callouts.flatMap((c) => c.inputs).filter((i) => /^button/.test(i)).map((i) => +i.slice(6)).sort((a, b) => a - b);
+      assert.deepEqual(buttons, Array.from({ length: last }, (_, i) => i + 1), 'every diagram button exactly once');
+      for (const v of d.views!) {
+        const key = v.image!.split('/').pop()!.replace('.webp', '');
+        const [pw, ph] = DEVICE_PHOTO_SIZES[key];
+        assert.ok(readFileSync(new URL(`../public${v.image}`, import.meta.url)).length > 0, 'hosted cutout exists');
+        assert.deepEqual([v.width, v.height], [Math.round(pw + 0.6 * ph), ph], 'standard label gutters');
+        const gx = (v.width - pw) / 2;
+        const on = d.callouts.filter((c) => c.view === v.id);
+        assert.ok(on.length > 0);
+        for (const c of on) {
+          assert.ok(c.anchor.x * v.width >= gx && c.anchor.x * v.width <= gx + pw, `${c.id}: anchor on photo`);
+          assert.ok(c.box.x * v.width < gx || c.box.x * v.width > gx + pw, `${c.id}: box beside photo`);
+        }
+      }
+    }
+    assert.deepEqual(inputs(aero, 'h14'), b(15, 16, 17, 18, 14));
+    assert.deepEqual(inputs(aero, 'h20'), b(21, 22, 23, 24, 20));
+    assert.deepEqual(inputs(aero, 'h7'), b(8, 9, 10, 11, 7));
+    assert.deepEqual([control(aero, 'b13').kind, inputs(aero, 'b13'), control(aero, 'b19').kind, inputs(aero, 'b19')],
+      ['button', b(13), 'button', b(19)], '13 and 19 are single buttons');
+    assert.deepEqual(inputs(aero, 'trigger'), b(1, 2)); assert.deepEqual(inputs(aero, 'flip'), b(3, 4));
+    assert.deepEqual([control(aero, 'mode').kind, inputs(aero, 'mode')], ['switch', ['', '']]);
+    assert.deepEqual(Object.fromEntries(aero.callouts.filter((c) => c.kind === 'axis').map((c) => [c.id, c.inputs])),
+      { mini: ['rotx', 'roty'], xy: ['x', 'y'], sl: ['slider1'], dl: ['slider2'], brake: ['rotz'], twist: ['z'] });
+    assert.deepEqual(inputs(aero, 'minib'), b(6));
+    assert.match(aero.notes!, /Mode 2 shifts buttons 13-24 to 25-36/);
+    assert.match(aero.notes!, /optional.*absent from these photos/); assert.match(aero.notes!, /Firefox/);
+    assert.deepEqual(inputs(flanker, 'h2'), b(3, 4, 5, 6, 2));
+    assert.deepEqual(inputs(flanker, 'h9'), b(10, 11, 12, 13, 9));
+    assert.deepEqual(inputs(flanker, 'h20'), b(21, 22, 23, 24, 20));
+    assert.deepEqual(inputs(flanker, 'h14'), b(15, 16, 17, 18, 14));
+    assert.deepEqual(inputs(flanker, 'trigger'), b(27, 28)); assert.deepEqual(inputs(flanker, 'flip'), b(25, 26));
+    assert.deepEqual(inputs(flanker, 'b29'), b(29)); assert.deepEqual(inputs(flanker, 'brakeb'), b(30));
+    assert.deepEqual(inputs(flanker, 'minib'), b(8));
+    assert.deepEqual(Object.fromEntries(flanker.callouts.filter((c) => c.kind === 'axis').map((c) => [c.id, c.inputs])),
+      { mini: ['rotx', 'roty'], brakea: ['slider1'] }, 'grip only: no invented base axes');
+    assert.deepEqual(['h14', 'flip', 'trigger', 'b29', 'brakea'].map((id) => control(flanker, id).view), Array(5).fill('side'));
+    assert.match(flanker.notes!, /alternate four-way configuration/i);
   });
   t('STECS: user-verified map, directional order and exact front/back photo layout', () => {
     const stecs = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-stecs')!;
@@ -1588,8 +1647,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(r.image === 'data:image/svg+xml,<svg/>' && !(lazy as { image?: string }).image, 'picture resolves, template untouched');
     assert.equal((await tp.resolveTemplateImage(lazy)).image, r.image, 'cached'); assert.equal(calls, 1);
     const imgs = await Promise.all(DEVICE_TEMPLATES.map((x) => tp.resolveTemplateImage(x).then((y) => y.image ?? y.views!.map((v) => v.image).join()))); // (photo templates: their views' photos)
-    assert.equal(new Set(imgs).size, 43, 'one distinct set of pictures per device');
-    passed++; console.log('  ✓ device template pictures: all 43 photo templates (distinct), lazy pictures cached');
+    assert.equal(new Set(imgs).size, 45, 'one distinct set of pictures per device');
+    passed++; console.log('  ✓ device template pictures: all 45 photo templates (distinct), lazy pictures cached');
   }
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };
