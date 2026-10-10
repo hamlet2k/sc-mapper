@@ -3385,7 +3385,7 @@ console.log('\nphoto-template layout before and after Save');
     await hp.waitForTimeout(400);
     const pedalGroup = picker.locator('optgroup[data-group=suggestions]');
     check((await picker.inputValue()) === '' && /generic/.test(await hv.getByTestId('device-status').innerText()), 'unmatched pedal name stays Automatic with a generic template');
-    check((await pedalGroup.getAttribute('label')) === 'Pedal templates' && (await pedalGroup.locator('option').count()) === 8, 'unmatched pedal hardware offers all eight pedal built-ins');
+    check((await pedalGroup.getAttribute('label')) === 'Pedal templates' && (await pedalGroup.locator('option').count()) === 9, 'unmatched pedal hardware offers all nine pedal built-ins (R1-LEGEND added)');
     await picker.selectOption({ value: 'builtin-vkb-t-rudder' });
     check((await picker.inputValue()) === 'builtin-vkb-t-rudder', 'choosing a pedal suggestion applies it with one selection');
     await selectSlot('js1');
