@@ -194,41 +194,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
   },
   // Logitech X56 throttle: one photo (front-right). Hat 1 / Hat 2 = upper / lower thumb hat; the left-grip button is on the far side (estimated).
   // builtin-logitech-x56-throttle: exact callouts via photoTplExactViews (2026-10-09 export).
-  // VKB STECS Mk.II + STEM: names per the UntoldForce maps. 'front' = thumb side, 'stem' = STEM module (same photo), 'back' = grip front + base. Aft triggers, ring-finger encoder, forward trigger L and the STEM toggle / gear lever / lever / encoders are hidden or ambiguous: estimated; STEM rocker / button mapping uncertain.
-  'builtin-vkb-stecs': {
-    views: [{ id: 'front', label: 'Thumb side', photo: 'vkb-stecs-front' }, { id: 'stem', label: 'STEM module', photo: 'vkb-stecs-front' }, { id: 'back', label: 'Grip front + base', photo: 'vkb-stecs-back' }],
-    anchors: {
-      ots: { view: 'front', x: 0.764, y: 0.143 },
-      otsb: { view: 'front', x: 0.77, y: 0.152 },
-      radio: { view: 'front', x: 0.672, y: 0.187 },
-      brk: { view: 'front', x: 0.73, y: 0.237 },
-      opex: { view: 'front', x: 0.69, y: 0.323 },
-      sw1: { view: 'stem', x: 0.2, y: 0.585 },
-      sw2: { view: 'stem', x: 0.325, y: 0.56 },
-      c1: { view: 'stem', x: 0.225, y: 0.68 },
-      a12: { view: 'stem', x: 0.29, y: 0.655 },
-      b15: { view: 'stem', x: 0.43, y: 0.66 },
-      en1: { view: 'stem', x: 0.13, y: 0.615 },
-      en2: { view: 'stem', x: 0.12, y: 0.655 },
-      tgl: { view: 'stem', x: 0.09, y: 0.625 },
-      gear: { view: 'stem', x: 0.075, y: 0.675 },
-      mlev: { view: 'stem', x: 0.08, y: 0.69 },
-      senc: { view: 'back', x: 0.762, y: 0.168 },
-      rew: { view: 'back', x: 0.762, y: 0.248 },
-      renc: { view: 'back', x: 0.705, y: 0.207 },
-      mb2: { view: 'back', x: 0.634, y: 0.252 },
-      mb1: { view: 'back', x: 0.655, y: 0.326 },
-      fwdr: { view: 'back', x: 0.73, y: 0.335 },
-      fwdl: { view: 'back', x: 0.72, y: 0.35 },
-      aftl: { view: 'back', x: 0.4, y: 0.26 },
-      aftr: { view: 'back', x: 0.4, y: 0.29 },
-      start: { view: 'back', x: 0.494, y: 0.606 },
-      sys: { view: 'back', x: 0.559, y: 0.682 },
-      mode: { view: 'back', x: 0.43, y: 0.563 },
-      mtgl: { view: 'back', x: 0.52, y: 0.17 },
-      mtgr: { view: 'back', x: 0.66, y: 0.14 },
-    },
-  },
+  // VKB STECS Mk.II + STEM: original photo positions preserved by photoTplExactViews (2026-10-10 button map).
   // MOZA MTP: matched to the MOZA diagram (same photo three times: front / rear panel controls and grip + levers, too many labels for one view) (panel labels readable on the photo). L GEN / R GEN / switch 24 / switch 33 are hidden under the grip (estimated); grip buttons 3 / 4, switch 5, hat 70, slide and button 19 assigned by position (uncertain); levers marked on the lever stems.
   // builtin-moza-mtp: exact callouts via photoTplExactViews (2026-10-09 export).
   // Batch 4 (densest): measured with grid overlays; hidden controls placed at their best estimated spot (see the notes).

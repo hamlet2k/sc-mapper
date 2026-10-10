@@ -905,7 +905,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(DEVICE_TEMPLATES.length, 43, '42 existing + Cougar MFD');
     assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
     // devices without published numbers: callout spots only (stick X / Y where obvious)
-    const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-vkb-stecs', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
+    const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
     const USB = new Set(['builtin-tm-warthog-stick', 'builtin-tm-warthog-throttle', 'builtin-tm-t16000m', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-winctrl-ursa-combat',
       'builtin-winctrl-orion-pedals', 'builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad', 'builtin-honeycomb-bravo',
       'builtin-honeycomb-charlie', 'builtin-logitech-flight-rudder', 'builtin-mfg-crosswind', 'builtin-tm-tfrp', 'builtin-tm-tpr', 'builtin-vkb-t-rudder', 'builtin-winctrl-viperace-icp',
@@ -930,7 +930,9 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         assert.ok(open > 5, 'X56 export keeps partially assigned controls');
         assert.ok(d.callouts.some((c) => c.inputs.includes('button33')), 'X56 export adds known numbers');
       } else if (d.id === 'builtin-vkb-gunfighter-mcg' || d.id === 'builtin-virpil-mt50cm') {
-        assert.equal(open, d.id === 'builtin-vkb-gunfighter-mcg' ? 5 : 2, `${d.id}: exported unassigned inputs preserved`);
+        assert.equal(open, d.id === 'builtin-vkb-gunfighter-mcg' ? 1 : 2, `${d.id}: exported unassigned inputs preserved`);
+      } else if (d.id === 'builtin-vkb-stecs') {
+        assert.equal(open, 10, 'STECS: only axes, encoder depresses, unlabelled pair and two top-hat directions are unassigned');
       } else if (OPEN.has(d.id)) {
         assert.ok(open > 5 && d.callouts.flatMap((c) => c.inputs).filter((i) => /^button|^hat/.test(i)).length === 0, `${d.id}: buttons left unassigned`);
         assert.match(d.notes!, /Customize a copy/);
@@ -1105,7 +1107,43 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(saved.callouts.find((c) => c.id === 'a2')!.inputs, ['button7']);
     assert.equal(tp.shortInput(''), '?');
   });
-  t('Oct 10 Gunfighter MCG Pro, MT-50CM and Cougar MFD: exact exports, photos, USB and distinct model matching', () => {
+  t('STECS: VKB default map, directional order, uncertain inputs and original photo positions', () => {
+    const stecs = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-stecs')!;
+    const b = (...n: number[]) => n.map((i) => `button${i}`);
+    // Expected inputs follow the diagram; hats = up/right/down/left/push, encoders = CW/CCW/push.
+    const expected: Record<string, [string, string[]]> = {
+      mtgl: ['axis', ['']], mtgr: ['axis', ['']],
+      radio: ['hat', ['button34', '', 'button33', '', 'button22']],
+      brk: ['hat', b(25, 27, 26, 28, 20)], opex: ['button', b(24)],
+      ots: ['axis', ['', '']], otsb: ['switch', ['', '']],
+      senc: ['switch', b(14, 15)], renc: ['switch', b(13, 12)],
+      rew: ['buttons', b(11, 18, 10)],
+      fwdl: ['button', b(8)], fwdr: ['button', b(16)], aftl: ['button', b(9)], aftr: ['button', b(17)],
+      mb1: ['hat', b(32, 30, 31, 29, 21)], mb2: ['button', b(23)],
+      mode: ['buttons', b(3, 4, 5, 6, 7)], start: ['button', b(2)], sys: ['button', b(1)],
+      sw1: ['switch', b(43, 44, 45)], sw2: ['switch', b(46, 47, 48)], tgl: ['switch', b(49, 50)],
+      en1: ['encoder', [...b(52, 51), '']], en2: ['encoder', [...b(54, 53), '']],
+      a12: ['buttons', b(35, 36)], b15: ['buttons', b(38, 39, 40, 41, 42)], c1: ['button', b(37)],
+      mlev: ['switch', b(57, 58)],
+    };
+    assert.deepEqual(Object.fromEntries(stecs.callouts.map((c) => [c.id, [c.kind, c.inputs]])), expected);
+    assert.equal(stecs.callouts.length, 28, 'no separate landing-gear control in the diagram');
+    assert.deepEqual(stecs.callouts.filter((c) => c.kind === 'axis').map((c) => c.label),
+      ['Left lever (MTG-L)', 'Right lever (MTG-R)', 'Ministick H / V axes']);
+    const buttons = stecs.callouts.flatMap((c) => c.inputs).filter((i) => i.startsWith('button')).map((i) => Number(i.slice(6))).sort((a, b) => a - b);
+    assert.deepEqual(buttons, [...Array.from({ length: 18 }, (_, i) => i + 1), ...Array.from({ length: 35 }, (_, i) => i + 20), 57, 58],
+      'all published buttons occur once; 19, 55 and 56 are not assigned');
+    const before = JSON.parse(readFileSync(new URL('./fixtures/oct10-stecs-layout.json', import.meta.url), 'utf8'));
+    assert.equal(stecs.aspect, before.aspect); assert.deepEqual(stecs.views, before.views);
+    assert.deepEqual(Object.fromEntries(stecs.callouts.map((c) => [c.id, { anchor: c.anchor, box: c.box, view: c.view }])), before.positions,
+      'renumbering and kind changes preserve every retained anchor, label box, view and size');
+    assert.equal(stecs.name, 'VKB STECS Mk.II + STEM module'); assert.equal(stecs.brand, 'VKB'); assert.equal(stecs.category, 'throttle');
+    assert.deepEqual(stecs.match, [{ name: 'STECS' }]);
+    assert.match(stecs.notes!, /VKB.*default button map/); assert.match(stecs.notes!, /VKBDevCfg can change/);
+    assert.match(stecs.notes!, /above 32.*Firefox/);
+    assert.equal(DEVICE_PHOTO_LAYOUTS[stecs.id], undefined, 'exact positions bypass automatic placement');
+  });
+  t('Oct 10 Gunfighter MCG Pro v2, MT-50CM and Cougar MFD: exact exports, photos, USB and distinct model matching', () => {
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
     for (const [file, id] of [['gunfighter', 'builtin-vkb-gunfighter-mcg'], ['mt50cm', 'builtin-virpil-mt50cm'], ['cougar-mfd', 'builtin-tm-cougar-mfd']]) {
       const expected = JSON.parse(readFileSync(new URL(`./fixtures/oct10-${file}.json`, import.meta.url), 'utf8'));
@@ -1134,6 +1172,13 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const gun = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-gunfighter-mcg')!;
     const original = JSON.parse(readFileSync(new URL('./fixtures/vkb-gunfighter-mcg-pro.sc-template.json', import.meta.url), 'utf8')).templates[0];
     assert.deepEqual(gun.callouts, original.callouts, 'Gunfighter: exact supplied export');
+    assert.equal(gun.callouts.length, 15, 'v2 adds GATE CONT Push');
+    const gc = (id: string) => gun.callouts.find((c) => c.id === id)!;
+    assert.deepEqual([gc('flip').kind, gc('flip').inputs, gc('flip').label], ['button', ['button3'], 'Flip trigger']);
+    assert.deepEqual(gc('brakea').inputs, ['slider2']);
+    assert.deepEqual(gc('lvl').inputs, ['button5']); assert.deepEqual(gc('gun').inputs, ['button6']);
+    assert.deepEqual(gc('1hu0ipa2').inputs, ['button8']);
+    assert.deepEqual(['reset', 'xy', '6dmumr55'].map((id) => gc(id).view), ['thumb', 'thumb', 'thumb']);
     assert.equal(gun.name, 'VKB Gunfighter + MCG Pro');
     assert.equal(gun.brand, 'VKB'); assert.equal(gun.category, 'stick');
     assert.equal(gun.notes, original.notes, 'original built-in notes retained');
