@@ -12,7 +12,7 @@ Note: `LIVE\user\client\0\Profiles\default` holds only the player's own changes,
 The defaults live inside `LIVE\Data.p4k`.
 
 ## 2. Extract the four source files from Data.p4k
-Ask Federico first. Then, on the PC, download unp4k (or StarBreaker) into a temp folder and extract:
+Normally the StarSource agent does this step (it did for 4.10.2): ask it to extract these files from the new Data.p4k on HighCastle with unp4k/StarBreaker and hand them over. To do it yourself, ask Federico first, then download unp4k into a temp folder on the PC and extract:
 
 | File in Data.p4k | Save as |
 | --- | --- |
@@ -23,7 +23,7 @@ Ask Federico first. Then, on the PC, download unp4k (or StarBreaker) into a temp
 
 The two XML files are binary CryXML inside the p4k and must be converted to text XML
 (unforge, or StarBreaker). The unforge converter can leave a stray `<![CDATA[/>` fragment;
-our parser tolerates it, and `build-defaults` cleans it. The StarSource agent can do the extraction too.
+our parser tolerates it, and `build-defaults` cleans it.
 
 Copy the files to the box (CopyToBox into `/workspace/uploads/`), then into `data/game/` in a worktree.
 

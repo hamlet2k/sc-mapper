@@ -953,7 +953,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       } else if (d.id === 'builtin-vkb-gunfighter-mcg' || d.id === 'builtin-virpil-mt50cm') {
         assert.equal(open, d.id === 'builtin-vkb-gunfighter-mcg' ? 1 : 2, `${d.id}: exported unassigned inputs preserved`);
       } else if (d.id === 'builtin-vkb-stecs') {
-        assert.equal(open, 10, 'STECS: only axes, encoder depresses, unlabelled pair and two top-hat directions are unassigned');
+        assert.equal(open, 0, 'STECS: user-verified layout has every input assigned');
       } else if (OPEN.has(d.id)) {
         assert.ok(open > 5 && d.callouts.flatMap((c) => c.inputs).filter((i) => /^button|^hat/.test(i)).length === 0, `${d.id}: buttons left unassigned`);
         assert.match(d.notes!, /Customize a copy/);
@@ -973,6 +973,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
           // Authored layouts keep their exact label positions, pinned by the export fixture tests.
           && !['builtin-honeycomb-bravo', 'builtin-moza-mtp', 'builtin-logitech-x56-throttle', 'builtin-tm-twcs', 'builtin-winctrl-orion'].includes(d.id)
           && !(d.id === 'builtin-virpil-t50cm4' && [c.id, o.id].sort().join(',') === 'mini,minib')
+          && !(d.id === 'builtin-vkb-stecs' && [c.id, o.id].sort().join(',') === 'f0g3o0no,tvc1hgok')
           && !(d.id === 'builtin-virpil-mt50cm' && [c.id, o.id].sort().join(',') === 'mtxi15i1,r9o62f2n')) assert.ok(Math.abs(o.box.x - c.box.x) > 0.12 || Math.abs(o.box.y - c.box.y) > 0.03, `${d.id}: boxes ${c.id} / ${o.id} too close`);
         if (c.inputRegions) assert.equal(c.inputRegions.length, c.inputs.length, `${d.id}/${c.id}: one outline per input`);
         if (c.kind === 'hat') assert.ok(c.inputs.length >= 4 && c.inputs.length <= 5, `${d.id}/${c.id}: hat = 4 directions (+ push)`);
@@ -1128,39 +1129,44 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(saved.callouts.find((c) => c.id === 'a2')!.inputs, ['button7']);
     assert.equal(tp.shortInput(''), '?');
   });
-  t('STECS: VKB default map, directional order, uncertain inputs and original photo positions', () => {
+  t('STECS: user-verified map, directional order and exact front/back photo layout', () => {
     const stecs = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-stecs')!;
     const b = (...n: number[]) => n.map((i) => `button${i}`);
-    // Expected inputs follow the diagram; hats = up/right/down/left/push, encoders = CW/CCW/push.
+    // Expected inputs follow the verified export; hats = up/right/down/left/push, encoders = CW/CCW/push.
     const expected: Record<string, [string, string[]]> = {
-      mtgl: ['axis', ['']], mtgr: ['axis', ['']],
-      radio: ['hat', ['button34', '', 'button33', '', 'button22']],
+      mtgl: ['axis', ['x']], mtgr: ['axis', ['y']],
+      radio: ['switch', b(34, 22, 33)],
       brk: ['hat', b(25, 27, 26, 28, 20)], opex: ['button', b(24)],
-      ots: ['axis', ['', '']], otsb: ['switch', ['', '']],
+      ots: ['axis', ['rotx', 'roty']],
       senc: ['switch', b(14, 15)], renc: ['switch', b(13, 12)],
-      rew: ['buttons', b(11, 18, 10)],
-      fwdl: ['button', b(8)], fwdr: ['button', b(16)], aftl: ['button', b(9)], aftr: ['button', b(17)],
-      mb1: ['hat', b(32, 30, 31, 29, 21)], mb2: ['button', b(23)],
-      mode: ['buttons', b(3, 4, 5, 6, 7)], start: ['button', b(2)], sys: ['button', b(1)],
+      rew: ['button', b(10)],
+      fwdl: ['button', b(17)], fwdr: ['button', b(9)], aftl: ['button', b(8)], aftr: ['button', b(16)],
+      mb1: ['hat', b(32, 30, 31, 29, 21)],
+      mode: ['switch', b(3, 4, 5, 6, 7)], start: ['button', b(2)], sys: ['button', b(1)],
       sw1: ['switch', b(43, 44, 45)], sw2: ['switch', b(46, 47, 48)], tgl: ['switch', b(49, 50)],
-      en1: ['encoder', [...b(52, 51), '']], en2: ['encoder', [...b(54, 53), '']],
-      a12: ['buttons', b(35, 36)], b15: ['buttons', b(38, 39, 40, 41, 42)], c1: ['button', b(37)],
+      en1: ['encoder', b(52, 51, 55)], en2: ['encoder', b(54, 53, 56)],
+      a12: ['button', b(35)], b15: ['buttons', b(38, 39, 40, 41, 42)], c1: ['button', b(37)],
       mlev: ['switch', b(57, 58)],
+      '4vhboel2': ['axis', ['z']], tvc1hgok: ['button', b(11)], f0g3o0no: ['button', b(18)],
+      o5h8aopw: ['button', b(23)], ooy4nuzr: ['button', b(36)],
     };
     assert.deepEqual(Object.fromEntries(stecs.callouts.map((c) => [c.id, [c.kind, c.inputs]])), expected);
-    assert.equal(stecs.callouts.length, 28, 'no separate landing-gear control in the diagram');
+    assert.equal(stecs.callouts.length, 31, 'all user-verified callouts retained');
+    assert.deepEqual(stecs.views!.map((v) => v.id), ['front', 'back'], 'two photo views');
+    assert.deepEqual(stecs.callouts.find((c) => c.label === 'ENT BUTTON')!.inputs, b(18), 'ENT: corrected duplicate input');
+    assert.deepEqual(stecs.callouts.find((c) => c.label === 'A2')!.inputs, b(36), 'A2: corrected duplicate input');
     assert.deepEqual(stecs.callouts.filter((c) => c.kind === 'axis').map((c) => c.label),
-      ['Left lever (MTG-L)', 'Right lever (MTG-R)', 'Ministick H / V axes']);
+      ['Left lever (MTG-L)', 'Right lever (MTG-R)', 'OTS', 'Wheel']);
     const buttons = stecs.callouts.flatMap((c) => c.inputs).filter((i) => i.startsWith('button')).map((i) => Number(i.slice(6))).sort((a, b) => a - b);
-    assert.deepEqual(buttons, [...Array.from({ length: 18 }, (_, i) => i + 1), ...Array.from({ length: 35 }, (_, i) => i + 20), 57, 58],
-      'all published buttons occur once; 19, 55 and 56 are not assigned');
-    const before = JSON.parse(readFileSync(new URL('./fixtures/oct10-stecs-layout.json', import.meta.url), 'utf8'));
-    assert.equal(stecs.aspect, before.aspect); assert.deepEqual(stecs.views, before.views);
-    assert.deepEqual(Object.fromEntries(stecs.callouts.map((c) => [c.id, { anchor: c.anchor, box: c.box, view: c.view }])), before.positions,
-      'renumbering and kind changes preserve every retained anchor, label box, view and size');
+    assert.deepEqual(buttons, [...Array.from({ length: 18 }, (_, i) => i + 1), ...Array.from({ length: 39 }, (_, i) => i + 20)],
+      'verified buttons 1-18 and 20-58 occur once; 19 is unused');
+    const verifiedLayout = JSON.parse(readFileSync(new URL('./fixtures/oct10-stecs-layout.json', import.meta.url), 'utf8'));
+    assert.equal(stecs.aspect, verifiedLayout.aspect); assert.deepEqual(stecs.views, verifiedLayout.views);
+    assert.deepEqual(stecs.callouts, verifiedLayout.callouts,
+      'every authored input, kind, label, group, anchor, box and view matches the verified layout');
     assert.equal(stecs.name, 'VKB STECS Mk.II + STEM module'); assert.equal(stecs.brand, 'VKB'); assert.equal(stecs.category, 'throttle');
     assert.deepEqual(stecs.match, [{ name: 'STECS' }]);
-    assert.match(stecs.notes!, /VKB.*default button map/); assert.match(stecs.notes!, /VKBDevCfg can change/);
+    assert.match(stecs.notes!, /user’s verified mapping/); assert.match(stecs.notes!, /DirectInput button N = buttonN/);
     assert.match(stecs.notes!, /above 32.*Firefox/);
     assert.equal(DEVICE_PHOTO_LAYOUTS[stecs.id], undefined, 'exact positions bypass automatic placement');
   });

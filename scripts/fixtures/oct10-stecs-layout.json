@@ -4,333 +4,606 @@
     {
       "id": "front",
       "label": "Thumb side",
-      "image": "/device-photos/vkb-stecs-front.webp",
       "width": 1365,
-      "height": 738
-    },
-    {
-      "id": "stem",
-      "label": "STEM module",
-      "image": "/device-photos/vkb-stecs-front.webp",
-      "width": 1365,
-      "height": 738
+      "height": 738,
+      "image": "/device-photos/vkb-stecs-front.webp"
     },
     {
       "id": "back",
       "label": "Grip front + base",
-      "image": "/device-photos/vkb-stecs-back.webp",
       "width": 1313,
-      "height": 819
+      "height": 819,
+      "image": "/device-photos/vkb-stecs-back.webp"
     }
   ],
-  "positions": {
-    "mtgl": {
+  "callouts": [
+    {
+      "id": "mtgl",
+      "kind": "axis",
+      "inputs": [
+        "x"
+      ],
+      "label": "Left lever (MTG-L)",
+      "group": "Levers",
+      "view": "front",
       "anchor": {
-        "x": 0.5125209444021326,
-        "y": 0.17
+        "x": 0.4929549185497187,
+        "y": 0.1792043510009324
       },
       "box": {
-        "x": 0.115,
-        "y": 0.05
-      },
-      "view": "back"
+        "x": 0.37080294198363367,
+        "y": 0.032209116532066824
+      }
     },
-    "mtgr": {
+    {
+      "id": "mtgr",
+      "kind": "axis",
+      "inputs": [
+        "y"
+      ],
+      "label": "Right lever (MTG-R)",
+      "group": "Levers",
+      "view": "front",
       "anchor": {
-        "x": 0.6001675552170601,
-        "y": 0.14
+        "x": 0.5594911220722236,
+        "y": 0.1444846182576571
       },
       "box": {
-        "x": 0.885,
-        "y": 0.05
-      },
-      "view": "back"
+        "x": 0.5182481751824818,
+        "y": 0.04435076399959159
+      }
     },
-    "radio": {
+    {
+      "id": "radio",
+      "kind": "switch",
+      "inputs": [
+        "button34",
+        "button22",
+        "button33"
+      ],
+      "label": "RADIO (up/push/dn)",
+      "group": "Right grip",
+      "view": "front",
       "anchor": {
-        "x": 0.6161787545787546,
-        "y": 0.187
+        "x": 0.6205478974284491,
+        "y": 0.19656421737257007
       },
       "box": {
-        "x": 0.125,
-        "y": 0.0895284552845528
-      },
-      "view": "front"
+        "x": 0.8948904441220917,
+        "y": 0.18870150741397027
+      }
     },
-    "brk": {
+    {
+      "id": "brk",
+      "kind": "hat",
+      "inputs": [
+        "button25",
+        "button27",
+        "button26",
+        "button28",
+        "button20"
+      ],
+      "label": "BRK",
+      "group": "Right grip",
+      "view": "front",
       "anchor": {
         "x": 0.6553553113553113,
         "y": 0.23699999999999996
       },
       "box": {
-        "x": 0.125,
-        "y": 0.24899999999999997
-      },
-      "view": "front"
+        "x": 0.8883211456076072,
+        "y": 0.33170322463243046
+      }
     },
-    "opex": {
+    {
+      "id": "opex",
+      "kind": "button",
+      "inputs": [
+        "button24"
+      ],
+      "label": "OP EXEC",
+      "group": "Right grip",
+      "view": "front",
       "anchor": {
-        "x": 0.6283369963369962,
-        "y": 0.323
+        "x": 0.6307240465615827,
+        "y": 0.32531644465910375
       },
       "box": {
-        "x": 0.125,
-        "y": 0.4084715447154471
-      },
-      "view": "front"
+        "x": 0.8953033268101761,
+        "y": 0.4772151788363189
+      }
     },
-    "ots": {
+    {
+      "id": "ots",
+      "kind": "axis",
+      "inputs": [
+        "rotx",
+        "roty"
+      ],
+      "label": "OTS",
+      "group": "Right grip",
+      "view": "front",
       "anchor": {
-        "x": 0.6783208791208791,
-        "y": 0.143
+        "x": 0.6808218461426737,
+        "y": 0.14737793851717904
       },
       "box": {
         "x": 0.885,
         "y": 0.05
-      },
-      "view": "front"
+      }
     },
-    "otsb": {
-      "anchor": {
-        "x": 0.6823736263736264,
-        "y": 0.152
-      },
-      "box": {
-        "x": 0.875,
-        "y": 0.2779065040650407
-      },
-      "view": "front"
-    },
-    "senc": {
+    {
+      "id": "senc",
+      "kind": "switch",
+      "inputs": [
+        "button14",
+        "button15"
+      ],
+      "label": "Roller (forward / backward)",
+      "group": "Right grip",
+      "view": "back",
       "anchor": {
         "x": 0.664024371667936,
         "y": 0.168
       },
       "box": {
-        "x": 0.885,
-        "y": 0.20184126984126982
-      },
-      "view": "back"
+        "x": 0.9103985923621642,
+        "y": 0.03
+      }
     },
-    "rew": {
+    {
+      "id": "rew",
+      "kind": "button",
+      "inputs": [
+        "button10"
+      ],
+      "label": "WPN SEL",
+      "group": "Right grip",
+      "view": "back",
       "anchor": {
-        "x": 0.664024371667936,
-        "y": 0.248
+        "x": 0.6663778162911612,
+        "y": 0.24097222222222223
       },
       "box": {
-        "x": 0.885,
-        "y": 0.4542222222222222
-      },
-      "view": "back"
+        "x": 0.94,
+        "y": 0.1376388973659939
+      }
     },
-    "fwdr": {
+    {
+      "id": "fwdr",
+      "kind": "button",
+      "inputs": [
+        "button9"
+      ],
+      "label": "F-L TRIG",
+      "group": "Right grip",
+      "view": "back",
       "anchor": {
-        "x": 0.6439908606245239,
-        "y": 0.335
+        "x": 0.67123048144362,
+        "y": 0.3220833248562283
       },
       "box": {
-        "x": 0.885,
-        "y": 0.5804126984126985
-      },
-      "view": "back"
+        "x": 0.8919915700737618,
+        "y": 0.3876689189189189
+      }
     },
-    "aftr": {
+    {
+      "id": "aftr",
+      "kind": "button",
+      "inputs": [
+        "button16"
+      ],
+      "label": "F-R TRIG",
+      "group": "Right grip",
+      "view": "front",
       "anchor": {
-        "x": 0.43739527798933736,
-        "y": 0.29
+        "x": 0.49452057183372067,
+        "y": 0.2963833524348723
       },
       "box": {
-        "x": 0.115,
-        "y": 0.4702539682539682
-      },
-      "view": "back"
+        "x": 0.225244570618273,
+        "y": 0.14882459864693998
+      }
     },
-    "mb1": {
+    {
+      "id": "mb1",
+      "kind": "hat",
+      "inputs": [
+        "button32",
+        "button30",
+        "button31",
+        "button29",
+        "button21"
+      ],
+      "label": "MB1",
+      "group": "Left grip",
+      "view": "back",
       "anchor": {
-        "x": 0.597037319116527,
-        "y": 0.326
+        "x": 0.57140383398099,
+        "y": 0.35541665818956164
       },
       "box": {
-        "x": 0.875,
-        "y": 0.8408095238095239
-      },
-      "view": "back"
+        "x": 0.8068492636163066,
+        "y": 0.8146959253259607
+      }
     },
-    "mb2": {
+    {
+      "id": "renc",
+      "kind": "switch",
+      "inputs": [
+        "button13",
+        "button12"
+      ],
+      "label": "Roller (forward / backward)",
+      "group": "Left grip",
+      "view": "back",
       "anchor": {
-        "x": 0.5838903274942879,
-        "y": 0.252
+        "x": 0.6199306970659121,
+        "y": 0.2831944359673394
       },
       "box": {
-        "x": 0.125,
-        "y": 0.20985714285714285
-      },
-      "view": "back"
+        "x": 0.915944540727903,
+        "y": 0.25986111958821617
+      }
     },
-    "renc": {
+    {
+      "id": "fwdl",
+      "kind": "button",
+      "inputs": [
+        "button17"
+      ],
+      "label": "F-R TRIG",
+      "group": "Left grip",
+      "view": "back",
       "anchor": {
-        "x": 0.6283396801218584,
-        "y": 0.207
+        "x": 0.6490467937608319,
+        "y": 0.35652779473198787
       },
       "box": {
-        "x": 0.885,
-        "y": 0.328031746031746
-      },
-      "view": "back"
+        "x": 0.8882149046793761,
+        "y": 0.4576388888888889
+      }
     },
-    "fwdl": {
+    {
+      "id": "aftl",
+      "kind": "button",
+      "inputs": [
+        "button8"
+      ],
+      "label": "B-L TRIG",
+      "group": "Left grip",
+      "view": "front",
       "anchor": {
-        "x": 0.6377303884234578,
-        "y": 0.35
+        "x": 0.46320941723489484,
+        "y": 0.3079565782874661
       },
       "box": {
-        "x": 0.885,
-        "y": 0.7066031746031747
-      },
-      "view": "back"
+        "x": 0.15949119373776907,
+        "y": 0.23562384772688744
+      }
     },
-    "aftl": {
-      "anchor": {
-        "x": 0.43739527798933736,
-        "y": 0.26
-      },
-      "box": {
-        "x": 0.115,
-        "y": 0.344063492063492
-      },
-      "view": "back"
-    },
-    "mode": {
+    {
+      "id": "mode",
+      "kind": "switch",
+      "inputs": [
+        "button3",
+        "button4",
+        "button5",
+        "button6",
+        "button7"
+      ],
+      "label": "Base buttons 1-5",
+      "group": "Base",
+      "view": "back",
       "anchor": {
         "x": 0.4561766945925362,
         "y": 0.563
       },
       "box": {
-        "x": 0.115,
-        "y": 0.5964444444444444
-      },
-      "view": "back"
+        "x": 0.3828422242268739,
+        "y": 0.9076388888888889
+      }
     },
-    "start": {
+    {
+      "id": "start",
+      "kind": "button",
+      "inputs": [
+        "button2"
+      ],
+      "label": "RED START",
+      "group": "Base",
+      "view": "back",
       "anchor": {
         "x": 0.49624371667936024,
         "y": 0.606
       },
       "box": {
-        "x": 0.115,
-        "y": 0.7146190476190476
-      },
-      "view": "back"
+        "x": 0.5201039438231152,
+        "y": 0.9343055725097656
+      }
     },
-    "sys": {
+    {
+      "id": "sys",
+      "kind": "button",
+      "inputs": [
+        "button1"
+      ],
+      "label": "DOT",
+      "group": "Base",
+      "view": "back",
       "anchor": {
-        "x": 0.536936785986291,
-        "y": 0.6819999999999999
+        "x": 0.5339687618473787,
+        "y": 0.677638922797309
       },
       "box": {
-        "x": 0.115,
-        "y": 0.8247777777777777
-      },
-      "view": "back"
+        "x": 0.6532061757000108,
+        "y": 0.9376388549804687
+      }
     },
-    "sw1": {
+    {
+      "id": "sw1",
+      "kind": "switch",
+      "inputs": [
+        "button43",
+        "button44",
+        "button45"
+      ],
+      "label": "SW1 (up / center / down)",
+      "group": "STEM",
+      "view": "back",
       "anchor": {
-        "x": 0.29736263736263735,
-        "y": 0.585
+        "x": 0.38908145580589254,
+        "y": 0.42097223069932727
       },
       "box": {
-        "x": 0.885,
-        "y": 0.4863211382113821
-      },
-      "view": "stem"
+        "x": 0.16516462355800476,
+        "y": 0.8531944274902343
+      }
     },
-    "sw2": {
+    {
+      "id": "sw2",
+      "kind": "switch",
+      "inputs": [
+        "button46",
+        "button47",
+        "button48"
+      ],
+      "label": "SW2 (up / center / down)",
+      "group": "STEM",
+      "view": "back",
       "anchor": {
-        "x": 0.38179487179487187,
-        "y": 0.56
+        "x": 0.3481802320562987,
+        "y": 0.44430554707845055
       },
       "box": {
-        "x": 0.885,
-        "y": 0.34534552845528455
-      },
-      "view": "stem"
+        "x": 0.11386478629021339,
+        "y": 0.6709721883138021
+      }
     },
-    "tgl": {
+    {
+      "id": "tgl",
+      "kind": "switch",
+      "inputs": [
+        "button49",
+        "button50"
+      ],
+      "label": "TGL (UP / DN)",
+      "group": "STEM",
+      "view": "front",
       "anchor": {
-        "x": 0.22306227106227108,
-        "y": 0.625
+        "x": 0.380234809770976,
+        "y": 0.5104882238570864
       },
       "box": {
-        "x": 0.115,
-        "y": 0.447479674796748
-      },
-      "view": "stem"
+        "x": 0.10469667318982387,
+        "y": 0.3918625898861325
+      }
     },
-    "en1": {
+    {
+      "id": "en1",
+      "kind": "encoder",
+      "inputs": [
+        "button52",
+        "button51",
+        "button55"
+      ],
+      "label": "EN1 (CW / CCW / depress)",
+      "group": "STEM",
+      "view": "front",
       "anchor": {
-        "x": 0.2500805860805861,
-        "y": 0.615
+        "x": 0.39119366610353473,
+        "y": 0.5943942354557528
       },
       "box": {
-        "x": 0.115,
-        "y": 0.3065040650406504
-      },
-      "view": "stem"
+        "x": 0.509489073370495,
+        "y": 0.9010117837992727
+      }
     },
-    "en2": {
+    {
+      "id": "en2",
+      "kind": "encoder",
+      "inputs": [
+        "button54",
+        "button53",
+        "button56"
+      ],
+      "label": "EN2 (CW / CCW / depress)",
+      "group": "STEM",
+      "view": "front",
       "anchor": {
-        "x": 0.24332600732600732,
-        "y": 0.655
+        "x": 0.30900194500290484,
+        "y": 0.6262205927540122
       },
       "box": {
-        "x": 0.115,
-        "y": 0.5884552845528456
-      },
-      "view": "stem"
+        "x": 0.19393341601944716,
+        "y": 0.8808317822530516
+      }
     },
-    "b15": {
+    {
+      "id": "b15",
+      "kind": "buttons",
+      "inputs": [
+        "button38",
+        "button39",
+        "button40",
+        "button41",
+        "button42"
+      ],
+      "label": "B1-B5",
+      "group": "STEM",
+      "view": "back",
       "anchor": {
-        "x": 0.45271794871794874,
-        "y": 0.66
+        "x": 0.2774696283985052,
+        "y": 0.4465277777777778
       },
       "box": {
-        "x": 0.885,
-        "y": 0.7682723577235773
-      },
-      "view": "stem"
+        "x": 0.09376078957701472,
+        "y": 0.4765277862548828
+      }
     },
-    "a12": {
+    {
+      "id": "a12",
+      "kind": "button",
+      "inputs": [
+        "button35"
+      ],
+      "label": "A1",
+      "group": "STEM",
+      "view": "back",
       "anchor": {
-        "x": 0.35815384615384616,
-        "y": 0.655
+        "x": 0.34956669270269175,
+        "y": 0.3898611280653212
       },
       "box": {
-        "x": 0.885,
-        "y": 0.6272967479674797
-      },
-      "view": "stem"
+        "x": 0.24835353170358535,
+        "y": 0.1798611111111111
+      }
     },
-    "c1": {
+    {
+      "id": "c1",
+      "kind": "button",
+      "inputs": [
+        "button37"
+      ],
+      "label": "C1",
+      "group": "STEM",
+      "view": "back",
       "anchor": {
-        "x": 0.31424908424908427,
-        "y": 0.68
+        "x": 0.31559787796522965,
+        "y": 0.3809722052680122
       },
       "box": {
-        "x": 0.885,
-        "y": 0.9
-      },
-      "view": "stem"
+        "x": 0.1311958088205427,
+        "y": 0.22097223069932725
+      }
     },
-    "mlev": {
+    {
+      "id": "mlev",
+      "kind": "switch",
+      "inputs": [
+        "button57",
+        "button58"
+      ],
+      "label": "Slider (UP / DN)",
+      "group": "STEM",
+      "view": "front",
       "anchor": {
-        "x": 0.2163076923076923,
-        "y": 0.69
+        "x": 0.2964774951076321,
+        "y": 0.5423146363408398
       },
       "box": {
-        "x": 0.115,
-        "y": 0.9
+        "x": 0.09608605789811644,
+        "y": 0.5292947779512319
+      }
+    },
+    {
+      "id": "4vhboel2",
+      "kind": "axis",
+      "inputs": [
+        "z"
+      ],
+      "anchor": {
+        "x": 0.5866927354069839,
+        "y": 0.3716094032549729
       },
-      "view": "stem"
+      "box": {
+        "x": 0.8656933638301209,
+        "y": 0.6163575042158516
+      },
+      "view": "front",
+      "label": "Wheel"
+    },
+    {
+      "id": "tvc1hgok",
+      "kind": "button",
+      "inputs": [
+        "button11"
+      ],
+      "label": "RST BUTTON",
+      "group": "Right grip",
+      "view": "back",
+      "anchor": {
+        "x": 0.6331022318768956,
+        "y": 0.21875
+      },
+      "box": {
+        "x": 0.5859618294383665,
+        "y": 0.03
+      }
+    },
+    {
+      "id": "f0g3o0no",
+      "kind": "button",
+      "inputs": [
+        "button18"
+      ],
+      "label": "ENT BUTTON",
+      "group": "Right grip",
+      "view": "back",
+      "anchor": {
+        "x": 0.5831889081455806,
+        "y": 0.25763888888888886
+      },
+      "box": {
+        "x": 0.47157708073819327,
+        "y": 0.03
+      }
+    },
+    {
+      "id": "o5h8aopw",
+      "kind": "button",
+      "inputs": [
+        "button23"
+      ],
+      "label": "MB2",
+      "group": "Left grip",
+      "view": "back",
+      "anchor": {
+        "x": 0.5977469036029571,
+        "y": 0.33208334181043836
+      },
+      "box": {
+        "x": 0.8523709424805717,
+        "y": 0.6565878584578231
+      }
+    },
+    {
+      "id": "ooy4nuzr",
+      "kind": "button",
+      "inputs": [
+        "button36"
+      ],
+      "label": "A2",
+      "group": "STEM",
+      "view": "back",
+      "anchor": {
+        "x": 0.31698439150170604,
+        "y": 0.41875
+      },
+      "box": {
+        "x": 0.12426339980841096,
+        "y": 0.3254166497124566
+      }
     }
-  }
+  ]
 }
