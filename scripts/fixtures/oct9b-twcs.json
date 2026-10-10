@@ -1,0 +1,267 @@
+{
+  "aspect": 2.163568773234201,
+  "views": [
+    {
+      "id": "thumb",
+      "label": "Thumb side",
+      "image": "/device-photos/tm-twcs-thumb.webp",
+      "width": 1164,
+      "height": 538
+    },
+    {
+      "id": "front",
+      "label": "Front",
+      "image": "/device-photos/tm-twcs-front.webp",
+      "width": 1573,
+      "height": 831
+    }
+  ],
+  "callouts": [
+    {
+      "id": "h11",
+      "kind": "hat",
+      "inputs": [
+        "button11",
+        "button12",
+        "button13",
+        "button14"
+      ],
+      "anchor": {
+        "x": 0.581137742824897,
+        "y": 0.3978930307941653
+      },
+      "box": {
+        "x": 0.8733533299611714,
+        "y": 0.47698539350562197
+      },
+      "label": "Hat (4-way)",
+      "group": "Grip",
+      "view": "thumb"
+    },
+    {
+      "id": "b3",
+      "kind": "button",
+      "inputs": [
+        "button3"
+      ],
+      "anchor": {
+        "x": 0.5649700507432401,
+        "y": 0.20609065155807366
+      },
+      "box": {
+        "x": 0.8727544910179641,
+        "y": 0.37266289816361986
+      },
+      "label": "Button 3",
+      "group": "Grip",
+      "view": "front"
+    },
+    {
+      "id": "b2",
+      "kind": "button",
+      "inputs": [
+        "button2"
+      ],
+      "anchor": {
+        "x": 0.5961078027051366,
+        "y": 0.20042492917847027
+      },
+      "box": {
+        "x": 0.8913174018174589,
+        "y": 0.24801700581234506
+      },
+      "label": "Button 2",
+      "group": "Grip",
+      "view": "front"
+    },
+    {
+      "id": "r45",
+      "kind": "switch",
+      "inputs": [
+        "button4",
+        "button5"
+      ],
+      "anchor": {
+        "x": 0.5398203684184366,
+        "y": 0.22762041389097912
+      },
+      "box": {
+        "x": 0.855988005678097,
+        "y": 0.7443342776203966
+      },
+      "label": "Rocker (fwd / aft)",
+      "group": "Grip",
+      "view": "front"
+    },
+    {
+      "id": "thr",
+      "kind": "axis",
+      "inputs": [
+        "z"
+      ],
+      "anchor": {
+        "x": 0.41329896907216496,
+        "y": 0.25
+      },
+      "box": {
+        "x": 0.115,
+        "y": 0.18413506815365555
+      },
+      "label": "Throttle",
+      "group": "Axes",
+      "view": "thumb"
+    },
+    {
+      "id": "h7",
+      "kind": "hat",
+      "inputs": [
+        "button7",
+        "button8",
+        "button9",
+        "button10"
+      ],
+      "anchor": {
+        "x": 0.5805389038816897,
+        "y": 0.2747163695299838
+      },
+      "box": {
+        "x": 0.8751496640508046,
+        "y": 0.2786061489408175
+      },
+      "label": "Hat (4-way)",
+      "group": "Grip",
+      "view": "thumb"
+    },
+    {
+      "id": "pov",
+      "kind": "hat",
+      "inputs": [
+        "hat1_up",
+        "hat1_right",
+        "hat1_down",
+        "hat1_left"
+      ],
+      "anchor": {
+        "x": 0.6032934131736527,
+        "y": 0.14505672609400325
+      },
+      "box": {
+        "x": 0.875,
+        "y": 0.1271840148698885
+      },
+      "label": "POV hat (8-way)",
+      "group": "Grip",
+      "view": "thumb"
+    },
+    {
+      "id": "mini",
+      "kind": "axis",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "anchor": {
+        "x": 0.5008982127298138,
+        "y": 0.2514164305949009
+      },
+      "box": {
+        "x": 0.12844311834095481,
+        "y": 0.05991501848690908
+      },
+      "label": "Ministick",
+      "group": "Grip",
+      "view": "front"
+    },
+    {
+      "id": "minib",
+      "kind": "button",
+      "inputs": [
+        "button6"
+      ],
+      "anchor": {
+        "x": 0.5008982127298138,
+        "y": 0.2502833034093927
+      },
+      "box": {
+        "x": 0.12305388764706915,
+        "y": 0.16643059490084985
+      },
+      "label": "Ministick press",
+      "group": "Grip",
+      "view": "front"
+    },
+    {
+      "id": "ant",
+      "kind": "axis",
+      "inputs": [
+        "slider1"
+      ],
+      "anchor": {
+        "x": 0.617065886537472,
+        "y": 0.13130313343772132
+      },
+      "box": {
+        "x": 0.8607784431137725,
+        "y": 0.0893767791834499
+      },
+      "label": "Antenna wheel",
+      "group": "Grip",
+      "view": "front"
+    },
+    {
+      "id": "b1",
+      "kind": "button",
+      "inputs": [
+        "button1"
+      ],
+      "anchor": {
+        "x": 0.5535927960972586,
+        "y": 0.4938411867212824
+      },
+      "box": {
+        "x": 0.7757485212680109,
+        "y": 0.8374392418266309
+      },
+      "label": "Front button",
+      "group": "Grip",
+      "view": "thumb"
+    },
+    {
+      "id": "paddle",
+      "kind": "axis",
+      "inputs": [
+        "rotz"
+      ],
+      "anchor": {
+        "x": 0.5104790419161677,
+        "y": 0.3828611725112872
+      },
+      "box": {
+        "x": 0.1296407276998737,
+        "y": 0.7386685552407932
+      },
+      "label": "Paddle rocker (rudder)",
+      "group": "Grip",
+      "view": "front"
+    }
+  ],
+  "photoHashes": {
+    "/device-photos/tm-twcs-thumb.webp": "855d25f0c02c998550070e7ff90bff53a354aee316bf9d54e6f9767ed5253682",
+    "/device-photos/tm-twcs-front.webp": "46286f25bc7b1eaca08ea6cdb9ec962c8ba3c4f14727d8f134aaca5a90ce4329"
+  },
+  "metadata": {
+    "id": "builtin-tm-twcs",
+    "name": "Thrustmaster TWCS throttle",
+    "brand": "Thrustmaster",
+    "notes": "Numbers as the Thrustmaster manual shows them (fixed, 1-based: button N = jsX_buttonN).",
+    "match": [
+      {
+        "vendor": "044F",
+        "product": "B687"
+      },
+      {
+        "name": "TWCS"
+      }
+    ]
+  }
+}

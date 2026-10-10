@@ -1170,6 +1170,7 @@ await page.screenshot({ path: shots + '205-template-author-submit.png' });
   await d.saveAs(f);
   const file = readFileSync(f, 'utf8');
   check(JSON.parse(file).templates[0].author === 'Test Pilot', 'editor export keeps the trimmed author');
+  check(JSON.stringify(JSON.parse(file).templates[0].match) === JSON.stringify([{ vendor: '231D', product: '0200' }]), 'new template export links the selected Gladiator, with no unrelated default USB id');
   const issuePattern = 'https://github.com/hamlet2k/sc-mapper/issues/new**';
   let issueRequest;
   const request = new Promise((resolve) => { issueRequest = resolve; });
@@ -1260,7 +1261,7 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
 { // Honeycomb Bravo: researched DI callouts on Federico photo
   await dv.getByTestId('template-select').selectOption('builtin-honeycomb-bravo');
   await page.waitForTimeout(600);
-  check((await dv.locator('[data-callout]').count()) === 17, 'Bravo: 17 callouts');
+  check((await dv.locator('[data-callout]').count()) === 16, 'Bravo: 16 callouts (consolidated panel switches)');
   const ap = dv.locator('[data-callout="ap"]');
   check(await ap.isVisible(), 'Bravo: AP modes callout visible');
   const apTxt = await ap.innerText();
@@ -1557,7 +1558,7 @@ const moza133 = mozaSlots.find(([, t]) => /133 buttons/.test(t))?.[0];
   const tsel = stickRow.getByTestId('slot-template');
   const grips = await tsel.locator('optgroup[data-group=grips] option').allInnerTexts();
   const autoTxt = await tsel.locator('option[value=""]').innerText();
-  check(/MOZA AB6 base \+ MHG/.test(autoTxt) && grips.length === 4 && /MHG/.test(grips[0]) && /MH16/.test(grips[1]) && /CarrierAce/.test(grips[2]) && /ViperAce/.test(grips[3]),
+  check(/MOZA AB6\/9 base \+ MHG/.test(autoTxt) && grips.length === 4 && /MHG/.test(grips[0]) && /MH16/.test(grips[1]) && /CarrierAce/.test(grips[2]) && /ViperAce/.test(grips[3]),
     `AB6 stick slot: Automatic = plain AB6, “Grips for this base” = AB6 + MH16 / CarrierAce / ViperAce (${autoTxt} | ${grips.join(' | ')})`);
   check(await otherRow.getByTestId('slot-template').locator('optgroup[data-group=grips]').count() === 0, 'the other AB6 (guessed MTQ throttle) has no grip group');
   await tsel.selectOption('builtin-moza-ab6-viperace');
@@ -3339,6 +3340,92 @@ console.log('\nphoto-template layout before and after Save');
     }
   } finally {
     await layoutContext.close();
+  }
+}
+
+// Name suggestions and the unrelated-device customization regression (isolated storage).
+{
+  const hintsContext = await browser.newContext({ viewport: { width: 1680, height: 1000 }, acceptDownloads: true });
+  const hp = await hintsContext.newPage();
+  hp.on('pageerror', (e) => errors.push(String(e)));
+  await hp.addInitScript(() => {
+    const pads = [
+      ['Thrustmaster T-Pendular-Rudder (Vendor: ffff Product: 0001)', 3],
+      ['WinCtrl URSA MINOR (Vendor: 4098 Product: B970)', 32],
+      ['Experimental Rudder Pedals (Vendor: ffff Product: 0002)', 3],
+    ].map(([id, n], index) => ({ index, id, mapping: '', connected: true, timestamp: 1,
+      buttons: Array.from({ length: n }, () => ({ pressed: false, touched: false, value: 0 })), axes: [0, 0, 0, 0] }));
+    navigator.getGamepads = () => pads;
+  });
+  try {
+    await hp.goto(url, { waitUntil: 'networkidle' });
+    const sample = readFileSync('public/samples/actionmaps.xml', 'utf8')
+      .replaceAll('VKBsim Gladiator EVO R', 'Thrustmaster T-Pendular-Rudder').replaceAll('0200231D', '0001FFFF')
+      .replaceAll('VKBsim Gladiator EVO L', 'WinCtrl URSA MINOR').replaceAll('3201231D', 'B9704098')
+      .replace('<modifiers />', '<options type="joystick" instance="3" Product="Experimental Rudder Pedals {0002FFFF-0000-0000-0000-504944564944}"/><modifiers />');
+    await hp.locator('input[type=file]').first().setInputFiles({ name: 'name-hints.xml', mimeType: 'text/xml', buffer: Buffer.from(sample) });
+    await hp.waitForTimeout(400);
+    await hp.locator('[data-view-tab=devices]').click();
+    const hv = hp.getByTestId('device-view'), picker = hv.getByTestId('template-select');
+    const selectSlot = async (id) => { await hp.getByTestId('sidebar-slots').locator(`[data-slot-row="${id}"]`).click(); };
+    await selectSlot('js3');
+    await hp.waitForTimeout(400);
+    const pedalGroup = picker.locator('optgroup[data-group=suggestions]');
+    check((await picker.inputValue()) === '' && /generic/.test(await hv.getByTestId('device-status').innerText()), 'unmatched pedal name stays Automatic with a generic template');
+    check((await pedalGroup.getAttribute('label')) === 'Pedal templates' && (await pedalGroup.locator('option').count()) === 8, 'unmatched pedal hardware offers all eight pedal built-ins');
+    await picker.selectOption({ value: 'builtin-vkb-t-rudder' });
+    check((await picker.inputValue()) === 'builtin-vkb-t-rudder', 'choosing a pedal suggestion applies it with one selection');
+    await selectSlot('js1');
+    await hp.waitForTimeout(300);
+    check(/Thrustmaster Pendular Rudder/.test(await hv.getByTestId('device-status').innerText()), 'T-Pendular-Rudder still matches its existing built-in automatically');
+    await picker.selectOption('builtin-stick');
+    check((await picker.locator('optgroup[data-group=suggestions]').getAttribute('label')) === 'Pedal templates', 'T-Pendular-Rudder offers pedal templates when displaying a generic template');
+    await selectSlot('js2');
+    await hp.waitForTimeout(300);
+    // Selecting another brand's artwork on the connected URSA must never link its copy to URSA.
+    for (const [id, expected] of [
+      ['builtin-honeycomb-bravo', [{ vendor: '294B', product: '1901' }, { name: 'Bravo Throttle' }, { name: 'Honeycomb Bravo' }, { name: 'Bravo Throttle Quadrant' }]],
+      ['builtin-tm-twcs', [{ vendor: '044F', product: 'B687' }, { name: 'TWCS' }]],
+      ['builtin-virpil-vmax-prime', [{ name: 'VMAX' }]],
+    ]) {
+      await picker.selectOption(id);
+      await hv.getByTestId('template-customize').click();
+      const editor = hp.getByTestId('template-editor');
+      const [download] = await Promise.all([hp.waitForEvent('download'), editor.getByTestId('tpl-export').click()]);
+      const path = `/tmp/oct9b-${id}-copy.json`;
+      await download.saveAs(path);
+      const copy = JSON.parse(readFileSync(path, 'utf8')).templates[0];
+      check(JSON.stringify(copy.match) === JSON.stringify(expected), `${id}: customized export keeps its source matching while URSA is selected`);
+      check(!copy.match.some((m) => m.vendor === '4098' && m.product === 'B970'), `${id}: no silent URSA USB inheritance`);
+      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+    }
+    for (const [file, id] of [['bravo', 'builtin-honeycomb-bravo'], ['mtp', 'builtin-moza-mtp'], ['x56', 'builtin-logitech-x56-throttle'], ['twcs', 'builtin-tm-twcs']]) {
+      const expected = JSON.parse(readFileSync(`scripts/fixtures/oct9b-${file}.json`, 'utf8'));
+      await picker.selectOption(id);
+      await hp.waitForTimeout(300);
+      check((await hv.locator('[data-callout]').count()) === expected.callouts.length, `${id}: all exported callouts rendered`);
+      for (const view of expected.views) {
+        const canvas = hv.locator(`[data-testid=device-canvas-view][data-view="${view.id}"]`);
+        check((await canvas.count()) === 1, `${id}: exported ${view.label} view rendered`);
+        const positions = expected.callouts.filter((c) => c.view === view.id).map((c) => ({ id: c.id, anchor: c.anchor }));
+        const offsets = await canvas.evaluate((el, callouts) => {
+          const r = el.getBoundingClientRect();
+          return callouts.map(({ id, anchor }) => {
+            const marker = el.querySelector(`[data-marker="${id}"] circle`).getBoundingClientRect();
+            return Math.hypot((marker.x + marker.width / 2 - r.x) / r.width - anchor.x, (marker.y + marker.height / 2 - r.y) / r.height - anchor.y);
+          });
+        }, positions);
+        check(offsets.every((d) => d < 0.006), `${id} ${view.label}: markers stay on every exported anchor`);
+      }
+    }
+    await hv.getByTestId('template-new').click();
+    const editor = hp.getByTestId('template-editor');
+    check((await editor.getByLabel('Rule 1 vendor id').inputValue()) === '4098' && (await editor.getByLabel('Rule 1 product id').inputValue()) === 'B970', 'New template deliberately links the currently selected URSA device');
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await picker.selectOption('builtin-moza-ab6');
+    check((await picker.locator('option:checked').innerText()).startsWith('MOZA AB6/9 base + MHG grip'), 'shared AB6/9 template uses the new name and its original id');
+  } finally {
+    await hintsContext.close();
   }
 }
 

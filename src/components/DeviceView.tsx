@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { isController, slotDeviceName, slotId, type GameSlot, type SlotMap } from '../lib/slots';
 import { AUTO_TEMPLATE, autoSlotTemplate, resolveSlotTemplate } from '../lib/slotTemplates';
+import { suggestCategory, suggestedTemplates, suggestionHeading } from '../lib/suggest';
 import { formatInput, searchSpec } from '../lib/inputs';
 import { useHeldKeyMods, usePadHits, type PressHit } from '../lib/listen';
 import { browserName } from '../lib/browser';
@@ -11,7 +12,7 @@ import { CHROMIUM_BUTTON_CAP } from '../lib/capture';
 import { pressBindTarget } from '../lib/pressBind';
 import { parseQuery, scoreRow } from '../lib/search';
 import {
-  DUP_ORDER_GUESSES, calloutFor, calloutTitle, cloneTemplate, coveredInputs, identityKey, inputRole, matchFor, matchScore, maxButton, newTemplate,
+  DUP_ORDER_GUESSES, calloutFor, calloutTitle, cloneTemplate, coveredInputs, identityKey, inputRole, matchScore, maxButton, newTemplateForDevice,
   calloutView, imageSrc, parseTemplates, resolveTemplateImage, templateViews, shortInput, splitCombo, templateGroups, templateVariants, GRIPS_GROUP, unassignedCount, useTemplateImage, type useTemplates,
   type Callout, type DeviceIdentity, type DeviceTemplate,
 } from '../lib/templates';
@@ -177,7 +178,9 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   const idKey = identityKey(ident);
   const tpl = useTemplateImage(chosen.template); // built-in device templates: the picture arrives on demand
   const autoTpl = autoSlotTemplate(T.templates, opt.gs, opt.pad);
-  const grips = templateVariants(T.templates, autoTpl); // grip variants of the automatic template (e.g. MOZA AB6 + another grip: same USB id)
+  const grips = templateVariants(T.templates, autoTpl); // grip variants of the automatic template (e.g. MOZA AB6/9 + another grip: same USB id)
+  const suggestions = slot === 'js' && ((!autoTpl.brand && autoTpl.builtin) || (!tpl.brand && tpl.builtin))
+    ? suggestedTemplates(ident.name, T.templates) : [];
   const tplMax = maxButton(tpl);
   const unassigned = tpl.callouts.reduce((n, c) => n + unassignedCount(c), 0);
   const rawLive = useLiveInputs(opt.pad);
@@ -246,7 +249,6 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
     : tpl.callouts.find((c) => c.id === selected);
 
 
-  const withLink = (t: DeviceTemplate): DeviceTemplate => (ident.vendor || ident.name ? { ...t, slot, match: [matchFor(ident, !!opt.pad?.dup)] } : { ...t, slot });
   const saveTemplate = async (t: DeviceTemplate) => {
     try {
       const v = await T.save(t);
@@ -278,7 +280,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
     catch (e) { notify('err', `PNG export failed: ${(e as Error).message}`); }
   };
   const customize = async () => {
-    try { setEditing(withLink(cloneTemplate(await resolveTemplateImage(tpl), ident.name ?? `${tpl.name} (copy)`))); }
+    try { setEditing(cloneTemplate(await resolveTemplateImage(tpl))); }
     catch (e) { notify('err', `Could not load the template picture: ${(e as Error).message}`); }
   };
   const axisLocked = instance > axisLimit[slot];
@@ -426,6 +428,11 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
                     {grips.map((t) => <option key={t.id} value={t.id}>{t.name}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
                   </optgroup>
                 )}
+                {suggestions.length > 0 && (
+                  <optgroup label={suggestionHeading(suggestCategory(ident.name)!)} data-group="suggestions">
+                    {suggestions.map((t) => <option key={t.id} value={t.id}>{t.name}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
+                  </optgroup>
+                )}
                 {templateGroups(T.templates).map((g) => (
                   <optgroup key={g.label} label={g.label} data-group={g.label}>
                     {g.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.slot !== opt.slot ? ` · ${t.slot}` : ''}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
@@ -437,7 +444,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
               {tpl.builtin
                 ? <IconButton icon="edit" label="Customize a copy of this template" onClick={() => void customize()} testid="template-customize" />
                 : <IconButton icon="edit" label="Edit this template" onClick={() => setEditing(structuredClone(tpl))} testid="template-edit" />}
-              <IconButton icon="filePlus" label="New template (draw your own device)" onClick={() => setEditing(withLink(newTemplate(slot, ident.name ?? 'My device')))} testid="template-new" />
+              <IconButton icon="filePlus" label="New template (draw your own device)" onClick={() => setEditing(newTemplateForDevice(ident))} testid="template-new" />
               <IconButton icon="import" label="Import templates (.json)" onClick={() => importRef.current?.click()} testid="template-import" />
               <IconButton icon="export" label="Export this template (.json)" onClick={() => void exportTemplateFile(tpl, notify)} testid="template-export" />
               {canSubmitTemplate(tpl) && <IconButton icon="share" label="Submit to feed" onClick={() => void exportTemplateFile(tpl, notify, true)} testid="template-submit" />}

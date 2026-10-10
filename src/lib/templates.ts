@@ -62,6 +62,8 @@ export interface TemplateMatch {
   /** exact button count: tells apart devices sharing one USB id (e.g. two MOZA bases with 128 and 133 buttons) */
   buttons?: number;
 }
+/** Hardware family; additional categories may be added without changing matching or picker code. */
+export type TemplateCategory = 'stick' | 'throttle' | 'pedals' | 'collective' | 'panel' | 'gamepad' | (string & {});
 export interface DeviceTemplate {
   format?: 'sc-mapper-device-template';
   version: 1;
@@ -79,13 +81,15 @@ export interface DeviceTemplate {
   callouts: Callout[];
   /** maker, for grouping in the template picker (built-in device templates; user templates are listed under “Your templates”) */
   brand?: string;
+  /** optional hardware family, used for name-based suggestions (never automatic matching) */
+  category?: TemplateCategory;
   /** optional template creator's name or handle (up to 40 characters) */
   author?: string;
   /** short note shown with the template, e.g. how the device numbers its buttons */
   notes?: string;
   /**
-   * built-in device templates only: the id of the template this one is a variant of (e.g. a MOZA AB6 base fitted with another
-   * grip, which reports the same USB id and button count as the plain AB6, so it can't be told apart). A variant has no match
+   * built-in device templates only: the id of the template this one is a variant of (e.g. a MOZA AB6/9 base fitted with another
+   * grip, which reports the same USB id and button count as the plain base, so it can't be told apart). A variant has no match
    * rules (never linked automatically); the pickers list it under its base whenever that base is the slot's automatic template.
    * Not stored or exported (a user copy is a template of its own).
    */
@@ -424,6 +428,7 @@ export function cleanTemplate(o: unknown, i = 0): DeviceTemplate {
     slot: t.slot === 'gp' ? 'gp' : 'js', ...(image ? { image } : {}), ...(views ? { views } : {}), aspect: Number.isFinite(aspect) && aspect > 0.2 && aspect < 5 ? aspect : BLANK_ASPECT,
     match, callouts, updatedAt: Number(t.updatedAt) || Date.now(),
     ...(typeof t.brand === 'string' && t.brand.trim() ? { brand: t.brand.trim().slice(0, 40) } : {}),
+    ...(typeof t.category === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(t.category) ? { category: t.category } : {}),
     ...(typeof t.author === 'string' && t.author.trim() ? { author: t.author.trim().slice(0, 40) } : {}),
     ...(typeof t.notes === 'string' && t.notes.trim() ? { notes: t.notes.trim().slice(0, 400) } : {}),
   };
@@ -590,7 +595,12 @@ export function useTemplates() {
 
 /** a fresh template (blank canvas unless an image is given) */
 export const newTemplate = (slot: 'js' | 'gp', name = 'My device'): DeviceTemplate => ({ version: 1, id: uid(), name, slot, aspect: BLANK_ASPECT, match: [], callouts: [] });
-/** an editable copy of a template (built-ins are read-only) */
+/** A blank template for this device only; linking a different device later is an explicit editor action. */
+export const newTemplateForDevice = (d: DeviceIdentity): DeviceTemplate => ({
+  ...newTemplate(d.slot ?? 'js', d.name ?? 'My device'),
+  match: d.name || (d.vendor && d.productId) ? [matchFor(d, !!d.dup)] : [],
+});
+/** an editable copy of a template (built-ins are read-only); keeps its source's match rules, never the selected device's */
 export const cloneTemplate = (t: DeviceTemplate, name = `${t.name} (copy)`): DeviceTemplate => {
   const { variantOf: _variant, ...rest } = t; // a copy is a template of its own, not a grip variant of a built-in
   return { ...structuredClone({ ...rest, builtin: undefined, loadImage: undefined }), id: uid(), name, builtin: undefined, loadImage: undefined };

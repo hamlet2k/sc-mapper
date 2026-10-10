@@ -77,25 +77,9 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
     },
   },
   // Thrustmaster TWCS: h11 estimated (no clear second 4-way hat on the photos); r45 / h7 assignment to the thumb-side stack uncertain.
-  'builtin-tm-twcs': {
-    views: [{ id: 'thumb', label: 'Thumb side', photo: 'tm-twcs-thumb' }, { id: 'front', label: 'Front', photo: 'tm-twcs-front' }],
-    anchors: {
-      pov: { view: 'thumb', x: 0.6, y: 0.155 },
-      r45: { view: 'thumb', x: 0.59, y: 0.27 },
-      h7: { view: 'thumb', x: 0.585, y: 0.38 },
-      b1: { view: 'thumb', x: 0.535, y: 0.47 },
-      thr: { view: 'thumb', x: 0.38, y: 0.25 },
-      mini: { view: 'front', x: 0.505, y: 0.235 },
-      minib: { view: 'front', x: 0.505, y: 0.25 },
-      ant: { view: 'front', x: 0.545, y: 0.22 },
-      b2: { view: 'front', x: 0.575, y: 0.2 },
-      b3: { view: 'front', x: 0.615, y: 0.195 },
-      h11: { view: 'front', x: 0.415, y: 0.255 },
-      paddle: { view: 'front', x: 0.48, y: 0.32 },
-    },
-  },
+  // builtin-tm-twcs: exact callouts via photoTplExactViews (2026-10-09 export).
   // builtin-moza-ab6: exact callouts via photoTplExactViews (Federico's export) — not listed here.
-  // builtin-honeycomb-bravo: exact callouts via photoTplExact (researched DI + invented spots) — not listed here.
+  // builtin-honeycomb-bravo: exact callouts via photoTplExact (2026-10-09 export) — not listed here.
   // VKB Gladiator NXT EVO SCG: head hats by position (uncertain); d1 (pinky) and en1 (right-side encoder) estimated.
   'builtin-vkb-gladiator-scg': {
     views: [{ id: 'thumb', label: 'Thumb side', photo: 'vkb-gladiator-scg-thumb' }, { id: 'front', label: 'Right side', photo: 'vkb-gladiator-scg-front' }],
@@ -219,26 +203,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
     },
   },
   // Logitech X56 throttle: one photo (front-right). Hat 1 / Hat 2 = upper / lower thumb hat; the left-grip button is on the far side (estimated).
-  'builtin-logitech-x56-throttle': {
-    views: [{ id: 'main', label: 'Front', photo: 'logitech-x56-throttle-main' }],
-    anchors: {
-      rty1: { view: 'main', x: 0.728, y: 0.09 },
-      rty2: { view: 'main', x: 0.74, y: 0.29 },
-      slider: { view: 'main', x: 0.65, y: 0.235 },
-      thumb: { view: 'main', x: 0.6, y: 0.345 },
-      hat1: { view: 'main', x: 0.675, y: 0.355 },
-      hat2: { view: 'main', x: 0.665, y: 0.4 },
-      mini: { view: 'main', x: 0.575, y: 0.39 },
-      mode: { view: 'main', x: 0.133, y: 0.509 },
-      sw: { view: 'main', x: 0.344, y: 0.607 },
-      tgl: { view: 'main', x: 0.8, y: 0.49 },
-      rty3: { view: 'main', x: 0.554, y: 0.568 },
-      rty4: { view: 'main', x: 0.647, y: 0.568 },
-      lthr: { view: 'main', x: 0.428, y: 0.205 },
-      rthr: { view: 'main', x: 0.62, y: 0.18 },
-      lbtn: { view: 'main', x: 0.335, y: 0.3 },
-    },
-  },
+  // builtin-logitech-x56-throttle: exact callouts via photoTplExactViews (2026-10-09 export).
   // VKB STECS Mk.II + STEM: names per the UntoldForce maps. 'front' = thumb side, 'stem' = STEM module (same photo), 'back' = grip front + base. Aft triggers, ring-finger encoder, forward trigger L and the STEM toggle / gear lever / lever / encoders are hidden or ambiguous: estimated; STEM rocker / button mapping uncertain.
   'builtin-vkb-stecs': {
     views: [{ id: 'front', label: 'Thumb side', photo: 'vkb-stecs-front' }, { id: 'stem', label: 'STEM module', photo: 'vkb-stecs-front' }, { id: 'back', label: 'Grip front + base', photo: 'vkb-stecs-back' }],
@@ -275,42 +240,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
     },
   },
   // MOZA MTP: matched to the MOZA diagram (same photo three times: front / rear panel controls and grip + levers, too many labels for one view) (panel labels readable on the photo). L GEN / R GEN / switch 24 / switch 33 are hidden under the grip (estimated); grip buttons 3 / 4, switch 5, hat 70, slide and button 19 assigned by position (uncertain); levers marked on the lever stems.
-  'builtin-moza-mtp': {
-    views: [{ id: 'panel', label: 'Panel (front)', photo: 'moza-mtp-main' }, { id: 'panel2', label: 'Panel (rear)', photo: 'moza-mtp-main' }, { id: 'grip', label: 'Grip and levers', photo: 'moza-mtp-main' }],
-    anchors: {
-      crank: { view: 'panel', x: 0.125, y: 0.51 },
-      apu: { view: 'panel', x: 0.176, y: 0.468 },
-      strobe: { view: 'panel', x: 0.213, y: 0.552 },
-      intr: { view: 'panel', x: 0.236, y: 0.586 },
-      pos: { view: 'panel', x: 0.288, y: 0.506 },
-      form: { view: 'panel', x: 0.379, y: 0.487 },
-      rtrim: { view: 'panel', x: 0.327, y: 0.61 },
-      reset: { view: 'panel', x: 0.395, y: 0.69 },
-      rzs: { view: 'panel', x: 0.437, y: 0.724 },
-      probe: { view: 'panel', x: 0.275, y: 0.425 },
-      rot4: { view: 'panel2', x: 0.385, y: 0.372 },
-      rot8: { view: 'panel2', x: 0.463, y: 0.418 },
-      s29: { view: 'panel2', x: 0.457, y: 0.337 },
-      s31: { view: 'panel2', x: 0.502, y: 0.35 },
-      s33: { view: 'panel2', x: 0.535, y: 0.37 },
-      lgen: { view: 'panel2', x: 0.5, y: 0.3 },
-      s24: { view: 'panel2', x: 0.535, y: 0.315 },
-      rgen: { view: 'panel2', x: 0.57, y: 0.335 },
-      light: { view: 'panel2', x: 0.77, y: 0.41 },
-      lthr: { view: 'grip', x: 0.525, y: 0.48 },
-      rthr: { view: 'grip', x: 0.555, y: 0.46 },
-      mini: { view: 'grip', x: 0.67, y: 0.375 },
-      minib: { view: 'grip', x: 0.676, y: 0.385 },
-      s69: { view: 'grip', x: 0.7, y: 0.287 },
-      b3: { view: 'grip', x: 0.73, y: 0.178 },
-      b4: { view: 'grip', x: 0.776, y: 0.131 },
-      s5: { view: 'grip', x: 0.75, y: 0.22 },
-      h11: { view: 'grip', x: 0.718, y: 0.307 },
-      h70: { view: 'grip', x: 0.74, y: 0.26 },
-      slide: { view: 'grip', x: 0.65, y: 0.32 },
-      b19: { view: 'grip', x: 0.63, y: 0.3 },
-    },
-  },
+  // builtin-moza-mtp: exact callouts via photoTplExactViews (2026-10-09 export).
   // Batch 4 (densest): measured with grid overlays; hidden controls placed at their best estimated spot (see the notes).
   // The third photo swaps with the grip in use (swap 'Grip'): combat grip (default), Airbus or Boeing modules (MOZA product shots,
   // seen from the front: the right module is on the left of the photo). Airbus 67 and Boeing 72 (left module end caps) face away
@@ -438,11 +368,11 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
     views: [{ id: 'main', label: 'Azeron', photo: 'azeron-keypad-main' }],
     anchors: {},
   },
-  // MOZA AB6 base fitted with other grips (grip variants of builtin-moza-ab6, picked by hand: same USB id 346E:1002). Federico's
+  // MOZA AB6/9 base fitted with other grips (grip variants of builtin-moza-ab6, picked by hand: same USB id 346E:1002). Federico's
   // photos, cut out with scripts/device-photos/cutout.py; positions placed by eye on the photos. Base controls sit on the same
   // AB6 keys / levers in every front photo (lit key row in front = 49-52, the far row = 53-56, front lever = S1, right lever = S2).
   'builtin-moza-ab6-mh16': {
-    views: [{ id: 'front', label: 'Front (on the AB6)', photo: 'moza-ab6-mh16-front' }, { id: 'side', label: 'Grip, thumb side (module off)', photo: 'moza-ab6-mh16-side' }],
+    views: [{ id: 'front', label: 'Front (on the AB6/9)', photo: 'moza-ab6-mh16-front' }, { id: 'side', label: 'Grip, thumb side (module off)', photo: 'moza-ab6-mh16-side' }],
     anchors: {
       castle: { view: 'front', x: 0.29, y: 0.11, side: 'L' },
       msw: { view: 'front', x: 0.38, y: 0.17, side: 'L' },
@@ -467,7 +397,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
   },
   'builtin-moza-ab6-carrierace': {
     views: [
-      { id: 'front', label: 'Front (on the AB6)', photo: 'moza-ab6-carrierace-front' },
+      { id: 'front', label: 'Front (on the AB6/9)', photo: 'moza-ab6-carrierace-front' },
       { id: 'side', label: 'Grip, thumb side', photo: 'winctrl-carrierace-side' },
       { id: 'rear', label: 'Grip, outer side', photo: 'moza-ab6-carrierace-rear' },
     ],

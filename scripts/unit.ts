@@ -923,7 +923,10 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       assert.equal(new Set(inputs).size, inputs.length, `${d.id}: every input on one callout`);
       for (const i of inputs) assert.ok(jsName.test(i), `${d.id}: ${i}`);
       const open = d.callouts.reduce((n, c) => n + tp.unassignedCount(c), 0);
-      if (OPEN.has(d.id)) {
+      if (d.id === 'builtin-logitech-x56-throttle') {
+        assert.ok(open > 5, 'X56 export keeps partially assigned controls');
+        assert.ok(d.callouts.some((c) => c.inputs.includes('button33')), 'X56 export adds known numbers');
+      } else if (OPEN.has(d.id)) {
         assert.ok(open > 5 && d.callouts.flatMap((c) => c.inputs).filter((i) => /^button|^hat/.test(i)).length === 0, `${d.id}: buttons left unassigned`);
         assert.match(d.notes!, /Customize a copy/);
       } else assert.equal(open, 0, `${d.id}: fully numbered`);
@@ -936,11 +939,14 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         for (const pt of [c.anchor, c.box]) assert.ok(pt.x >= 0 && pt.x <= 1 && pt.y >= 0 && pt.y <= 1, `${d.id}/${c.id}`);
         // Preserve the T-50CM4 export's adjacent ministick / press boxes (exact data pinned below).
         for (const o of d.callouts) if (o !== c && tp.calloutView(d, o) === tp.calloutView(d, c)
+          // Authored layouts keep their exact label positions, pinned by the export fixture tests.
+          && !['builtin-honeycomb-bravo', 'builtin-moza-mtp', 'builtin-logitech-x56-throttle', 'builtin-tm-twcs'].includes(d.id)
           && !(d.id === 'builtin-virpil-t50cm4' && [c.id, o.id].sort().join(',') === 'mini,minib')) assert.ok(Math.abs(o.box.x - c.box.x) > 0.12 || Math.abs(o.box.y - c.box.y) > 0.03, `${d.id}: boxes ${c.id} / ${o.id} too close`);
         if (c.inputRegions) assert.equal(c.inputRegions.length, c.inputs.length, `${d.id}/${c.id}: one outline per input`);
         if (c.kind === 'hat') assert.ok(c.inputs.length >= 4 && c.inputs.length <= 5, `${d.id}/${c.id}: hat = 4 directions (+ push)`);
       }
-      if (tp.maxButton(d) > 32) assert.match(d.notes!, /Firefox/, `${d.id}: >32 buttons mentions Firefox`);
+      // X56's original notes are retained per the import contract; its exported button33 uses the UI's Chromium notice.
+      if (tp.maxButton(d) > 32 && d.id !== 'builtin-logitech-x56-throttle') assert.match(d.notes!, /Firefox/, `${d.id}: >32 buttons mentions Firefox`);
       const back = tp.parseTemplates(tp.exportTemplates([{ ...d, builtin: undefined, id: 'copy' } as any]))[0];
       assert.deepEqual(back.callouts.map((c) => c.region), d.callouts.map((c) => c.region), `${d.id}: regions survive export/import`);
       assert.deepEqual(back.callouts.map((c) => c.inputs), d.callouts.map((c) => c.inputs), `${d.id}: unassigned inputs survive export/import`);
@@ -1043,7 +1049,10 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(tp.pickTemplate(all, ab6(1)).how, 'guessed');
     assert.equal(tp.pickTemplate(all, ab6(1), 'builtin-moza-mtp').template.id, 'builtin-moza-mtp', 'the user pick wins over the guess');
     assert.equal(tp.pickTemplate(all, ab9(1)).template.id, 'builtin-moza-mtp', 'AB9: the 1st is the MTP');
-    assert.notEqual(tp.pickTemplate(all, ab9(2)).how, 'guessed', 'AB9: no stick guess for the last (no AB9 template)');
+    assert.equal(tp.pickTemplate(all, ab9(2)).template.id, 'builtin-moza-ab6', 'AB9: last device matches the shared AB6/9 template');
+    assert.equal(pick('MOZA AB9 FFB Base (Vendor: 346e Product: 1000)', 128), 'builtin-moza-ab6', 'AB9 USB id from existing DUP_ORDER_GUESSES');
+    assert.equal(tp.pickTemplate(all, { name: 'MOZA AB9', slot: 'js' }).template.id, 'builtin-moza-ab6', 'AB9 name without USB ids');
+    assert.ok(all.filter((x) => x.id === 'builtin-moza-ab6' || x.variantOf === 'builtin-moza-ab6').every((x) => x.name.startsWith('MOZA AB6/9 base + ')));
     assert.equal(tp.pickTemplate(all, { ...ab6(1), dup: undefined }).template.id, 'builtin-moza-ab6', 'one AB6: the stick');
     assert.equal(tp.pickTemplate([tpl('mine', [{ vendor: '346E', product: '1002' }]), ...all], ab6(1)).template.id, 'builtin-moza-mtq', 'identical devices: the order guess beats a match rule (a copy is picked explicitly)');
     assert.equal(tp.pickTemplate([tpl('mine-128', [{ vendor: '346E', product: '1002', buttons: 128 }]), ...all], ab6(1)).template.id, 'mine-128', 'a user template linked by the exact button count beats the guess');
@@ -1263,49 +1272,28 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(DEVICE_PHOTO_LAYOUTS['builtin-moza-ab6'], undefined, 'not in DEVICE_PHOTO_LAYOUTS (exact path)');
     assert.ok(ab6.match.some((m) => m.vendor === '346E' && m.product === '1002'));
   });
-  t('Honeycomb Bravo: callouts keep Federico export anchor+box fractions (no withPhotoLayout re-box)', () => {
-    const br = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-honeycomb-bravo')!;
-    assert.ok(br);
-    assert.deepEqual(br.views?.map((v) => [v.id, v.label, v.image, v.width, v.height]),
-      [['main', 'Bravo', '/device-photos/honeycomb-bravo-main.webp', 1825, 1031]]);
-    assert.ok(br.match.some((m) => m.vendor === '294B' && m.product === '1901'));
-    const by = Object.fromEntries(br.callouts.map((c) => [c.id, c]));
-    const expect: Record<string, { label: string; kind: string; inputs: string[]; ax: number; ay: number; bx: number; by: number }> = {
-      apsel: { label: "AP mode (IAS/CRS/HDG/VS/ALT)", kind: 'switch', inputs: ["button17", "button18", "button19", "button20", "button21"], ax: 0.42243348328332936, ay: 0.3188625338925878, bx: 0.18745248308653162, by: 0.10617531909946491 },
-      ap: { label: "AP modes (HDG…IAS)", kind: 'buttons', inputs: ["button1", "button2", "button3", "button4", "button5", "button6", "button7"], ax: 0.5737642353478494, ay: 0.30270906544112974, bx: 0.6954372391501307, by: 0.06579167364605011 },
-      apenc: { label: "AP value (INCR / DECR)", kind: 'encoder', inputs: ["button13", "button14"], ax: 0.6216730038022814, ay: 0.30001681214080994, bx: 0.8612167300380228, by: 0.12771326847633221 },
-      apm: { label: "AUTO PILOT", kind: 'button', inputs: ["button8"], ax: 0.6619772095190708, ay: 0.28924785028999145, bx: 0.9205323425989187, by: 0.31213192631701864 },
-      gear: { label: "Gear (UP / DOWN)", kind: 'switch', inputs: ["button31", "button32"], ax: 0.3365019011406844, ay: 0.4911660775570655, bx: 0.09, by: 0.28 },
-      sw14: { label: "Panel switches 1-4", kind: 'buttons', inputs: ["button34", "button35", "button36", "button37", "button38", "button39", "button40", "button41"], ax: 0.4939163266026022, ay: 0.4130910399505557, bx: 0.3821292775665399, by: 0.03 },
-      sw57: { label: "Panel switches 5-7", kind: 'buttons', inputs: ["button42", "button43", "button44", "button45", "button46", "button47"], ax: 0.5623573912413855, ay: 0.4023220780997372, bx: 0.5357414216596365, by: 0.03 },
-      flaps: { label: "Flaps (down / up)", kind: 'switch', inputs: ["button15", "button16"], ax: 0.6939163498098859, ay: 0.4373212169525124, bx: 0.9091254984924548, by: 0.5248191154349112 },
-      trim: { label: "Trim (nose down / up)", kind: 'encoder', inputs: ["button22", "button23"], ax: 0.41254752851711024, ay: 0.6217398747931988, bx: 0.09, by: 0.58 },
-      l1: { label: "Lever 1 (Y)", kind: 'axis', inputs: ["y"], ax: 0.4863117638649596, ay: 0.69173820384921, bx: 0.14106463298144903, by: 0.97 },
-      l2: { label: "Lever 2 (X)", kind: 'axis', inputs: ["x"], ax: 0.5273764142518714, ay: 0.6876997982235, bx: 0.32433461236409816, by: 0.97 },
-      l3: { label: "Lever 3 (RZ)", kind: 'axis', inputs: ["rotz"], ax: 0.5623573912413855, ay: 0.6850075962736408, bx: 0.4969581633013011, by: 0.97 },
-      l4: { label: "Lever 4 (RY)", kind: 'axis', inputs: ["roty"], ax: 0.6049429889867515, ay: 0.6823152916228604, bx: 0.8574144486692015, by: 0.97 },
-      l5: { label: "Lever 5 (RX)", kind: 'axis', inputs: ["rotx"], ax: 0.6467680840437856, ay: 0.6809691906479308, bx: 0.8893535889600166, by: 0.8034662279831049 },
-      l6: { label: "Lever 6 (Z)", kind: 'axis', inputs: ["z"], ax: 0.6840303950436668, ay: 0.6769308877231421, bx: 0.9182509505703422, by: 0.6473161527700851 },
-      rev: { label: "Reverse detents", kind: 'buttons', inputs: ["button24", "button25", "button26", "button27", "button28", "button33"], ax: 0.6049429889867515, ay: 0.8869258235407149, bx: 0.6923954604696412, by: 0.97 },
-      toga: { label: "Lever TOGA / rev btns", kind: 'buttons', inputs: ["button9", "button10", "button11", "button12", "button29", "button30", "button48"], ax: 0.5661596726102067, ay: 0.5988557987661717, bx: 0.15475284010738474, by: 0.8075046336088149 },
-    };
-    assert.deepEqual(br.callouts.map((c) => c.id), Object.keys(expect), 'same 17 callouts, export order');
-    for (const [id, e] of Object.entries(expect)) {
-      const c = by[id];
-      assert.equal(c.label, e.label, id); assert.equal(c.kind, e.kind, id); assert.deepEqual(c.inputs, e.inputs, id); assert.equal(c.view, 'main', id);
-      assert.ok(Math.abs(c.anchor.x - e.ax) < 1e-12 && Math.abs(c.anchor.y - e.ay) < 1e-12, `${id} anchor`);
-      assert.ok(Math.abs(c.box.x - e.bx) < 1e-12 && Math.abs(c.box.y - e.by) < 1e-12, `${id} box`);
+  t('Oct 9 Bravo, MTP, X56 and TWCS exports: exact authored data and photos, original built-in metadata', () => {
+    for (const [file, id] of [['bravo', 'builtin-honeycomb-bravo'], ['mtp', 'builtin-moza-mtp'],
+      ['x56', 'builtin-logitech-x56-throttle'], ['twcs', 'builtin-tm-twcs']]) {
+      const expected = JSON.parse(readFileSync(new URL(`./fixtures/oct9b-${file}.json`, import.meta.url), 'utf8'));
+      const actual = DEVICE_TEMPLATES.find((x) => x.id === id)!;
+      assert.deepEqual({ aspect: actual.aspect, views: actual.views, callouts: actual.callouts },
+        { aspect: expected.aspect, views: expected.views, callouts: expected.callouts }, `${id}: all authored fields`);
+      for (const [key, value] of Object.entries(expected.metadata)) assert.deepEqual(actual[key as keyof DeviceTemplate], value, `${id}: own ${key}`);
+      for (const [photo, hash] of Object.entries(expected.photoHashes)) {
+        assert.equal(createHash('sha256').update(readFileSync(new URL(`../public${photo}`, import.meta.url))).digest('hex'), hash, `${id}: photo bytes decoded as-is`);
+      }
+      assert.equal(DEVICE_PHOTO_LAYOUTS[id], undefined, `${id}: bypass automatic re-boxing`);
+      const assigned = actual.callouts.flatMap((c) => c.inputs).filter(Boolean);
+      assert.equal(new Set(assigned).size, assigned.length, `${id}: no duplicate numbering`);
     }
-    assert.equal(tp.maxButton(br), 48);
-    assert.match(br.notes!, /Firefox/);
-    assert.equal(DEVICE_PHOTO_LAYOUTS['builtin-honeycomb-bravo'], undefined, 'not in DEVICE_PHOTO_LAYOUTS (exact path)');
   });
   t('MOZA AB6 + ViperAce EX: callouts keep Federico export anchor+box fractions (no withPhotoLayout re-box), same canvases', () => {
     const va = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-moza-ab6-viperace')!;
     assert.ok(va);
-    assert.equal(va.name, 'MOZA AB6 base + WinCtrl ViperAce EX grip'); assert.equal(va.brand, 'MOZA'); assert.deepEqual(va.match, []);
+    assert.equal(va.name, 'MOZA AB6/9 base + WinCtrl ViperAce EX grip'); assert.equal(va.brand, 'MOZA'); assert.deepEqual(va.match, []);
     assert.deepEqual(va.views?.map((v) => [v.id, v.label, v.image, v.width, v.height]), [
-      ['front', 'Front (on the AB6)', '/device-photos/moza-ab6-viperace-front.webp', 1140, 986],
+      ['front', 'Front (on the AB6/9)', '/device-photos/moza-ab6-viperace-front.webp', 1140, 986],
       ['side', 'Grip, labelled side', '/device-photos/winctrl-viperace-side.webp', 1994, 1430],
     ]);
     // the export's canvases = the app's canvas for each photo (photo centred between the 0.3 * h label gutters)
@@ -2455,6 +2443,56 @@ console.log('\nshared controller files');
   });
 }
 
+// ---------------------------------------------------------------- name hints and editor template creation
+{
+  const sg = await import('../src/lib/suggest');
+  const tp = await import('../src/lib/templates');
+  const { DEVICE_TEMPLATES } = await import('../src/lib/deviceTemplates');
+  const { BUILTIN_TEMPLATES } = await import('../src/lib/builtinTemplates');
+  const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+  t('name suggestions: case, word boundaries and punctuation; unknown names have none', () => {
+    for (const name of ['pedal', 'Pedals', 'Thrustmaster T-Pendular-Rudder', 'TPR', 'TFRP', 'MFG Crosswind', 'Charlie', 'T-Rudder', 'R1-FALCON']) assert.equal(sg.suggestCategory(name), 'pedals', name);
+    for (const name of ['throttle', 'TQ', 'quadrant', 'HOTAS throttle', 'TWCS', 'MTP', 'MTQ', 'STECS', 'URSA', 'VMAX', 'T-50CM4', 'Bravo', 'Orion throttle']) assert.equal(sg.suggestCategory(name), 'throttle', name);
+    for (const name of ['Collective', 'Rotor TCS', 'TCS']) assert.equal(sg.suggestCategory(name), 'collective', name);
+    for (const name of ['', 'USB Controller', 'VKB Gladiator', 'TCSim', 'R100', 'Pedalboard', 'Bravoish', 'MTPlus']) assert.equal(sg.suggestCategory(name), undefined, name);
+    assert.equal(sg.suggestCategory(undefined), undefined);
+    assert.equal(sg.suggestCategory('Throttle and rudder pedals'), 'pedals', 'specific pedal hint takes precedence');
+  });
+  t('suggestions use a single category field on built-ins; never users or generic templates', () => {
+    assert.ok(all.every((x) => x.category));
+    assert.equal(all.filter((x) => x.category === 'pedals').length, 8);
+    assert.equal(all.filter((x) => x.builtin && x.brand && x.category === 'throttle').length, 11);
+    assert.deepEqual(sg.suggestedTemplates('pedals', all), all.filter((x) => x.category === 'pedals'));
+    const collective = { ...tp.newTemplate('js', 'Future collective'), builtin: true, brand: 'Maker', category: 'collective' };
+    assert.deepEqual(sg.suggestedTemplates('Rotor TCS', [...all, collective, { ...collective, builtin: false }]), [collective]);
+    assert.deepEqual(sg.suggestedTemplates('neutral USB controller', all), []);
+    assert.ok(sg.suggestedTemplates('TWCS', all).every((x) => x.category === 'throttle' && x.brand));
+    assert.equal(sg.suggestionHeading('pedals'), 'Pedal templates');
+    assert.equal(sg.suggestionHeading('collective'), 'Collective templates');
+    assert.equal(tp.pickTemplate(all, { name: 'unmatched rudder pedals', slot: 'js' }).how, 'fallback', 'hints never become matching rules');
+    assert.equal(tp.cleanTemplate({ ...collective, category: 'future-category' }).category, 'future-category', 'optional category round-trips and allows future families');
+    assert.equal(tp.cleanTemplate({ ...collective, category: undefined }).category, undefined, 'older files remain valid');
+  });
+  t('editor creation: blank templates have no defaults; copies preserve their source USB rules, new templates link their own device', () => {
+    const unrelated = { slot: 'js' as const, name: 'WinCtrl URSA Minor', vendor: '4098', productId: 'B970' };
+    assert.deepEqual(tp.newTemplate('js').match, []);
+    for (const id of ['builtin-honeycomb-bravo', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-logitech-x56-throttle', 'builtin-virpil-vmax-prime']) {
+      const source = all.find((x) => x.id === id)!;
+      const copy = tp.cloneTemplate(source);
+      assert.deepEqual(copy.match, source.match, `${id}: source matching survives copy and export`);
+      assert.deepEqual(tp.parseTemplates(tp.exportTemplates([copy]))[0].match, source.match);
+      assert.ok(!copy.match.some((m) => m.vendor === unrelated.vendor && m.product === unrelated.productId));
+      assert.notEqual(copy.match, source.match);
+      assert.notEqual(copy.id, source.id);
+    }
+    const device = { slot: 'js' as const, name: 'Bravo', vendor: '294b', productId: '1901' };
+    assert.deepEqual(tp.newTemplateForDevice(device).match, [{ vendor: '294B', product: '1901' }]);
+    assert.deepEqual(tp.newTemplateForDevice({ slot: 'js', name: 'My pedals' }).match, [{ name: 'My pedals' }]);
+    assert.deepEqual(tp.newTemplateForDevice({ slot: 'gp' }).match, []);
+    assert.deepEqual(tp.cloneTemplate(all.find((x) => x.variantOf)!).match, [], 'grip variants and generic copies remain manually picked');
+  });
+}
+
 // ---------------------------------------------------------------- public template feed (/templates/*.json, docs/template-feed.md)
 console.log('\ntemplate feed');
 {
@@ -2486,6 +2524,8 @@ console.log('\ntemplate feed');
       const src = builtins.find((x) => x.id === e.id)!;
       assert.equal(f.variantOf, src.variantOf, `${e.id}: variantOf kept`); assert.equal(e.variantOf, src.variantOf);
       assert.deepEqual(e.match, src.match); assert.equal(e.slot, src.slot); assert.equal(e.brand, src.brand);
+      assert.ok(src.category, `${e.id}: hardware category`);
+      assert.equal(e.category, src.category); assert.equal(f.category, src.category);
     }
     assert.deepEqual(a.index.templates.filter((e) => e.variantOf).map((e) => e.id), ['builtin-moza-ab6-mh16', 'builtin-moza-ab6-carrierace', 'builtin-moza-ab6-viperace']);
     assert.ok(a.index.templates.filter((e) => e.variantOf).every((e) => !e.match.length), 'grip variants have no match rules');

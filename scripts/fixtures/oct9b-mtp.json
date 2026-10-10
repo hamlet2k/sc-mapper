@@ -1,0 +1,642 @@
+{
+  "aspect": 1.7755344418052257,
+  "views": [
+    {
+      "id": "panel",
+      "label": "Panel (right grip)",
+      "image": "/device-photos/moza-mtp-main.webp",
+      "width": 1495,
+      "height": 842
+    },
+    {
+      "id": "panel2",
+      "label": "Panel (front grip)",
+      "image": "/device-photos/moza-mtp-front.webp",
+      "width": 1631,
+      "height": 921
+    }
+  ],
+  "callouts": [
+    {
+      "id": "lgen",
+      "kind": "switch",
+      "inputs": [
+        "button21",
+        "button20"
+      ],
+      "anchor": {
+        "x": 0.2832156671262255,
+        "y": 0.5509722391764323
+      },
+      "box": {
+        "x": 0.1188235294117647,
+        "y": 0.4643055386013455
+      },
+      "label": "L GEN",
+      "group": "Panel",
+      "view": "panel2"
+    },
+    {
+      "id": "s24",
+      "kind": "switch",
+      "inputs": [
+        "button24",
+        "button23",
+        "button22"
+      ],
+      "anchor": {
+        "x": 0.3152157054227941,
+        "y": 0.5309722052680121
+      },
+      "box": {
+        "x": 0.10250981349571078,
+        "y": 0.3254166497124566
+      },
+      "label": "Switch (3 pos)",
+      "group": "Panel",
+      "view": "panel2"
+    },
+    {
+      "id": "rgen",
+      "kind": "switch",
+      "inputs": [
+        "button26",
+        "button25"
+      ],
+      "anchor": {
+        "x": 0.34407844094669116,
+        "y": 0.5176389058430989
+      },
+      "box": {
+        "x": 0.19223529890471813,
+        "y": 0.20097223917643228
+      },
+      "label": "R GEN",
+      "group": "Panel",
+      "view": "panel2"
+    },
+    {
+      "id": "s29",
+      "kind": "switch",
+      "inputs": [
+        "button29",
+        "button28",
+        "button27"
+      ],
+      "anchor": {
+        "x": 0.3271372357536765,
+        "y": 0.5998611450195312
+      },
+      "box": {
+        "x": 0.0981176518458946,
+        "y": 0.7254166497124566
+      },
+      "label": "Switch (3 pos)",
+      "group": "Panel",
+      "view": "panel2"
+    },
+    {
+      "id": "s31",
+      "kind": "switch",
+      "inputs": [
+        "button31",
+        "button30"
+      ],
+      "anchor": {
+        "x": 0.3585097847732843,
+        "y": 0.57875001695421
+      },
+      "box": {
+        "x": 0.19223529890471813,
+        "y": 0.8654166327582465
+      },
+      "label": "Switch",
+      "group": "Panel",
+      "view": "panel2"
+    },
+    {
+      "id": "s33",
+      "kind": "switch",
+      "inputs": [
+        "button33",
+        "button32"
+      ],
+      "anchor": {
+        "x": 0.39364707797181375,
+        "y": 0.5554167005750869
+      },
+      "box": {
+        "x": 0.3164705882352941,
+        "y": 0.8954166836208768
+      },
+      "label": "Switch",
+      "group": "Panel",
+      "view": "panel2"
+    },
+    {
+      "id": "rot4",
+      "kind": "switch",
+      "inputs": [
+        "button34",
+        "button35",
+        "button36",
+        "button37"
+      ],
+      "anchor": {
+        "x": 0.42644757433489827,
+        "y": 0.38319443596733943
+      },
+      "box": {
+        "x": 0.251799677459287,
+        "y": 0.09430554707845053
+      },
+      "label": "Rotary (4 pos)",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "rot8",
+      "kind": "switch",
+      "inputs": [
+        "button38",
+        "button39",
+        "button40",
+        "button41",
+        "button42",
+        "button43",
+        "button44",
+        "button45"
+      ],
+      "anchor": {
+        "x": 0.4777777586744425,
+        "y": 0.43874999152289496
+      },
+      "box": {
+        "x": 0.08153365587404636,
+        "y": 0.15208333333333332
+      },
+      "label": "Rotary (8 pos)",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "probe",
+      "kind": "switch",
+      "inputs": [
+        "button48",
+        "button47",
+        "button46"
+      ],
+      "anchor": {
+        "x": 0.35100334448160536,
+        "y": 0.42499999999999993
+      },
+      "box": {
+        "x": 0.06338028169014084,
+        "y": 0.39763887193467884
+      },
+      "label": "PROBE (3 pos)",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "reset",
+      "kind": "button",
+      "inputs": [
+        "button64"
+      ],
+      "anchor": {
+        "x": 0.6803921568627451,
+        "y": 0.6209721883138021
+      },
+      "box": {
+        "x": 0.8661176853553921,
+        "y": 0.7843055725097656
+      },
+      "label": "RESET",
+      "group": "Panel",
+      "view": "panel2"
+    },
+    {
+      "id": "form",
+      "kind": "encoder",
+      "inputs": [
+        "button49",
+        "button50"
+      ],
+      "anchor": {
+        "x": 0.41987290969899665,
+        "y": 0.487
+      },
+      "box": {
+        "x": 0.8189358181423612,
+        "y": 0.7920833163791232
+      },
+      "label": "FORMATION",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "pos",
+      "kind": "encoder",
+      "inputs": [
+        "button51",
+        "button52"
+      ],
+      "anchor": {
+        "x": 0.3596120401337793,
+        "y": 0.506
+      },
+      "box": {
+        "x": 0.7801251956181534,
+        "y": 0.8798611111111111
+      },
+      "label": "POSITION",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "rtrim",
+      "kind": "encoder",
+      "inputs": [
+        "button62",
+        "button63",
+        "button65"
+      ],
+      "anchor": {
+        "x": 0.6483921664368872,
+        "y": 0.627638922797309
+      },
+      "box": {
+        "x": 0.7180392156862745,
+        "y": 0.8887500339084201
+      },
+      "label": "RUD TRIM",
+      "group": "Panel",
+      "view": "panel2"
+    },
+    {
+      "id": "light",
+      "kind": "encoder",
+      "inputs": [
+        "button66",
+        "button67"
+      ],
+      "anchor": {
+        "x": 0.42,
+        "y": 0.4720833248562283
+      },
+      "box": {
+        "x": 0.2832156671262255,
+        "y": 0.08208334181043837
+      },
+      "label": "LIGHT",
+      "group": "Panel",
+      "view": "panel2"
+    },
+    {
+      "id": "apu",
+      "kind": "switch",
+      "inputs": [
+        "button54",
+        "button53"
+      ],
+      "anchor": {
+        "x": 0.2774647696290591,
+        "y": 0.4865277608235677
+      },
+      "box": {
+        "x": 0.06964006259780908,
+        "y": 0.5065277947319878
+      },
+      "label": "APU",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "crank",
+      "kind": "switch",
+      "inputs": [
+        "button55",
+        "button56",
+        "button57"
+      ],
+      "anchor": {
+        "x": 0.25242564599838613,
+        "y": 0.5365277608235677
+      },
+      "box": {
+        "x": 0.09154929577464789,
+        "y": 0.7065277947319879
+      },
+      "label": "ENG CRANK (3 pos)",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "strobe",
+      "kind": "switch",
+      "inputs": [
+        "button59",
+        "button58"
+      ],
+      "anchor": {
+        "x": 0.30563378371356614,
+        "y": 0.56875
+      },
+      "box": {
+        "x": 0.176056338028169,
+        "y": 0.7787500169542101
+      },
+      "label": "STROBE",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "intr",
+      "kind": "switch",
+      "inputs": [
+        "button61",
+        "button60"
+      ],
+      "anchor": {
+        "x": 0.33380279779807315,
+        "y": 0.6065277947319878
+      },
+      "box": {
+        "x": 0.25367763083492273,
+        "y": 0.8631944444444445
+      },
+      "label": "INTR WING",
+      "group": "Panel",
+      "view": "panel"
+    },
+    {
+      "id": "rzs",
+      "kind": "axis",
+      "inputs": [
+        "rotz"
+      ],
+      "anchor": {
+        "x": 0.7349803730085784,
+        "y": 0.5920833163791233
+      },
+      "box": {
+        "x": 0.8937254901960784,
+        "y": 0.5554167005750869
+      },
+      "label": "MIN / MAX slider",
+      "group": "Panel",
+      "view": "panel2"
+    },
+    {
+      "id": "lthr",
+      "kind": "axis",
+      "inputs": [
+        "rotx"
+      ],
+      "anchor": {
+        "x": 0.5021909137660162,
+        "y": 0.14208331637912328
+      },
+      "box": {
+        "x": 0.41330204398046266,
+        "y": 0.03
+      },
+      "label": "Left lever",
+      "group": "Axes",
+      "view": "panel"
+    },
+    {
+      "id": "rthr",
+      "kind": "axis",
+      "inputs": [
+        "roty"
+      ],
+      "anchor": {
+        "x": 0.577308284658035,
+        "y": 0.17319446139865452
+      },
+      "box": {
+        "x": 0.6699530134365219,
+        "y": 0.03
+      },
+      "label": "Right lever",
+      "group": "Axes",
+      "view": "panel"
+    },
+    {
+      "id": "mini",
+      "kind": "axis",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "anchor": {
+        "x": 0.582942097026604,
+        "y": 0.16652776930067276
+      },
+      "box": {
+        "x": 0.8472941559436274,
+        "y": 0.062083329094780815
+      },
+      "label": "Ministick",
+      "group": "Grip",
+      "view": "panel2"
+    },
+    {
+      "id": "minib",
+      "kind": "button",
+      "inputs": [
+        "button1"
+      ],
+      "anchor": {
+        "x": 0.5848200504022398,
+        "y": 0.16763890584309896
+      },
+      "box": {
+        "x": 0.7192940984987745,
+        "y": 0.04541666242811415
+      },
+      "label": "Ministick press",
+      "group": "Grip",
+      "view": "panel2"
+    },
+    {
+      "id": "s69",
+      "kind": "switch",
+      "inputs": [
+        "button69",
+        "button2",
+        "button68"
+      ],
+      "anchor": {
+        "x": 0.5611764705882353,
+        "y": 0.31763890584309895
+      },
+      "box": {
+        "x": 0.8742744715073529,
+        "y": 0.4265277862548828
+      },
+      "label": "Switch (3 pos)",
+      "group": "Grip",
+      "view": "panel2"
+    },
+    {
+      "id": "b3",
+      "kind": "button",
+      "inputs": [
+        "button3"
+      ],
+      "anchor": {
+        "x": 0.5229019703584559,
+        "y": 0.20652779473198785
+      },
+      "box": {
+        "x": 0.8372549019607843,
+        "y": 0.20986111958821616
+      },
+      "label": "Button 3",
+      "group": "Grip",
+      "view": "panel2"
+    },
+    {
+      "id": "b4",
+      "kind": "button",
+      "inputs": [
+        "button4"
+      ],
+      "anchor": {
+        "x": 0.4940392348345588,
+        "y": 0.2231944613986545
+      },
+      "box": {
+        "x": 0.869254940257353,
+        "y": 0.29208331637912327
+      },
+      "label": "Button 4",
+      "group": "Grip",
+      "view": "panel2"
+    },
+    {
+      "id": "s5",
+      "kind": "switch",
+      "inputs": [
+        "button5",
+        "button6",
+        "button7"
+      ],
+      "anchor": {
+        "x": 0.44635292202818627,
+        "y": 0.3076388888888889
+      },
+      "box": {
+        "x": 0.4137254901960784,
+        "y": 0.0509722179836697
+      },
+      "label": "Switch (3 pos)",
+      "group": "Grip",
+      "view": "panel2"
+    },
+    {
+      "id": "h11",
+      "kind": "hat",
+      "inputs": [
+        "button11",
+        "button12",
+        "button13",
+        "button14",
+        "button15"
+      ],
+      "anchor": {
+        "x": 0.653051624089153,
+        "y": 0.2076388888888889
+      },
+      "box": {
+        "x": 0.897183079488214,
+        "y": 0.17763888041178386
+      },
+      "label": "Hat (4-way + push)",
+      "group": "Grip",
+      "view": "panel"
+    },
+    {
+      "id": "h70",
+      "kind": "hat",
+      "inputs": [
+        "button70",
+        "button10",
+        "button71",
+        "button8",
+        "button9"
+      ],
+      "anchor": {
+        "x": 0.6824725752518583,
+        "y": 0.14541668362087673
+      },
+      "box": {
+        "x": 0.8984350165664123,
+        "y": 0.05652777353922526
+      },
+      "label": "Hat (4-way + push)",
+      "group": "Grip",
+      "view": "panel"
+    },
+    {
+      "id": "slide",
+      "kind": "switch",
+      "inputs": [
+        "button16",
+        "button17",
+        "button18"
+      ],
+      "anchor": {
+        "x": 0.6499217336353189,
+        "y": 0.3065277947319878
+      },
+      "box": {
+        "x": 0.9372457346072965,
+        "y": 0.34541668362087674
+      },
+      "label": "Slide (3 pos)",
+      "group": "Grip",
+      "view": "panel"
+    },
+    {
+      "id": "b19",
+      "kind": "button",
+      "inputs": [
+        "button19"
+      ],
+      "anchor": {
+        "x": 0.6167449234796801,
+        "y": 0.36875
+      },
+      "box": {
+        "x": 0.8865414710485133,
+        "y": 0.6454166836208768
+      },
+      "label": "Button 19",
+      "group": "Grip",
+      "view": "panel"
+    }
+  ],
+  "photoHashes": {
+    "/device-photos/moza-mtp-main.webp": "c42ecd7466bb19daec574278f42466e2a433ddb3104bd8bf54532c400dc82cfa",
+    "/device-photos/moza-mtp-front.webp": "72ea4207b2b0d58a598d82836a012f7f7702beb06103f08261f5c11a2383b5c6"
+  },
+  "metadata": {
+    "id": "builtin-moza-mtp",
+    "name": "MOZA MTP throttle",
+    "brand": "MOZA",
+    "notes": "Default numbering from the MOZA diagrams (1-based: button N = jsX_buttonN). MOZA Cockpit can change it: if yours differs, use “Customize a copy”. Uses buttons up to 71: Chrome / Edge only report the first 32, use Firefox.",
+    "match": [
+      {
+        "name": "MOZA MTP"
+      },
+      {
+        "name": "MTP Throttle"
+      }
+    ]
+  }
+}

@@ -46,7 +46,8 @@ Cache headers on Vercel (`vercel.json`): `index.json` uses `public, max-age=60, 
   "templates": [
     {
       "id": "builtin-moza-ab6-mh16",
-      "name": "MOZA AB6 base + MH16 grip",
+      "name": "MOZA AB6/9 base + MH16 grip",
+      "category": "stick",                             // optional hardware family
       "brand": "MOZA",                                 // absent for the generic templates
       "slot": "js",                                    // js = joystick / HOTAS, gp = gamepad
       "builtin": true,
@@ -76,9 +77,14 @@ have no edit date, so compare `hash` instead.
 
 - **`builtin`** is always `true` in the feed: these are SC Keymap's built-in templates. When the app imports a file, it makes a user
   template with a new id, as for any template file.
-- **`variantOf`** marks a grip variant: a base fitted with another grip (e.g. MOZA AB6 + MH16) that reports the same USB id and button
+- **`variantOf`** marks a grip variant: a base fitted with another grip (e.g. MOZA AB6/9 + MH16) that reports the same USB id and button
   count as the plain base, so it can't be told apart automatically. A variant has **no match rules**. Offer it as an alternative
   whenever its base (`variantOf`) is the device's automatic match (SC Keymap lists it under "Grips for this base").
+- **`category`** is an optional hardware family in both index entries and per-template files: `stick`, `throttle`,
+  `pedals`, `collective`, `panel`, `gamepad`, or a future category. Every current built-in supplies it. Consumers should tolerate
+  missing or unfamiliar values. It is an additive field in version 1. SC Keymap uses it to offer device-name suggestions only
+  when automatic matching falls back or the user displays a generic template; choosing a suggestion is always a user action. Add a collective
+  built-in with `category: "collective"` to include it in collective suggestions. It does not change match rules.
 - **`match`**: a list of rules, and a device matches when any one rule fits. Inside a rule, every field present must fit. `vendor` /
   `product` are 4 hex digits in upper case (USB VID / PID). `name` is part of the device name (compare case-insensitively, ignoring
   punctuation and spaces). `buttons` is an exact button count, used to tell apart devices sharing a USB id. SC Keymap scores a USB id

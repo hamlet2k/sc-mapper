@@ -29,7 +29,7 @@ export const feedArtFile = (id: string) => `${FEED_DIR}/art/${id}.svg`;
 
 export interface FeedPhoto { width: number; height: number; bytes?: number; hash?: string; productBox: { x: number; y: number; w: number; h: number } }
 export interface FeedEntry {
-  id: string; name: string; brand?: string; slot: 'js' | 'gp'; builtin: true; variantOf?: string; match: TemplateMatch[];
+  id: string; name: string; brand?: string; category?: DeviceTemplate['category']; slot: 'js' | 'gp'; builtin: true; variantOf?: string; match: TemplateMatch[];
   file: string; hash: string; bytes: number; photos: string[];
   /** generated vector art (templates without photos): the same picture as the template's embedded `image`, as a plain SVG file */
   art?: { url: string; width: number; height: number };
@@ -52,7 +52,7 @@ export interface FeedOptions {
 /* ------------------------------------------------------------- deterministic JSON */
 /** preferred key order (any object level); other keys follow alphabetically. Keeps files readable and their bytes independent of how
  * the template objects happen to be built */
-const KEY_ORDER = ['format', 'version', 'id', 'name', 'brand', 'author', 'slot', 'kind', 'builtin', 'variantOf', 'notes', 'vendor', 'product', 'buttons', 'inputs',
+const KEY_ORDER = ['format', 'version', 'id', 'name', 'brand', 'category', 'author', 'slot', 'kind', 'builtin', 'variantOf', 'notes', 'vendor', 'product', 'buttons', 'inputs',
   'label', 'group', 'view', 'aspect', 'match', 'image', 'width', 'height', 'swap', 'x', 'y', 'anchor', 'box', 'region', 'inputRegions', 'views', 'callouts'];
 const RANK = new Map(KEY_ORDER.map((k, i) => [k, i]));
 function canonical(v: unknown, path: string): unknown {
@@ -132,7 +132,7 @@ export async function buildTemplateFeed(opts: FeedOptions, source?: DeviceTempla
       } else if (ft.image.startsWith('data:')) problems.push(`${t.id}: picture is neither generated SVG art nor a built-in photo`);
     }
     entries.push({
-      id: t.id, name: t.name, ...(t.brand ? { brand: t.brand } : {}), slot: t.slot, builtin: true, ...(t.variantOf ? { variantOf: t.variantOf } : {}),
+      id: t.id, name: t.name, ...(t.brand ? { brand: t.brand } : {}), ...(t.category ? { category: t.category } : {}), slot: t.slot, builtin: true, ...(t.variantOf ? { variantOf: t.variantOf } : {}),
       match: t.match, file: feedFile(t.id), hash: opts.sha256(json), bytes, photos: urls, ...(art ? { art } : {}),
     });
   }

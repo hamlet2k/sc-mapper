@@ -1,0 +1,416 @@
+{
+  "aspect": 1.7706855791962175,
+  "views": [
+    {
+      "id": "main",
+      "label": "Front",
+      "image": "/device-photos/logitech-x56-throttle-main.webp",
+      "width": 1498,
+      "height": 846
+    }
+  ],
+  "callouts": [
+    {
+      "id": "mode",
+      "kind": "switch",
+      "inputs": [
+        "",
+        "",
+        ""
+      ],
+      "anchor": {
+        "x": 0.25745660881174903,
+        "y": 0.509
+      },
+      "box": {
+        "x": 0.10564706839767157,
+        "y": 0.616527811686198
+      },
+      "label": "Mode switch (M1 / M2 / S1)",
+      "group": "Base",
+      "view": "main"
+    },
+    {
+      "id": "rty3",
+      "kind": "encoder",
+      "inputs": [
+        "button14",
+        "button15"
+      ],
+      "anchor": {
+        "x": 0.5356875834445928,
+        "y": 0.568
+      },
+      "box": {
+        "x": 0.49529411764705883,
+        "y": 0.927638922797309
+      },
+      "label": "Rotary 1",
+      "group": "Base",
+      "view": "main"
+    },
+    {
+      "id": "rty4",
+      "kind": "encoder",
+      "inputs": [
+        "",
+        "button6"
+      ],
+      "anchor": {
+        "x": 0.5971495327102804,
+        "y": 0.568
+      },
+      "box": {
+        "x": 0.6433725394454657,
+        "y": 0.9231944613986545
+      },
+      "label": "Rotary 2",
+      "group": "Base",
+      "view": "main"
+    },
+    {
+      "id": "hat2",
+      "kind": "hat",
+      "inputs": [
+        "button20",
+        "button21",
+        "button22",
+        "button23"
+      ],
+      "anchor": {
+        "x": 0.6044705978094362,
+        "y": 0.4131944444444444
+      },
+      "box": {
+        "x": 0.9150587852328431,
+        "y": 0.4765277862548828
+      },
+      "label": "Hat 4",
+      "group": "Right grip",
+      "view": "main"
+    },
+    {
+      "id": "hat1",
+      "kind": "hat",
+      "inputs": [
+        "button24",
+        "button27",
+        "button26",
+        "button25"
+      ],
+      "anchor": {
+        "x": 0.6156542056074766,
+        "y": 0.355
+      },
+      "box": {
+        "x": 0.9338823146446078,
+        "y": 0.3576388888888889
+      },
+      "label": "Hat 3",
+      "group": "Right grip",
+      "view": "main"
+    },
+    {
+      "id": "slider",
+      "kind": "switch",
+      "inputs": [
+        "button33",
+        ""
+      ],
+      "anchor": {
+        "x": 0.6019607843137255,
+        "y": 0.24319445292154948
+      },
+      "box": {
+        "x": 0.8987451171875,
+        "y": 0.11652776930067274
+      },
+      "label": "Slider (aft/fwd)",
+      "group": "Right grip",
+      "view": "main"
+    },
+    {
+      "id": "mini",
+      "kind": "axis",
+      "inputs": [
+        "x",
+        "y"
+      ],
+      "anchor": {
+        "x": 0.5467450788909314,
+        "y": 0.4120833502875434
+      },
+      "box": {
+        "x": 0.0786666570925245,
+        "y": 0.4554166581895616
+      },
+      "label": "Ministick",
+      "group": "Right grip",
+      "view": "main"
+    },
+    {
+      "id": "thumb",
+      "kind": "button",
+      "inputs": [
+        "button1"
+      ],
+      "anchor": {
+        "x": 0.5660881174899867,
+        "y": 0.34500000000000003
+      },
+      "box": {
+        "x": 0.0805490291819853,
+        "y": 0.3443055470784505
+      },
+      "label": "Thumb button",
+      "group": "Right grip",
+      "view": "main"
+    },
+    {
+      "id": "rty1",
+      "kind": "axis",
+      "inputs": [
+        "z"
+      ],
+      "anchor": {
+        "x": 0.6527843520220589,
+        "y": 0.09875000847710504
+      },
+      "box": {
+        "x": 0.519764715456495,
+        "y": 0.03
+      },
+      "label": "Rotary 1",
+      "group": "Right grip",
+      "view": "main"
+    },
+    {
+      "id": "rty2",
+      "kind": "axis",
+      "inputs": [
+        "rotz"
+      ],
+      "anchor": {
+        "x": 0.6578038832720589,
+        "y": 0.29875000847710503
+      },
+      "box": {
+        "x": 0.9288627833946078,
+        "y": 0.19875000847710503
+      },
+      "label": "Rotary 2",
+      "group": "Right grip",
+      "view": "main"
+    },
+    {
+      "id": "lthr",
+      "kind": "axis",
+      "inputs": [
+        ""
+      ],
+      "anchor": {
+        "x": 0.46517645143995096,
+        "y": 0.1609722137451172
+      },
+      "box": {
+        "x": 0.3836078239889706,
+        "y": 0.03
+      },
+      "label": "Left throttle",
+      "group": "Axes",
+      "view": "main"
+    },
+    {
+      "id": "rthr",
+      "kind": "axis",
+      "inputs": [
+        ""
+      ],
+      "anchor": {
+        "x": 0.5793057409879839,
+        "y": 0.18
+      },
+      "box": {
+        "x": 0.8479215494791666,
+        "y": 0.03
+      },
+      "label": "Right throttle",
+      "group": "Axes",
+      "view": "main"
+    },
+    {
+      "id": "lbtn",
+      "kind": "button",
+      "inputs": [
+        "button5"
+      ],
+      "anchor": {
+        "x": 0.4137254901960784,
+        "y": 0.22652778625488282
+      },
+      "box": {
+        "x": 0.07427451937806373,
+        "y": 0.13541666666666666
+      },
+      "label": "Left grip button",
+      "group": "Left grip",
+      "view": "main"
+    },
+    {
+      "id": "sw",
+      "kind": "buttons",
+      "inputs": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "anchor": {
+        "x": 0.3986666570925245,
+        "y": 0.5765277438693577
+      },
+      "box": {
+        "x": 0.17529411764705882,
+        "y": 0.8998611450195313
+      },
+      "label": "SW 1-6",
+      "group": "Base",
+      "view": "main"
+    },
+    {
+      "id": "tgl",
+      "kind": "buttons",
+      "inputs": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "anchor": {
+        "x": 0.7299607460171569,
+        "y": 0.4776388804117839
+      },
+      "box": {
+        "x": 0.9345098039215687,
+        "y": 0.6576388888888889
+      },
+      "label": "TGL 1-4 (up / down)",
+      "group": "Base",
+      "view": "main"
+    },
+    {
+      "id": "s1180l6l",
+      "kind": "button",
+      "inputs": [
+        "button2"
+      ],
+      "anchor": {
+        "x": 0.6534117455575981,
+        "y": 0.1009722179836697
+      },
+      "box": {
+        "x": 0.6195294309129902,
+        "y": 0.03
+      },
+      "view": "main",
+      "label": "Rotary 1 Push"
+    },
+    {
+      "id": "885q69o6",
+      "kind": "button",
+      "inputs": [
+        "button3"
+      ],
+      "anchor": {
+        "x": 0.6578038832720589,
+        "y": 0.29875000847710503
+      },
+      "box": {
+        "x": 0.916941157322304,
+        "y": 0.26652776930067273
+      },
+      "view": "main",
+      "label": "Rotary 2 Push"
+    },
+    {
+      "id": "5937cajo",
+      "kind": "button",
+      "inputs": [
+        "button4"
+      ],
+      "anchor": {
+        "x": 0.4457254806219363,
+        "y": 0.2331944359673394
+      },
+      "box": {
+        "x": 0.15584314682904413,
+        "y": 0.07319444020589193
+      },
+      "label": "Right grip button",
+      "group": "Left grip",
+      "view": "main"
+    },
+    {
+      "id": "a4bsyp5h",
+      "kind": "switch",
+      "inputs": [
+        "button28",
+        "button29"
+      ],
+      "anchor": {
+        "x": 0.5219607843137255,
+        "y": 0.2548611111111111
+      },
+      "box": {
+        "x": 0.08682353898590686,
+        "y": 0.23541666666666666
+      },
+      "view": "main",
+      "label": "K1 (up/dn)"
+    },
+    {
+      "id": "wp84o9ct",
+      "kind": "encoder",
+      "inputs": [
+        "button30",
+        "button31"
+      ],
+      "anchor": {
+        "x": 0.41294117647058826,
+        "y": 0.15763888888888888
+      },
+      "box": {
+        "x": 0.24996079388786765,
+        "y": 0.03
+      },
+      "view": "main",
+      "label": "Scroll (fwd/aft)"
+    }
+  ],
+  "photoHashes": {
+    "/device-photos/logitech-x56-throttle-main.webp": "1e382dbb49a2e7af364be658fe9f2a86ba9040ed8b1e6210aba0c60cb9964ed5"
+  },
+  "metadata": {
+    "id": "builtin-logitech-x56-throttle",
+    "name": "Logitech G X56 throttle",
+    "brand": "Logitech",
+    "notes": "Callout spots without numbers (shown as “?”): the numbering depends on the device configuration and is not published. Use “Customize a copy” and type the numbers you see in the input tester.",
+    "match": [
+      {
+        "name": "X56 H.O.T.A.S. Throttle"
+      },
+      {
+        "name": "X56 HOTAS Throttle"
+      },
+      {
+        "name": "X-56 Rhino Throttle"
+      }
+    ]
+  }
+}

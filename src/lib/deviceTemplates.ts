@@ -246,7 +246,7 @@ export function withPhotoLayout(t: DeviceTemplate, layout: DevicePhotoLayout): D
 // shows: manual button N = DirectInput button N = SC jsX_buttonN. USB ids 044F:0402 (stick) and 044F:0404 (throttle).
 const TM_NOTE = 'Numbers as the Thrustmaster manual shows them: button N there = jsX_buttonN in the game (fixed, 1-based). In T.A.R.G.E.T mode the device is replaced by a virtual one and the numbers change.';
 tpl('tm-warthog-stick', {
-  id: 'builtin-tm-warthog-stick', name: 'Thrustmaster HOTAS Warthog stick', brand: 'Thrustmaster', notes: TM_NOTE,
+  id: 'builtin-tm-warthog-stick', category: 'stick', name: 'Thrustmaster HOTAS Warthog stick', brand: 'Thrustmaster', notes: TM_NOTE,
   match: [{ vendor: '044F', product: '0402' }, { name: 'Joystick - HOTAS Warthog' }],
 }, [
   c('wpn', 'button', b(2), 'Weapon release', 'Grip head', { side: 'L' }),
@@ -263,7 +263,7 @@ tpl('tm-warthog-stick', {
 
 // Thrustmaster HOTAS Warthog throttle: exact callouts from Federico's export (2026-10-07) — photoTplExactViews, not withPhotoLayout.
 photoTplExactViews({
-  id: 'builtin-tm-warthog-throttle', name: 'Thrustmaster HOTAS Warthog throttle', brand: 'Thrustmaster', notes: TM_NOTE,
+  id: 'builtin-tm-warthog-throttle', category: 'throttle', name: 'Thrustmaster HOTAS Warthog throttle', brand: 'Thrustmaster', notes: TM_NOTE,
   match: [{ vendor: '044F', product: '0404' }, { name: 'Throttle - HOTAS Warthog' }],
 }, [
   { id: 'top', label: 'Grips and panel (rear)', photo: 'tm-warthog-throttle-top', width: 1819, height: 1187 },
@@ -321,7 +321,7 @@ photoTplExactViews({
 
 // Thrustmaster T.16000M FCS: fixed numbering (manual), right-handed base layout. USB 044F:B10A.
 tpl('tm-t16000m', {
-  id: 'builtin-tm-t16000m', name: 'Thrustmaster T.16000M FCS stick', brand: 'Thrustmaster',
+  id: 'builtin-tm-t16000m', category: 'stick', name: 'Thrustmaster T.16000M FCS stick', brand: 'Thrustmaster',
   notes: 'Numbers as the Thrustmaster manual shows them (fixed, 1-based: button N = jsX_buttonN). Base buttons shown for the right-handed setting; in left-handed mode the two base panels swap.',
   match: [{ vendor: '044F', product: 'B10A' }, { name: 'T.16000M' }],
 }, [
@@ -338,29 +338,44 @@ tpl('tm-t16000m', {
 ]);
 
 // Thrustmaster TWCS throttle: fixed numbering (manual). USB 044F:B687.
-tpl('tm-twcs', {
-  id: 'builtin-tm-twcs', name: 'Thrustmaster TWCS throttle', brand: 'Thrustmaster',
+photoTplExactViews({
+  id: 'builtin-tm-twcs', category: 'throttle', name: 'Thrustmaster TWCS throttle', brand: 'Thrustmaster',
   notes: 'Numbers as the Thrustmaster manual shows them (fixed, 1-based: button N = jsX_buttonN).',
   match: [{ vendor: '044F', product: 'B687' }, { name: 'TWCS' }],
 }, [
-  c('h11', 'hat', b(11, 12, 13, 14), 'Hat (4-way)', 'Grip', { side: 'L' }),
-  c('b3', 'button', b(3), 'Button 3', 'Grip', { side: 'L' }),
-  c('b2', 'button', b(2), 'Button 2', 'Grip', { side: 'L' }),
-  c('r45', 'switch', b(4, 5), 'Rocker (fwd / aft)', 'Grip', { side: 'L' }),
-  c('thr', 'axis', ['z'], 'Throttle', 'Axes', { side: 'L' }),
-  c('h7', 'hat', b(7, 8, 9, 10), 'Hat (4-way)', 'Grip', { side: 'R' }),
-  c('pov', 'hat', hat(1), 'POV hat (8-way)', 'Grip', { side: 'R' }),
-  c('mini', 'axis', ['x', 'y'], 'Ministick', 'Grip', { side: 'R' }),
-  c('minib', 'button', b(6), 'Ministick press', 'Grip', { art: 'mini', side: 'R' }),
-  c('ant', 'axis', ['slider1'], 'Antenna wheel', 'Grip', { side: 'R' }),
-  c('b1', 'button', b(1), 'Front button', 'Grip', { side: 'R' }),
-  c('paddle', 'axis', ['rotz'], 'Paddle rocker (rudder)', 'Grip', { side: 'R' }),
+  {"id": "thumb", "label": "Thumb side", "width": 1164, "height": 538, "photo": "tm-twcs-thumb"},
+  {"id": "front", "label": "Front", "width": 1573, "height": 831, "photo": "tm-twcs-front"},
+], [
+  {"id": "h11", "kind": "hat", "inputs": ["button11", "button12", "button13", "button14"], "label": "Hat (4-way)", "group": "Grip", "view": "thumb",
+    "anchor": {"x": 0.581137742824897, "y": 0.3978930307941653}, "box": {"x": 0.8733533299611714, "y": 0.47698539350562197}},
+  {"id": "b3", "kind": "button", "inputs": ["button3"], "label": "Button 3", "group": "Grip", "view": "front",
+    "anchor": {"x": 0.5649700507432401, "y": 0.20609065155807366}, "box": {"x": 0.8727544910179641, "y": 0.37266289816361986}},
+  {"id": "b2", "kind": "button", "inputs": ["button2"], "label": "Button 2", "group": "Grip", "view": "front",
+    "anchor": {"x": 0.5961078027051366, "y": 0.20042492917847027}, "box": {"x": 0.8913174018174589, "y": 0.24801700581234506}},
+  {"id": "r45", "kind": "switch", "inputs": ["button4", "button5"], "label": "Rocker (fwd / aft)", "group": "Grip", "view": "front",
+    "anchor": {"x": 0.5398203684184366, "y": 0.22762041389097912}, "box": {"x": 0.855988005678097, "y": 0.7443342776203966}},
+  {"id": "thr", "kind": "axis", "inputs": ["z"], "label": "Throttle", "group": "Axes", "view": "thumb",
+    "anchor": {"x": 0.41329896907216496, "y": 0.25}, "box": {"x": 0.115, "y": 0.18413506815365555}},
+  {"id": "h7", "kind": "hat", "inputs": ["button7", "button8", "button9", "button10"], "label": "Hat (4-way)", "group": "Grip", "view": "thumb",
+    "anchor": {"x": 0.5805389038816897, "y": 0.2747163695299838}, "box": {"x": 0.8751496640508046, "y": 0.2786061489408175}},
+  {"id": "pov", "kind": "hat", "inputs": ["hat1_up", "hat1_right", "hat1_down", "hat1_left"], "label": "POV hat (8-way)", "group": "Grip", "view": "thumb",
+    "anchor": {"x": 0.6032934131736527, "y": 0.14505672609400325}, "box": {"x": 0.875, "y": 0.1271840148698885}},
+  {"id": "mini", "kind": "axis", "inputs": ["x", "y"], "label": "Ministick", "group": "Grip", "view": "front",
+    "anchor": {"x": 0.5008982127298138, "y": 0.2514164305949009}, "box": {"x": 0.12844311834095481, "y": 0.05991501848690908}},
+  {"id": "minib", "kind": "button", "inputs": ["button6"], "label": "Ministick press", "group": "Grip", "view": "front",
+    "anchor": {"x": 0.5008982127298138, "y": 0.2502833034093927}, "box": {"x": 0.12305388764706915, "y": 0.16643059490084985}},
+  {"id": "ant", "kind": "axis", "inputs": ["slider1"], "label": "Antenna wheel", "group": "Grip", "view": "front",
+    "anchor": {"x": 0.617065886537472, "y": 0.13130313343772132}, "box": {"x": 0.8607784431137725, "y": 0.0893767791834499}},
+  {"id": "b1", "kind": "button", "inputs": ["button1"], "label": "Front button", "group": "Grip", "view": "thumb",
+    "anchor": {"x": 0.5535927960972586, "y": 0.4938411867212824}, "box": {"x": 0.7757485212680109, "y": 0.8374392418266309}},
+  {"id": "paddle", "kind": "axis", "inputs": ["rotz"], "label": "Paddle rocker (rudder)", "group": "Grip", "view": "front",
+    "anchor": {"x": 0.5104790419161677, "y": 0.3828611725112872}, "box": {"x": 0.1296407276998737, "y": 0.7386685552407932}},
 ]);
 
 /* ------------------------------------------------------------------ VIRPIL */
 const VPC_NOTE = 'Default numbering from the VIRPIL diagrams (1-based: button N = jsX_buttonN). The VPC Configurator can renumber everything: if yours differs, use “Customize a copy”.';
 tpl('virpil-alpha-prime', {
-  id: 'builtin-virpil-alpha-prime', name: 'VIRPIL Alpha Prime (R) stick', brand: 'VIRPIL', notes: VPC_NOTE,
+  id: 'builtin-virpil-alpha-prime', category: 'stick', name: 'VIRPIL Alpha Prime (R) stick', brand: 'VIRPIL', notes: VPC_NOTE,
   match: [{ name: 'Alpha Prime' }],
 }, [
   c('b13', 'button', b(13), 'Head button (front)', 'Grip head', { side: 'L' }),
@@ -383,7 +398,7 @@ tpl('virpil-alpha-prime', {
 // Exact photos and callouts from Federico's export (2026-10-09); retain the built-in metadata.
 // T1 stays 30 / 32: the export's 30 / 31 duplicates T2's button 31.
 photoTplExactViews({
-  id: 'builtin-virpil-vmax-prime', name: 'VIRPIL VMAX Prime throttle', brand: 'VIRPIL',
+  id: 'builtin-virpil-vmax-prime', category: 'throttle', name: 'VIRPIL VMAX Prime throttle', brand: 'VIRPIL',
   notes: VPC_NOTE + ' Shown without the shift layer. Uses buttons above 32: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ name: 'VMAX' }],
 }, [
@@ -448,7 +463,7 @@ photoTplExactViews({
 
 // Exact photos and callouts from Federico's export (2026-10-09); retain the built-in metadata.
 photoTplExactViews({
-  id: 'builtin-virpil-t50cm4', name: 'VIRPIL VPC MongoosT-50CM4 throttle', brand: 'VIRPIL',
+  id: 'builtin-virpil-t50cm4', category: 'throttle', name: 'VIRPIL VPC MongoosT-50CM4 throttle', brand: 'VIRPIL',
   notes: VPC_NOTE + ' Shown without the shift layer. Uses buttons above 32: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ name: 'T-50CM4' }, { name: 'MongoosT-50CM4' }],
 }, [
@@ -504,7 +519,7 @@ photoTplExactViews({
 /* ------------------------------------------------------------------ WinCtrl (WinWing) */
 const WC_NOTE = 'Default numbering from the WinCtrl diagrams (1-based: button N = jsX_buttonN). SimAppPro can change it: if yours differs, use “Customize a copy”.';
 tpl('winctrl-carrierace', {
-  id: 'builtin-winctrl-carrierace', name: 'WinCtrl CarrierAce stick (WinCtrl base)', brand: 'WinCtrl', notes: WC_NOTE,
+  id: 'builtin-winctrl-carrierace', category: 'stick', name: 'WinCtrl CarrierAce stick (WinCtrl base)', brand: 'WinCtrl', notes: WC_NOTE,
   match: [{ name: 'JGRIP-F18' }, { name: 'Metal 2 + CarrierAce' }, { name: 'CarrierAce Joystick' }, { name: 'CarrierAce Stick' }],
 }, [
   c('wpn', 'button', b(20), 'Weapon release', 'Grip head', { side: 'L' }),
@@ -520,7 +535,7 @@ tpl('winctrl-carrierace', {
   c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
 ]);
 tpl('winctrl-viperace', {
-  id: 'builtin-winctrl-viperace', name: 'WinCtrl ViperAce stick (WinCtrl base)', brand: 'WinCtrl',
+  id: 'builtin-winctrl-viperace', category: 'stick', name: 'WinCtrl ViperAce stick (WinCtrl base)', brand: 'WinCtrl',
   notes: WC_NOTE + ' Uses buttons above 32: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ name: 'JGRIP-F16' }, { name: 'Metal 2 + ViperAce' }, { name: 'ViperAce Joystick' }, { name: 'ViperAce Stick' }],
 }, [
@@ -542,7 +557,7 @@ tpl('winctrl-viperace', {
   c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
 ]);
 tpl('winctrl-orion', {
-  id: 'builtin-winctrl-orion', name: 'WinCtrl Orion throttle (F-15EX grips, F/A-18 panel)', brand: 'WinCtrl',
+  id: 'builtin-winctrl-orion', category: 'throttle', name: 'WinCtrl Orion throttle (F-15EX grips, F/A-18 panel)', brand: 'WinCtrl',
   notes: WC_NOTE + ' Uses buttons up to 111: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ name: 'F15EX HANDLE' }, { name: 'Orion Throttle Base II + F15EX' }],
 }, [
@@ -570,7 +585,7 @@ tpl('winctrl-orion', {
 ]);
 // WinCtrl URSA MINOR Combat: exact callouts from Federico's export (2026-10-06) — photoTplExactViews.
 photoTplExactViews({
-  id: 'builtin-winctrl-ursa-combat', name: 'WinCtrl URSA MINOR throttle (Combat grip)', brand: 'WinCtrl',
+  id: 'builtin-winctrl-ursa-combat', category: 'throttle', name: 'WinCtrl URSA MINOR throttle (Combat grip)', brand: 'WinCtrl',
   notes: 'Grip numbers from the WinCtrl grip maps; base from published export. Lever detents soft 18/22, hard 24/25. Buttons to 81: use Firefox (Chrome caps at 32). Customize a copy if yours differ.',
   match: [{ vendor: '4098', product: 'B970' }, { vendor: '4098', product: 'BC27' }, { name: 'URSA MINOR Combat' }, { name: 'URSA MINOR Throttle' }],
 }, [
@@ -648,9 +663,9 @@ photoTplExactViews({
 const MOZA_NOTE = 'Default numbering from the MOZA diagrams (1-based: button N = jsX_buttonN). MOZA Cockpit can change it: if yours differs, use “Customize a copy”.';
 // MOZA AB6 + MHG: exact callouts from Federico's export (2026-10-06) — photoTplExact, not withPhotoLayout.
 photoTplExactViews({
-  id: 'builtin-moza-ab6', name: 'MOZA AB6 base + MHG grip', brand: 'MOZA',
+  id: 'builtin-moza-ab6', category: 'stick', name: 'MOZA AB6/9 base + MHG grip', brand: 'MOZA',
   notes: MOZA_NOTE + ' MHG 1-24, ministick 25-29, base 49-62. Positions from published export. 128+ buttons: Chrome / Edge cap at 32 — use Firefox.',
-  match: [{ vendor: '346E', product: '1002' }, { name: 'AB6' }, { name: 'MOZA AB6' }],
+  match: [{ vendor: '346E', product: '1002' }, { name: 'AB6' }, { name: 'MOZA AB6' }, { vendor: '346E', product: '1000' }, { name: 'AB9' }],
 }, [
   { id: 'front', label: 'Front', photo: 'moza-ab6-front', width: 1594, height: 990 },
   { id: 'back', label: 'Back', photo: 'moza-ab6-back', width: 1594, height: 990 },
@@ -695,10 +710,10 @@ photoTplExactViews({
     anchor: { x: 0.59429658955041, y: 0.6451036764766327 }, box: { x: 0.7626964231480046, y: 0.921313452697316 } },
 ]);
 
-// MOZA AB6 base fitted with other grips: grip variants of the AB6 above (same USB id 346E:1002 and button count whatever grip is
+// MOZA AB6/9 base fitted with other grips: grip variants of the AB6 above (same USB id 346E:1002 and button count whatever grip is
 // fitted, so they have no match rules and are never picked automatically; the template pickers list them under the AB6).
 // Base controls keep the AB6's numbers (keys 49-56, levers S1 / S2 + zones 57-62).
-const AB6_GRIP_NOTE = 'Never picked automatically (same USB id 346E:1002 as the plain AB6): pick it under “Grips for this base”. Base 49-62, S1, S2 as on the AB6. Buttons above 32: use Firefox.';
+const AB6_GRIP_NOTE = 'Never picked automatically (same USB ids as its base: AB6 346E:1002, AB9 346E:1000): pick it under “Grips for this base”. Base 49-62, S1, S2 as on the AB6/9. Buttons above 32: use Firefox.';
 const AB6_WC_NOTE = 'WinCtrl grip on the MOZA adaptor: numbers as on the WinCtrl template (check in the input tester). Paddle axis, if on, replaces base lever S1.';
 const ab6Base = (): Spec[] => [
   c('bkeys', 'buttons', b(49, 50, 51, 52), 'Base keys (left) 49-52', 'Base'),
@@ -709,7 +724,7 @@ const ab6Base = (): Spec[] => [
   c('wrb', 'switch', b(60, 61, 62), 'Dial wheel (zones)', 'Base'),
 ];
 photoTpl({
-  id: 'builtin-moza-ab6-mh16', name: 'MOZA AB6 base + MH16 grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
+  id: 'builtin-moza-ab6-mh16', category: 'stick', name: 'MOZA AB6/9 base + MH16 grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
   notes: 'MOZA Cockpit MH16 diagram, trim in Button mode (D-pad mode: trim = POV 1). TMS / DMS / trim: no push; paddle: button only; twist only with the Z module. Numbers differ? “Customize a copy”. ' + AB6_GRIP_NOTE,
 }, [
   c('castle', 'hat', b(20, 21, 22, 23, 24), 'Module hat (4-way + push)', 'Side module'),
@@ -728,8 +743,8 @@ photoTpl({
   ...ab6Base(),
 ]);
 photoTpl({
-  id: 'builtin-moza-ab6-carrierace', name: 'MOZA AB6 base + WinCtrl CarrierAce grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
-  notes: AB6_WC_NOTE + ' Not on MOZA’s supported-grip list: check your AB6 firmware. ' + AB6_GRIP_NOTE,
+  id: 'builtin-moza-ab6-carrierace', category: 'stick', name: 'MOZA AB6/9 base + WinCtrl CarrierAce grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
+  notes: AB6_WC_NOTE + ' Not on MOZA’s supported-grip list: check your AB6/9 firmware. ' + AB6_GRIP_NOTE,
 }, [
   c('wpn', 'button', b(20), 'Weapon release', 'Grip head'),
   c('hatC', 'hat', b(22, 23, 24, 25, 21), 'Hat C (4-way + push)', 'Grip head'),
@@ -746,10 +761,10 @@ photoTpl({
 // MOZA AB6 + WinCtrl ViperAce EX: exact callouts from Federico's export (2026-10-07) — photoTplExactViews, not withPhotoLayout.
 // Canvases = pageSizeForPhoto of each photo (548x986 -> 1140x986, 1136x1430 -> 1994x1430), same as the export.
 photoTplExactViews({
-  id: 'builtin-moza-ab6-viperace', name: 'MOZA AB6 base + WinCtrl ViperAce EX grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
+  id: 'builtin-moza-ab6-viperace', category: 'stick', name: 'MOZA AB6/9 base + WinCtrl ViperAce EX grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
   notes: AB6_WC_NOTE + ' Wheel / EX trigger 1 / 2 / 41 / 42 / 3 (SimAppPro: 42 / 43). ' + AB6_GRIP_NOTE,
 }, [
-  { id: 'front', label: 'Front (on the AB6)', photo: 'moza-ab6-viperace-front', width: 1140, height: 986 },
+  { id: 'front', label: 'Front (on the AB6/9)', photo: 'moza-ab6-viperace-front', width: 1140, height: 986 },
   { id: 'side', label: 'Grip, labelled side', photo: 'winctrl-viperace-side', width: 1994, height: 1430 },
 ], [
   { id: 'cms', kind: 'hat', inputs: b(22, 23, 24, 25, 21), label: "Thumb hat (4-way + push)", group: 'Side module', view: 'front',
@@ -798,30 +813,79 @@ photoTplExactViews({
     anchor: { x: 0.6028090059087517, y: 0.7471357980803838 }, box: { x: 0.8432584612557058, y: 0.9241766887486563 } },
 ]);
 
-tpl('moza-mtp', {
-  id: 'builtin-moza-mtp', name: 'MOZA MTP throttle', brand: 'MOZA',
+photoTplExactViews({
+  id: 'builtin-moza-mtp', category: 'throttle', name: 'MOZA MTP throttle', brand: 'MOZA',
   notes: MOZA_NOTE + ' Uses buttons up to 71: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ name: 'MOZA MTP' }, { name: 'MTP Throttle' }],
 }, [
-  c('lgen', 'switch', b(21, 20), 'L GEN', 'Panel'), c('s24', 'switch', b(24, 23, 22), 'Switch (3 pos)', 'Panel'),
-  c('rgen', 'switch', b(26, 25), 'R GEN', 'Panel'), c('s29', 'switch', b(29, 28, 27), 'Switch (3 pos)', 'Panel'),
-  c('s31', 'switch', b(31, 30), 'Switch', 'Panel'), c('s33', 'switch', b(33, 32), 'Switch', 'Panel'),
-  c('rot4', 'switch', b(34, 35, 36, 37), 'Rotary (4 pos)', 'Panel'), c('rot8', 'switch', b(...range(38, 45)), 'Rotary (8 pos)', 'Panel'),
-  c('probe', 'switch', b(48, 47, 46), 'PROBE (3 pos)', 'Panel'), c('reset', 'button', b(64), 'RESET', 'Panel'),
-  c('form', 'encoder', b(49, 50), 'FORMATION', 'Panel'), c('pos', 'encoder', b(51, 52), 'POSITION', 'Panel'),
-  c('rtrim', 'encoder', b(62, 63, 65), 'RUD TRIM', 'Panel'), c('light', 'encoder', b(66, 67), 'LIGHT', 'Panel'),
-  c('apu', 'switch', b(54, 53), 'APU', 'Panel'), c('crank', 'switch', b(55, 56, 57), 'ENG CRANK (3 pos)', 'Panel'),
-  c('strobe', 'switch', b(59, 58), 'STROBE', 'Panel'), c('intr', 'switch', b(61, 60), 'INTR WING', 'Panel'),
-  c('rzs', 'axis', ['rotz'], 'MIN / MAX slider', 'Panel'),
-  c('lthr', 'axis', ['rotx'], 'Left lever', 'Axes'), c('rthr', 'axis', ['roty'], 'Right lever', 'Axes'),
-  c('mini', 'axis', ['x', 'y'], 'Ministick', 'Grip'), c('minib', 'button', b(1), 'Ministick press', 'Grip', { art: 'mini' }),
-  c('s69', 'switch', b(69, 2, 68), 'Switch (3 pos)', 'Grip'), c('b3', 'button', b(3), 'Button 3', 'Grip'), c('b4', 'button', b(4), 'Button 4', 'Grip'),
-  c('s5', 'switch', b(5, 6, 7), 'Switch (3 pos)', 'Grip'), c('h11', 'hat', b(11, 12, 13, 14, 15), 'Hat (4-way + push)', 'Grip'),
-  c('h70', 'hat', b(70, 10, 71, 8, 9), 'Hat (4-way + push)', 'Grip'), c('slide', 'switch', b(16, 17, 18), 'Slide (3 pos)', 'Grip'),
-  c('b19', 'button', b(19), 'Button 19', 'Grip'),
+  {"id": "panel", "label": "Panel (right grip)", "width": 1495, "height": 842, "photo": "moza-mtp-main"},
+  {"id": "panel2", "label": "Panel (front grip)", "width": 1631, "height": 921, "photo": "moza-mtp-front"},
+], [
+  {"id": "lgen", "kind": "switch", "inputs": ["button21", "button20"], "label": "L GEN", "group": "Panel", "view": "panel2",
+    "anchor": {"x": 0.2832156671262255, "y": 0.5509722391764323}, "box": {"x": 0.1188235294117647, "y": 0.4643055386013455}},
+  {"id": "s24", "kind": "switch", "inputs": ["button24", "button23", "button22"], "label": "Switch (3 pos)", "group": "Panel", "view": "panel2",
+    "anchor": {"x": 0.3152157054227941, "y": 0.5309722052680121}, "box": {"x": 0.10250981349571078, "y": 0.3254166497124566}},
+  {"id": "rgen", "kind": "switch", "inputs": ["button26", "button25"], "label": "R GEN", "group": "Panel", "view": "panel2",
+    "anchor": {"x": 0.34407844094669116, "y": 0.5176389058430989}, "box": {"x": 0.19223529890471813, "y": 0.20097223917643228}},
+  {"id": "s29", "kind": "switch", "inputs": ["button29", "button28", "button27"], "label": "Switch (3 pos)", "group": "Panel", "view": "panel2",
+    "anchor": {"x": 0.3271372357536765, "y": 0.5998611450195312}, "box": {"x": 0.0981176518458946, "y": 0.7254166497124566}},
+  {"id": "s31", "kind": "switch", "inputs": ["button31", "button30"], "label": "Switch", "group": "Panel", "view": "panel2",
+    "anchor": {"x": 0.3585097847732843, "y": 0.57875001695421}, "box": {"x": 0.19223529890471813, "y": 0.8654166327582465}},
+  {"id": "s33", "kind": "switch", "inputs": ["button33", "button32"], "label": "Switch", "group": "Panel", "view": "panel2",
+    "anchor": {"x": 0.39364707797181375, "y": 0.5554167005750869}, "box": {"x": 0.3164705882352941, "y": 0.8954166836208768}},
+  {"id": "rot4", "kind": "switch", "inputs": ["button34", "button35", "button36", "button37"], "label": "Rotary (4 pos)", "group": "Panel", "view": "panel",
+    "anchor": {"x": 0.42644757433489827, "y": 0.38319443596733943}, "box": {"x": 0.251799677459287, "y": 0.09430554707845053}},
+  {"id": "rot8", "kind": "switch", "inputs": ["button38", "button39", "button40", "button41", "button42", "button43", "button44", "button45"], "label": "Rotary (8 pos)", "group": "Panel", "view": "panel",
+    "anchor": {"x": 0.4777777586744425, "y": 0.43874999152289496}, "box": {"x": 0.08153365587404636, "y": 0.15208333333333332}},
+  {"id": "probe", "kind": "switch", "inputs": ["button48", "button47", "button46"], "label": "PROBE (3 pos)", "group": "Panel", "view": "panel",
+    "anchor": {"x": 0.35100334448160536, "y": 0.42499999999999993}, "box": {"x": 0.06338028169014084, "y": 0.39763887193467884}},
+  {"id": "reset", "kind": "button", "inputs": ["button64"], "label": "RESET", "group": "Panel", "view": "panel2",
+    "anchor": {"x": 0.6803921568627451, "y": 0.6209721883138021}, "box": {"x": 0.8661176853553921, "y": 0.7843055725097656}},
+  {"id": "form", "kind": "encoder", "inputs": ["button49", "button50"], "label": "FORMATION", "group": "Panel", "view": "panel",
+    "anchor": {"x": 0.41987290969899665, "y": 0.487}, "box": {"x": 0.8189358181423612, "y": 0.7920833163791232}},
+  {"id": "pos", "kind": "encoder", "inputs": ["button51", "button52"], "label": "POSITION", "group": "Panel", "view": "panel",
+    "anchor": {"x": 0.3596120401337793, "y": 0.506}, "box": {"x": 0.7801251956181534, "y": 0.8798611111111111}},
+  {"id": "rtrim", "kind": "encoder", "inputs": ["button62", "button63", "button65"], "label": "RUD TRIM", "group": "Panel", "view": "panel2",
+    "anchor": {"x": 0.6483921664368872, "y": 0.627638922797309}, "box": {"x": 0.7180392156862745, "y": 0.8887500339084201}},
+  {"id": "light", "kind": "encoder", "inputs": ["button66", "button67"], "label": "LIGHT", "group": "Panel", "view": "panel2",
+    "anchor": {"x": 0.42, "y": 0.4720833248562283}, "box": {"x": 0.2832156671262255, "y": 0.08208334181043837}},
+  {"id": "apu", "kind": "switch", "inputs": ["button54", "button53"], "label": "APU", "group": "Panel", "view": "panel",
+    "anchor": {"x": 0.2774647696290591, "y": 0.4865277608235677}, "box": {"x": 0.06964006259780908, "y": 0.5065277947319878}},
+  {"id": "crank", "kind": "switch", "inputs": ["button55", "button56", "button57"], "label": "ENG CRANK (3 pos)", "group": "Panel", "view": "panel",
+    "anchor": {"x": 0.25242564599838613, "y": 0.5365277608235677}, "box": {"x": 0.09154929577464789, "y": 0.7065277947319879}},
+  {"id": "strobe", "kind": "switch", "inputs": ["button59", "button58"], "label": "STROBE", "group": "Panel", "view": "panel",
+    "anchor": {"x": 0.30563378371356614, "y": 0.56875}, "box": {"x": 0.176056338028169, "y": 0.7787500169542101}},
+  {"id": "intr", "kind": "switch", "inputs": ["button61", "button60"], "label": "INTR WING", "group": "Panel", "view": "panel",
+    "anchor": {"x": 0.33380279779807315, "y": 0.6065277947319878}, "box": {"x": 0.25367763083492273, "y": 0.8631944444444445}},
+  {"id": "rzs", "kind": "axis", "inputs": ["rotz"], "label": "MIN / MAX slider", "group": "Panel", "view": "panel2",
+    "anchor": {"x": 0.7349803730085784, "y": 0.5920833163791233}, "box": {"x": 0.8937254901960784, "y": 0.5554167005750869}},
+  {"id": "lthr", "kind": "axis", "inputs": ["rotx"], "label": "Left lever", "group": "Axes", "view": "panel",
+    "anchor": {"x": 0.5021909137660162, "y": 0.14208331637912328}, "box": {"x": 0.41330204398046266, "y": 0.03}},
+  {"id": "rthr", "kind": "axis", "inputs": ["roty"], "label": "Right lever", "group": "Axes", "view": "panel",
+    "anchor": {"x": 0.577308284658035, "y": 0.17319446139865452}, "box": {"x": 0.6699530134365219, "y": 0.03}},
+  {"id": "mini", "kind": "axis", "inputs": ["x", "y"], "label": "Ministick", "group": "Grip", "view": "panel2",
+    "anchor": {"x": 0.582942097026604, "y": 0.16652776930067276}, "box": {"x": 0.8472941559436274, "y": 0.062083329094780815}},
+  {"id": "minib", "kind": "button", "inputs": ["button1"], "label": "Ministick press", "group": "Grip", "view": "panel2",
+    "anchor": {"x": 0.5848200504022398, "y": 0.16763890584309896}, "box": {"x": 0.7192940984987745, "y": 0.04541666242811415}},
+  {"id": "s69", "kind": "switch", "inputs": ["button69", "button2", "button68"], "label": "Switch (3 pos)", "group": "Grip", "view": "panel2",
+    "anchor": {"x": 0.5611764705882353, "y": 0.31763890584309895}, "box": {"x": 0.8742744715073529, "y": 0.4265277862548828}},
+  {"id": "b3", "kind": "button", "inputs": ["button3"], "label": "Button 3", "group": "Grip", "view": "panel2",
+    "anchor": {"x": 0.5229019703584559, "y": 0.20652779473198785}, "box": {"x": 0.8372549019607843, "y": 0.20986111958821616}},
+  {"id": "b4", "kind": "button", "inputs": ["button4"], "label": "Button 4", "group": "Grip", "view": "panel2",
+    "anchor": {"x": 0.4940392348345588, "y": 0.2231944613986545}, "box": {"x": 0.869254940257353, "y": 0.29208331637912327}},
+  {"id": "s5", "kind": "switch", "inputs": ["button5", "button6", "button7"], "label": "Switch (3 pos)", "group": "Grip", "view": "panel2",
+    "anchor": {"x": 0.44635292202818627, "y": 0.3076388888888889}, "box": {"x": 0.4137254901960784, "y": 0.0509722179836697}},
+  {"id": "h11", "kind": "hat", "inputs": ["button11", "button12", "button13", "button14", "button15"], "label": "Hat (4-way + push)", "group": "Grip", "view": "panel",
+    "anchor": {"x": 0.653051624089153, "y": 0.2076388888888889}, "box": {"x": 0.897183079488214, "y": 0.17763888041178386}},
+  {"id": "h70", "kind": "hat", "inputs": ["button70", "button10", "button71", "button8", "button9"], "label": "Hat (4-way + push)", "group": "Grip", "view": "panel",
+    "anchor": {"x": 0.6824725752518583, "y": 0.14541668362087673}, "box": {"x": 0.8984350165664123, "y": 0.05652777353922526}},
+  {"id": "slide", "kind": "switch", "inputs": ["button16", "button17", "button18"], "label": "Slide (3 pos)", "group": "Grip", "view": "panel",
+    "anchor": {"x": 0.6499217336353189, "y": 0.3065277947319878}, "box": {"x": 0.9372457346072965, "y": 0.34541668362087674}},
+  {"id": "b19", "kind": "button", "inputs": ["button19"], "label": "Button 19", "group": "Grip", "view": "panel",
+    "anchor": {"x": 0.6167449234796801, "y": 0.36875}, "box": {"x": 0.8865414710485133, "y": 0.6454166836208768}},
 ]);
 tpl('moza-mtq', {
-  id: 'builtin-moza-mtq', name: 'MOZA MTQ throttle quadrant', brand: 'MOZA',
+  id: 'builtin-moza-mtq', category: 'throttle', name: 'MOZA MTQ throttle quadrant', brand: 'MOZA',
   notes: MOZA_NOTE + ' Grip photo follows the grip in use (combat, Airbus 66 / 67, Boeing 68-75): press one of its buttons or pick it above the picture. Uses buttons up to 75: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ name: 'MOZA MTQ' }, { name: 'MTQ Throttle' }],
 }, [
@@ -848,7 +912,7 @@ tpl('moza-mtq', {
 /* ------------------------------------------------------------------ devices without published numbers: art + callout spots only */
 const OPEN_NOTE = 'Callout spots without numbers (shown as “?”): the numbering depends on the device configuration and is not published. Use “Customize a copy” and type the numbers you see in the input tester.';
 tpl('vkb-gladiator-scg', {
-  id: 'builtin-vkb-gladiator-scg', name: 'VKB Gladiator NXT EVO (Space Combat Grip)', brand: 'VKB', notes: OPEN_NOTE,
+  id: 'builtin-vkb-gladiator-scg', category: 'stick', name: 'VKB Gladiator NXT EVO (Space Combat Grip)', brand: 'VKB', notes: OPEN_NOTE,
   match: [{ name: 'Gladiator' }],
 }, [
   c('a4', 'hat', u(5), 'A4 hat', 'Grip head', { side: 'L' }), c('a2', 'button', u(1), 'A2 red button', 'Grip head', { side: 'L' }),
@@ -861,7 +925,7 @@ tpl('vkb-gladiator-scg', {
   c('fkeys', 'buttons', u(3), 'F1-F3', 'Base', { side: 'R' }), c('en1', 'encoder', u(2), 'En1 encoder', 'Base', { side: 'R' }),
 ]);
 tpl('vkb-gunfighter-mcg', {
-  id: 'builtin-vkb-gunfighter-mcg', name: 'VKB Gunfighter + MCG Ultimate', brand: 'VKB', notes: OPEN_NOTE,
+  id: 'builtin-vkb-gunfighter-mcg', category: 'stick', name: 'VKB Gunfighter + MCG Ultimate', brand: 'VKB', notes: OPEN_NOTE,
   match: [{ name: 'Gunfighter' }],
 }, [
   c('apoff', 'button', u(1), 'AP OFF (red)', 'Grip head', { side: 'L' }), c('gc', 'hat', u(5), 'GATE CONT ministick (4-way + push)', 'Grip head', { side: 'L' }),
@@ -874,7 +938,7 @@ tpl('vkb-gunfighter-mcg', {
   c('ring', 'button', u(1), 'Ring-finger button', 'Grip', { side: 'R' }), c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
 ]);
 tpl('vkb-stecs', {
-  id: 'builtin-vkb-stecs', name: 'VKB STECS Mk.II + STEM module', brand: 'VKB', notes: OPEN_NOTE,
+  id: 'builtin-vkb-stecs', category: 'throttle', name: 'VKB STECS Mk.II + STEM module', brand: 'VKB', notes: OPEN_NOTE,
   match: [{ name: 'STECS' }],
 }, [
   c('mtgl', 'axis', [''], 'Left lever (MTG-L)', 'Levers'), c('mtgr', 'axis', [''], 'Right lever (MTG-R)', 'Levers'),
@@ -894,7 +958,7 @@ tpl('vkb-stecs', {
 
 /* ------------------------------------------------------------------ Logitech */
 tpl('logitech-x56-stick', {
-  id: 'builtin-logitech-x56-stick', name: 'Logitech G X56 stick', brand: 'Logitech', notes: OPEN_NOTE,
+  id: 'builtin-logitech-x56-stick', category: 'stick', name: 'Logitech G X56 stick', brand: 'Logitech', notes: OPEN_NOTE,
   match: [{ name: 'X56 H.O.T.A.S. Stick' }, { name: 'X56 HOTAS Stick' }, { name: 'X-56 Rhino Stick' }],
 }, [
   c('a', 'button', u(1), 'Fire button A (red)', 'Grip head', { side: 'L' }), c('h2', 'hat', u(4), 'Thumb hat', 'Grip', { side: 'L' }),
@@ -904,17 +968,52 @@ tpl('logitech-x56-stick', {
   c('h1', 'hat', u(4), 'Hat 1', 'Grip head', { side: 'R' }), c('c', 'button', u(1), 'Button C', 'Grip', { side: 'R' }),
   c('twist', 'axis', [''], 'Twist', 'Axes', { side: 'R' }), c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
 ]);
-tpl('logitech-x56-throttle', {
-  id: 'builtin-logitech-x56-throttle', name: 'Logitech G X56 throttle', brand: 'Logitech', notes: OPEN_NOTE,
+photoTplExactViews({
+  id: 'builtin-logitech-x56-throttle', category: 'throttle', name: 'Logitech G X56 throttle', brand: 'Logitech', notes: OPEN_NOTE,
   match: [{ name: 'X56 H.O.T.A.S. Throttle' }, { name: 'X56 HOTAS Throttle' }, { name: 'X-56 Rhino Throttle' }],
 }, [
-  c('mode', 'switch', u(3), 'Mode switch (M1 / M2 / S1)', 'Base'), c('rty3', 'axis', [''], 'Rotary 3', 'Base'), c('rty4', 'axis', [''], 'Rotary 4', 'Base'),
-  c('hat2', 'hat', u(4), 'Hat 2', 'Right grip'), c('hat1', 'hat', u(4), 'Hat 1', 'Right grip'), c('slider', 'switch', u(2), 'Slider (2 pos)', 'Right grip'),
-  c('mini', 'axis', ['', ''], 'Ministick', 'Right grip'), c('thumb', 'button', u(1), 'Thumb button', 'Right grip'),
-  c('rty1', 'axis', [''], 'Rotary 1', 'Right grip'), c('rty2', 'axis', [''], 'Rotary 2', 'Right grip'),
-  c('lthr', 'axis', [''], 'Left throttle', 'Axes'), c('rthr', 'axis', [''], 'Right throttle', 'Axes'),
-  c('lbtn', 'button', u(1), 'Left grip button', 'Left grip'),
-  c('sw', 'buttons', u(6), 'SW 1-6', 'Base'), c('tgl', 'buttons', u(8), 'TGL 1-4 (up / down)', 'Base'),
+  {"id": "main", "label": "Front", "width": 1498, "height": 846, "photo": "logitech-x56-throttle-main"},
+], [
+  {"id": "mode", "kind": "switch", "inputs": ["", "", ""], "label": "Mode switch (M1 / M2 / S1)", "group": "Base", "view": "main",
+    "anchor": {"x": 0.25745660881174903, "y": 0.509}, "box": {"x": 0.10564706839767157, "y": 0.616527811686198}},
+  {"id": "rty3", "kind": "encoder", "inputs": ["button14", "button15"], "label": "Rotary 1", "group": "Base", "view": "main",
+    "anchor": {"x": 0.5356875834445928, "y": 0.568}, "box": {"x": 0.49529411764705883, "y": 0.927638922797309}},
+  {"id": "rty4", "kind": "encoder", "inputs": ["", "button6"], "label": "Rotary 2", "group": "Base", "view": "main",
+    "anchor": {"x": 0.5971495327102804, "y": 0.568}, "box": {"x": 0.6433725394454657, "y": 0.9231944613986545}},
+  {"id": "hat2", "kind": "hat", "inputs": ["button20", "button21", "button22", "button23"], "label": "Hat 4", "group": "Right grip", "view": "main",
+    "anchor": {"x": 0.6044705978094362, "y": 0.4131944444444444}, "box": {"x": 0.9150587852328431, "y": 0.4765277862548828}},
+  {"id": "hat1", "kind": "hat", "inputs": ["button24", "button27", "button26", "button25"], "label": "Hat 3", "group": "Right grip", "view": "main",
+    "anchor": {"x": 0.6156542056074766, "y": 0.355}, "box": {"x": 0.9338823146446078, "y": 0.3576388888888889}},
+  {"id": "slider", "kind": "switch", "inputs": ["button33", ""], "label": "Slider (aft/fwd)", "group": "Right grip", "view": "main",
+    "anchor": {"x": 0.6019607843137255, "y": 0.24319445292154948}, "box": {"x": 0.8987451171875, "y": 0.11652776930067274}},
+  {"id": "mini", "kind": "axis", "inputs": ["x", "y"], "label": "Ministick", "group": "Right grip", "view": "main",
+    "anchor": {"x": 0.5467450788909314, "y": 0.4120833502875434}, "box": {"x": 0.0786666570925245, "y": 0.4554166581895616}},
+  {"id": "thumb", "kind": "button", "inputs": ["button1"], "label": "Thumb button", "group": "Right grip", "view": "main",
+    "anchor": {"x": 0.5660881174899867, "y": 0.34500000000000003}, "box": {"x": 0.0805490291819853, "y": 0.3443055470784505}},
+  {"id": "rty1", "kind": "axis", "inputs": ["z"], "label": "Rotary 1", "group": "Right grip", "view": "main",
+    "anchor": {"x": 0.6527843520220589, "y": 0.09875000847710504}, "box": {"x": 0.519764715456495, "y": 0.03}},
+  {"id": "rty2", "kind": "axis", "inputs": ["rotz"], "label": "Rotary 2", "group": "Right grip", "view": "main",
+    "anchor": {"x": 0.6578038832720589, "y": 0.29875000847710503}, "box": {"x": 0.9288627833946078, "y": 0.19875000847710503}},
+  {"id": "lthr", "kind": "axis", "inputs": [""], "label": "Left throttle", "group": "Axes", "view": "main",
+    "anchor": {"x": 0.46517645143995096, "y": 0.1609722137451172}, "box": {"x": 0.3836078239889706, "y": 0.03}},
+  {"id": "rthr", "kind": "axis", "inputs": [""], "label": "Right throttle", "group": "Axes", "view": "main",
+    "anchor": {"x": 0.5793057409879839, "y": 0.18}, "box": {"x": 0.8479215494791666, "y": 0.03}},
+  {"id": "lbtn", "kind": "button", "inputs": ["button5"], "label": "Left grip button", "group": "Left grip", "view": "main",
+    "anchor": {"x": 0.4137254901960784, "y": 0.22652778625488282}, "box": {"x": 0.07427451937806373, "y": 0.13541666666666666}},
+  {"id": "sw", "kind": "buttons", "inputs": ["", "", "", "", "", ""], "label": "SW 1-6", "group": "Base", "view": "main",
+    "anchor": {"x": 0.3986666570925245, "y": 0.5765277438693577}, "box": {"x": 0.17529411764705882, "y": 0.8998611450195313}},
+  {"id": "tgl", "kind": "buttons", "inputs": ["", "", "", "", "", "", "", ""], "label": "TGL 1-4 (up / down)", "group": "Base", "view": "main",
+    "anchor": {"x": 0.7299607460171569, "y": 0.4776388804117839}, "box": {"x": 0.9345098039215687, "y": 0.6576388888888889}},
+  {"id": "s1180l6l", "kind": "button", "inputs": ["button2"], "view": "main", "label": "Rotary 1 Push",
+    "anchor": {"x": 0.6534117455575981, "y": 0.1009722179836697}, "box": {"x": 0.6195294309129902, "y": 0.03}},
+  {"id": "885q69o6", "kind": "button", "inputs": ["button3"], "view": "main", "label": "Rotary 2 Push",
+    "anchor": {"x": 0.6578038832720589, "y": 0.29875000847710503}, "box": {"x": 0.916941157322304, "y": 0.26652776930067273}},
+  {"id": "5937cajo", "kind": "button", "inputs": ["button4"], "label": "Right grip button", "group": "Left grip", "view": "main",
+    "anchor": {"x": 0.4457254806219363, "y": 0.2331944359673394}, "box": {"x": 0.15584314682904413, "y": 0.07319444020589193}},
+  {"id": "a4bsyp5h", "kind": "switch", "inputs": ["button28", "button29"], "view": "main", "label": "K1 (up/dn)",
+    "anchor": {"x": 0.5219607843137255, "y": 0.2548611111111111}, "box": {"x": 0.08682353898590686, "y": 0.23541666666666666}},
+  {"id": "wp84o9ct", "kind": "encoder", "inputs": ["button30", "button31"], "view": "main", "label": "Scroll (fwd/aft)",
+    "anchor": {"x": 0.41294117647058826, "y": 0.15763888888888888}, "box": {"x": 0.24996079388786765, "y": 0.03}},
 ]);
 
 
@@ -923,7 +1022,7 @@ tpl('logitech-x56-throttle', {
 // Distinct from builtin-winctrl-orion (the F-15EX throttle): pedals use USB 4098:BEF0 and the "Orion Pedals" / "Combat Rudder" names.
 // Exact callouts from Federico's export (anchor + box fractions as saved) — do not run through withPhotoLayout auto-box.
 photoTplExact({
-  id: 'builtin-winctrl-orion-pedals', name: 'WinCtrl Orion Combat Rudder Pedals', brand: 'WinCtrl',
+  id: 'builtin-winctrl-orion-pedals', category: 'pedals', name: 'WinCtrl Orion Combat Rudder Pedals', brand: 'WinCtrl',
   notes: 'Toe brakes = rotx / roty, rudder = rotz. Button numbers as reported by DirectInput on a Metal unit. Callout positions from the published Metal export.',
   match: [{ vendor: '4098', product: 'BEF0' }, { name: 'Orion Pedals' }, { name: 'Orion Combat Rudder' }, { name: 'Combat Rudder Pedals' }],
 }, 'winctrl-orion-pedals-main', 'main', 'Pedals', 1413.0434782608697, 1000, [
@@ -947,7 +1046,7 @@ const WC_MFD_NOTE = WC_NOTE + ' Bezel 1-44 per the WinCtrl diagram (GAIN 10/11, 
 // Exact photos and callouts from Federico's export (2026-10-09); retain the built-in metadata.
 // Bottom banks repeat the right-bank inputs in the export; preserve the authored numbering.
 photoTplExactViews({
-  id: 'builtin-winctrl-carrierace-mfd-l', name: 'WinCtrl CarrierAce MFD', brand: 'WinCtrl', notes: WC_MFD_NOTE,
+  id: 'builtin-winctrl-carrierace-mfd-l', category: 'panel', name: 'WinCtrl CarrierAce MFD', brand: 'WinCtrl', notes: WC_MFD_NOTE,
   match: [{ vendor: '4098', product: 'BEE0' }, { vendor: '4098', product: 'BEE1' }, { vendor: '4098', product: 'BEE2' }, { name: 'CarrierAce MFD' }],
 }, [
   { id: 'main', label: 'MFD', photo: 'winctrl-carrierace-mfd-l', width: 2420, height: 1367 },
@@ -982,7 +1081,7 @@ photoTplExactViews({
 // PTO 2: numbering from Federico's WinCtrl diagram (2026-10-06). Button 2 (MASTER CAUTION) is not numbered there, so not mapped.
 const WC_PTO2_NOTE = WC_NOTE + ' Per Federico\'s WinCtrl diagram: 1, 3-41 (switch positions grouped); MASTER CAUTION is not numbered there. Buttons above 32: use Firefox (Chrome / Edge stop at 32).';
 photoTpl({
-  id: 'builtin-winctrl-carrierace-pto2', name: 'WinCtrl CarrierAce PTO 2', brand: 'WinCtrl', notes: WC_PTO2_NOTE,
+  id: 'builtin-winctrl-carrierace-pto2', category: 'panel', name: 'WinCtrl CarrierAce PTO 2', brand: 'WinCtrl', notes: WC_PTO2_NOTE,
   match: [{ vendor: '4098', product: 'BF05' }, { name: 'CarrierAce PTO 2' }, { name: 'CarrierAce PTO' }],
 }, [
   c('jett1', 'button', b(1), 'PUSH TO JETT (1)', 'Left'),
@@ -1005,7 +1104,7 @@ photoTpl({
 const WC_UFC_NOTE = WC_NOTE + ' UFC 1-41 (top toggles 33-38), HUD 65-83. Axes: UFC VOL 1/2 = RX/RY, BRT = RZ; HUD BRT = X, BLK LVL = Y, BAL = Z, AOA = Dial. COMM knob turning is not numbered (PULL 29/32 only). Buttons above 32: use Firefox.';
 // Exact photos and callouts from Federico's export (2026-10-09); retain the built-in metadata.
 photoTplExactViews({
-  id: 'builtin-winctrl-carrierace-ufc-hud', name: 'WinCtrl CarrierAce UFC + HUD', brand: 'WinCtrl', notes: WC_UFC_NOTE,
+  id: 'builtin-winctrl-carrierace-ufc-hud', category: 'panel', name: 'WinCtrl CarrierAce UFC + HUD', brand: 'WinCtrl', notes: WC_UFC_NOTE,
   match: [{ vendor: '4098', product: 'BEDE' }, { name: 'CarrierAce UFC' }, { name: 'CarrierAce HUD' }, { name: 'UFC+HUD' }],
 }, [
   { id: 'ufc', label: 'UFC', photo: 'winctrl-carrierace-ufc', width: 2299, height: 1299 },
@@ -1063,52 +1162,52 @@ photoTplExactViews({
     anchor: { x: 0.6726541118604781, y: 0.819861094156901 }, box: { x: 0.910008980185992, y: 0.6931944105360243 } },
 ]);
 photoTpl({
-  id: 'builtin-azeron-keypad', name: 'Azeron Keypad (XInput)', brand: 'Azeron', notes: PHOTO_ONLY_NOTE,
+  id: 'builtin-azeron-keypad', category: 'panel', name: 'Azeron Keypad (XInput)', brand: 'Azeron', notes: PHOTO_ONLY_NOTE,
   match: [{ vendor: '16D0', product: '12F7' }, { name: 'Azeron Keypad' }, { name: 'Azeron Cyborg' }],
 });
 
 
 // Honeycomb Bravo Throttle Quadrant: USB 294B:1901. Button/axis numbers from published DI maps (RoystonS / Sporty's);
 // callout positions from Federico's export (2026-10-06, exact anchor + box fractions — no re-box).
-photoTplExact({
-  id: 'builtin-honeycomb-bravo', name: 'Honeycomb Bravo Throttle Quadrant', brand: 'Honeycomb',
+photoTplExactViews({
+  id: 'builtin-honeycomb-bravo', category: 'throttle', name: 'Honeycomb Bravo Throttle Quadrant', brand: 'Honeycomb',
   notes: 'DI: AP 1-8, INCR/DECR 13/14, mode 17-21, flaps 15/16, trim 22/23, gear 31/32, switches 34-47, rev detents 24-28+33, lever btns 9-12+29+30+48. Axes Y=L1 X=L2 RZ=L3 RY=L4 RX=L5 Z=L6. Positions from the Federico export. Buttons to 48: use Firefox (Chrome caps at 32).',
   match: [{ vendor: '294B', product: '1901' }, { name: 'Bravo Throttle' }, { name: 'Honeycomb Bravo' }, { name: 'Bravo Throttle Quadrant' }],
-}, 'honeycomb-bravo-main', 'main', 'Bravo', 1825, 1031, [
-  { id: 'apsel', kind: 'switch', inputs: ['button17','button18','button19','button20','button21'], label: "AP mode (IAS/CRS/HDG/VS/ALT)", group: "Autopilot", view: 'main',
-    anchor: { x: 0.42243348328332936, y: 0.3188625338925878 }, box: { x: 0.18745248308653162, y: 0.10617531909946491 } },
-  { id: 'ap', kind: 'buttons', inputs: ['button1','button2','button3','button4','button5','button6','button7'], label: "AP modes (HDG…IAS)", group: "Autopilot", view: 'main',
-    anchor: { x: 0.5737642353478494, y: 0.30270906544112974 }, box: { x: 0.6954372391501307, y: 0.06579167364605011 } },
-  { id: 'apenc', kind: 'encoder', inputs: ['button13','button14'], label: "AP value (INCR / DECR)", group: "Autopilot", view: 'main',
-    anchor: { x: 0.6216730038022814, y: 0.30001681214080994 }, box: { x: 0.8612167300380228, y: 0.12771326847633221 } },
-  { id: 'apm', kind: 'button', inputs: ['button8'], label: "AUTO PILOT", group: "Autopilot", view: 'main',
-    anchor: { x: 0.6619772095190708, y: 0.28924785028999145 }, box: { x: 0.9205323425989187, y: 0.31213192631701864 } },
-  { id: 'gear', kind: 'switch', inputs: ['button31','button32'], label: "Gear (UP / DOWN)", group: "Panel", view: 'main',
-    anchor: { x: 0.3365019011406844, y: 0.4911660775570655 }, box: { x: 0.09, y: 0.28 } },
-  { id: 'sw14', kind: 'buttons', inputs: ['button34','button35','button36','button37','button38','button39','button40','button41'], label: "Panel switches 1-4", group: "Panel", view: 'main',
-    anchor: { x: 0.4939163266026022, y: 0.4130910399505557 }, box: { x: 0.3821292775665399, y: 0.03 } },
-  { id: 'sw57', kind: 'buttons', inputs: ['button42','button43','button44','button45','button46','button47'], label: "Panel switches 5-7", group: "Panel", view: 'main',
-    anchor: { x: 0.5623573912413855, y: 0.4023220780997372 }, box: { x: 0.5357414216596365, y: 0.03 } },
-  { id: 'flaps', kind: 'switch', inputs: ['button15','button16'], label: "Flaps (down / up)", group: "Panel", view: 'main',
-    anchor: { x: 0.6939163498098859, y: 0.4373212169525124 }, box: { x: 0.9091254984924548, y: 0.5248191154349112 } },
-  { id: 'trim', kind: 'encoder', inputs: ['button22','button23'], label: "Trim (nose down / up)", group: "Levers", view: 'main',
-    anchor: { x: 0.41254752851711024, y: 0.6217398747931988 }, box: { x: 0.09, y: 0.58 } },
-  { id: 'l1', kind: 'axis', inputs: ['y'], label: "Lever 1 (Y)", group: "Levers", view: 'main',
-    anchor: { x: 0.4863117638649596, y: 0.69173820384921 }, box: { x: 0.14106463298144903, y: 0.97 } },
-  { id: 'l2', kind: 'axis', inputs: ['x'], label: "Lever 2 (X)", group: "Levers", view: 'main',
-    anchor: { x: 0.5273764142518714, y: 0.6876997982235 }, box: { x: 0.32433461236409816, y: 0.97 } },
-  { id: 'l3', kind: 'axis', inputs: ['rotz'], label: "Lever 3 (RZ)", group: "Levers", view: 'main',
-    anchor: { x: 0.5623573912413855, y: 0.6850075962736408 }, box: { x: 0.4969581633013011, y: 0.97 } },
-  { id: 'l4', kind: 'axis', inputs: ['roty'], label: "Lever 4 (RY)", group: "Levers", view: 'main',
-    anchor: { x: 0.6049429889867515, y: 0.6823152916228604 }, box: { x: 0.8574144486692015, y: 0.97 } },
-  { id: 'l5', kind: 'axis', inputs: ['rotx'], label: "Lever 5 (RX)", group: "Levers", view: 'main',
-    anchor: { x: 0.6467680840437856, y: 0.6809691906479308 }, box: { x: 0.8893535889600166, y: 0.8034662279831049 } },
-  { id: 'l6', kind: 'axis', inputs: ['z'], label: "Lever 6 (Z)", group: "Levers", view: 'main',
-    anchor: { x: 0.6840303950436668, y: 0.6769308877231421 }, box: { x: 0.9182509505703422, y: 0.6473161527700851 } },
-  { id: 'rev', kind: 'buttons', inputs: ['button24','button25','button26','button27','button28','button33'], label: "Reverse detents", group: "Levers", view: 'main',
-    anchor: { x: 0.6049429889867515, y: 0.8869258235407149 }, box: { x: 0.6923954604696412, y: 0.97 } },
-  { id: 'toga', kind: 'buttons', inputs: ['button9','button10','button11','button12','button29','button30','button48'], label: "Lever TOGA / rev btns", group: "Levers", view: 'main',
-    anchor: { x: 0.5661596726102067, y: 0.5988557987661717 }, box: { x: 0.15475284010738474, y: 0.8075046336088149 } },
+}, [
+  {"id": "main", "label": "Bravo", "width": 1825, "height": 1031, "photo": "honeycomb-bravo-main"},
+], [
+  {"id": "apsel", "kind": "switch", "inputs": ["button17", "button18", "button19", "button20", "button21"], "label": "AP mode (IAS/CRS/HDG/VS/ALT)", "group": "Autopilot", "view": "main",
+    "anchor": {"x": 0.42243348328332936, "y": 0.3188625338925878}, "box": {"x": 0.18745248308653162, "y": 0.10617531909946491}},
+  {"id": "ap", "kind": "buttons", "inputs": ["button1", "button2", "button3", "button4", "button5", "button6", "button7"], "label": "AP modes (HDG…IAS)", "group": "Autopilot", "view": "main",
+    "anchor": {"x": 0.5216640310721644, "y": 0.30430556403266057}, "box": {"x": 0.6954372391501307, "y": 0.06579167364605011}},
+  {"id": "apenc", "kind": "encoder", "inputs": ["button13", "button14"], "label": "AP value (INCR / DECR)", "group": "Autopilot", "view": "main",
+    "anchor": {"x": 0.6216730038022814, "y": 0.30001681214080994}, "box": {"x": 0.8612167300380228, "y": 0.12771326847633221}},
+  {"id": "apm", "kind": "button", "inputs": ["button8"], "label": "AUTO PILOT", "group": "Autopilot", "view": "main",
+    "anchor": {"x": 0.6619772095190708, "y": 0.28924785028999145}, "box": {"x": 0.9205323425989187, "y": 0.31213192631701864}},
+  {"id": "gear", "kind": "switch", "inputs": ["button31", "button32"], "label": "Gear (UP / DOWN)", "group": "Panel", "view": "main",
+    "anchor": {"x": 0.3365019011406844, "y": 0.4911660775570655}, "box": {"x": 0.09, "y": 0.28}},
+  {"id": "sw14", "kind": "buttons", "inputs": ["button34", "button35", "button36", "button37", "button38", "button39", "button40", "button41", "button42", "button43", "button44", "button45", "button46", "button47"], "label": "Panel switches 1-4", "group": "Panel", "view": "main",
+    "anchor": {"x": 0.5335949668704622, "y": 0.46875}, "box": {"x": 0.3821292775665399, "y": 0.03}},
+  {"id": "flaps", "kind": "switch", "inputs": ["button15", "button16"], "label": "Flaps (down / up)", "group": "Panel", "view": "main",
+    "anchor": {"x": 0.6939163498098859, "y": 0.4373212169525124}, "box": {"x": 0.9091254984924548, "y": 0.5248191154349112}},
+  {"id": "trim", "kind": "encoder", "inputs": ["button22", "button23"], "label": "Trim (nose down / up)", "group": "Levers", "view": "main",
+    "anchor": {"x": 0.41254752851711024, "y": 0.6217398747931988}, "box": {"x": 0.09, "y": 0.58}},
+  {"id": "l1", "kind": "axis", "inputs": ["y"], "label": "Lever 1 (Y)", "group": "Levers", "view": "main",
+    "anchor": {"x": 0.4863117638649596, "y": 0.69173820384921}, "box": {"x": 0.14106463298144903, "y": 0.97}},
+  {"id": "l2", "kind": "axis", "inputs": ["x"], "label": "Lever 2 (X)", "group": "Levers", "view": "main",
+    "anchor": {"x": 0.5273764142518714, "y": 0.6876997982235}, "box": {"x": 0.32433461236409816, "y": 0.97}},
+  {"id": "l3", "kind": "axis", "inputs": ["rotz"], "label": "Lever 3 (RZ)", "group": "Levers", "view": "main",
+    "anchor": {"x": 0.5623573912413855, "y": 0.6850075962736408}, "box": {"x": 0.4969581633013011, "y": 0.97}},
+  {"id": "l4", "kind": "axis", "inputs": ["roty"], "label": "Lever 4 (RY)", "group": "Levers", "view": "main",
+    "anchor": {"x": 0.6049429889867515, "y": 0.6823152916228604}, "box": {"x": 0.8574144486692015, "y": 0.97}},
+  {"id": "l5", "kind": "axis", "inputs": ["rotx"], "label": "Lever 5 (RX)", "group": "Levers", "view": "main",
+    "anchor": {"x": 0.6467680840437856, "y": 0.6809691906479308}, "box": {"x": 0.8893535889600166, "y": 0.8034662279831049}},
+  {"id": "l6", "kind": "axis", "inputs": ["z"], "label": "Lever 6 (Z)", "group": "Levers", "view": "main",
+    "anchor": {"x": 0.6840303950436668, "y": 0.6769308877231421}, "box": {"x": 0.9182509505703422, "y": 0.6473161527700851}},
+  {"id": "rev", "kind": "buttons", "inputs": ["button24", "button25", "button26", "button27", "button28", "button33"], "label": "Reverse detents", "group": "Levers", "view": "main",
+    "anchor": {"x": 0.6049429889867515, "y": 0.8869258235407149}, "box": {"x": 0.6923954604696412, "y": 0.97}},
+  {"id": "toga", "kind": "buttons", "inputs": ["button9", "button10", "button11", "button12", "button29", "button30", "button48"], "label": "Lever TOGA / rev btns", "group": "Levers", "view": "main",
+    "anchor": {"x": 0.5661596726102067, "y": 0.5988557987661717}, "box": {"x": 0.15475284010738474, "y": 0.8075046336088149}},
 ]);
 
 /* ------------------------------------------------------------------ rudder pedals (photo built-ins, 2026-10-06) */
@@ -1130,7 +1229,7 @@ const PEDAL_L = 0.115, PEDAL_R = 0.885;
 // Honeycomb Charlie: USB 294B:1903 ("Honeycomb Aeronautical Charlie Rudder Pedal", a user's lsusb). Windows Game Controllers:
 // X = left toe brake, Y = right toe brake, Z = rudder (IL-2 forum user report). No buttons.
 pedalTpl({
-  id: 'builtin-honeycomb-charlie', name: 'Honeycomb Charlie Rudder Pedals', brand: 'Honeycomb',
+  id: 'builtin-honeycomb-charlie', category: 'pedals', name: 'Honeycomb Charlie Rudder Pedals', brand: 'Honeycomb',
   notes: 'Left toe brake = x, right toe brake = y, rudder = z (as Windows Game Controllers shows them). No buttons. The toe brakes can read inverted (100 % at rest) until calibrated: invert the axis in game if so. USB 294B:1903 (from a Linux lsusb report); other units are matched by name.',
   match: [{ vendor: '294B', product: '1903' }, { name: 'Charlie Rudder' }, { name: 'Honeycomb Charlie' }],
 }, 'honeycomb-charlie-main', [
@@ -1143,7 +1242,7 @@ pedalTpl({
 // the Logitech-badged unit keeps the Saitek id and name). X = left toe brake, Y = right toe brake, RZ = rudder.
 // Not 06A3:0764 (Pro Flight Combat Rudder Pedals) or 0765 (Cessna pedals); "Flight Rudder Pedals" alone would also hit the TFRP.
 pedalTpl({
-  id: 'builtin-logitech-flight-rudder', name: 'Logitech G Flight Rudder Pedals (Saitek Pro Flight)', brand: 'Logitech',
+  id: 'builtin-logitech-flight-rudder', category: 'pedals', name: 'Logitech G Flight Rudder Pedals (Saitek Pro Flight)', brand: 'Logitech',
   notes: 'Left toe brake = x, right toe brake = y, rudder = rotz. No buttons. Windows lists it as “Saitek Pro Flight Rudder Pedals” (USB 06A3:0763) even on the Logitech-badged unit. Not the Pro Flight Combat Rudder Pedals (06A3:0764) or the Cessna pedals (0765).',
   match: [{ vendor: '06A3', product: '0763' }, { name: 'Pro Flight Rudder Pedals' }, { name: 'Saitek Flight Rudder' }, { name: 'Logitech G Flight Rudder' }],
 }, 'logitech-flight-rudder-main', [
@@ -1155,7 +1254,7 @@ pedalTpl({
 // MFG Crosswind V3: USB 16D0:0A38 "MFG Crosswind V2" (V2 and V3 share the electronics; firmware 5.09+ may report
 // "MFG Crosswind v2/3"). DCS default assignment: rudder JOY_RZ, left brake JOY_X, right brake JOY_Y (both inverted).
 pedalTpl({
-  id: 'builtin-mfg-crosswind', name: 'MFG Crosswind V3 Rudder Pedals', brand: 'MFG',
+  id: 'builtin-mfg-crosswind', category: 'pedals', name: 'MFG Crosswind V3 Rudder Pedals', brand: 'MFG',
   notes: 'Left toe brake = x, right toe brake = y, rudder = rotz. No buttons. V2 and V3 share the electronics: Windows shows “MFG Crosswind V2” (USB 16D0:0A38) or, on newer firmware, “MFG Crosswind v2/3”. Brakes may need inverting in game. MFG Configurator can merge the brakes into one axis, and the second-set (SN2) firmware has another id: Customize a copy if yours differ.',
   match: [{ vendor: '16D0', product: '0A38' }, { name: 'MFG Crosswind' }],
 }, 'mfg-crosswind-v3-main', [
@@ -1168,7 +1267,7 @@ pedalTpl({
 // "T.Flight Rudder Pedals" (usb.ids). Y = left toe brake, X = right toe brake, Z = rudder (Federico's Game Controllers
 // screenshot). "T-Rudder" only with the Thrustmaster vendor id: "VKBsim T-Rudder" is the VKB pedals.
 pedalTpl({
-  id: 'builtin-tm-tfrp', name: 'Thrustmaster T.Flight Rudder Pedals (TFRP)', brand: 'Thrustmaster',
+  id: 'builtin-tm-tfrp', category: 'pedals', name: 'Thrustmaster T.Flight Rudder Pedals (TFRP)', brand: 'Thrustmaster',
   notes: 'Left toe brake = y, right toe brake = x, rudder = z. No buttons. On USB (T.RJ12 adapter, selector on AIRPLANE) Windows shows “T-Rudder”. Plugged into a T.Flight HOTAS (RJ12) the pedals are axes of the stick instead and this template does not apply.',
   match: [{ vendor: '044F', product: 'B679' }, { vendor: '044F', product: 'B678' }, { vendor: '044F', name: 'T-Rudder' }, { name: 'T.Flight Rudder' }],
 }, 'tm-tfrp-main', [
@@ -1180,7 +1279,7 @@ pedalTpl({
 // Thrustmaster Pendular Rudder: USB 044F:B68F "T-Pendular-Rudder". DCS default assignment and Federico's Game Controllers
 // screenshot agree: Y = left toe brake, X = right toe brake, Z = rudder.
 pedalTpl({
-  id: 'builtin-tm-tpr', name: 'Thrustmaster Pendular Rudder (TPR)', brand: 'Thrustmaster',
+  id: 'builtin-tm-tpr', category: 'pedals', name: 'Thrustmaster Pendular Rudder (TPR)', brand: 'Thrustmaster',
   notes: 'Left toe brake = y, right toe brake = x, rudder = z. No buttons. Windows shows “T-Pendular-Rudder” (USB 044F:B68F).',
   match: [{ vendor: '044F', product: 'B68F' }, { name: 'T-Pendular-Rudder' }, { name: 'Pendular Rudder' }],
 }, 'tm-tpr-main', [
@@ -1192,7 +1291,7 @@ pedalTpl({
 // VIRPIL R1-FALCON (VPC-305-001): USB product id not published, so name rules only. VIRPIL pedals show as "VPC Rudder Pedals"
 // with Z = rudder, Slider = left toe brake, Dial = right toe brake (ED forum; DCS default rudder JOY_Z).
 pedalTpl({
-  id: 'builtin-virpil-r1-falcon', name: 'VIRPIL R1-FALCON Rudder Pedals', brand: 'VIRPIL',
+  id: 'builtin-virpil-r1-falcon', category: 'pedals', name: 'VIRPIL R1-FALCON Rudder Pedals', brand: 'VIRPIL',
   notes: 'Left toe brake = slider1 (Slider), right toe brake = slider2 (Dial), rudder = z, as VIRPIL pedals report by default. No buttons. Matched by name only (“VPC Rudder Pedals” also covers the older ACE pedals). The VPC Configurator can rename or move the axes: Customize a copy if your numbers differ.',
   match: [{ name: 'R1-FALCON' }, { name: 'VPC Rudder Pedals' }],
 }, 'virpil-r1-falcon-main', [
@@ -1204,7 +1303,7 @@ pedalTpl({
 // VKB T-Rudder Mk.V: USB 231D:011F "VKBsim T-Rudder" (linux-hardware probes). One axis: the rudder (MARS sensor) = Rx
 // (VKB pedals manual; DCS default for "VKBsim T-Rudder" = JOY_RX). No toe brakes.
 pedalTpl({
-  id: 'builtin-vkb-t-rudder', name: 'VKB T-Rudder Mk.V', brand: 'VKB',
+  id: 'builtin-vkb-t-rudder', category: 'pedals', name: 'VKB T-Rudder Mk.V', brand: 'VKB',
   notes: 'Rudder = rotx (VKB default). No toe brakes and no buttons. VKB ids and axes depend on the VKBDevCfg setup (some shop pages say Z; through a Black Box it shows as “VKBsim Black Box”), and differential braking from the rudder is a VKBDevCfg option that adds axes: Customize a copy if your numbers differ.',
   match: [{ vendor: '231D', product: '011F' }, { name: 'VKBsim T-Rudder' }, { name: 'VKB T-Rudder' }, { name: 'T-Rudder Mk' }],
 }, 'vkb-t-rudder-main', [

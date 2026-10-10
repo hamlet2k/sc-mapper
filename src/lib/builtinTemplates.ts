@@ -24,7 +24,7 @@ const t = (id: string, art: string, kind: CalloutKind, inputs: string[], bx: num
 };
 const b = (...n: number[]) => n.map((i) => `button${i}`);
 const DEFAULT_THROTTLE: DeviceTemplate = {
-  version: 1, id: 'builtin-throttle', name: 'Generic throttle', builtin: true, slot: 'js',
+  version: 1, id: 'builtin-throttle', category: 'throttle', name: 'Generic throttle', builtin: true, slot: 'js',
   image: `data:image/svg+xml;utf8,${encodeURIComponent(DEFAULT_THROTTLE_SVG)}`, aspect: TW / TH, match: [],
   callouts: [
     // left column: left grip, left lever, panel (pilot side); ordered so that leader lines do not cross
@@ -55,7 +55,7 @@ const DEFAULT_THROTTLE: DeviceTemplate = {
 };
 
 const DEFAULT_STICK: DeviceTemplate = {
-  version: 1, id: 'builtin-stick', name: 'Generic stick', builtin: true, slot: 'js',
+  version: 1, id: 'builtin-stick', category: 'stick', name: 'Generic stick', builtin: true, slot: 'js',
   image: `data:image/svg+xml;utf8,${encodeURIComponent(DEFAULT_STICK_SVG)}`, aspect: DW / DH, match: [],
   callouts: [
     // left column, top to bottom (grip front / thumb side)
@@ -96,7 +96,7 @@ const g = (id: string, art: string, kind: CalloutKind, inputs: string[], bx: num
   return { id, kind, inputs, anchor: { x: ax / GW, y: ay / GH }, box: { x: bx, y: by }, ...(label ? { label } : {}), ...(group ? { group } : {}), ...(region ? { region } : {}), ...(inputRegions ? { inputRegions } : {}) };
 };
 const DEFAULT_GAMEPAD: DeviceTemplate = {
-  version: 1, id: 'builtin-gamepad', name: 'Gamepad', builtin: true, slot: 'gp',
+  version: 1, id: 'builtin-gamepad', category: 'gamepad', name: 'Gamepad', builtin: true, slot: 'gp',
   image: `data:image/svg+xml;utf8,${encodeURIComponent(DEFAULT_GAMEPAD_SVG)}`, aspect: GW / GH, match: [],
   callouts: [
     // left column, top to bottom; the triggers also show bindings of the analog triggerl / triggerr axes
