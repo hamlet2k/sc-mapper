@@ -1096,7 +1096,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const gr = tp.templateGroups([mine, ...all]);
     assert.deepEqual(gr.map((g) => g.label), ['Your templates', 'Generic (built-in)', 'Azeron', 'Honeycomb', 'Logitech', 'MFG', 'MOZA', 'Thrustmaster', 'VIRPIL', 'VKB', 'WinCtrl']);
     assert.deepEqual(gr[0].templates.map((x) => x.name), ['Mine'], 'a user copy of a brand template stays under “Your templates”');
-    assert.equal(gr[7].templates.length, 6, 'Thrustmaster: Warthog stick + throttle, T.16000M, TWCS, TFRP, TPR');
+    assert.equal(gr[7].templates.length, 7, 'Thrustmaster: Warthog stick + throttle, T.16000M, TWCS, TFRP, TPR, MFD Cougar');
     // a copy of an unassigned template takes numbers per callout (the editor's “Customize a copy” path)
     const copy = tp.cloneTemplate(by('vkb-gladiator-scg'), 'My Gladiator');
     assert.ok(!copy.builtin && !(copy as any).loadImage);
@@ -1500,8 +1500,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(r.image === 'data:image/svg+xml,<svg/>' && !(lazy as { image?: string }).image, 'picture resolves, template untouched');
     assert.equal((await tp.resolveTemplateImage(lazy)).image, r.image, 'cached'); assert.equal(calls, 1);
     const imgs = await Promise.all(DEVICE_TEMPLATES.map((x) => tp.resolveTemplateImage(x).then((y) => y.image ?? y.views!.map((v) => v.image).join()))); // (photo templates: their views' photos)
-    assert.equal(new Set(imgs).size, 42, 'one distinct set of pictures per device');
-    passed++; console.log('  ✓ device template pictures: all 42 photo templates (distinct), lazy pictures cached');
+    assert.equal(new Set(imgs).size, 43, 'one distinct set of pictures per device');
+    passed++; console.log('  ✓ device template pictures: all 43 photo templates (distinct), lazy pictures cached');
   }
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };
