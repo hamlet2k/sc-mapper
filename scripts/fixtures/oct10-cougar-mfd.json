@@ -1,0 +1,183 @@
+{
+  "aspect": 1.7703549060542798,
+  "views": [
+    {
+      "id": "main",
+      "label": "Page 1",
+      "width": 1696,
+      "height": 958,
+      "image": "/device-photos/tm-cougar-mfd-main.webp"
+    }
+  ],
+  "callouts": [
+    {
+      "id": "sv9m6aqq",
+      "kind": "buttons",
+      "inputs": [
+        "button6",
+        "button7",
+        "button8",
+        "button9",
+        "button10"
+      ],
+      "anchor": {
+        "x": 0.5947451004327512,
+        "y": 0.43763889736599393
+      },
+      "box": {
+        "x": 0.8419607484106924,
+        "y": 0.5531944274902344
+      },
+      "view": "main",
+      "label": "OSB R1-R5"
+    },
+    {
+      "id": "6v6sjpdt",
+      "kind": "encoder",
+      "inputs": [
+        "button21",
+        "button22"
+      ],
+      "anchor": {
+        "x": 0.6185882568359375,
+        "y": 0.1654166751437717
+      },
+      "box": {
+        "x": 0.7465882185393689,
+        "y": 0.05319444868299696
+      },
+      "view": "main",
+      "label": "SYM (up/dn)"
+    },
+    {
+      "id": "5dv577fg",
+      "kind": "encoder",
+      "inputs": [
+        "button23",
+        "button24"
+      ],
+      "anchor": {
+        "x": 0.5702745026233149,
+        "y": 0.7009722391764323
+      },
+      "box": {
+        "x": 0.7315294333065258,
+        "y": 0.9076388888888889
+      },
+      "view": "main",
+      "label": "CON (up/dn)"
+    },
+    {
+      "id": "1mosty1x",
+      "kind": "encoder",
+      "inputs": [
+        "button27",
+        "button28"
+      ],
+      "anchor": {
+        "x": 0.28478430654488357,
+        "y": 0.2043055640326606
+      },
+      "box": {
+        "x": 0.1605490172143076,
+        "y": 0.06430555979410807
+      },
+      "view": "main",
+      "label": "GAIN (up/dn)"
+    },
+    {
+      "id": "21itljm4",
+      "kind": "encoder",
+      "inputs": [
+        "button25",
+        "button28"
+      ],
+      "anchor": {
+        "x": 0.23207841461780024,
+        "y": 0.6965277777777777
+      },
+      "box": {
+        "x": 0.1410980463962929,
+        "y": 0.8765277438693576
+      },
+      "view": "main",
+      "label": "BRT (up/dn)"
+    },
+    {
+      "id": "rudpgz0h",
+      "kind": "buttons",
+      "inputs": [
+        "button1",
+        "button2",
+        "button3",
+        "button4",
+        "button5"
+      ],
+      "anchor": {
+        "x": 0.4529411884382659,
+        "y": 0.12430555555555556
+      },
+      "box": {
+        "x": 0.8632941391888787,
+        "y": 0.2831944359673394
+      },
+      "view": "main",
+      "label": "OSB T1-T5"
+    },
+    {
+      "id": "kzu4zqoo",
+      "kind": "buttons",
+      "inputs": [
+        "button20",
+        "button19",
+        "button18",
+        "button17",
+        "button16"
+      ],
+      "anchor": {
+        "x": 0.2578039431104473,
+        "y": 0.4509722391764323
+      },
+      "box": {
+        "x": 0.08274511000689339,
+        "y": 0.2231944613986545
+      },
+      "view": "main",
+      "label": "OSB L1-L5"
+    },
+    {
+      "id": "d5izpaso",
+      "kind": "buttons",
+      "inputs": [
+        "button15",
+        "button14",
+        "button13",
+        "button12",
+        "button11"
+      ],
+      "anchor": {
+        "x": 0.39019609039905023,
+        "y": 0.7954166836208767
+      },
+      "box": {
+        "x": 0.08086273791743259,
+        "y": 0.5143055386013455
+      },
+      "view": "main",
+      "label": "OSB B1-B5"
+    }
+  ],
+  "photoHashes": {
+    "/device-photos/tm-cougar-mfd-main.webp": "6089b4b968e7932e0ac065d768ef9d1d08fc9ec691b6839da7fee2cd4e998627"
+  },
+  "photoSizes": {
+    "tm-cougar-mfd-main": [
+      1121,
+      958,
+      0.02319,
+      0.02818,
+      0.95361,
+      0.95303
+    ]
+  }
+}

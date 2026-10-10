@@ -372,6 +372,32 @@ photoTplExactViews({
     "anchor": {"x": 0.5104790419161677, "y": 0.3828611725112872}, "box": {"x": 0.1296407276998737, "y": 0.7386685552407932}},
 ]);
 
+// Exact photo, view size and callouts from the supplied Cougar MFD export (2026-10-10).
+photoTplExactViews({
+  id: 'builtin-tm-cougar-mfd', category: 'panel', name: 'Thrustmaster MFD Cougar', brand: 'Thrustmaster',
+  notes: 'Numbering read from the Thrustmaster software; one template for both the left and right MFD.',
+  match: [{ vendor: '044F', product: 'B354' }, { name: 'MFD Cougar' }, { name: 'F16 MFD' }],
+}, [
+  {"id": "main", "label": "Page 1", "width": 1696, "height": 958, "photo": "tm-cougar-mfd-main"},
+], [
+  {"id": "sv9m6aqq", "kind": "buttons", "inputs": ["button6", "button7", "button8", "button9", "button10"], "view": "main", "label": "OSB R1-R5",
+    "anchor": {"x": 0.5947451004327512, "y": 0.43763889736599393}, "box": {"x": 0.8419607484106924, "y": 0.5531944274902344}},
+  {"id": "6v6sjpdt", "kind": "encoder", "inputs": ["button21", "button22"], "view": "main", "label": "SYM (up/dn)",
+    "anchor": {"x": 0.6185882568359375, "y": 0.1654166751437717}, "box": {"x": 0.7465882185393689, "y": 0.05319444868299696}},
+  {"id": "5dv577fg", "kind": "encoder", "inputs": ["button23", "button24"], "view": "main", "label": "CON (up/dn)",
+    "anchor": {"x": 0.5702745026233149, "y": 0.7009722391764323}, "box": {"x": 0.7315294333065258, "y": 0.9076388888888889}},
+  {"id": "1mosty1x", "kind": "encoder", "inputs": ["button27", "button28"], "view": "main", "label": "GAIN (up/dn)",
+    "anchor": {"x": 0.28478430654488357, "y": 0.2043055640326606}, "box": {"x": 0.1605490172143076, "y": 0.06430555979410807}},
+  {"id": "21itljm4", "kind": "encoder", "inputs": ["button25", "button28"], "view": "main", "label": "BRT (up/dn)",
+    "anchor": {"x": 0.23207841461780024, "y": 0.6965277777777777}, "box": {"x": 0.1410980463962929, "y": 0.8765277438693576}},
+  {"id": "rudpgz0h", "kind": "buttons", "inputs": ["button1", "button2", "button3", "button4", "button5"], "view": "main", "label": "OSB T1-T5",
+    "anchor": {"x": 0.4529411884382659, "y": 0.12430555555555556}, "box": {"x": 0.8632941391888787, "y": 0.2831944359673394}},
+  {"id": "kzu4zqoo", "kind": "buttons", "inputs": ["button20", "button19", "button18", "button17", "button16"], "view": "main", "label": "OSB L1-L5",
+    "anchor": {"x": 0.2578039431104473, "y": 0.4509722391764323}, "box": {"x": 0.08274511000689339, "y": 0.2231944613986545}},
+  {"id": "d5izpaso", "kind": "buttons", "inputs": ["button15", "button14", "button13", "button12", "button11"], "view": "main", "label": "OSB B1-B5",
+    "anchor": {"x": 0.39019609039905023, "y": 0.7954166836208767}, "box": {"x": 0.08086273791743259, "y": 0.5143055386013455}},
+]);
+
 /* ------------------------------------------------------------------ VIRPIL */
 const VPC_NOTE = 'Default numbering from the VIRPIL diagrams (1-based: button N = jsX_buttonN). The VPC Configurator can renumber everything: if yours differs, use “Customize a copy”.';
 tpl('virpil-alpha-prime', {

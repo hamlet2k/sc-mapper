@@ -899,17 +899,17 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[2].id]: { view: 'front', x: 1.5, y: 0.5 } } })), 'coordinates outside 0..1 rejected');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { views: [], anchors: {} })), 'empty layout rejected');
   });
-  t('device templates (42 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
+  t('device templates (43 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    assert.equal(DEVICE_TEMPLATES.length, 42, '41 existing + MT-50CM');
+    assert.equal(DEVICE_TEMPLATES.length, 43, '42 existing + Cougar MFD');
     assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
     // devices without published numbers: callout spots only (stick X / Y where obvious)
     const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-vkb-stecs', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
     const USB = new Set(['builtin-tm-warthog-stick', 'builtin-tm-warthog-throttle', 'builtin-tm-t16000m', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-winctrl-ursa-combat',
       'builtin-winctrl-orion-pedals', 'builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad', 'builtin-honeycomb-bravo',
       'builtin-honeycomb-charlie', 'builtin-logitech-flight-rudder', 'builtin-mfg-crosswind', 'builtin-tm-tfrp', 'builtin-tm-tpr', 'builtin-vkb-t-rudder', 'builtin-winctrl-viperace-icp',
-      'builtin-vkb-gunfighter-mcg', 'builtin-virpil-mt50cm']);
+      'builtin-vkb-gunfighter-mcg', 'builtin-virpil-mt50cm', 'builtin-tm-cougar-mfd']);
     const PHOTO_ONLY = new Set(['builtin-azeron-keypad']);
     const ASPECTS = new Set<number>();
     for (const d of DEVICE_TEMPLATES) {
@@ -918,9 +918,11 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       if (d.variantOf) assert.deepEqual(d.match, [], `${d.id}: a grip variant has no match rules (picked by hand)`);
       else assert.ok(d.match.some((m) => m.name), `${d.id}: name pattern`);
       assert.equal(d.match.some((m) => m.vendor && m.product), USB.has(d.id), `${d.id}: USB id only where confident`);
-      // Authored duplicates: AB6 + ViperAce shares S1; the Oct 9 MFD bottom banks repeat the right banks.
+      // Authored duplicates: AB6 + ViperAce shares S1; the Oct 9 MFD bottom banks repeat the right banks;
+      // the Cougar MFD's BRT down repeats GAIN down (button28), preserved from the supplied export.
       const inputs = d.callouts.filter((c) => !(d.id === 'builtin-moza-ab6-viperace' && c.id === 'paddlea')
-        && !(d.id === 'builtin-winctrl-carrierace-mfd-l' && ['pwbznv1k', 'y0hu82ch'].includes(c.id))).flatMap((c) => c.inputs).filter(Boolean);
+        && !(d.id === 'builtin-winctrl-carrierace-mfd-l' && ['pwbznv1k', 'y0hu82ch'].includes(c.id)))
+        .flatMap((c) => c.inputs.filter((i) => !(d.id === 'builtin-tm-cougar-mfd' && c.id === '21itljm4' && i === 'button28'))).filter(Boolean);
       assert.equal(new Set(inputs).size, inputs.length, `${d.id}: every input on one callout`);
       for (const i of inputs) assert.ok(jsName.test(i), `${d.id}: ${i}`);
       const open = d.callouts.reduce((n, c) => n + tp.unassignedCount(c), 0);
@@ -1103,9 +1105,9 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(saved.callouts.find((c) => c.id === 'a2')!.inputs, ['button7']);
     assert.equal(tp.shortInput(''), '?');
   });
-  t('Oct 10 Gunfighter MCG Pro and MT-50CM: exact exports, photos, USB and distinct model matching', () => {
+  t('Oct 10 Gunfighter MCG Pro, MT-50CM and Cougar MFD: exact exports, photos, USB and distinct model matching', () => {
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    for (const [file, id] of [['gunfighter', 'builtin-vkb-gunfighter-mcg'], ['mt50cm', 'builtin-virpil-mt50cm']]) {
+    for (const [file, id] of [['gunfighter', 'builtin-vkb-gunfighter-mcg'], ['mt50cm', 'builtin-virpil-mt50cm'], ['cougar-mfd', 'builtin-tm-cougar-mfd']]) {
       const expected = JSON.parse(readFileSync(new URL(`./fixtures/oct10-${file}.json`, import.meta.url), 'utf8'));
       const actual = DEVICE_TEMPLATES.find((x) => x.id === id)!;
       assert.ok(actual, id);
@@ -1115,6 +1117,19 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       for (const [photo, hash] of Object.entries(expected.photoHashes)) {
         assert.equal(createHash('sha256').update(readFileSync(new URL(`../public${photo}`, import.meta.url))).digest('hex'), hash, `${id}: exact exported WebP bytes`);
       }
+      for (const [photo, size] of Object.entries(expected.photoSizes ?? {})) {
+        assert.deepEqual(DEVICE_PHOTO_SIZES[photo], size, `${id}: photo size and alpha bounds`);
+      }
+    }
+    const cougar = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-tm-cougar-mfd')!;
+    assert.equal(cougar.name, 'Thrustmaster MFD Cougar');
+    assert.equal(cougar.brand, 'Thrustmaster'); assert.equal(cougar.category, 'panel');
+    assert.equal(cougar.notes, 'Numbering read from the Thrustmaster software; one template for both the left and right MFD.');
+    assert.equal(cougar.callouts.length, 8); assert.equal(cougar.views!.length, 1);
+    assert.deepEqual(cougar.match, [{ vendor: '044F', product: 'B354' }, { name: 'MFD Cougar' }, { name: 'F16 MFD' }]);
+    assert.equal(tp.pickTemplate(all, { vendor: '044F', productId: 'B354', slot: 'js' }).template.id, cougar.id);
+    for (const name of ['MFD Cougar', 'F16 MFD 3', 'F16 MFD 4']) {
+      assert.equal(tp.pickTemplate(all, { name, slot: 'js' }).template.id, cougar.id, name);
     }
     const gun = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-gunfighter-mcg')!;
     const original = JSON.parse(readFileSync(new URL('./fixtures/vkb-gunfighter-mcg-pro.sc-template.json', import.meta.url), 'utf8')).templates[0];
