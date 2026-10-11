@@ -1,0 +1,2360 @@
+[
+  {
+    "id": "builtin-winctrl-blackshark-collective",
+    "views": [
+      {
+        "id": "main",
+        "label": "Collective and grip",
+        "image": "/device-photos/winctrl-blackshark-collective-main.webp",
+        "width": 2044,
+        "height": 1430
+      }
+    ],
+    "callouts": [
+      {
+        "id": "collective",
+        "kind": "axis",
+        "inputs": [
+          "z"
+        ],
+        "label": "Collective lever (pitch)",
+        "group": "Lever",
+        "view": "main",
+        "anchor": {
+          "x": 0.5282520201148057,
+          "y": 0.4949127906976744
+        },
+        "box": {
+          "x": 0.48841464034910126,
+          "y": 0.9297965293706849
+        }
+      },
+      {
+        "id": "detents",
+        "kind": "buttons",
+        "inputs": [
+          "button29",
+          "button32"
+        ],
+        "label": "Lever detents (29 / 32)",
+        "group": "Lever",
+        "view": "main",
+        "anchor": {
+          "x": 0.5973577111717162,
+          "y": 0.5751453665799873
+        },
+        "box": {
+          "x": 0.8892276422764228,
+          "y": 0.8146802325581395
+        }
+      },
+      {
+        "id": "wheel",
+        "kind": "axis",
+        "inputs": [
+          "rotz"
+        ],
+        "label": "Thumb wheel Rz",
+        "group": "Grip",
+        "view": "main",
+        "anchor": {
+          "x": 0.39798,
+          "y": 0.16272
+        },
+        "box": {
+          "x": 0.7469512195121951,
+          "y": 0.49723838096441225
+        }
+      },
+      {
+        "id": "wheelb",
+        "kind": "switch",
+        "inputs": [
+          "button15",
+          "button17",
+          "button16"
+        ],
+        "label": "Wheel (up / push / down)",
+        "group": "Grip",
+        "view": "main",
+        "anchor": {
+          "x": 0.39798,
+          "y": 0.16272
+        },
+        "box": {
+          "x": 0.7420731831372269,
+          "y": 0.43212207528047786
+        }
+      },
+      {
+        "id": "tgt",
+        "kind": "button",
+        "inputs": [
+          "button14"
+        ],
+        "label": "TGT LOCK",
+        "group": "Grip",
+        "view": "main",
+        "anchor": {
+          "x": 0.43131,
+          "y": 0.12986
+        },
+        "box": {
+          "x": 0.7534553093638846,
+          "y": 0.27281978518463845
+        }
+      },
+      {
+        "id": "route",
+        "kind": "switch",
+        "inputs": [
+          "button11",
+          "button12",
+          "button13"
+        ],
+        "label": "ROUTE / DESCENT",
+        "group": "Grip",
+        "view": "main",
+        "anchor": {
+          "x": 0.40879,
+          "y": 0.09893
+        },
+        "box": {
+          "x": 0.7892276174653836,
+          "y": 0.13793603764023893
+        }
+      },
+      {
+        "id": "mini",
+        "kind": "axis",
+        "inputs": [
+          "x",
+          "y",
+          "button18"
+        ],
+        "label": "LDG  LTS",
+        "group": "Grip",
+        "view": "main",
+        "anchor": {
+          "x": 0.3705,
+          "y": 0.18784
+        },
+        "box": {
+          "x": 0.37459350213771914,
+          "y": 0.7577034706293151
+        }
+      },
+      {
+        "id": "minihat",
+        "kind": "hat",
+        "inputs": [
+          "button19",
+          "button20",
+          "button21",
+          "button22",
+          "button18"
+        ],
+        "label": "LDG  LTS",
+        "group": "Grip",
+        "view": "main",
+        "anchor": {
+          "x": 0.3705,
+          "y": 0.18784
+        },
+        "box": {
+          "x": 0.37459350213771914,
+          "y": 0.6542150807935138
+        }
+      },
+      {
+        "id": "s8",
+        "kind": "switch",
+        "inputs": [
+          "button8",
+          "button9",
+          "button10"
+        ],
+        "label": "Switch (8 / 9 / 10)",
+        "group": "Grip",
+        "view": "main",
+        "anchor": {
+          "x": 0.35519,
+          "y": 0.09442
+        },
+        "box": {
+          "x": 0.5306910693160887,
+          "y": 0.03
+        }
+      },
+      {
+        "id": "pov",
+        "kind": "hat",
+        "inputs": [
+          "hat1_up",
+          "hat1_right",
+          "hat1_down",
+          "hat1_left"
+        ],
+        "label": "8-way POV hat",
+        "group": "Grip",
+        "view": "main",
+        "anchor": {
+          "x": 0.3339430956336541,
+          "y": 0.11119186046511628
+        },
+        "box": {
+          "x": 0.10467479674796748,
+          "y": 0.03
+        }
+      },
+      {
+        "id": "air",
+        "kind": "switch",
+        "inputs": [
+          "button5",
+          "button6",
+          "button7"
+        ],
+        "label": "AIR TO AIR (outer / all / inner)",
+        "group": "Grip",
+        "view": "main",
+        "anchor": {
+          "x": 0.28808,
+          "y": 0.164
+        },
+        "box": {
+          "x": 0.06808943089430894,
+          "y": 0.19723838983580125
+        }
+      },
+      {
+        "id": "sling",
+        "kind": "button",
+        "inputs": [
+          "button4"
+        ],
+        "label": "SLING",
+        "group": "Grip",
+        "view": "main",
+        "anchor": {
+          "x": 0.32276,
+          "y": 0.19751
+        },
+        "box": {
+          "x": 0.29898375224291796,
+          "y": 0.5077034706293151
+        }
+      },
+      {
+        "id": "rear28",
+        "kind": "button",
+        "inputs": [
+          "button28"
+        ],
+        "label": "Rear button 28 (hidden)",
+        "group": "Rear",
+        "view": "main",
+        "anchor": {
+          "x": 0.2567073232759305,
+          "y": 0.2542151074076808
+        },
+        "box": {
+          "x": 0.07947154161406726,
+          "y": 0.3972383543502453
+        }
+      },
+      {
+        "id": "rear27",
+        "kind": "button",
+        "inputs": [
+          "button27"
+        ],
+        "label": "Rear button 27 (hidden)",
+        "group": "Rear",
+        "view": "main",
+        "anchor": {
+          "x": 0.2965447030416349,
+          "y": 0.3065406888030296
+        },
+        "box": {
+          "x": 0.14532520325203252,
+          "y": 0.6902616633925327
+        }
+      },
+      {
+        "id": "pyd6aotl",
+        "kind": "buttons",
+        "inputs": [
+          "button23",
+          "button24",
+          "button25",
+          "button26"
+        ],
+        "label": "Side button 23",
+        "group": "Side",
+        "view": "main",
+        "anchor": {
+          "x": 0.2745935083404789,
+          "y": 0.2809592845828034
+        },
+        "box": {
+          "x": 0.08353658226447377,
+          "y": 0.5635174596032431
+        }
+      }
+    ],
+    "photoSha256": {
+      "/device-photos/winctrl-blackshark-collective-main.webp": "abbd7cf53c8aae68c9bf4264581d8daede0ba07627c82e5b2756525e4b9cfabc"
+    },
+    "aspect": 1.4293706293706294
+  },
+  {
+    "id": "builtin-virpil-cdt-aeromax",
+    "views": [
+      {
+        "id": "front",
+        "label": "Grip face and base",
+        "image": "/device-photos/virpil-cdt-aeromax-front.webp",
+        "width": 1534,
+        "height": 1097
+      },
+      {
+        "id": "side",
+        "label": "Right side and base",
+        "image": "/device-photos/virpil-cdt-aeromax-side.webp",
+        "width": 1484,
+        "height": 1037
+      }
+    ],
+    "callouts": [
+      {
+        "id": "b13",
+        "kind": "buttons",
+        "inputs": [
+          "button13",
+          "button25"
+        ],
+        "label": "Head button (13 / 25)",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.39048,
+          "y": 0.10848
+        },
+        "box": {
+          "x": 0.11031984501610946,
+          "y": 0.11794609786453333
+        }
+      },
+      {
+        "id": "h14",
+        "kind": "hat",
+        "inputs": [
+          "button15",
+          "button16",
+          "button17",
+          "button18",
+          "button14"
+        ],
+        "label": "Top hat (Mode 1)",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.4322,
+          "y": 0.09845
+        },
+        "box": {
+          "x": 0.8942094806407984,
+          "y": 0.20635725306084116
+        }
+      },
+      {
+        "id": "b19",
+        "kind": "buttons",
+        "inputs": [
+          "button19",
+          "button31"
+        ],
+        "label": "Head button (19 / 31)",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.46675,
+          "y": 0.08022
+        },
+        "box": {
+          "x": 0.7254982937431413,
+          "y": 0.03
+        }
+      },
+      {
+        "id": "mini",
+        "kind": "axis",
+        "inputs": [
+          "rotx",
+          "roty",
+          "button6"
+        ],
+        "label": "Ministick RX / RY",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.39831,
+          "y": 0.1969
+        },
+        "box": {
+          "x": 0.10757657698126094,
+          "y": 0.3197541527727005
+        }
+      },
+      {
+        "id": "h20",
+        "kind": "hat",
+        "inputs": [
+          "button21",
+          "button22",
+          "button23",
+          "button24",
+          "button20"
+        ],
+        "label": "Right hat (Mode 1)",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.48435,
+          "y": 0.15041
+        },
+        "box": {
+          "x": 0.8866654444914632,
+          "y": 0.6339981313186238
+        }
+      },
+      {
+        "id": "mode",
+        "kind": "switch",
+        "inputs": [
+          "mode1",
+          "mode2"
+        ],
+        "label": "Mode 1 / Mode 2",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.46741,
+          "y": 0.19234
+        },
+        "box": {
+          "x": 0.700808868348571,
+          "y": 0.9520860508198467
+        }
+      },
+      {
+        "id": "h7",
+        "kind": "hat",
+        "inputs": [
+          "button8",
+          "button9",
+          "button10",
+          "button11",
+          "button7"
+        ],
+        "label": "Thumb hat",
+        "group": "Grip",
+        "view": "front",
+        "anchor": {
+          "x": 0.44394,
+          "y": 0.33728
+        },
+        "box": {
+          "x": 0.1583270814092266,
+          "y": 0.5350160560127463
+        }
+      },
+      {
+        "id": "xy",
+        "kind": "axis",
+        "inputs": [
+          "x",
+          "y"
+        ],
+        "label": "Stick X / Y",
+        "group": "Base",
+        "view": "side",
+        "anchor": {
+          "x": 0.4947268908250135,
+          "y": 0.4850446928394632
+        },
+        "box": {
+          "x": 0.08573050041326903,
+          "y": 0.6983828119050407
+        }
+      },
+      {
+        "id": "sl",
+        "kind": "axis",
+        "inputs": [
+          "slider1"
+        ],
+        "label": "Left lever SL (optional)",
+        "group": "Base",
+        "view": "front",
+        "anchor": {
+          "x": 0.40287,
+          "y": 0.79307
+        },
+        "box": {
+          "x": 0.11,
+          "y": 0.915
+        }
+      },
+      {
+        "id": "dl",
+        "kind": "axis",
+        "inputs": [
+          "slider2"
+        ],
+        "label": "Right lever DL (optional)",
+        "group": "Base",
+        "view": "side",
+        "anchor": {
+          "x": 0.41225713197214503,
+          "y": 0.7964030862378081
+        },
+        "box": {
+          "x": 0.2037360061045434,
+          "y": 0.9261357440440219
+        }
+      },
+      {
+        "id": "b5",
+        "kind": "button",
+        "inputs": [
+          "button5"
+        ],
+        "label": "Side button",
+        "group": "Grip head",
+        "view": "side",
+        "anchor": {
+          "x": 0.59704,
+          "y": 0.23529
+        },
+        "box": {
+          "x": 0.89,
+          "y": 0.15
+        }
+      },
+      {
+        "id": "trigger",
+        "kind": "switch",
+        "inputs": [
+          "button1",
+          "button2"
+        ],
+        "label": "Trigger (stage 1 / 2)",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.58558,
+          "y": 0.34041
+        },
+        "box": {
+          "x": 0.19904261257619918,
+          "y": 0.1698423908346001
+        }
+      },
+      {
+        "id": "flip",
+        "kind": "switch",
+        "inputs": [
+          "button3",
+          "button4"
+        ],
+        "label": "Flip trigger (UP / DOWN)",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.6221192091499831,
+          "y": 0.3687658068025105
+        },
+        "box": {
+          "x": 0.9191444770745437,
+          "y": 0.34089729527700335
+        }
+      },
+      {
+        "id": "b12",
+        "kind": "button",
+        "inputs": [
+          "button12"
+        ],
+        "label": "Side button 12",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.52224,
+          "y": 0.38187
+        },
+        "box": {
+          "x": 0.11,
+          "y": 0.48
+        }
+      },
+      {
+        "id": "brake",
+        "kind": "axis",
+        "inputs": [
+          "rotz"
+        ],
+        "label": "Brake lever RZ",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.63881,
+          "y": 0.43298
+        },
+        "box": {
+          "x": 0.8601416986518998,
+          "y": 0.553274446355596
+        }
+      },
+      {
+        "id": "twist",
+        "kind": "axis",
+        "inputs": [
+          "z"
+        ],
+        "label": "Twist Z",
+        "group": "Axes",
+        "view": "side",
+        "anchor": {
+          "x": 0.4933859395147771,
+          "y": 0.5619233048727752
+        },
+        "box": {
+          "x": 0.7079414230094627,
+          "y": 0.9530432142653864
+        }
+      },
+      {
+        "id": "kcljg3bb",
+        "kind": "hat",
+        "inputs": [
+          "button27",
+          "button28",
+          "button29",
+          "button30",
+          "button26"
+        ],
+        "label": "Top hat (Mode 2)",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.43059669875685025,
+          "y": 0.09776530703727157
+        },
+        "box": {
+          "x": 0.8468879991219578,
+          "y": 0.29572938433125195
+        }
+      },
+      {
+        "id": "38bd082m",
+        "kind": "hat",
+        "inputs": [
+          "button33",
+          "button34",
+          "button35",
+          "button36",
+          "button32"
+        ],
+        "label": "Right hat (Mode 2)",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.48340463785978505,
+          "y": 0.14869780880136485
+        },
+        "box": {
+          "x": 0.8852938300954397,
+          "y": 0.7435510900751838
+        }
+      },
+      {
+        "id": "ztry6k81",
+        "kind": "button",
+        "inputs": [
+          "button12"
+        ],
+        "anchor": {
+          "x": 0.49746392087583485,
+          "y": 0.45381236800776037
+        },
+        "box": {
+          "x": 0.23513866487058757,
+          "y": 0.7214482737819413
+        },
+        "view": "front"
+      }
+    ],
+    "photoSha256": {
+      "/device-photos/virpil-cdt-aeromax-front.webp": "582dd8030d7ebd8781a6fc51ceb891a9c7f7cb6bf9faf04b608dab9830acc1e5",
+      "/device-photos/virpil-cdt-aeromax-side.webp": "95e2809038795fa67255163f264e08c973b218802d93d66b44986b2423ef463e"
+    },
+    "aspect": 1.398359161349134
+  },
+  {
+    "id": "builtin-virpil-flanker",
+    "views": [
+      {
+        "id": "front",
+        "label": "Grip face",
+        "image": "/device-photos/virpil-flanker-front.webp",
+        "width": 1485,
+        "height": 1217
+      },
+      {
+        "id": "side",
+        "label": "Right side",
+        "image": "/device-photos/virpil-flanker-side.webp",
+        "width": 1497,
+        "height": 1150
+      }
+    ],
+    "callouts": [
+      {
+        "id": "b1",
+        "kind": "button",
+        "inputs": [
+          "button1"
+        ],
+        "label": "Head button 1",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.41684,
+          "y": 0.12736
+        },
+        "box": {
+          "x": 0.11,
+          "y": 0.07
+        }
+      },
+      {
+        "id": "h2",
+        "kind": "hat",
+        "inputs": [
+          "button3",
+          "button4",
+          "button5",
+          "button6",
+          "button2"
+        ],
+        "label": "Top hat",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.49899,
+          "y": 0.14051
+        },
+        "box": {
+          "x": 0.89,
+          "y": 0.22
+        }
+      },
+      {
+        "id": "b7",
+        "kind": "button",
+        "inputs": [
+          "button7"
+        ],
+        "label": "Head button 7",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.53333,
+          "y": 0.09121
+        },
+        "box": {
+          "x": 0.89,
+          "y": 0.08
+        }
+      },
+      {
+        "id": "mini",
+        "kind": "axis",
+        "inputs": [
+          "rotx",
+          "roty",
+          "button8"
+        ],
+        "label": "CURSOR CNTRL",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.431755198597194,
+          "y": 0.24683294141957082
+        },
+        "box": {
+          "x": 0.10936986151178611,
+          "y": 0.36017877064876397
+        }
+      },
+      {
+        "id": "h9",
+        "kind": "hat",
+        "inputs": [
+          "button10",
+          "button11",
+          "button12",
+          "button13",
+          "button9"
+        ],
+        "label": "MANVR hat",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.54141,
+          "y": 0.20214
+        },
+        "box": {
+          "x": 0.89,
+          "y": 0.37
+        }
+      },
+      {
+        "id": "h20",
+        "kind": "hat",
+        "inputs": [
+          "button21",
+          "button22",
+          "button23",
+          "button24",
+          "button20"
+        ],
+        "label": "GN hat",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.47959762466432154,
+          "y": 0.23914848525261112
+        },
+        "box": {
+          "x": 0.12013508591438353,
+          "y": 0.28717638209908086
+        }
+      },
+      {
+        "id": "b19",
+        "kind": "button",
+        "inputs": [
+          "button19"
+        ],
+        "label": "Pinky button",
+        "group": "Grip",
+        "view": "front",
+        "anchor": {
+          "x": 0.53939,
+          "y": 0.60394
+        },
+        "box": {
+          "x": 0.25719534902644825,
+          "y": 0.8740772669059903
+        }
+      },
+      {
+        "id": "brakeb",
+        "kind": "button",
+        "inputs": [
+          "button30"
+        ],
+        "label": "Brake lever click",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.46044588826496496,
+          "y": 0.7146246640326617
+        },
+        "box": {
+          "x": 0.8884125765704144,
+          "y": 0.853905564887424
+        }
+      },
+      {
+        "id": "h14",
+        "kind": "hat",
+        "inputs": [
+          "button15",
+          "button16",
+          "button17",
+          "button18",
+          "button14"
+        ],
+        "label": "TASK RESET hat",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.5379064730635476,
+          "y": 0.4062855442928995
+        },
+        "box": {
+          "x": 0.1730606291911166,
+          "y": 0.5753437631778995
+        }
+      },
+      {
+        "id": "flip",
+        "kind": "switch",
+        "inputs": [
+          "button25",
+          "button26"
+        ],
+        "label": "Flip trigger (UP / TRIGGER)",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.7101544917499859,
+          "y": 0.31599312020696274
+        },
+        "box": {
+          "x": 0.9311356030327489,
+          "y": 0.10370979416013998
+        }
+      },
+      {
+        "id": "trigger",
+        "kind": "switch",
+        "inputs": [
+          "button27",
+          "button28"
+        ],
+        "label": "Trigger (stage 1 / 2)",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.56179,
+          "y": 0.41304
+        },
+        "box": {
+          "x": 0.9046178314639132,
+          "y": 0.5388425322606806
+        }
+      },
+      {
+        "id": "b29",
+        "kind": "button",
+        "inputs": [
+          "button29"
+        ],
+        "label": "A/P Trigger",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.50568,
+          "y": 0.38957
+        },
+        "box": {
+          "x": 0.1068762282291599,
+          "y": 0.5234736199267611
+        }
+      },
+      {
+        "id": "brakea",
+        "kind": "axis",
+        "inputs": [
+          "slider1"
+        ],
+        "label": "Brake lever SR",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.51102,
+          "y": 0.69739
+        },
+        "box": {
+          "x": 0.89,
+          "y": 0.75
+        }
+      }
+    ],
+    "photoSha256": {
+      "/device-photos/virpil-flanker-front.webp": "534cb9d0de38e94809f9721e460809ceb42dd493f6cdde906b13391748561c26",
+      "/device-photos/virpil-flanker-side.webp": "f2bc8b179a0f045a7bc2335a5a696bd69db1e94982c915c604ecdc76e70f531b"
+    },
+    "aspect": 1.2202136400986032
+  },
+  {
+    "id": "builtin-virpil-mt50cm",
+    "views": [
+      {
+        "id": "main",
+        "label": "Panel Side Grip",
+        "image": "/device-photos/virpil-mt50cm-panel.webp",
+        "width": 1753,
+        "height": 990
+      },
+      {
+        "id": "p2",
+        "label": "Axis Front Grip",
+        "image": "/device-photos/virpil-mt50cm-front.webp",
+        "width": 1498,
+        "height": 846
+      }
+    ],
+    "callouts": [
+      {
+        "id": "qlij6yto",
+        "kind": "hat",
+        "inputs": [
+          "button17",
+          "button14",
+          "button15",
+          "button16",
+          "button13"
+        ],
+        "view": "main",
+        "anchor": {
+          "x": 0.6756862386067708,
+          "y": 0.20986111958821616
+        },
+        "box": {
+          "x": 0.9009411980124081,
+          "y": 0.06319444444444444
+        }
+      },
+      {
+        "id": "eopdbdd5",
+        "kind": "encoder",
+        "inputs": [
+          "button18",
+          "button19"
+        ],
+        "view": "main",
+        "label": "Wheel",
+        "anchor": {
+          "x": 0.6708235318053003,
+          "y": 0.16041666666666668
+        },
+        "box": {
+          "x": 0.7516078455307904,
+          "y": 0.052083333333333336
+        }
+      },
+      {
+        "id": "0ro528im",
+        "kind": "button",
+        "inputs": [
+          "button20"
+        ],
+        "view": "main",
+        "anchor": {
+          "x": 0.6621960808249081,
+          "y": 0.2826388888888889
+        },
+        "box": {
+          "x": 0.9040784529143688,
+          "y": 0.2654166751437717
+        }
+      },
+      {
+        "id": "4zijh859",
+        "kind": "hat",
+        "inputs": [
+          "button25",
+          "button22",
+          "button23",
+          "button24",
+          "button21"
+        ],
+        "view": "main",
+        "anchor": {
+          "x": 0.6182745121974571,
+          "y": 0.22291666666666668
+        },
+        "box": {
+          "x": 0.40964706121706496,
+          "y": 0.03319443596733941
+        }
+      },
+      {
+        "id": "tk1zfqgb",
+        "kind": "button",
+        "inputs": [
+          "button31"
+        ],
+        "view": "main",
+        "anchor": {
+          "x": 0.5798431396484375,
+          "y": 0.25069444444444444
+        },
+        "box": {
+          "x": 0.2182745121974571,
+          "y": 0.09541666242811415
+        }
+      },
+      {
+        "id": "bmxe1v63",
+        "kind": "hat",
+        "inputs": [
+          "button30",
+          "button27",
+          "button28",
+          "button29",
+          "button26"
+        ],
+        "view": "main",
+        "anchor": {
+          "x": 0.6120000023935356,
+          "y": 0.29375
+        },
+        "box": {
+          "x": 0.9,
+          "y": 0.391
+        }
+      },
+      {
+        "id": "4so3wydg",
+        "kind": "button",
+        "inputs": [
+          "button32"
+        ],
+        "view": "main",
+        "anchor": {
+          "x": 0.5900392180798101,
+          "y": 0.3298611111111111
+        },
+        "box": {
+          "x": 0.9,
+          "y": 0.498
+        }
+      },
+      {
+        "id": "cbyrrdn1",
+        "kind": "axis",
+        "inputs": [
+          "rotz"
+        ],
+        "view": "p2",
+        "label": "Lever",
+        "anchor": {
+          "x": 0.35129410089231006,
+          "y": 0.38319443596733943
+        },
+        "box": {
+          "x": 0.09090196796492034,
+          "y": 0.7531944274902344
+        }
+      },
+      {
+        "id": "sr5q7m2i",
+        "kind": "switch",
+        "inputs": [
+          "button43",
+          ""
+        ],
+        "view": "main",
+        "label": "T2",
+        "anchor": {
+          "x": 0.5837647082758884,
+          "y": 0.5868055555555556
+        },
+        "box": {
+          "x": 0.9037341642358173,
+          "y": 0.7192356114037076
+        }
+      },
+      {
+        "id": "gkvkfsko",
+        "kind": "switch",
+        "inputs": [
+          "button44",
+          ""
+        ],
+        "view": "main",
+        "label": "T3",
+        "anchor": {
+          "x": 0.5476862769033395,
+          "y": 0.6201388888888889
+        },
+        "box": {
+          "x": 0.9,
+          "y": 0.819
+        }
+      },
+      {
+        "id": "7n6pzk47",
+        "kind": "switch",
+        "inputs": [
+          "button93",
+          "button94",
+          "button95",
+          "button96",
+          "button97"
+        ],
+        "view": "main",
+        "label": "MODE",
+        "anchor": {
+          "x": 0.4904313749425551,
+          "y": 0.6368055555555555
+        },
+        "box": {
+          "x": 0.7635293758616728,
+          "y": 0.8754166497124566
+        }
+      },
+      {
+        "id": "f2485x4t",
+        "kind": "encoder",
+        "inputs": [
+          "button60",
+          "button59",
+          "button58"
+        ],
+        "view": "main",
+        "label": "E3",
+        "anchor": {
+          "x": 0.4551372572954963,
+          "y": 0.7118055555555556
+        },
+        "box": {
+          "x": 0.5759215710209865,
+          "y": 0.9220833672417534
+        }
+      },
+      {
+        "id": "mtxi15i1",
+        "kind": "encoder",
+        "inputs": [
+          "button57",
+          "button56",
+          "button55"
+        ],
+        "view": "main",
+        "label": "E2",
+        "anchor": {
+          "x": 0.4269019631778493,
+          "y": 0.6729166666666667
+        },
+        "box": {
+          "x": 0.45356862984451596,
+          "y": 0.9331944783528646
+        }
+      },
+      {
+        "id": "r9o62f2n",
+        "kind": "encoder",
+        "inputs": [
+          "button54",
+          "button53",
+          "button52"
+        ],
+        "view": "main",
+        "label": "E1",
+        "anchor": {
+          "x": 0.39552941415824144,
+          "y": 0.6284722222222222
+        },
+        "box": {
+          "x": 0.3343529435700061,
+          "y": 0.9265277438693577
+        }
+      },
+      {
+        "id": "p6b7xkpy",
+        "kind": "axis",
+        "inputs": [
+          "slider1"
+        ],
+        "view": "p2",
+        "label": "A2",
+        "anchor": {
+          "x": 0.6449411788641237,
+          "y": 0.3398611280653212
+        },
+        "box": {
+          "x": 0.8877646891276042,
+          "y": 0.10430556403266059
+        }
+      },
+      {
+        "id": "c2kh05ul",
+        "kind": "axis",
+        "inputs": [
+          "slider2"
+        ],
+        "view": "p2",
+        "label": "A1",
+        "anchor": {
+          "x": 0.685725492589614,
+          "y": 0.3798611111111111
+        },
+        "box": {
+          "x": 0.9059608250038297,
+          "y": 0.28208334181043837
+        }
+      },
+      {
+        "id": "5p5jsedd",
+        "kind": "switch",
+        "inputs": [
+          "button45",
+          "button46"
+        ],
+        "view": "main",
+        "label": "T4",
+        "anchor": {
+          "x": 0.357882355334712,
+          "y": 0.48125
+        },
+        "box": {
+          "x": 0.07270587995940564,
+          "y": 0.6009722391764323
+        }
+      },
+      {
+        "id": "a5ha4o2f",
+        "kind": "switch",
+        "inputs": [
+          "button47",
+          "button48"
+        ],
+        "view": "main",
+        "label": "T5",
+        "anchor": {
+          "x": 0.38705883549708947,
+          "y": 0.5143055386013455
+        },
+        "box": {
+          "x": 0.12541177188648897,
+          "y": 0.7520833333333333
+        }
+      },
+      {
+        "id": "yt7ylqz7",
+        "kind": "switch",
+        "inputs": [
+          "button49",
+          "button50"
+        ],
+        "view": "main",
+        "label": "T6",
+        "anchor": {
+          "x": 0.41705883549708944,
+          "y": 0.5443055386013456
+        },
+        "box": {
+          "x": 0.23019609039905026,
+          "y": 0.8165278116861979
+        }
+      },
+      {
+        "id": "d8bary6z",
+        "kind": "buttons",
+        "inputs": [
+          "button33",
+          "button34",
+          "button35",
+          "button36",
+          "button37",
+          "button38",
+          "button39",
+          "button40"
+        ],
+        "view": "main",
+        "label": "B1-B8",
+        "anchor": {
+          "x": 0.4629803945503983,
+          "y": 0.48541666666666666
+        },
+        "box": {
+          "x": 0.1,
+          "y": 0.28400000000000003
+        }
+      },
+      {
+        "id": "81twnl14",
+        "kind": "switch",
+        "inputs": [
+          "button42",
+          "button41"
+        ],
+        "view": "main",
+        "label": "T1",
+        "anchor": {
+          "x": 0.5280784337660845,
+          "y": 0.53125
+        },
+        "box": {
+          "x": 0.9,
+          "y": 0.605
+        }
+      },
+      {
+        "id": "og69opzs",
+        "kind": "axis",
+        "inputs": [
+          "x",
+          "y",
+          "button12"
+        ],
+        "view": "p2",
+        "label": "Ministick",
+        "anchor": {
+          "x": 0.37121568866804533,
+          "y": 0.2965277777777778
+        },
+        "box": {
+          "x": 0.11349019368489584,
+          "y": 0.16986109415690104
+        }
+      },
+      {
+        "id": "gm59mkih",
+        "kind": "hat",
+        "inputs": [
+          "button10",
+          "button9",
+          "button8",
+          "button11",
+          "button7"
+        ],
+        "view": "p2",
+        "anchor": {
+          "x": 0.40180392396216297,
+          "y": 0.3284722222222222
+        },
+        "box": {
+          "x": 0.3381176398782169,
+          "y": 0.03
+        }
+      },
+      {
+        "id": "cn1mosed",
+        "kind": "axis",
+        "inputs": [
+          "z"
+        ],
+        "view": "p2",
+        "label": "Slide",
+        "anchor": {
+          "x": 0.4386666690602022,
+          "y": 0.35625
+        },
+        "box": {
+          "x": 0.5395293950099571,
+          "y": 0.035416666666666666
+        }
+      },
+      {
+        "id": "e9zw01gc",
+        "kind": "encoder",
+        "inputs": [
+          "button4",
+          "button6",
+          "button5"
+        ],
+        "view": "p2",
+        "label": "Rocker",
+        "anchor": {
+          "x": 0.4637647082758885,
+          "y": 0.3909722222222222
+        },
+        "box": {
+          "x": 0.6863529818665748,
+          "y": 0.052083333333333336
+        }
+      },
+      {
+        "id": "ptqvje86",
+        "kind": "button",
+        "inputs": [
+          "button3"
+        ],
+        "view": "p2",
+        "anchor": {
+          "x": 0.4904313749425551,
+          "y": 0.42986111111111114
+        },
+        "box": {
+          "x": 0.7785882568359375,
+          "y": 0.7765277438693576
+        }
+      },
+      {
+        "id": "y7dbqf07",
+        "kind": "switch",
+        "inputs": [
+          "button2",
+          "button1"
+        ],
+        "view": "p2",
+        "label": "Pinky",
+        "anchor": {
+          "x": 0.5625882376876532,
+          "y": 0.3840277777777778
+        },
+        "box": {
+          "x": 0.8676862769033394,
+          "y": 0.5454166836208767
+        }
+      },
+      {
+        "id": "qhgqpiei",
+        "kind": "axis",
+        "inputs": [
+          "rotx"
+        ],
+        "view": "p2",
+        "label": "Left Throttle",
+        "anchor": {
+          "x": 0.5084705906288297,
+          "y": 0.5326388888888889
+        },
+        "box": {
+          "x": 0.5953725418390012,
+          "y": 0.86875
+        }
+      },
+      {
+        "id": "tav9qoc6",
+        "kind": "axis",
+        "inputs": [
+          "roty"
+        ],
+        "view": "p2",
+        "label": "Right Throttle",
+        "anchor": {
+          "x": 0.4590588259229473,
+          "y": 0.4840277777777778
+        },
+        "box": {
+          "x": 0.30486276663985906,
+          "y": 0.8609722561306423
+        }
+      }
+    ],
+    "photoSha256": {
+      "/device-photos/virpil-mt50cm-panel.webp": "e665df6b56e8cf970fb1602afe67b4cf4b5e4168abf4dbdcd09eea1bbeb82485",
+      "/device-photos/virpil-mt50cm-front.webp": "5164f72bf0f748185f5ff9bc5c4e6c8cc8e338d588a1ec07468a1ced238b589f"
+    },
+    "aspect": 1.7707070707070707
+  },
+  {
+    "id": "builtin-winctrl-viperace",
+    "views": [
+      {
+        "id": "head",
+        "label": "Grip head",
+        "image": "/device-photos/winctrl-viperace-head.webp",
+        "width": 1952,
+        "height": 1430
+      },
+      {
+        "id": "side",
+        "label": "Side module",
+        "image": "/device-photos/winctrl-viperace-side.webp",
+        "width": 1994,
+        "height": 1430
+      }
+    ],
+    "callouts": [
+      {
+        "id": "wpn",
+        "kind": "button",
+        "inputs": [
+          "button20"
+        ],
+        "anchor": {
+          "x": 0.4461967213114755,
+          "y": 0.165
+        },
+        "box": {
+          "x": 0.115,
+          "y": 0.05
+        },
+        "label": "Weapon release",
+        "group": "Grip head",
+        "view": "head"
+      },
+      {
+        "id": "tms",
+        "kind": "hat",
+        "inputs": [
+          "button10",
+          "button11",
+          "button12",
+          "button13",
+          "button9"
+        ],
+        "anchor": {
+          "x": 0.478702868852459,
+          "y": 0.4699999999999999
+        },
+        "box": {
+          "x": 0.125,
+          "y": 0.6395720279720281
+        },
+        "label": "Hat (4-way + push)",
+        "group": "Grip head",
+        "view": "head"
+      },
+      {
+        "id": "cms",
+        "kind": "hat",
+        "inputs": [
+          "button22",
+          "button23",
+          "button24",
+          "button25",
+          "button21"
+        ],
+        "anchor": {
+          "x": 0.3935143442622951,
+          "y": 0.21000000000000002
+        },
+        "box": {
+          "x": 0.125,
+          "y": 0.16190209790209792
+        },
+        "label": "Thumb hat (4-way + push)",
+        "group": "Grip",
+        "view": "head"
+      },
+      {
+        "id": "trig",
+        "kind": "switch",
+        "inputs": [
+          "button4",
+          "button5"
+        ],
+        "anchor": {
+          "x": 0.5415887662988966,
+          "y": 0.506
+        },
+        "box": {
+          "x": 0.115,
+          "y": 0.584486013986014
+        },
+        "label": "Trigger (stage 1 / 2)",
+        "group": "Grip",
+        "view": "side"
+      },
+      {
+        "id": "mini",
+        "kind": "axis",
+        "inputs": [
+          "rotx",
+          "roty",
+          "button26"
+        ],
+        "anchor": {
+          "x": 0.4238799817344243,
+          "y": 0.3389911604233112
+        },
+        "box": {
+          "x": 0.115,
+          "y": 0.33796083916083913
+        },
+        "label": "Ministick",
+        "group": "Side module",
+        "view": "head"
+      },
+      {
+        "id": "minib",
+        "kind": "hat",
+        "inputs": [
+          "button27",
+          "button28",
+          "button29",
+          "button30",
+          "button26"
+        ],
+        "anchor": {
+          "x": 0.42458302267182174,
+          "y": 0.33995207054808896
+        },
+        "box": {
+          "x": 0.1271921736922636,
+          "y": 0.45910221355251407
+        },
+        "label": "Ministick (digital + press)",
+        "group": "Side module",
+        "view": "head"
+      },
+      {
+        "id": "hatD",
+        "kind": "hat",
+        "inputs": [
+          "button32",
+          "button33",
+          "button34",
+          "button35",
+          "button31"
+        ],
+        "anchor": {
+          "x": 0.478702868852459,
+          "y": 0.26
+        },
+        "box": {
+          "x": 0.875,
+          "y": 0.4005972027972028
+        },
+        "label": "Hat D (4-way + push)",
+        "group": "Side module",
+        "view": "head"
+      },
+      {
+        "id": "hatE",
+        "kind": "hat",
+        "inputs": [
+          "button37",
+          "button38",
+          "button39",
+          "button40",
+          "button36"
+        ],
+        "anchor": {
+          "x": 0.5577264344262295,
+          "y": 0.219
+        },
+        "box": {
+          "x": 0.875,
+          "y": 0.27504475524475525
+        },
+        "label": "Hat E (4-way + push)",
+        "group": "Side module",
+        "view": "head"
+      },
+      {
+        "id": "paddle",
+        "kind": "switch",
+        "inputs": [
+          "button7",
+          "button8"
+        ],
+        "anchor": {
+          "x": 0.6065356068204614,
+          "y": 0.749
+        },
+        "box": {
+          "x": 0.819950833269781,
+          "y": 0.9308982716012988
+        },
+        "label": "Paddle (stage 1 / 2)",
+        "group": "Grip",
+        "view": "side"
+      },
+      {
+        "id": "trim",
+        "kind": "hat",
+        "inputs": [
+          "hat1_up",
+          "hat1_right",
+          "hat1_down",
+          "hat1_left",
+          "button19"
+        ],
+        "anchor": {
+          "x": 0.5252202868852459,
+          "y": 0.11099999999999999
+        },
+        "box": {
+          "x": 0.875,
+          "y": 0.1494923076923077
+        },
+        "label": "Trim hat (8-way POV)",
+        "group": "Grip head",
+        "view": "head"
+      },
+      {
+        "id": "dms",
+        "kind": "hat",
+        "inputs": [
+          "button15",
+          "button16",
+          "button17",
+          "button18",
+          "button14"
+        ],
+        "anchor": {
+          "x": 0.5803289869608826,
+          "y": 0.48800000000000004
+        },
+        "box": {
+          "x": 0.1581644860043056,
+          "y": 0.26500276694419106
+        },
+        "label": "Hat (4-way + push)",
+        "group": "Grip head",
+        "view": "side"
+      },
+      {
+        "id": "wheel",
+        "kind": "switch",
+        "inputs": [
+          "button1",
+          "button2",
+          "button41",
+          "button42",
+          "button3"
+        ],
+        "anchor": {
+          "x": 0.670912738214644,
+          "y": 0.551
+        },
+        "box": {
+          "x": 0.885,
+          "y": 0.47586993006993017
+        },
+        "label": "Wheel (5-way)",
+        "group": "Grip head",
+        "view": "side"
+      },
+      {
+        "id": "wheela",
+        "kind": "axis",
+        "inputs": [
+          "rotz"
+        ],
+        "anchor": {
+          "x": 0.6713584842286014,
+          "y": 0.548464765823373
+        },
+        "box": {
+          "x": 0.885,
+          "y": 0.6118447552447553
+        },
+        "label": "Wheel (analog)",
+        "group": "Grip head",
+        "view": "side"
+      },
+      {
+        "id": "nws",
+        "kind": "button",
+        "inputs": [
+          "button6"
+        ],
+        "anchor": {
+          "x": 0.48542827868852456,
+          "y": 0.686
+        },
+        "box": {
+          "x": 0.885,
+          "y": 0.5124993006993007
+        },
+        "label": "Front button",
+        "group": "Grip",
+        "view": "head"
+      },
+      {
+        "id": "paddlea",
+        "kind": "axis",
+        "inputs": [
+          "slider1"
+        ],
+        "anchor": {
+          "x": 0.6066932802289584,
+          "y": 0.7492904000302743
+        },
+        "box": {
+          "x": 0.8220145845503178,
+          "y": 0.7858041783624187
+        },
+        "label": "Paddle (analog)",
+        "group": "Grip",
+        "view": "side"
+      },
+      {
+        "id": "xy",
+        "kind": "axis",
+        "inputs": [
+          "x",
+          "y"
+        ],
+        "anchor": {
+          "x": 0.63675,
+          "y": 0.7849999999999999
+        },
+        "box": {
+          "x": 0.885,
+          "y": 0.6749076923076923
+        },
+        "label": "Stick X / Y",
+        "group": "Axes",
+        "view": "head"
+      }
+    ],
+    "photoSha256": {
+      "/device-photos/winctrl-viperace-head.webp": "0897f1d5f0d4e3587c438e349ecb5743cf69114fd1af4ec9445e3dd28ca022e0",
+      "/device-photos/winctrl-viperace-side.webp": "d61604356b5d1fcbfb384eb628c0eb4c5efc3d5e271a0b12eb3195a828c2e663"
+    },
+    "aspect": 1.3650349650349651
+  },
+  {
+    "id": "builtin-moza-ab6-viperace",
+    "views": [
+      {
+        "id": "front",
+        "label": "Front (on the AB6/9)",
+        "image": "/device-photos/moza-ab6-viperace-front.webp",
+        "width": 1140,
+        "height": 986
+      },
+      {
+        "id": "side",
+        "label": "Grip, labelled side",
+        "image": "/device-photos/winctrl-viperace-side.webp",
+        "width": 1994,
+        "height": 1430
+      }
+    ],
+    "callouts": [
+      {
+        "id": "cms",
+        "kind": "hat",
+        "inputs": [
+          "button22",
+          "button23",
+          "button24",
+          "button25",
+          "button21"
+        ],
+        "label": "Thumb hat (4-way + push)",
+        "group": "Side module",
+        "view": "front",
+        "anchor": {
+          "x": 0.43750877192982457,
+          "y": 0.135
+        },
+        "box": {
+          "x": 0.125,
+          "y": 0.13731744421906694
+        }
+      },
+      {
+        "id": "wpn",
+        "kind": "button",
+        "inputs": [
+          "button20"
+        ],
+        "label": "Weapon release",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.48077192982456146,
+          "y": 0.112
+        },
+        "box": {
+          "x": 0.115,
+          "y": 0.05
+        }
+      },
+      {
+        "id": "mini",
+        "kind": "axis",
+        "inputs": [
+          "rotx",
+          "roty",
+          "button26"
+        ],
+        "label": "Ministick",
+        "group": "Side module",
+        "view": "front",
+        "anchor": {
+          "x": 0.45192982456140357,
+          "y": 0.20700000000000002
+        },
+        "box": {
+          "x": 0.115,
+          "y": 0.2789756592292089
+        }
+      },
+      {
+        "id": "minib",
+        "kind": "hat",
+        "inputs": [
+          "button27",
+          "button28",
+          "button29",
+          "button30",
+          "button26"
+        ],
+        "label": "Ministick (digital + press)",
+        "group": "Side module",
+        "view": "front",
+        "anchor": {
+          "x": 0.45238954577889173,
+          "y": 0.20743818068038064
+        },
+        "box": {
+          "x": 0.125,
+          "y": 0.4206338742393509
+        }
+      },
+      {
+        "id": "trim",
+        "kind": "hat",
+        "inputs": [
+          "hat1_up",
+          "hat1_right",
+          "hat1_down",
+          "hat1_left",
+          "button19"
+        ],
+        "label": "Trim hat (8-way POV)",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.528361403508772,
+          "y": 0.08
+        },
+        "box": {
+          "x": 0.875,
+          "y": 0.05
+        }
+      },
+      {
+        "id": "hatD",
+        "kind": "hat",
+        "inputs": [
+          "button32",
+          "button33",
+          "button34",
+          "button35",
+          "button31"
+        ],
+        "label": "Hat D (4-way + push)",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.5,
+          "y": 0.172
+        },
+        "box": {
+          "x": 0.875,
+          "y": 0.2718661257606491
+        }
+      },
+      {
+        "id": "hatE",
+        "kind": "hat",
+        "inputs": [
+          "button37",
+          "button38",
+          "button39",
+          "button40",
+          "button36"
+        ],
+        "label": "Hat E (4-way + push)",
+        "group": "Grip head",
+        "view": "front",
+        "anchor": {
+          "x": 0.5576842105263158,
+          "y": 0.16
+        },
+        "box": {
+          "x": 0.875,
+          "y": 0.16093306288032455
+        }
+      },
+      {
+        "id": "tms",
+        "kind": "hat",
+        "inputs": [
+          "button10",
+          "button11",
+          "button12",
+          "button13",
+          "button9"
+        ],
+        "label": "Hat (4-way + push)",
+        "group": "Grip",
+        "view": "front",
+        "anchor": {
+          "x": 0.48942456140350876,
+          "y": 0.29
+        },
+        "box": {
+          "x": 0.125,
+          "y": 0.5195131845841785
+        }
+      },
+      {
+        "id": "nws",
+        "kind": "button",
+        "inputs": [
+          "button6"
+        ],
+        "label": "Front button",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.47584267948450665,
+          "y": 0.7111010079796145
+        },
+        "box": {
+          "x": 0.1252808945902278,
+          "y": 0.8411397854372185
+        }
+      },
+      {
+        "id": "dms",
+        "kind": "hat",
+        "inputs": [
+          "button15",
+          "button16",
+          "button17",
+          "button18",
+          "button14"
+        ],
+        "label": "Hat (4-way + push)",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.5803289869608826,
+          "y": 0.48800000000000004
+        },
+        "box": {
+          "x": 0.125,
+          "y": 0.43668181818181817
+        }
+      },
+      {
+        "id": "trig",
+        "kind": "switch",
+        "inputs": [
+          "button4",
+          "button5"
+        ],
+        "label": "Trigger (stage 1 / 2)",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.5415887662988966,
+          "y": 0.506
+        },
+        "box": {
+          "x": 0.115,
+          "y": 0.5573181818181818
+        }
+      },
+      {
+        "id": "wheel",
+        "kind": "switch",
+        "inputs": [
+          "button1",
+          "button2",
+          "button41",
+          "button42",
+          "button3"
+        ],
+        "label": "Wheel / EX trigger (5-way)",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.670912738214644,
+          "y": 0.551
+        },
+        "box": {
+          "x": 0.885,
+          "y": 0.48402517482517493
+        }
+      },
+      {
+        "id": "wheela",
+        "kind": "axis",
+        "inputs": [
+          "rotz"
+        ],
+        "label": "Wheel / EX trigger (analog)",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.668054741510104,
+          "y": 0.5513318962556684
+        },
+        "box": {
+          "x": 0.885,
+          "y": 0.6200000000000001
+        }
+      },
+      {
+        "id": "paddle",
+        "kind": "switch",
+        "inputs": [
+          "button7",
+          "button8"
+        ],
+        "label": "Paddle (stage 1 / 2)",
+        "group": "Grip",
+        "view": "side",
+        "anchor": {
+          "x": 0.6065356068204614,
+          "y": 0.749
+        },
+        "box": {
+          "x": 0.8758173680997555,
+          "y": 0.7741903451874095
+        }
+      },
+      {
+        "id": "xy",
+        "kind": "axis",
+        "inputs": [
+          "x",
+          "y"
+        ],
+        "label": "Stick X / Y",
+        "group": "Axes",
+        "view": "front",
+        "anchor": {
+          "x": 0.5576842105263158,
+          "y": 0.42
+        },
+        "box": {
+          "x": 0.885,
+          "y": 0.42557809330628804
+        }
+      },
+      {
+        "id": "bkeys",
+        "kind": "buttons",
+        "inputs": [
+          "button49",
+          "button50",
+          "button51",
+          "button52"
+        ],
+        "label": "Base keys (left) 49-52",
+        "group": "Base",
+        "view": "front",
+        "anchor": {
+          "x": 0.418280701754386,
+          "y": 0.64
+        },
+        "box": {
+          "x": 0.115,
+          "y": 0.6883671399594321
+        }
+      },
+      {
+        "id": "bkeysr",
+        "kind": "buttons",
+        "inputs": [
+          "button53",
+          "button54",
+          "button55",
+          "button56"
+        ],
+        "label": "Base keys (right) 53-56",
+        "group": "Base",
+        "view": "front",
+        "anchor": {
+          "x": 0.6105614035087719,
+          "y": 0.583
+        },
+        "box": {
+          "x": 0.885,
+          "y": 0.5735091277890467
+        }
+      },
+      {
+        "id": "wl",
+        "kind": "axis",
+        "inputs": [
+          "slider1"
+        ],
+        "label": "Slider wheel (left)",
+        "group": "Base",
+        "view": "front",
+        "anchor": {
+          "x": 0.5624912280701755,
+          "y": 0.68
+        },
+        "box": {
+          "x": 0.2407490840623857,
+          "y": 0.8222201896371577
+        }
+      },
+      {
+        "id": "wlb",
+        "kind": "switch",
+        "inputs": [
+          "button57",
+          "button58",
+          "button59"
+        ],
+        "label": "Slider wheel (zones)",
+        "group": "Base",
+        "view": "front",
+        "anchor": {
+          "x": 0.5644344644388345,
+          "y": 0.678130656287913
+        },
+        "box": {
+          "x": 0.30714609165972095,
+          "y": 0.9355706518536541
+        }
+      },
+      {
+        "id": "wr",
+        "kind": "axis",
+        "inputs": [
+          "slider2"
+        ],
+        "label": "Dial wheel (right)",
+        "group": "Base",
+        "view": "front",
+        "anchor": {
+          "x": 0.6442105263157896,
+          "y": 0.635
+        },
+        "box": {
+          "x": 0.8549213726771762,
+          "y": 0.8078112363022332
+        }
+      },
+      {
+        "id": "wrb",
+        "kind": "switch",
+        "inputs": [
+          "button60",
+          "button61",
+          "button62"
+        ],
+        "label": "Dial wheel (zones)",
+        "group": "Base",
+        "view": "front",
+        "anchor": {
+          "x": 0.6441109242125335,
+          "y": 0.6358643785145893
+        },
+        "box": {
+          "x": 0.7702652133190221,
+          "y": 0.9240434452130786
+        }
+      },
+      {
+        "id": "paddlea",
+        "kind": "axis",
+        "inputs": [
+          "slider1"
+        ],
+        "label": "Paddle lever",
+        "view": "side",
+        "anchor": {
+          "x": 0.6061387207068072,
+          "y": 0.7472936762681863
+        },
+        "box": {
+          "x": 0.8432584612557058,
+          "y": 0.9241766887486563
+        }
+      }
+    ],
+    "photoSha256": {
+      "/device-photos/moza-ab6-viperace-front.webp": "4bf0f051f1c674a5653503e9af60b3bf69086bffea7e25a3b772d698948e7e61",
+      "/device-photos/winctrl-viperace-side.webp": "d61604356b5d1fcbfb384eb628c0eb4c5efc3d5e271a0b12eb3195a828c2e663"
+    },
+    "aspect": 1.156186612576065
+  }
+]

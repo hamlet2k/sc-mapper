@@ -25,7 +25,7 @@ const templateList = async (picker) => {
   await list.waitFor({ state: 'visible' });
   return list;
 };
-const templateOption = async (picker, value) => (await templateList(picker)).locator(`[role="option"][data-value="${value}"]`);
+const templateOption = async (picker, value) => (await templateList(picker)).locator(`[role="option"][data-value="${value}"]`).first();
 const selectTemplate = async (picker, choice) => {
   const value = typeof choice === 'string' ? choice : choice.value;
   await (await templateOption(picker, value)).click();
@@ -821,6 +821,14 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
   const list = await templateList(picker);
   const ids = await list.getByRole('option').evaluateAll((els) => els.map((e) => e.dataset.value));
   check(new Set(ids).size === ids.length, 'template suggestions and lower groups contain no duplicate picks');
+  const sticks = list.locator('[data-group="Sticks"]');
+  const generic = sticks.getByRole('option').first();
+  check(await generic.getAttribute('data-value') === 'builtin-stick'
+    && /^generic stick$/i.test(await generic.locator('[data-template-name]').innerText())
+    && await generic.getAttribute('data-branded') === null
+    && await generic.evaluate((el) => !el.parentElement.querySelector('[data-brand-header]')
+      && parseFloat(getComputedStyle(el).paddingLeft) === 24 && getComputedStyle(el).fontStyle === 'normal'),
+    'Generic stick leads Sticks as a normal full-name option at brand-row indentation without a brand header');
   const family = await list.locator('[data-brand=MOZA] [role=option]').evaluateAll((els) => els.map((e) => e.dataset.value));
   const base = family.indexOf('builtin-moza-ab6');
   check(base >= 0 && family.slice(base + 1, base + 4).every((id) => id.startsWith('builtin-moza-ab6-')), 'grip variants sit directly below their base');
@@ -1312,10 +1320,41 @@ await page.screenshot({ path: shots + '205-template-author-submit.png' });
   await ctx.unroute(issuePattern);
   check(/Template file downloaded\. Drag it into the GitHub issue/.test(await page.locator('.fixed.bottom-5.right-5').innerText()), 'submission toast tells the user to drag the downloaded file into the issue');
 }
+const savedTemplateName = await te.getByLabel('Template name').inputValue();
 await te.getByTestId('tpl-save').click();
 await page.waitForTimeout(500);
 check(await te.count() === 0, 'template saved, editor closed');
 check((await dv.getByTestId('template-author').innerText()) === 'by Test Pilot' && await dv.getByTestId('template-submit').isVisible(), 'saved user template shows its author and Submit to feed action');
+{ // A saved user template is visible in My templates and in suggestions, including filtered results.
+  const picker = dv.getByTestId('template-select');
+  const list = await templateList(picker);
+  const mine = list.locator('[data-group="My templates"]');
+  const row = mine.getByRole('option').filter({ hasText: savedTemplateName }).first();
+  const name = await row.locator('[data-template-name]').innerText();
+  const value = await row.getAttribute('data-value');
+  check(name.toLowerCase() === savedTemplateName.toLowerCase()
+    && /^custom$/i.test(await row.locator('[data-template-custom]').innerText())
+    && await mine.locator('[data-brand-header]').count() === 0,
+    'saved user template appears under My templates with a Custom marker and its full name');
+  const sections = await list.locator(':scope > [data-group]').evaluateAll((els) => els.map((el) => el.dataset.group));
+  check(sections[0] === 'suggestions' && /^my templates$/i.test(sections[1]), 'My templates follows Suggested for this device');
+  const suggested = list.locator(`[data-group="suggestions"] [data-value="${value}"]`);
+  check(await suggested.locator('[data-template-custom]').count() === 1, 'suggested user template also has the Custom marker');
+  await picker.fill(name.toUpperCase());
+  const filtered = list.locator(`[data-value="${value}"]`);
+  check(await filtered.count() === 2 && await filtered.locator('[data-template-custom]').count() === 2,
+    'case-insensitive filtering retains both custom markers');
+  const ids = await list.getByRole('option').evaluateAll((els) => els.map((el) => el.id));
+  check(new Set(ids).size === ids.length, 'suggested and My templates occurrences have unique ARIA ids');
+  await picker.press('ArrowDown');
+  await picker.press('ArrowDown');
+  const active = page.locator(`[id="${await picker.getAttribute('aria-activedescendant')}"]`);
+  check(await active.evaluate((el) => el.closest('[data-group]').dataset.group.toLowerCase() === 'my templates'),
+    'keyboard navigation reaches the saved template in My templates');
+  await picker.press('Enter');
+  check(await templateValue(picker) === value, 'Enter selects the saved user template');
+  await selectTemplate(picker, '');
+}
 check(/linked to this device \(USB 231D:0200\)/.test(await dv.getByTestId('device-status').innerText()), 'saved template auto-applies to the EVO R by USB id');
 check((await dv.locator('[data-callout]').count()) === 4 && (await dv.innerText()).includes('Decoy'), 'device view uses the new template (B3 shows its Decoy binding)');
 {
@@ -1721,8 +1760,8 @@ const moza133 = mozaSlots.find(([, t]) => /133 buttons/.test(t))?.[0];
     check((await vdv.locator('[data-callout]').count()) === 22, `ViperAce grip on the AB6: 22 callouts (${await vdv.locator('[data-callout]').count()})`);
     await fp.setViewportSize({ width: 1680, height: 1800 }); // each whole photo page clear of the sticky header
     const AT = {
-      front: { cms: [0.43750877192982457, 0.135], trim: [0.528361403508772, 0.08], xy: [0.5576842105263158, 0.42], wrb: [0.6466140350877194, 0.645] },
-      side: { nws: [0.47584267948450665, 0.7111010079796145], wheel: [0.670912738214644, 0.551], paddlea: [0.6028090059087517, 0.7471357980803838] },
+      front: { cms: [0.43750877192982457, 0.135], trim: [0.528361403508772, 0.08], xy: [0.5576842105263158, 0.42], wrb: [0.6441109242125335, 0.6358643785145893] },
+      side: { nws: [0.47584267948450665, 0.7111010079796145], wheel: [0.670912738214644, 0.551], paddlea: [0.6061387207068072, 0.7472936762681863] },
     };
     for (const [v, file] of [['front', '175-ab6-viperace-front-federico'], ['side', '176-ab6-viperace-side-federico']]) {
       const pg = vdv.locator(`[data-testid=device-canvas-view][data-view=${v}]`);

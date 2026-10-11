@@ -70,6 +70,7 @@ body {
   font-size: 11px; font-weight: 500;
 }
 .template-picker-option { display: flex; align-items: center; gap: 6px; padding: 7px 12px; }
+.template-picker-option[data-direct] { padding-left: 24px; }
 .template-picker-option[data-branded] { padding-left: 36px; }
 .template-picker-option[data-variant] { padding-left: 24px; }
 .template-picker-option[data-branded][data-variant] { padding-left: 48px; }

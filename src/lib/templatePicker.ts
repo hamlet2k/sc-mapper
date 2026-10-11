@@ -5,7 +5,7 @@ export interface TemplatePickerGroup { label: string; brand?: string; templates:
 const TYPES = [
   ['stick', 'Sticks'], ['throttle', 'Throttles'], ['pedals', 'Pedals'],
   ['collective', 'Collectives'], ['panel', 'Panels'], ['gamepad', 'Gamepads'],
-  ['generic', 'Generic'], ['user', 'My templates'],
+  ['generic', 'Generic'],
 ] as const;
 const alphabetical = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' });
 
@@ -29,22 +29,39 @@ export function templatePickerGroups(templates: readonly DeviceTemplate[], auto?
     ...(auto ? [auto.id] : []), ...templateVariants([...templates], auto).map((t) => t.id),
     ...suggestedTemplates(deviceName, templates).map((t) => t.id),
   ]);
-  const suggested = templates.filter((t) => suggestedIds.has(t.id));
-  const remaining = templates.filter((t) => !suggestedIds.has(t.id));
-  const brandOf = (t: DeviceTemplate) => (t.brand || templates.find((b) => b.id === t.variantOf)?.brand || '').trim();
+  const brandOf = (t: DeviceTemplate) => {
+    const brand = (t.brand ?? '').trim();
+    return /^generic$/i.test(brand) ? '' : brand;
+  };
+  const suggested = templates.filter((t) => suggestedIds.has(t.id) && (!t.builtin || brandOf(t)));
+  const remaining = templates.filter((t) => t.builtin && !suggested.some((s) => s.id === t.id));
+  const users = templates.filter((t) => !t.builtin).sort((a, b) => alphabetical(a.name, b.name));
   const family = (t: DeviceTemplate) => {
     const base = t.variantOf ? templates.find((b) => b.id === t.variantOf) : undefined;
     const category = t.category ?? base?.category;
-    return category && TYPES.some(([key]) => key === category) ? category : !t.builtin && !category ? 'user' : 'generic';
+    return category && TYPES.some(([key]) => key === category) ? category : 'generic';
   };
   return [
     ...(suggested.length ? [{ label: 'Suggested for this device', templates: orderTemplateFamilies(suggested) }] : []),
+    ...(users.length ? [{ label: 'My templates', templates: users }] : []),
     ...TYPES.flatMap(([key, label]) => {
       const members = remaining.filter((t) => family(t) === key);
-      const brands = [...new Map(members.map((t) => [brandOf(t).toLocaleLowerCase(), brandOf(t)])).values()].sort(alphabetical);
-      return brands.map((brand) => ({ label, brand: brand || undefined, templates: orderTemplateFamilies(members.filter((t) => brandOf(t).toLocaleLowerCase() === brand.toLocaleLowerCase())) }));
+      const brands = [...new Map(members.map((t) => [brandOf(t).toLocaleLowerCase(), brandOf(t)])).values()].sort((a, b) => !a ? -1 : !b ? 1 : alphabetical(a, b));
+      return brands.map((brand) => {
+        const items = members.filter((t) => brandOf(t).toLocaleLowerCase() === brand.toLocaleLowerCase());
+        return { label, brand: brand || undefined, templates: brand ? orderTemplateFamilies(items)
+          : items.sort((a, b) => Number(/^generic\b/i.test(b.name)) - Number(/^generic\b/i.test(a.name)) || alphabetical(a.name, b.name)) };
+      });
     }),
   ];
+}
+
+/** Older copies have no source id; their default copy name still identifies the built-in. */
+export function templateCopyOf(t: DeviceTemplate, templates: readonly DeviceTemplate[]): string | undefined {
+  if (t.builtin) return undefined;
+  const sourceName = t.name.replace(/(?:\s*\(copy\))+\s*$/i, '').trim();
+  return templates.find((b) => b.builtin && (b.id === t.variantOf
+    || (sourceName !== t.name.trim() && b.name.toLocaleLowerCase() === sourceName.toLocaleLowerCase())))?.name;
 }
 
 export function matchesTemplate(t: DeviceTemplate, query: string, group?: string): boolean {

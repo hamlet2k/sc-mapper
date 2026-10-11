@@ -400,7 +400,7 @@ function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, onArm, onRemove, o
         <div className="text-[10px] uppercase tracking-widest text-slate-500">Template</div>
         {!ctl || !st ? <div className="text-slate-500">— (keyboard view)</div> : (
           <>
-            <TemplateCombobox templates={T.templates.filter((t) => t.slot === gs.slot)} automatic={auto!}
+            <TemplateCombobox templates={T.templates.filter((t) => !t.builtin || t.slot === gs.slot)} automatic={auto!}
               deviceName={st.ident.name} slot={gs.slot} value={st.pick}
               onChange={(value) => slots.pickTemplate(gs, value || (st.legacy ? AUTO_TEMPLATE : null))}
               testId="slot-template" label={`Template for ${slotId(gs)}`} className="w-full" />

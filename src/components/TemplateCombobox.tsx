@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DeviceTemplate } from '../lib/templates';
-import { matchesTemplate, templateOptionDetails, templateOptionLabel, templateOptionName, templatePickerGroups, type TemplatePickerGroup } from '../lib/templatePicker';
+import { matchesTemplate, templateCopyOf, templateOptionDetails, templateOptionLabel, templateOptionName, templatePickerGroups, type TemplatePickerGroup } from '../lib/templatePicker';
 
 interface Props {
   templates: readonly DeviceTemplate[];
@@ -31,13 +31,21 @@ export function TemplateCombobox({ templates, automatic, deviceName, slot, value
   }
   const automaticLabel = `Automatic (${automatic.name})`;
   const showAuto = matchesTemplate(automatic, query, 'Automatic');
-  const options = [...(showAuto ? [{ value: '', label: automaticLabel }] : []), ...filtered.flatMap((g) => g.templates.map((t) => ({ value: t.id, label: templateOptionLabel(t, slot) })))];
+  // A suggested custom template also appears in My templates; each occurrence needs its own ARIA id.
+  const rowKey = (group: string, value: string) => `${group}:${value}`;
+  const options = [...(showAuto ? [{ key: 'automatic', value: '' }] : []), ...filtered.flatMap((g) => g.templates.map((t) => ({ key: rowKey(g.label, t.id), value: t.id })))];
   const current = value ? templates.find((t) => t.id === value) : undefined;
   const closedLabel = value ? current ? templateOptionLabel(current, slot) : value : automaticLabel;
-  const highlighted = options.find((o) => o.value === active)?.value ?? options[0]?.value;
-  const optionId = (v: string) => `${id}-option-${v || 'automatic'}`;
+  const highlighted = options.find((o) => o.key === active)?.key ?? options[0]?.key;
+  const selectedKey = options.find((o) => o.value === value)?.key;
+  const optionId = (key: string) => `${id}-option-${encodeURIComponent(key)}`;
   const choose = (v: string) => { onChange(v); setOpen(false); setQuery(''); input.current?.focus(); };
-  const expand = () => { if (!open) { setQuery(''); setActive(value); setOpen(true); } };
+  const expand = () => { if (!open) {
+    setQuery('');
+    const selectedGroup = groups.find((g) => g.templates.some((t) => t.id === value));
+    setActive(value && selectedGroup ? rowKey(selectedGroup.label, value) : 'automatic');
+    setOpen(true);
+  } };
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -64,15 +72,17 @@ export function TemplateCombobox({ templates, automatic, deviceName, slot, value
     return () => document.removeEventListener('pointerdown', outside);
   }, [open]);
   useEffect(() => {
-    if (open && highlighted !== undefined) document.getElementById(`${id}-option-${highlighted || 'automatic'}`)?.scrollIntoView({ block: 'nearest' });
+    if (open && highlighted !== undefined) document.getElementById(optionId(highlighted))?.scrollIntoView({ block: 'nearest' });
   }, [open, highlighted, id]);
 
-  const option = (v: string, text: string, variant = false, brand?: string, details?: string) => <div key={v} id={optionId(v)} role="option" aria-selected={value === v}
-    data-value={v} data-variant={variant || undefined} data-branded={!!brand || undefined}
-    onPointerDown={(e) => e.preventDefault()} onClick={() => choose(v)} onPointerMove={() => setActive(v)}
-    className={`template-picker-option cursor-pointer text-xs ${highlighted === v ? 'bg-hud/20 text-hud2' : 'text-slate-200 hover:bg-hud/10'}`}>
+  const option = (key: string, v: string, text: string, variant = false, brand?: string, details?: string, custom = false, copyOf?: string, direct = false) => <div key={key} id={optionId(key)} role="option" aria-selected={selectedKey === key}
+    data-value={v} data-custom={custom || undefined} data-direct={direct || undefined} data-variant={variant || undefined} data-branded={!!brand || undefined}
+    onPointerDown={(e) => e.preventDefault()} onClick={() => choose(v)} onPointerMove={() => setActive(key)}
+    className={`template-picker-option cursor-pointer text-xs ${highlighted === key ? 'bg-hud/20 text-hud2' : 'text-slate-200 hover:bg-hud/10'}`}>
     {variant && <span aria-hidden="true" className="shrink-0 text-slate-500">↳</span>}
     <span data-template-name className="min-w-0 flex-1">{text}</span>
+    {custom && <span data-template-custom className="shrink-0 rounded border border-slate-600 px-1 text-[9px] text-slate-400">Custom</span>}
+    {copyOf && <span data-template-copy title={`copy of ${copyOf}`} className="max-w-[35%] truncate text-right text-[10px] text-slate-500">copy of {copyOf}</span>}
     {details && <span data-template-details className="shrink-0 text-right text-[10px] text-slate-500">{details}</span>}
     <span aria-hidden="true" className="w-3 shrink-0 text-hud">{value === v ? '✓' : ''}</span>
   </div>;
@@ -89,23 +99,28 @@ export function TemplateCombobox({ templates, automatic, deviceName, slot, value
         else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault();
           if (!open) { expand(); return; }
-          const index = options.findIndex((o) => o.value === highlighted);
-          setActive(options[(index + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length]?.value ?? null);
+          const index = options.findIndex((o) => o.key === highlighted);
+          setActive(options[(index + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length]?.key ?? null);
         } else if (e.key === 'Enter') {
           e.preventDefault(); e.stopPropagation();
-          if (!open) expand(); else if (highlighted !== undefined) choose(highlighted);
+          if (!open) expand(); else if (highlighted !== undefined) choose(options.find((o) => o.key === highlighted)!.value);
         }
       }} />
     <button type="button" tabIndex={-1} aria-label={`Toggle ${label}`} className="absolute inset-y-0 right-0 px-2 text-slate-400"
       onPointerDown={(e) => e.preventDefault()} onClick={() => { input.current?.focus(); if (open) setOpen(false); else expand(); }}>▾</button>
     {open && createPortal(<div ref={popup} id={`${id}-listbox`} role="listbox" aria-label={label}
       className="template-picker-list scrollbar-thin fixed z-[200] overflow-auto rounded border border-edge bg-panel2 shadow-xl" style={position}>
-      {showAuto && option('', automaticLabel)}
+      {showAuto && option('automatic', '', automaticLabel)}
       {sections.map((section, i) => <div key={section.label} role="group" aria-labelledby={`${id}-type-${i}`} data-group={section.label === 'Suggested for this device' ? 'suggestions' : section.label}>
         <div id={`${id}-type-${i}`} role="presentation" data-type-header className="template-picker-type font-display">{section.label}</div>
         {section.groups.map((g, j) => <div key={g.brand ?? ''} role="group" aria-labelledby={g.brand ? `${id}-brand-${i}-${j}` : `${id}-type-${i}`} data-brand={g.brand}>
           {g.brand && <div id={`${id}-brand-${i}-${j}`} role="presentation" data-brand-header className="template-picker-brand">{g.brand}</div>}
-          {g.templates.map((t) => option(t.id, templateOptionName(t, query.trim() ? undefined : g.brand), !!t.variantOf, g.brand, templateOptionDetails(t, slot)))}
+          {g.templates.map((t) => {
+            const direct = !g.brand && section.label !== 'Suggested for this device' && section.label !== 'My templates';
+            return option(rowKey(g.label, t.id), t.id, templateOptionName(t, query.trim() ? undefined : g.brand),
+              !!t.builtin && !!t.variantOf && !direct, g.brand, templateOptionDetails(t, slot),
+              !t.builtin, templateCopyOf(t, templates), direct);
+          })}
         </div>)}
       </div>)}
       {!options.length && <div role="status" className="px-3 py-3 text-xs text-slate-400">No matching templates</div>}
