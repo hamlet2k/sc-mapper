@@ -125,15 +125,23 @@ round-trips every file through it).
   built-ins may omit it. This additive metadata uses the existing version 1 format, shared with DCS Mapper.
 - **Callouts.** `anchor` is the point on the device where the leader line starts. `box` is the centre of the label. Both are fractions
   (0..1) of the view's canvas. `view` is the id of the view the callout sits on (missing = the first view). `kind` is `button`, `hat`
-  (inputs up, right, down, left, then an optional push), `axis` (one, or two for a mini-stick: x then y), `encoder` (clockwise,
+  (inputs up, right, down, left, then an optional push), `axis` (one, or two for a mini-stick: x then y, then an optional press button), `encoder` (clockwise,
   counter-clockwise, optional push), `switch` (one input per position) or `buttons` (a row, one input per key). `group` is a
   display grouping.
+- **Mini-stick press (optional).** An `axis` callout can use `inputs: ["rotx", "roty", "button6"]`: the first two entries are
+  axes and the third is a numbered button id (`buttonN`, N ≥ 1). The third entry is only valid after two assigned axes; a
+  single-axis callout cannot carry a press, and a non-button third entry is invalid. Omit the third entry to clear the press
+  (do not write `''`). DCS Mapper consumers should render the third entry as a separate **Press** line/chip, show its button
+  mappings and pressed highlights, and offer it as a button binding target alongside the two axes. It is not an axis and
+  should not get an axis value meter. Template exports, the feed, and custom templates embedded in `.sckeymap.json` files
+  preserve all three entries. This optional addition keeps template version 1, shared-controller version 1, and feed
+  `formatVersion: 1`; existing one- and two-axis callouts keep their behavior.
 - **`region` / `inputRegions`** (optional) are glow outlines: an SVG path in canvas units, with the canvas scaled to 1000 wide
   (viewBox `0 0 1000 1000/aspect`) and drawn translated to the anchor. `inputRegions` has one path per input (`''` = none).
 - **An empty input `''`** keeps the place of a control whose number the device does not fix (e.g. user-configured firmware). Show it as
   unassigned.
 - **Input count limit (shared contract): a callout has at most 32 inputs, whatever its kind.** Each kind also has its natural size:
-  `button` 1, `hat` 4 or 5, `axis` 1 or 2, `encoder` 2 or 3, `buttons` 2 to 32 (long rows: ICP / UFC keypads, MFD bezels),
+  `button` 1, `hat` 4 or 5, `axis` 1 or 2 axes plus an optional third press button, `encoder` 2 or 3, `buttons` 2 to 32 (long rows: ICP / UFC keypads, MFD bezels),
   `switch` 2 to 8 as built in the editors (SC Keymap and DCS Mapper); a file with a longer switch (up to 32) is still valid. A template
   with a callout of more than 32 inputs is **invalid**: SC Keymap rejects the whole file on import (template import, shared
   controller files) with a visible error naming the callout ("callout 4 (UFC keypad) has 33 inputs; a callout can have at most

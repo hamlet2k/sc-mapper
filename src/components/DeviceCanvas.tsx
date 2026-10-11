@@ -463,10 +463,12 @@ export function CalloutBody({ c, s, entriesFor, live, keyMods }: { c: Callout; s
     );
   }
   if (c.kind === 'axis') {
+    const press = c.inputs[2];
+    const pressRows = liveFirst(press ? entriesFor(press) : [], (e) => firing.has(e), 3);
     return (
       <div className="min-w-[120px]">
         {head}
-        {c.inputs.map((i) => {
+        {c.inputs.slice(0, 2).map((i) => {
           const v = live.values[i];
           const es = [...entriesFor(i), ...coveredInputs({ inputs: [i] }).slice(1).flatMap(entriesFor)];
           const rows = liveFirst(es, (e) => firing.has(e), 2);
@@ -484,7 +486,14 @@ export function CalloutBody({ c, s, entriesFor, live, keyMods }: { c: Callout; s
             </div>
           );
         })}
-        {!c.inputs.some((i) => entriesFor(i).length) && none}
+        {press && <div className="mt-1" data-testid="callout-press">
+          <span data-dir={press} data-active={live.active.has(press) ? '1' : undefined}
+            className={`rounded px-1 font-mono text-[9px] ${live.active.has(press) ? 'bg-hud text-black' : 'bg-black/40 text-slate-400'}`}>Press {shortInput(press)}</span>
+          {pressRows.shown.map((e, k) => <ActionLine key={k} e={e} on={firing.has(e)} />)}
+          {pressRows.hidden > 0 && <More n={pressRows.hidden} live={pressRows.hiddenLive} />}
+          {!pressRows.shown.length && none}
+        </div>}
+        {!press && !c.inputs.some((i) => entriesFor(i).length) && none}
       </div>
     );
   }

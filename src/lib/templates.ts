@@ -8,7 +8,7 @@ export type CalloutKind = 'button' | 'hat' | 'axis' | 'encoder' | 'switch' | 'bu
 export const CALLOUT_KINDS: { kind: CalloutKind; label: string; hint: string }[] = [
   { kind: 'button', label: 'Button', hint: 'one button' },
   { kind: 'hat', label: 'Hat (5-way)', hint: 'up / right / down / left, optional push button' },
-  { kind: 'axis', label: 'Axis', hint: 'one axis, or two for a mini-stick' },
+  { kind: 'axis', label: 'Axis', hint: 'one axis, or two for a mini-stick (+ optional press button)' },
   { kind: 'encoder', label: 'Encoder pair', hint: 'two buttons: clockwise, counter-clockwise (+ optional push)' },
   { kind: 'switch', label: 'Multi-position switch', hint: 'one button per position' },
   { kind: 'buttons', label: 'Button row', hint: 'several buttons side by side, numbered 1, 2, 3…' },
@@ -17,7 +17,7 @@ export interface Pt { x: number; y: number }
 export interface Callout {
   id: string;
   kind: CalloutKind;
-  /** game input names (no js1_ prefix): button: [button3]; hat: [hat1_up, hat1_right, hat1_down, hat1_left, (push)]; axis: [x] or [x, y];
+  /** game input names (no js1_ prefix): button: [button3]; hat: [hat1_up, hat1_right, hat1_down, hat1_left, (push)]; axis: [x], [x, y] or [x, y, buttonN];
    * encoder: [cw, ccw] or [cw, ccw, push]; switch: one per position; buttons (row): one per button.
    * '' = not assigned yet (device templates whose button numbers depend on the user's configuration: set them in a copy) */
   inputs: string[];
@@ -115,7 +115,7 @@ export const BLANK_ASPECT = 1.6;
 export const MAX_VIEWS = 12;
 /** most inputs one callout can have (a button row / multi-position switch: e.g. an ICP keypad, a UFC, an MFD bezel's ~20 push
  * buttons). Part of the template file contract (docs/template-feed.md): a file with a longer callout is rejected on import, never
- * cut. The other kinds keep their natural sizes (hat 5, axis 2, encoder 3, button 1). */
+ * cut. The other kinds keep their natural sizes (hat 5, axis 3 including press, encoder 3, button 1). */
 export const MAX_CALLOUT_INPUTS = 32;
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
@@ -129,6 +129,8 @@ export const hatInputs = (n: number) => HAT_DIRS.map((d) => `hat${n}_${d}`);
 const HAT_RE = /^hat(\d)_(up|down|left|right)$/;
 const DPAD_RE = /^dpad_(up|down|left|right)$/;
 export const isAxisInput = (i: string) => JS_AXES.includes(i) || GP_AXES.includes(i) || i === 'triggerl' || i === 'triggerr';
+/** numbered button id used by an optional mini-stick press input */
+export const isButtonInput = (i: string) => i.length <= 25 && /^button[1-9]\d*$/.test(i);
 
 /** callout kind and inputs for a pressed input */
 export function calloutFor(input: string): { kind: CalloutKind; inputs: string[] } {
@@ -216,11 +218,12 @@ export function shortInput(i: string): string {
 export function calloutTitle(c: Callout): string {
   if (c.label) return c.label;
   if (c.kind === 'hat') { const m = HAT_RE.exec(c.inputs[0] ?? ''); return m ? `Hat ${m[1]}` : DPAD_RE.test(c.inputs[0] ?? '') ? 'D-pad' : 'Hat'; }
-  if (c.kind === 'axis') return c.inputs.map(shortInput).join('/');
+  if (c.kind === 'axis') return c.inputs.slice(0, 2).map(shortInput).join('/');
   return c.inputs.map((i) => (/^button\d+$/.test(i) ? `B${shortInput(i)}` : shortInput(i))).join('/');
 }
 /** role of each input of a callout, for display */
 export function inputRole(c: Callout, idx: number): string {
+  if (c.kind === 'axis' && idx === 2) return 'Press';
   if (c.kind === 'hat') return idx < 4 ? ARROW[HAT_DIRS[idx]] : '●';
   if (c.kind === 'encoder') return idx === 0 ? '⟳' : idx === 1 ? '⟲' : '●';
   if (c.kind === 'switch') return `P${idx + 1}`;
@@ -412,6 +415,14 @@ export function cleanTemplate(o: unknown, i = 0): DeviceTemplate {
     // more than MAX_CALLOUT_INPUTS: the file is invalid (cutting it would silently drop buttons of the row)
     if (Array.isArray(q.inputs) && q.inputs.length > MAX_CALLOUT_INPUTS) {
       throw new Error(`Template “${t.name}”: callout ${j + 1}${typeof q.label === 'string' && q.label.trim() ? ` (${q.label.trim().slice(0, 40)})` : ''} has ${q.inputs.length} inputs; a callout can have at most ${MAX_CALLOUT_INPUTS}`);
+    }
+    // Check the original positions before sanitizing: an invalid press must never be silently removed or shifted.
+    if (kind === 'axis' && Array.isArray(q.inputs) && q.inputs.length > 1) {
+      const rawInputs = q.inputs, axes = rawInputs.slice(0, 2);
+      if (rawInputs.length > 3 || !axes.every((x) => typeof x === 'string' && (isAxisInput(x) || (rawInputs.length === 2 && x === ''))) ||
+          (rawInputs.length === 3 && (typeof rawInputs[2] !== 'string' || !isButtonInput(rawInputs[2])))) {
+        throw new Error(`Template “${t.name}”: callout ${j + 1}: an axis callout needs one or two axes; an optional third input must be a buttonN after two axes`);
+      }
     }
     const inputs = Array.isArray(q.inputs) ? q.inputs.filter((x): x is string => typeof x === 'string' && (x === '' || INPUT_RE.test(x))) : [];
     if (!inputs.length) throw new Error(`Template “${t.name}”: callout ${j + 1} has no valid input`);

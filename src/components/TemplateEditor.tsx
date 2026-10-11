@@ -4,7 +4,7 @@ import { getPads, padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { deviceInputs, multiPickRange, pickEntries, usage, type DeviceInputs, type PickEntry } from '../lib/inputPicker';
 import { usePadHits, type PressHit } from '../lib/listen';
 import {
-  BLANK_ASPECT, CALLOUT_KINDS, HAT_DIRS, editorMaxInputs, parseButtonRange, calloutFor, calloutTitle, coveredInputs, freeBoxSpot, hatInputs, inputRole, inputsForKind,
+  BLANK_ASPECT, CALLOUT_KINDS, HAT_DIRS, editorMaxInputs, parseButtonRange, calloutFor, calloutTitle, coveredInputs, freeBoxSpot, hatInputs, inputRole, inputsForKind, isAxisInput, isButtonInput,
   calloutView, loadImageFile, matchFor, matchScore, shortInput, templateViews, uid, usedInputs, viewTemplate, type Callout, type CalloutKind, type DeviceIdentity, type DeviceTemplate, type Pt,
 } from '../lib/templates';
 import { MAX_PAGES, addPage, deletePage, movePage, pageCallouts, pageLabel, renamePage, setPageImage } from '../lib/templatePages';
@@ -106,7 +106,15 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
     if (pressTarget) {
       const c = cur.callouts.find((x) => x.id === pressTarget.id);
       if (c) {
-        const next = c.kind === 'hat' && /^hat\d_/.test(input) && pressTarget.idx < 4 ? calloutFor(input).inputs.concat(c.inputs.slice(4)) : c.inputs.map((x, i) => (i === pressTarget.idx ? input : x));
+        if (c.kind === 'axis') {
+          if (pressTarget.idx === 2 && (c.inputs.length < 2 || !c.inputs.slice(0, 2).every(isAxisInput))) { setPressTarget(null); return; }
+          if (!(pressTarget.idx === 2 ? isButtonInput(input) : isAxisInput(input))) {
+            notify('err', pressTarget.idx === 2 ? 'Press a numbered button for the stick press. Still listening…' : 'Move an axis to set this input. Still listening…');
+            return;
+          }
+        }
+        const next = c.kind === 'axis' && pressTarget.idx === 2 ? [...c.inputs.slice(0, 2), input]
+          : c.kind === 'hat' && /^hat\d_/.test(input) && pressTarget.idx < 4 ? calloutFor(input).inputs.concat(c.inputs.slice(4)) : c.inputs.map((x, i) => (i === pressTarget.idx ? input : x));
         patchCallout(c.id, { inputs: next });
       }
       setPressTarget(null);
@@ -447,7 +455,7 @@ function InputsEditor({ c, slot, devIn, callouts, pressTarget, setPressTarget, c
   const buttons = devIn ? pickEntries(devIn, callouts, 'button') : [];
   const set = (i: number, v: string) => onChange(c.inputs.map((x, j) => (j === i ? v : x)));
   const pressBtn = (i: number) => canPress && (
-    <button type="button" onClick={() => setPressTarget(pressTarget?.id === c.id && pressTarget.idx === i ? null : { id: c.id, idx: i })} title="Press the control on the device to set this input"
+    <button type="button" onClick={() => setPressTarget(pressTarget?.id === c.id && pressTarget.idx === i ? null : { id: c.id, idx: i })} title="Press the control on the device to set this input" aria-label={c.kind === 'axis' && i === 2 ? 'Listen for press button' : `Listen for input ${i + 1}`}
       className={`rounded border px-1 text-[10px] ${pressTarget?.id === c.id && pressTarget.idx === i ? 'border-mod bg-mod/20 text-mod' : 'border-edge text-slate-400 hover:border-hud/60'}`}>
       {pressTarget?.id === c.id && pressTarget.idx === i ? 'press…' : <Ico name="press" />}
     </button>
@@ -457,8 +465,8 @@ function InputsEditor({ c, slot, devIn, callouts, pressTarget, setPressTarget, c
     <button type="button" data-testid="input-picker-btn" aria-expanded={open === i} aria-label={`Pick ${label} from the device inputs`} title={`Pick from ${devIn.from === 'device' ? 'the device' : 'the link rule'}'s inputs`}
       onClick={() => setOpen(open === i ? null : i)} className={`rounded border px-1 text-[10px] ${open === i ? 'border-hud bg-hud/15 text-hud' : 'border-edge text-slate-400 hover:border-hud/60'}`}>▾</button>
   );
-  const picker = (i: number, value: string, apply: (v: string) => void) => devIn && open === i && (
-    <InputPicker d={devIn} entries={buttons} value={value} selfId={c.id} onClose={() => setOpen(null)} onPick={(v) => { setOpen(null); apply(v); }} />
+  const picker = (i: number, value: string, apply: (v: string) => void, entries = buttons) => devIn && open === i && (
+    <InputPicker d={devIn} entries={entries} value={value} selfId={c.id} onClose={() => setOpen(null)} onPick={(v) => { setOpen(null); apply(v); }} />
   );
   const range = devIn && buttons.length ? multiPickRange(c, slot) : null;
   const multi = (roles: (i: number) => string, apply: (inputs: string[]) => void) => range && devIn && (open === 'multi'
@@ -511,17 +519,31 @@ function InputsEditor({ c, slot, devIn, callouts, pressTarget, setPressTarget, c
     );
   }
   if (c.kind === 'axis') {
+    const axisInputs = c.inputs.slice(0, 2);
+    const canSetPress = axisInputs.length === 2 && axisInputs.every(isAxisInput);
+    const setPress = (v: string) => onChange(v ? [...axisInputs, v] : axisInputs);
     return (
       <div className="space-y-1">
-        {c.inputs.map((a, i) => (
+        {axisInputs.map((a, i) => (
           <label key={i} className="flex items-center gap-2">{c.inputs.length > 1 ? (i ? 'Axis 2' : 'Axis 1') : 'Axis'}
             <select value={a} onChange={(e) => set(i, e.target.value)} aria-label={`Axis ${i + 1}`} className={`${field} min-w-0 flex-1 font-mono`}>
               {[...new Set([a, ...axes])].map((x) => <option key={x} value={x}>{x ? `${x}${usedNote(x)}${devIn?.from === 'device' && !devIn.axes.includes(x) ? ' (not on the device)' : ''}` : '— not set —'}</option>)}
             </select>
             {pressBtn(i)}
-            {i > 0 && <button type="button" onClick={() => onChange(c.inputs.slice(0, 1))} className="text-slate-500 hover:text-alert" aria-label="Remove second axis"><Ico name="close" /></button>}
+            {i > 0 && <button type="button" onClick={() => { setPressTarget(null); setOpen(null); onChange(c.inputs.slice(0, 1)); }} className="text-slate-500 hover:text-alert" aria-label="Remove second axis"><Ico name="close" /></button>}
           </label>
         ))}
+        {canSetPress && <>
+          <label className="flex items-center gap-2">Press button
+            <input defaultValue={c.inputs[2] ?? ''} key={`${c.id}:press:${c.inputs[2] ?? ''}`} placeholder="optional, e.g. button6" aria-label="Press button input"
+              onBlur={(e) => { const v = numIn(e.target.value); if (v === '' || isButtonInput(v)) setPress(v); else e.target.value = c.inputs[2] ?? ''; }}
+              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
+            {pickBtn(2, 'the press button')}
+            {pressBtn(2)}
+            {c.inputs[2] && <button type="button" onClick={() => { setPressTarget(null); setOpen(null); setPress(''); }} className="text-slate-500 hover:text-alert" aria-label="Clear press button"><Ico name="close" /></button>}
+          </label>
+          {picker(2, c.inputs[2] ?? '', setPress, buttons.filter((e) => isButtonInput(e.input)))}
+        </>}
         {devIn?.from === 'device' && <p className="text-[10px] text-slate-500">{devIn.axes.length} axes on {devIn.label}: {devIn.axes.join(', ') || 'none'}</p>}
         {c.inputs.length < 2 && <button type="button" onClick={() => onChange([...c.inputs, axes.find((x) => !c.inputs.includes(x) && !used.has(x)) ?? axes.find((x) => !c.inputs.includes(x)) ?? axes[0]])} className="text-[11px] text-hud hover:underline"><Ico name="plus" /> second axis (mini-stick)</button>}
       </div>

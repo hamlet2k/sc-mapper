@@ -553,6 +553,51 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
   });
   const moza = (buttons: number) => ({ name: 'MOZA AB6 FFB Base', vendor: '346E', productId: '1002', buttons, slot: 'js' as const });
   const tpl = (id: string, match: any[], extra: any = {}) => ({ version: 1 as const, id, name: id, slot: 'js' as const, aspect: 1.6, match, callouts: [], ...extra });
+  const axisTemplate = (inputs: unknown[]) => tpl('mini-press', [], { callouts: [{ id: 'mini', kind: 'axis', inputs, label: 'Ministick', anchor: { x: 0.5, y: 0.5 }, box: { x: 0.2, y: 0.5 } }] });
+  t('axis press: two axes plus a button validate and round-trip through template export/import', () => {
+    const clean = tp.cleanTemplate(axisTemplate(['rotx', 'roty', 'button6']));
+    assert.deepEqual(clean.callouts[0].inputs, ['rotx', 'roty', 'button6']);
+    assert.deepEqual(tp.parseTemplates(tp.exportTemplates([clean]))[0].callouts, clean.callouts);
+    assert.equal(tp.inputRole(clean.callouts[0], 2), 'Press');
+    assert.ok(tp.coveredInputs(clean.callouts[0]).includes('button6'));
+    assert.equal(tp.calloutTitle({ ...clean.callouts[0], label: undefined }), 'RX/RY');
+    for (const inputs of [['x'], ['x', 'y'], ['thumblx', 'thumbly'], ['', '']]) {
+      assert.deepEqual(tp.cleanTemplate(axisTemplate(inputs)).callouts[0].inputs, inputs, 'old axis inputs unchanged');
+    }
+  });
+  t('axis press: refuse a button after one axis, non-button third entries, missing axes, and extra inputs', () => {
+    for (const inputs of [['x', 'button6'], ['x', 'y', 'z'], ['x', 'y', 'hat1_up'], ['x', 'y', ''], ['x', 'y', 6],
+      ['x', 'y', 'button6!'], ['x', 'y', 'button' + '6'.repeat(30)], ['x', 'y', 'button0'], ['x', '', 'button6'], ['button5', 'y', 'button6'], ['x', 'y', 'button6', 'button7']]) {
+      assert.throws(() => tp.cleanTemplate(axisTemplate(inputs)), /optional third input must be a buttonN after two axes/, String(inputs));
+      assert.throws(() => tp.parseTemplates(JSON.stringify(axisTemplate(inputs))), /optional third input/);
+    }
+  });
+  const React = await import('react');
+  const { createElement } = React;
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { CalloutBody } = await import('../src/components/DeviceCanvas');
+  // The unit runner uses the root tsconfig (classic JSX); Vite uses the app's automatic JSX runtime.
+  (globalThis as any).React = React;
+  t('axis press: button chip and action highlight independently of axis meters, respecting keyboard modifiers', () => {
+    const c = tp.cleanTemplate(axisTemplate(['rotx', 'roty', 'button6'])).callouts[0];
+    const row = buildRows(defaults, ed.newProfile('press'))[0];
+    const entry = (input: string, prefix: string) => ({ row, b: { slot: 'js' as const, instance: 1, input, phys: input, custom: true, devices: [] }, prefix, conflict: false });
+    const plain = entry('button6', ''), alt = entry('lalt+button6', 'lalt');
+    const entriesFor = (i: string) => i === 'button6' ? [plain, alt] : [];
+    const render = (active: string[], keyMods = new Set<string>()) => renderToStaticMarkup(createElement(CalloutBody, {
+      c, s: { tone: 'custom', active: active.length > 0 }, entriesFor, live: { active: new Set(active), values: {} }, keyMods,
+    }));
+    const idle = render([]), axis = render(['rotx']), pressed = render(['button6']), layered = render(['button6'], new Set(['lalt']));
+    assert.match(idle, /Press 6/);
+    assert.equal((idle.match(/data-axis-live=/g) ?? []).length, 2, 'press has no axis meter');
+    assert.doesNotMatch(idle, /data-row-live="1"/);
+    assert.doesNotMatch(axis, /data-dir="button6" data-active="1"|data-row-live="1"/);
+    assert.match(pressed, /data-dir="button6" data-active="1"/);
+    assert.match(pressed, /data-row-live="1" data-row-input="button6"/);
+    assert.doesNotMatch(pressed, /data-row-live="1" data-row-input="lalt\+button6"/);
+    assert.match(layered, /data-row-live="1" data-row-input="lalt\+button6"/);
+  });
+  delete (globalThis as any).React;
   const submission = await import('../src/lib/submitTemplate');
   t('template author: trimmed, capped, optional, unknown fields ignored; export round trip keeps it', () => {
     const src = tpl('author-test', [], { author: '  Pilot Handle  ', unknown: 'ignored' });
@@ -2584,6 +2629,10 @@ console.log('\npress to bind (Devices, Edit mode)');
   t('the selected callout wins when two show the same input', () => {
     assert.deepEqual(pb.pressBindTarget(callouts, 'js', 1, { slot: 'js', instance: 1, inputs: ['button1'] }, 'dup'), { kind: 'hit', calloutId: 'dup', input: 'button1' });
   });
+  t('a mini-stick press selects its axis callout and binds the button itself', () => {
+    assert.deepEqual(pb.pressBindTarget([{ id: 'mini', inputs: ['rotx', 'roty', 'button6'] }], 'js', 1,
+      { slot: 'js', instance: 1, inputs: ['button6'] }), { kind: 'hit', calloutId: 'mini', input: 'button6' });
+  });
   t('an input no callout shows: raw input (callout null)', () => {
     assert.deepEqual(pb.pressBindTarget(callouts, 'js', 1, { slot: 'js', instance: 1, inputs: ['button47'] }), { kind: 'hit', calloutId: null, input: 'button47' });
   });
@@ -2716,6 +2765,18 @@ console.log('\nshared controller files');
     const bad = JSON.parse(sh.serializeShared(sh.packController({ game, device, template: row(4), bindings })));
     bad.template.template.callouts.at(-1).inputs = Array.from({ length: 33 }, (_, k) => `button${k + 1}`);
     assert.match(errOf(JSON.stringify(bad)), /damaged: .*has 33 inputs; a callout can have at most 32/);
+  });
+  t('shared controller: optional axis press and its button binding round-trip without a version bump', () => {
+    const template = { ...custom, callouts: [{ ...custom.callouts[0], kind: 'axis' as const, inputs: ['rotx', 'roty', 'button6'] }] };
+    const pk = sh.packController({ game, device, template, bindings: [{ ...bindings[0], input: 'button6' }] });
+    const back = sh.parseShared(sh.serializeShared(pk));
+    assert.equal(back.version, 1);
+    assert.equal(back.template.kind, 'custom');
+    if (back.template.kind === 'custom') assert.deepEqual(back.template.template.callouts[0].inputs, ['rotx', 'roty', 'button6']);
+    assert.deepEqual(back.bindings, pk.bindings);
+    const bad = JSON.parse(sh.serializeShared(pk));
+    bad.template.template.callouts[0].inputs = ['rotx', 'roty', 'z'];
+    assert.match(errOf(JSON.stringify(bad)), /damaged: .*optional third input must be a buttonN/);
   });
   t('version and format validation: friendly errors for wrong, corrupt and newer files', () => {
     const ok = sh.packController({ game, device, template: builtin, bindings });
@@ -2898,6 +2959,11 @@ console.log('\ntemplate feed');
     const file = fd.feedTemplate({ ...BUILTIN_TEMPLATES[0], author: 'Pilot Handle' });
     assert.equal(JSON.parse(fd.stableJson(file)).author, 'Pilot Handle');
     assert.equal(parseTemplates(fd.stableJson(file))[0].author, 'Pilot Handle');
+  });
+  t('feed template preserves the optional axis press in version 1 JSON and import', () => {
+    const file = fd.feedTemplate({ ...BUILTIN_TEMPLATES[0], callouts: [{ id: 'mini', kind: 'axis', inputs: ['rotx', 'roty', 'button6'], anchor: { x: 0.5, y: 0.5 }, box: { x: 0.2, y: 0.5 } }] });
+    assert.equal(file.version, 1);
+    assert.deepEqual(parseTemplates(fd.stableJson(file))[0].callouts[0].inputs, ['rotx', 'roty', 'button6']);
   });
   const read = (path: string) => JSON.parse(a.files.get(path.slice(1))!);
   t('every built-in template is in the feed (index entry + file), nothing else', () => {

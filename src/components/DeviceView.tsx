@@ -701,7 +701,7 @@ function InputPanel({ c, slot, instance, index, rows, live, keyMods, editMode, o
           return (
             <li key={i} data-input={i}>
               <div className="flex items-center gap-1.5">
-                <code className={`rounded px-1 ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-hud/90'}`}>{formatInput(slot, instance, i)}</code>
+                <code className={`rounded px-1 ${live.active.has(i) ? 'bg-hud text-black' : 'bg-black/40 text-hud/90'}`}>{inputRole(c, c.inputs.indexOf(i)) === 'Press' ? 'Press · ' : ''}{formatInput(slot, instance, i)}</code>
                 <button type="button" onClick={() => onShowInList(searchSpec(slot, instance, i))} className="ml-auto text-[10px] text-hud hover:underline">show in list</button>
               </div>
               {!es.length ? <div className="mt-0.5 text-[11px] text-slate-600">not bound</div> : (
@@ -730,7 +730,7 @@ function InputPanel({ c, slot, instance, index, rows, live, keyMods, editMode, o
           {bindable.length > 1 ? (
             <select value={target} onChange={(e) => setTarget(e.target.value)} aria-label="Input to bind" data-testid="bind-target"
               className={`rounded border bg-panel2 px-1 py-0.5 font-mono text-[11px] text-slate-200 ${pressed === target ? 'border-ok/70' : 'border-edge'}`}>
-              {bindable.map((i) => <option key={i} value={i}>{i}</option>)}
+              {bindable.map((i) => <option key={i} value={i}>{inputRole(c, c.inputs.indexOf(i)) === 'Press' ? 'Press · ' : ''}{i}</option>)}
             </select>
           ) : <code className="text-hud/90" data-testid="bind-target-fixed">{target}</code>}
           {bindable.length > 1 && (

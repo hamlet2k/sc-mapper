@@ -1133,6 +1133,34 @@ check((await tplCount()) === 3, 'callout deleted');
 await page.keyboard.press('Control+z');
 await page.waitForTimeout(100);
 check((await tplCount()) === 4, 'Ctrl+Z brings it back');
+{ // a single mini-stick callout covers its two axes and optional numbered press button
+  await te.getByTestId('tpl-callouts').locator('button').filter({ hasText: /axis · Z/ }).click();
+  check(await te.getByLabel('Press button input').count() === 0, 'one-axis callout hides the Press button field');
+  await te.getByLabel('Axis 1').selectOption('rotx');
+  await te.getByRole('button', { name: /second axis/ }).click();
+  await te.getByLabel('Axis 2').selectOption('roty');
+  await te.getByLabel('Callout name').fill('Ministick');
+  const press = te.getByLabel('Press button input');
+  await press.fill('6');
+  await press.press('Enter');
+  check(await press.inputValue() === 'button6', 'ministick press accepts a bare button number');
+  await te.getByRole('button', { name: 'Clear press button' }).click();
+  check(await press.inputValue() === '', 'clearing the press leaves the two axes');
+  await te.getByRole('button', { name: 'Pick the press button from the device inputs' }).click();
+  const picker = te.getByTestId('input-picker');
+  check(await picker.getByTestId('input-picker-option').count() === 32, 'press picker offers numbered buttons, excluding POV directions');
+  await picker.locator('[data-input="button6"]').click();
+  await te.getByRole('button', { name: 'Remove second axis' }).click();
+  check(await press.count() === 0 && await te.getByTestId('callout-press').count() === 0, 'removing the second axis also removes its press');
+  await te.getByRole('button', { name: /second axis/ }).click();
+  await te.getByLabel('Axis 2').selectOption('roty');
+  await te.getByRole('button', { name: 'Listen for press button' }).click();
+  await page.waitForTimeout(300);
+  await tap(() => window.__axis(1, 4, 0.9), () => window.__axis(1, 4, 0));
+  check(await press.inputValue() === '', 'press capture ignores axis movement and keeps listening');
+  await tap(() => window.__btn(1, 5, true), () => window.__btn(1, 5, false));
+  check(await press.inputValue() === 'button6' && /Press 6/.test(await te.getByTestId('callout-press').innerText()), 'capture assigns a button to the optional third input and previews Press');
+}
 {
   const b64 = await page.evaluate(() => {
     // a plain drawing of a stick (2400 x 1500, scaled down to 1600 px on upload)
@@ -1194,6 +1222,25 @@ check(await te.count() === 0, 'template saved, editor closed');
 check((await dv.getByTestId('template-author').innerText()) === 'by Test Pilot' && await dv.getByTestId('template-submit').isVisible(), 'saved user template shows its author and Submit to feed action');
 check(/linked to this device \(USB 231D:0200\)/.test(await dv.getByTestId('device-status').innerText()), 'saved template auto-applies to the EVO R by USB id');
 check((await dv.locator('[data-callout]').count()) === 4 && (await dv.innerText()).includes('Decoy'), 'device view uses the new template (B3 shows its Decoy binding)');
+{
+  const mini = dv.locator('[data-callout]').filter({ hasText: 'Ministick' }), press = mini.getByTestId('callout-press');
+  check(/Press 6/.test(await press.innerText()) && await mini.locator('[data-axis-live]').count() === 2, 'saved device callout shows two axis meters and a separate Press line');
+  await page.evaluate(() => window.__btn(1, 5, true));
+  await page.waitForTimeout(250);
+  check(await mini.getAttribute('data-active') === '1' && await press.locator('[data-dir="button6"]').getAttribute('data-active') === '1' && await press.locator('[data-row-input="button6"][data-row-live="1"]').count() > 0,
+    'stick press highlights its callout, Press chip, and bound button actions');
+  await page.evaluate(() => window.__btn(1, 5, false));
+  const wasEditing = await page.getByTestId('edit-bar').isVisible().catch(() => false);
+  if (!wasEditing) await page.getByTestId('edit-toggle').click();
+  await dv.getByTestId('press-bind').click();
+  await page.waitForTimeout(300);
+  await tap(() => window.__btn(1, 5, true), () => window.__btn(1, 5, false));
+  const panel = dv.getByTestId('input-panel');
+  check(/ministick/i.test(await panel.innerText()) && /Press/.test(await panel.locator('[data-input="button6"]').innerText()) && await panel.getByTestId('bind-target').inputValue() === 'button6',
+    'press-to-bind selects the ministick and its button, with Press mappings in the inspector');
+  await panel.getByRole('button', { name: 'Close', exact: true }).click();
+  if (!wasEditing) await page.getByTestId('edit-toggle').click();
+}
 { // the 4-callout template has no callout for button 12, so that binding is listed beside the picture
   const ov = await dv.getByTestId('device-overflow').innerText();
   check((await dv.locator('[data-overflow="button12"]').count()) === 1 && /Autoland/.test(ov), `bound inputs without a callout listed beside the picture (${ov.replace(/\n/g, ' ').slice(0, 120)})`);
@@ -1205,6 +1252,7 @@ let exported;
   await d.saveAs(f);
   exported = JSON.parse(readFileSync(f, 'utf8'));
   const t0 = exported.templates?.[0];
+  check(t0.callouts.find((c) => c.label === 'Ministick')?.inputs.join() === 'rotx,roty,button6', 'exported template preserves both ministick axes and its press button');
   check(exported.format === 'sc-mapper-device-templates' && /^data:image\//.test(t0?.image) && t0.callouts.length === 4 && t0.match[0].vendor === '231D', `template exported as JSON with the image embedded (${d.suggestedFilename()}, ${(readFileSync(f).length / 1024) | 0} KB)`);
 }
 writeFileSync('/tmp/shared-template.json', JSON.stringify({ ...exported, templates: [{ ...exported.templates[0], id: 'shared-1', name: 'Shared stick', match: [{ name: 'Gladiator EVO L' }] }] }));
