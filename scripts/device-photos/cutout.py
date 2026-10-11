@@ -14,7 +14,7 @@ Photo folder default: /workspace/uploads/sc-templates/templates (vendor product 
 """
 import json, os, sys
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 from scipy import ndimage
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -67,9 +67,26 @@ def process(v):
         a = (~outside).astype(np.float32)
         bg = np.array([255, 255, 255], np.float32); have_alpha = False
     else:
-        a = model_mask(rgba, key); have_alpha = False
+        if v.get('outline'):
+            # Hand-traced source outline for thumbnails where the model drops controls.
+            mask = Image.new('L', rgba.size, 0)
+            cx, cy = v.get('crop', [0, 0])[:2]
+            ImageDraw.Draw(mask).polygon([(x - cx, y - cy) for x, y in v['outline']], fill=255)
+            a = np.asarray(mask, np.float32) / 255
+        else:
+            a = model_mask(rgba, key)
+        have_alpha = False
         border = np.concatenate([rgb[:4].reshape(-1, 3), rgb[-4:].reshape(-1, 3), rgb[:, :4].reshape(-1, 3), rgb[:, -4:].reshape(-1, 3)])
         bg = np.median(border, axis=0)
+    # Source-coordinate exclusions remove adjacent reflections / thumbnail banners
+    # without clipping a tilted device to a rectangular crop.
+    if v.get('exclude'):
+        mask = Image.new('L', rgba.size, 255)
+        draw = ImageDraw.Draw(mask)
+        cx, cy = v.get('crop', [0, 0])[:2]
+        for polygon in v['exclude']:
+            draw.polygon([(x - cx, y - cy) for x, y in polygon], fill=0)
+        a = a * (np.asarray(mask, np.float32) / 255)
     # largest parts only (drops logos, stray specks); keep every part at least 3 % of the biggest one
     lab, n = ndimage.label(a > 0.35)
     if n > 1:

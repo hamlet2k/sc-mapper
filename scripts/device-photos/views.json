@@ -1,5 +1,5 @@
 {
-  "_doc": "Photo views of the device-specific built-in templates: source photo (relative to the photo folder), optional crop [x0,y0,x1,y1] in source pixels, background: white for edge-connected white studio backgrounds. Processed by scripts/device-photos/cutout.py into public/device-photos/<device>-<view>.webp.",
+  "_doc": "Photo views of the device-specific built-in templates: source photo (relative to the photo folder), optional crop [x0,y0,x1,y1], outline polygon (fallback when the model drops controls), and exclude polygons in source pixels, background: white for edge-connected white studio backgrounds. Processed by scripts/device-photos/cutout.py into public/device-photos/<device>-<view>.webp.",
   "views": [
     { "device": "tm-warthog-stick", "view": "thumb", "label": "Thumb side", "src": "stick/thrustmaster/warthog/gallery-hotas-warthog-flight-stick1.png" },
     { "device": "tm-warthog-stick", "view": "side", "label": "Right side", "src": "stick/thrustmaster/warthog/71oQvyJJAvL.jpg" },
@@ -70,6 +70,7 @@
     {"device": "winctrl-32-rmp", "view": "main", "label": "RMP", "src": "../../panels7/winwing-32-rmp/user-rmp.png", "background": "white"},
     {"device": "winctrl-32-tcas", "view": "main", "label": "TCAS", "src": "../../panels7/winwing-32-tcas/user-tcas.png", "background": "white"},
     {"device": "winctrl-pfp-3n", "view": "main", "label": "CDU", "src": "../../panels7/winwing-pfp-3n/user-pfp3n.png", "background": "white"},
-    {"device": "tc-apache-mpd", "view": "main", "label": "MPD", "src": "../../panels7/tc-apache-mpd/Total_Controls_1656webb.jpg"}
+    {"device": "tc-apache-mpd", "view": "main", "label": "MPD", "src": "../../panels7/tc-apache-mpd/user-apache-mpd.png", "crop": [60, 25, 724, 654], "background": "white", "exclude": [[[60, 633], [104, 633], [104, 653], [668, 636], [668, 615], [724, 615], [724, 654], [60, 654]]]},
+    {"device": "bfs-a10c-ufc", "view": "main", "label": "UFC", "src": "../../panels7/a10c-ufc-bfs.png", "crop": [5, 148, 583, 379], "outline": [[64, 150], [72, 151], [571, 226], [577, 230], [580, 237], [558, 354], [555, 363], [550, 374], [542, 377], [40, 260], [25, 254], [18, 246], [16, 239], [10, 236], [7, 231], [6, 224], [9, 216], [13, 212], [30, 215], [33, 211], [58, 159], [61, 152]]}
   ]
 }
