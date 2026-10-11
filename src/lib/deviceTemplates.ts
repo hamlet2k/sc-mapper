@@ -818,7 +818,7 @@ photoTplExactViews({
 ]);
 
 tpl('winctrl-carrierace', {
-  id: 'builtin-winctrl-carrierace', category: 'stick', name: 'WinCtrl CarrierAce stick (WinCtrl base)', brand: 'WinCtrl', notes: WC_NOTE,
+  id: 'builtin-winctrl-carrierace', category: 'stick', name: 'WINCTRL CarrierAce stick (WINCTRL base)', brand: 'WINCTRL', notes: WC_NOTE,
   match: [{ name: 'JGRIP-F18' }, { name: 'Metal 2 + CarrierAce' }, { name: 'CarrierAce Joystick' }, { name: 'CarrierAce Stick' }],
 }, [
   c('wpn', 'button', b(20), 'Weapon release', 'Grip head', { side: 'L' }),
@@ -834,7 +834,7 @@ tpl('winctrl-carrierace', {
   c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
 ]);
 tpl('winctrl-viperace', {
-  id: 'builtin-winctrl-viperace', category: 'stick', name: 'WinCtrl ViperAce stick (WinCtrl base)', brand: 'WinCtrl',
+  id: 'builtin-winctrl-viperace', category: 'stick', name: 'WINCTRL ViperAce stick (WINCTRL base)', brand: 'WINCTRL',
   notes: WC_NOTE + ' Uses buttons above 32: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ name: 'JGRIP-F16' }, { name: 'Metal 2 + ViperAce' }, { name: 'ViperAce Joystick' }, { name: 'ViperAce Stick' }],
 }, [
@@ -857,7 +857,7 @@ tpl('winctrl-viperace', {
 ]);
 // Exact photos, view sizes and callouts from the supplied Orion export (2026-10-10).
 photoTplExactViews({
-  id: 'builtin-winctrl-orion', category: 'throttle', name: 'WinCtrl Orion throttle (F-15EX grips, F/A-18 panel)', brand: 'WinCtrl',
+  id: 'builtin-winctrl-orion', category: 'throttle', name: 'WINCTRL Orion throttle (F-15EX grips, F/A-18 panel)', brand: 'WINCTRL',
   notes: WC_NOTE + ' Uses buttons up to 111: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ name: 'F15EX HANDLE' }, { name: 'Orion Throttle Base II + F15EX' }],
 }, [
@@ -952,7 +952,7 @@ photoTplExactViews({
 ]);
 // WinCtrl URSA MINOR Combat: exact callouts from Federico's export (2026-10-06) — photoTplExactViews.
 photoTplExactViews({
-  id: 'builtin-winctrl-ursa-combat', category: 'throttle', name: 'WinCtrl URSA MINOR throttle (Combat grip)', brand: 'WinCtrl',
+  id: 'builtin-winctrl-ursa-combat', category: 'throttle', name: 'WINCTRL URSA MINOR throttle (Combat grip)', brand: 'WINCTRL',
   notes: 'Grip numbers from the WinCtrl grip maps; base from published export. Lever detents soft 18/22, hard 24/25. Buttons to 81: use Firefox (Chrome caps at 32). Customize a copy if yours differ.',
   match: [{ vendor: '4098', product: 'B970' }, { vendor: '4098', product: 'BC27' }, { name: 'URSA MINOR Combat' }, { name: 'URSA MINOR Throttle' }],
 }, [
@@ -1111,7 +1111,7 @@ photoTpl({
   ...ab6Base(),
 ]);
 photoTpl({
-  id: 'builtin-moza-ab6-carrierace', category: 'stick', name: 'MOZA AB6/9 base + WinCtrl CarrierAce grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
+  id: 'builtin-moza-ab6-carrierace', category: 'stick', name: 'MOZA AB6/9 base + WINCTRL CarrierAce grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
   notes: AB6_WC_NOTE + ' Not on MOZA’s supported-grip list: check your AB6/9 firmware. ' + AB6_GRIP_NOTE,
 }, [
   c('wpn', 'button', b(20), 'Weapon release', 'Grip head'),
@@ -1129,7 +1129,7 @@ photoTpl({
 // MOZA AB6 + WinCtrl ViperAce EX: exact callouts from Federico's export (2026-10-07) — photoTplExactViews, not withPhotoLayout.
 // Canvases = pageSizeForPhoto of each photo (548x986 -> 1140x986, 1136x1430 -> 1994x1430), same as the export.
 photoTplExactViews({
-  id: 'builtin-moza-ab6-viperace', category: 'stick', name: 'MOZA AB6/9 base + WinCtrl ViperAce EX grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
+  id: 'builtin-moza-ab6-viperace', category: 'stick', name: 'MOZA AB6/9 base + WINCTRL ViperAce EX grip', brand: 'MOZA', variantOf: 'builtin-moza-ab6', match: [],
   notes: AB6_WC_NOTE + ' Wheel / EX trigger 1 / 2 / 41 / 42 / 3 (SimAppPro: 42 / 43). ' + AB6_GRIP_NOTE,
 }, [
   { id: 'front', label: 'Front (on the AB6/9)', photo: 'moza-ab6-viperace-front', width: 1140, height: 986 },
@@ -1467,7 +1467,7 @@ photoTplExactViews({
 // Distinct from builtin-winctrl-orion (the F-15EX throttle): pedals use USB 4098:BEF0 and the "Orion Pedals" / "Combat Rudder" names.
 // Exact callouts from Federico's export (anchor + box fractions as saved) — do not run through withPhotoLayout auto-box.
 photoTplExact({
-  id: 'builtin-winctrl-orion-pedals', category: 'pedals', name: 'WinCtrl Orion Combat Rudder Pedals', brand: 'WinCtrl',
+  id: 'builtin-winctrl-orion-pedals', category: 'pedals', name: 'WINCTRL Orion Combat Rudder Pedals', brand: 'WINCTRL',
   notes: 'Toe brakes = rotx / roty, rudder = rotz. Button numbers as reported by DirectInput on a Metal unit. Callout positions from the published Metal export.',
   match: [{ vendor: '4098', product: 'BEF0' }, { name: 'Orion Pedals' }, { name: 'Orion Combat Rudder' }, { name: 'Combat Rudder Pedals' }],
 }, 'winctrl-orion-pedals-main', 'main', 'Pedals', 1413.0434782608697, 1000, [
@@ -1491,7 +1491,7 @@ const WC_MFD_NOTE = WC_NOTE + ' Bezel 1-44 per the WinCtrl diagram (GAIN 10/11, 
 // Exact photos and callouts from Federico's export (2026-10-09); retain the built-in metadata.
 // Bottom banks repeat the right-bank inputs in the export; preserve the authored numbering.
 photoTplExactViews({
-  id: 'builtin-winctrl-carrierace-mfd-l', category: 'panel', name: 'WinCtrl CarrierAce MFD', brand: 'WinCtrl', notes: WC_MFD_NOTE,
+  id: 'builtin-winctrl-carrierace-mfd-l', category: 'panel', name: 'WINCTRL CarrierAce MFD', brand: 'WINCTRL', notes: WC_MFD_NOTE,
   match: [{ vendor: '4098', product: 'BEE0' }, { vendor: '4098', product: 'BEE1' }, { vendor: '4098', product: 'BEE2' }, { name: 'CarrierAce MFD' }],
 }, [
   { id: 'main', label: 'MFD', photo: 'winctrl-carrierace-mfd-l', width: 2420, height: 1367 },
@@ -1526,7 +1526,7 @@ photoTplExactViews({
 // PTO 2: numbering from Federico's WinCtrl diagram (2026-10-06). Button 2 (MASTER CAUTION) is not numbered there, so not mapped.
 const WC_PTO2_NOTE = WC_NOTE + ' Per Federico\'s WinCtrl diagram: 1, 3-41 (switch positions grouped); MASTER CAUTION is not numbered there. Buttons above 32: use Firefox (Chrome / Edge stop at 32).';
 photoTpl({
-  id: 'builtin-winctrl-carrierace-pto2', category: 'panel', name: 'WinCtrl CarrierAce PTO 2', brand: 'WinCtrl', notes: WC_PTO2_NOTE,
+  id: 'builtin-winctrl-carrierace-pto2', category: 'panel', name: 'WINCTRL CarrierAce PTO 2', brand: 'WINCTRL', notes: WC_PTO2_NOTE,
   match: [{ vendor: '4098', product: 'BF05' }, { name: 'CarrierAce PTO 2' }, { name: 'CarrierAce PTO' }],
 }, [
   c('jett1', 'button', b(1), 'PUSH TO JETT (1)', 'Left'),
@@ -1549,7 +1549,7 @@ photoTpl({
 const WC_UFC_NOTE = WC_NOTE + ' UFC 1-41 (top toggles 33-38), HUD 65-83. Axes: UFC VOL 1/2 = RX/RY, BRT = RZ; HUD BRT = X, BLK LVL = Y, BAL = Z, AOA = Dial. COMM knob turning is not numbered (PULL 29/32 only). Buttons above 32: use Firefox.';
 // Exact photos and callouts from Federico's export (2026-10-09); retain the built-in metadata.
 photoTplExactViews({
-  id: 'builtin-winctrl-carrierace-ufc-hud', category: 'panel', name: 'WinCtrl CarrierAce UFC + HUD', brand: 'WinCtrl', notes: WC_UFC_NOTE,
+  id: 'builtin-winctrl-carrierace-ufc-hud', category: 'panel', name: 'WINCTRL CarrierAce UFC + HUD', brand: 'WINCTRL', notes: WC_UFC_NOTE,
   match: [{ vendor: '4098', product: 'BEDE' }, { name: 'CarrierAce UFC' }, { name: 'CarrierAce HUD' }, { name: 'UFC+HUD' }],
 }, [
   { id: 'ufc', label: 'UFC', photo: 'winctrl-carrierace-ufc', width: 2299, height: 1299 },
@@ -1758,7 +1758,7 @@ pedalTpl({
 /* ------------------------------------------------------------------ October 9 photo additions */
 // ICP numbering and axes: supplied SimAppPro diagram. USB 4098:BF30: the real Firefox device list in scripts/e2e.mjs.
 photoTpl({
-  id: 'builtin-winctrl-viperace-icp', category: 'panel', name: 'WinCtrl ViperAce ICP', brand: 'WinCtrl',
+  id: 'builtin-winctrl-viperace-icp', category: 'panel', name: 'WINCTRL ViperAce ICP', brand: 'WINCTRL',
   notes: WC_NOTE + ' ICP buttons 1–34 and axes X / Y / RX / RY from the supplied SimAppPro diagram. Chrome / Edge cap at 32 buttons — use Firefox for 33–34.',
   match: [{ vendor: '4098', product: 'BF30' }, { name: 'ICP' }, { name: 'ViperAce ICP' }],
 }, [

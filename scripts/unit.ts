@@ -1195,7 +1195,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     // picker groups: user templates, generic built-ins, then brands A-Z
     const mine = { ...tp.newTemplate('js', 'Mine'), brand: 'Thrustmaster' };
     const gr = tp.templateGroups([mine, ...all]);
-    assert.deepEqual(gr.map((g) => g.label), ['Your templates', 'Generic (built-in)', 'Azeron', 'Honeycomb', 'Logitech', 'MFG', 'MOZA', 'Thrustmaster', 'VIRPIL', 'VKB', 'WinCtrl', 'WINCTRL']);
+    assert.deepEqual(gr.map((g) => g.label), ['Your templates', 'Generic (built-in)', 'Azeron', 'Honeycomb', 'Logitech', 'MFG', 'MOZA', 'Thrustmaster', 'VIRPIL', 'VKB', 'WINCTRL']);
     assert.deepEqual(gr[0].templates.map((x) => x.name), ['Mine'], 'a user copy of a brand template stays under “Your templates”');
     assert.equal(gr[7].templates.length, 7, 'Thrustmaster: Warthog stick + throttle, T.16000M, TWCS, TFRP, TPR, MFD Cougar');
     // a copy of an unassigned template takes numbers per callout (the editor's “Customize a copy” path)
@@ -1799,12 +1799,15 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       assert.equal(new Set(assigned).size, assigned.length, `${id}: no duplicate numbering`);
     }
   });
-  t('Oct 10 Orion: exact exported layout and photos, original built-in metadata', () => {
+  t('Oct 10 Orion: exact exported layout and photos, built-in metadata with normalized WINCTRL spelling', () => {
     const expected = JSON.parse(readFileSync(new URL('./fixtures/oct10-orion.json', import.meta.url), 'utf8'));
     const actual = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion')!;
     assert.deepEqual({ aspect: actual.aspect, views: actual.views, callouts: actual.callouts },
       { aspect: expected.aspect, views: expected.views, callouts: expected.callouts }, 'every authored field, including optional regions');
-    for (const [key, value] of Object.entries(expected.metadata)) assert.deepEqual(actual[key as keyof DeviceTemplate], value, `original ${key}`);
+    for (const [key, value] of Object.entries(expected.metadata)) {
+      const normalized = (key === 'name' || key === 'brand') && typeof value === 'string' ? value.replaceAll('WinCtrl', 'WINCTRL') : value;
+      assert.deepEqual(actual[key as keyof DeviceTemplate], normalized, `original ${key} with normalized brand spelling`);
+    }
     for (const [photo, hash] of Object.entries(expected.photoHashes)) {
       assert.equal(createHash('sha256').update(readFileSync(new URL(`../public${photo}`, import.meta.url))).digest('hex'), hash, 'exact exported WebP bytes');
     }
@@ -1818,7 +1821,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
   t('MOZA AB6 + ViperAce EX: callouts keep Federico export anchor+box fractions (no withPhotoLayout re-box), same canvases', () => {
     const va = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-moza-ab6-viperace')!;
     assert.ok(va);
-    assert.equal(va.name, 'MOZA AB6/9 base + WinCtrl ViperAce EX grip'); assert.equal(va.brand, 'MOZA'); assert.deepEqual(va.match, []);
+    assert.equal(va.name, 'MOZA AB6/9 base + WINCTRL ViperAce EX grip'); assert.equal(va.brand, 'MOZA'); assert.deepEqual(va.match, []);
     assert.deepEqual(va.views?.map((v) => [v.id, v.label, v.image, v.width, v.height]), [
       ['front', 'Front (on the AB6/9)', '/device-photos/moza-ab6-viperace-front.webp', 1140, 986],
       ['side', 'Grip, labelled side', '/device-photos/winctrl-viperace-side.webp', 1994, 1430],
@@ -3042,6 +3045,35 @@ console.log('\nshared controller files');
     assert.equal(sg.suggestCategory('Throttle and rudder pedals'), 'pedals', 'specific pedal hint takes precedence');
   });
   const picker = await import('../src/lib/templatePicker');
+  t('template combobox: brand names shorten only within brand groups without changing data', () => {
+    const named = (name: string) => tp.newTemplate('js', name);
+    for (const [name, brand, model] of [
+      ['Thrustmaster HOTAS Warthog', 'Thrustmaster', 'HOTAS Warthog'],
+      ['winctrl: Orion', 'WINCTRL', 'Orion'], ['MOZA — AB6', 'MOZA', 'AB6'],
+      ['VKB / Gunfighter', 'VKB', 'Gunfighter'], ['A.C.M.E. + Base', 'A.C.M.E.', 'Base'],
+      ['MOZAic stick', 'MOZA', 'MOZAic stick'], ['Custom MOZA stick', 'MOZA', 'Custom MOZA stick'],
+      ['MOZA', 'MOZA', 'MOZA'], ['MOZA — ', 'MOZA', 'MOZA — '],
+    ]) {
+      const template = named(name);
+      assert.equal(picker.templateOptionName(template, brand), model);
+      assert.equal(picker.templateOptionName(template), name, 'suggestions and filtering retain full names');
+      assert.equal(template.name, name, 'display shortening does not mutate template data');
+    }
+    const ab6 = DEVICE_TEMPLATES.find((t) => t.id === 'builtin-moza-ab6')!;
+    assert.equal(picker.templateOptionDetails(ab6, 'js'), '62 buttons');
+    assert.equal(picker.templateOptionDetails(ab6, 'gp'), 'js · 62 buttons');
+    assert.equal(picker.templateOptionLabel(ab6, 'js'), `${ab6.name} · 62 buttons`, 'closed display keeps the full name and details');
+    assert.equal(picker.templateOptionDetails(named('Small template'), 'js'), '');
+  });
+  t('built-in brand spelling matches every name prefix; WINCTRL forms a single brand', () => {
+    for (const template of DEVICE_TEMPLATES) {
+      assert.ok(template.brand && template.name.startsWith(`${template.brand} `), template.id);
+      if (template.id.startsWith('builtin-winctrl-')) assert.equal(template.brand, 'WINCTRL', template.id);
+      assert.doesNotMatch(template.name, /WinCtrl/, template.id);
+    }
+    const brands = picker.templatePickerGroups(DEVICE_TEMPLATES).map((g) => g.brand).filter((b) => /winctrl/i.test(b ?? ''));
+    assert.ok(brands.length > 0 && brands.every((b) => b === 'WINCTRL'));
+  });
   t('template combobox: type order, categorized users, brands, models and adjacent variants', () => {
     const make = (id: string, name: string, category?: string, extra: Partial<DeviceTemplate> = {}): DeviceTemplate => ({ ...tp.newTemplate('js', name), id, category, builtin: true, ...extra });
     const base = make('base', 'Z base', 'stick', { brand: 'Acme' });

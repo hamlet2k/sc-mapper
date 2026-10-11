@@ -52,7 +52,18 @@ export function matchesTemplate(t: DeviceTemplate, query: string, group?: string
   const text = `${t.name} ${t.brand ?? ''} ${t.category ?? ''} ${group ?? ''}`.toLocaleLowerCase();
   return words.every((word) => text.includes(word));
 }
-export function templateOptionLabel(t: DeviceTemplate, slot?: string): string {
+/** Shorten only the visible name within a brand group, leaving the template untouched. */
+export function templateOptionName(t: DeviceTemplate, brand?: string): string {
+  if (!brand || !t.name.toLocaleLowerCase().startsWith(brand.toLocaleLowerCase())) return t.name;
+  const suffix = t.name.slice(brand.length);
+  const model = suffix.replace(/^[\s\p{P}\p{S}]+/u, '');
+  return model && model !== suffix ? model : t.name;
+}
+export function templateOptionDetails(t: DeviceTemplate, slot?: string): string {
   const count = maxButton(t);
-  return `${t.name}${slot && t.slot !== slot ? ` · ${t.slot}` : ''}${count > 32 ? ` · ${count} buttons` : ''}`;
+  return [slot && t.slot !== slot ? t.slot : '', count > 32 ? `${count} buttons` : ''].filter(Boolean).join(' · ');
+}
+export function templateOptionLabel(t: DeviceTemplate, slot?: string): string {
+  const details = templateOptionDetails(t, slot);
+  return `${t.name}${details ? ` · ${details}` : ''}`;
 }

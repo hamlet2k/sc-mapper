@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DeviceTemplate } from '../lib/templates';
-import { matchesTemplate, templateOptionLabel, templatePickerGroups } from '../lib/templatePicker';
+import { matchesTemplate, templateOptionDetails, templateOptionLabel, templateOptionName, templatePickerGroups, type TemplatePickerGroup } from '../lib/templatePicker';
 
 interface Props {
   templates: readonly DeviceTemplate[];
@@ -23,6 +23,12 @@ export function TemplateCombobox({ templates, automatic, deviceName, slot, value
   const [position, setPosition] = useState({ left: 0, top: 0, width: 320, maxHeight: 320 });
   const groups = useMemo(() => templatePickerGroups(templates, automatic, deviceName), [templates, automatic, deviceName]);
   const filtered = groups.map((g) => ({ ...g, templates: g.templates.filter((t) => matchesTemplate(t, query, g.label)) })).filter((g) => g.templates.length);
+  // A type section contains all its brands so its sticky header spans the entire type.
+  const sections: { label: string; groups: TemplatePickerGroup[] }[] = [];
+  for (const group of filtered) {
+    if (sections.at(-1)?.label !== group.label) sections.push({ label: group.label, groups: [] });
+    sections.at(-1)!.groups.push(group);
+  }
   const automaticLabel = `Automatic (${automatic.name})`;
   const showAuto = matchesTemplate(automatic, query, 'Automatic');
   const options = [...(showAuto ? [{ value: '', label: automaticLabel }] : []), ...filtered.flatMap((g) => g.templates.map((t) => ({ value: t.id, label: templateOptionLabel(t, slot) })))];
@@ -61,11 +67,14 @@ export function TemplateCombobox({ templates, automatic, deviceName, slot, value
     if (open && highlighted !== undefined) document.getElementById(`${id}-option-${highlighted || 'automatic'}`)?.scrollIntoView({ block: 'nearest' });
   }, [open, highlighted, id]);
 
-  const option = (v: string, text: string, variant = false) => <div key={v} id={optionId(v)} role="option" aria-selected={value === v}
-    data-value={v} data-variant={variant || undefined}
+  const option = (v: string, text: string, variant = false, brand?: string, details?: string) => <div key={v} id={optionId(v)} role="option" aria-selected={value === v}
+    data-value={v} data-variant={variant || undefined} data-branded={!!brand || undefined}
     onPointerDown={(e) => e.preventDefault()} onClick={() => choose(v)} onPointerMove={() => setActive(v)}
-    className={`cursor-pointer px-3 py-2 text-xs ${variant ? 'pl-6' : ''} ${highlighted === v ? 'bg-hud/20 text-hud2' : 'text-slate-200 hover:bg-hud/10'}`}>
-    {variant && <span aria-hidden="true" className="mr-1 text-slate-500">↳</span>}{text}{value === v && <span aria-hidden="true" className="ml-2 text-hud">✓</span>}
+    className={`template-picker-option cursor-pointer text-xs ${highlighted === v ? 'bg-hud/20 text-hud2' : 'text-slate-200 hover:bg-hud/10'}`}>
+    {variant && <span aria-hidden="true" className="shrink-0 text-slate-500">↳</span>}
+    <span data-template-name className="min-w-0 flex-1">{text}</span>
+    {details && <span data-template-details className="shrink-0 text-right text-[10px] text-slate-500">{details}</span>}
+    <span aria-hidden="true" className="w-3 shrink-0 text-hud">{value === v ? '✓' : ''}</span>
   </div>;
   return <div className={`relative min-w-0 ${className}`} data-template-picker>
     <input ref={input} role="combobox" aria-label={label} aria-expanded={open} aria-controls={`${id}-listbox`} aria-autocomplete="list"
@@ -90,13 +99,14 @@ export function TemplateCombobox({ templates, automatic, deviceName, slot, value
     <button type="button" tabIndex={-1} aria-label={`Toggle ${label}`} className="absolute inset-y-0 right-0 px-2 text-slate-400"
       onPointerDown={(e) => e.preventDefault()} onClick={() => { input.current?.focus(); if (open) setOpen(false); else expand(); }}>▾</button>
     {open && createPortal(<div ref={popup} id={`${id}-listbox`} role="listbox" aria-label={label}
-      className="fixed z-[200] overflow-auto rounded border border-edge bg-panel2 py-1 shadow-xl" style={position}>
+      className="template-picker-list scrollbar-thin fixed z-[200] overflow-auto rounded border border-edge bg-panel2 shadow-xl" style={position}>
       {showAuto && option('', automaticLabel)}
-      {filtered.map((g, i) => <div key={`${g.label}:${g.brand ?? ''}`} role="group" aria-labelledby={`${id}-group-${i}`} data-group={g.label === 'Suggested for this device' ? 'suggestions' : g.label} data-brand={g.brand}>
-        <span id={`${id}-group-${i}`} className="sr-only">{g.label} {g.brand}</span>
-        {(i === 0 || filtered[i - 1].label !== g.label) && <div className="px-3 pb-1 pt-3 font-display text-[11px] font-semibold uppercase tracking-wider text-hud2">{g.label}</div>}
-        {g.brand && <div className="px-3 py-1 text-[11px] font-semibold text-slate-400">{g.brand}</div>}
-        {g.templates.map((t) => option(t.id, templateOptionLabel(t, slot), !!t.variantOf))}
+      {sections.map((section, i) => <div key={section.label} role="group" aria-labelledby={`${id}-type-${i}`} data-group={section.label === 'Suggested for this device' ? 'suggestions' : section.label}>
+        <div id={`${id}-type-${i}`} role="presentation" data-type-header className="template-picker-type font-display">{section.label}</div>
+        {section.groups.map((g, j) => <div key={g.brand ?? ''} role="group" aria-labelledby={g.brand ? `${id}-brand-${i}-${j}` : `${id}-type-${i}`} data-brand={g.brand}>
+          {g.brand && <div id={`${id}-brand-${i}-${j}`} role="presentation" data-brand-header className="template-picker-brand">{g.brand}</div>}
+          {g.templates.map((t) => option(t.id, templateOptionName(t, query.trim() ? undefined : g.brand), !!t.variantOf, g.brand, templateOptionDetails(t, slot)))}
+        </div>)}
       </div>)}
       {!options.length && <div role="status" className="px-3 py-3 text-xs text-slate-400">No matching templates</div>}
     </div>, document.body)}

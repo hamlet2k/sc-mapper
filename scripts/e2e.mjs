@@ -824,8 +824,54 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
   const family = await list.locator('[data-brand=MOZA] [role=option]').evaluateAll((els) => els.map((e) => e.dataset.value));
   const base = family.indexOf('builtin-moza-ab6');
   check(base >= 0 && family.slice(base + 1, base + 4).every((id) => id.startsWith('builtin-moza-ab6-')), 'grip variants sit directly below their base');
+  const ab6 = list.locator('[data-value="builtin-moza-ab6"]');
+  const grip = list.locator('[data-value="builtin-moza-ab6-mh16"]');
+  check(/^AB6\/9 base \+ MHG grip$/i.test(await ab6.locator('[data-template-name]').innerText()) && /^62 buttons$/i.test(await ab6.locator('[data-template-details]').innerText()), 'brand rows show model names with separate button counts');
+  check(/↳/.test(await grip.innerText()) && /^AB6\/9 base \+ MH16 grip$/i.test(await grip.locator('[data-template-name]').innerText()), 'grip rows keep the arrow and model name');
+  const styling = await list.evaluate((el) => {
+    const type = el.querySelector('[data-group="Sticks"] [data-type-header]');
+    const brand = el.querySelector('[data-group="Sticks"] [data-brand="MOZA"] [data-brand-header]');
+    const base = el.querySelector('[data-value="builtin-moza-ab6"]');
+    const grip = el.querySelector('[data-value="builtin-moza-ab6-mh16"]');
+    const detail = base.querySelector('[data-template-details]');
+    const name = base.querySelector('[data-template-name]');
+    return {
+      casing: [brand, name].every((n) => getComputedStyle(n).textTransform === 'none'),
+      indentation: parseFloat(getComputedStyle(brand).paddingLeft) < parseFloat(getComputedStyle(base).paddingLeft) && parseFloat(getComputedStyle(base).paddingLeft) < parseFloat(getComputedStyle(grip).paddingLeft),
+      detail: getComputedStyle(detail).textAlign === 'right' && parseFloat(getComputedStyle(detail).fontSize) < parseFloat(getComputedStyle(name).fontSize),
+      headers: [type, brand].every((h) => h.getAttribute('role') === 'presentation' && !h.hasAttribute('tabindex')),
+    };
+  });
+  check(styling.casing && styling.indentation && styling.detail && styling.headers, 'compact headers are nonselectable; brands and names keep their casing, rows indent, and details align right');
+  for (const [typeName, brandName] of [['Sticks', 'VIRPIL'], ['Throttles', 'WINCTRL']]) {
+    const sticky = await list.evaluate((el, [typeName, brandName]) => {
+      const type = el.querySelector(`[data-group="${typeName}"] [data-type-header]`);
+      const brand = el.querySelector(`[data-group="${typeName}"] [data-brand="${brandName}"] [data-brand-header]`);
+      el.scrollTop += brand.getBoundingClientRect().top - el.getBoundingClientRect().top - type.offsetHeight + 30;
+      return new Promise((resolve) => requestAnimationFrame(() => {
+        const top = el.getBoundingClientRect().top + el.clientTop;
+        const t = type.getBoundingClientRect(), b = brand.getBoundingClientRect();
+        resolve(Math.abs(t.top - top) < 2 && Math.abs(b.top - t.bottom) < 2);
+      }));
+    }, [typeName, brandName]);
+    check(sticky, `${typeName} and ${brandName} headers stay stacked while scrolling`);
+  }
+  await picker.fill('reset-picker-navigation');
+  await picker.fill('');
+  for (let i = 0; i < ids.indexOf('builtin-moza-ab6-mh16'); i++) await picker.press('ArrowDown');
+  const active = page.locator(`[id="${await picker.getAttribute('aria-activedescendant')}"]`);
+  check(await active.getAttribute('role') === 'option' && await active.getAttribute('data-value') === 'builtin-moza-ab6-mh16', 'keyboard navigation crosses type and brand headers and lands on the grip option');
+  const visibleActive = await active.evaluate((el) => {
+    const list = el.closest('[role=listbox]'), rect = el.getBoundingClientRect(), popup = list.getBoundingClientRect();
+    return rect.top >= popup.top + 50 && rect.bottom <= popup.bottom;
+  });
+  check(visibleActive, 'keyboard navigation scrolls options below the stacked headers');
   await picker.fill('tHrUsTmAsTeR');
   check((await list.getByRole('option').count()) > 0 && (await list.getByRole('option').allInnerTexts()).every((name) => /thrustmaster/i.test(name)), 'typing filters by brand, ignoring case');
+  await picker.fill('mOzA ab6');
+  check((await list.getByRole('option').allInnerTexts()).every((name) => /MOZA AB6/i.test(name)), 'typed filtering restores full template names inside brand groups');
+  await picker.fill('wInCtRl');
+  check((await list.locator('[data-brand-header]').allInnerTexts()).every((name) => /^(WINCTRL|MOZA)$/i.test(name)) && (await list.locator('[data-template-name]').allInnerTexts()).every((name) => /WINCTRL/i.test(name)), 'WINCTRL spelling is consistent in brand headers and full filtered names');
   await picker.fill('pEdAlS');
   check((await list.getByRole('option').count()) >= 9, 'typing a device type finds its models');
   await picker.fill('nothing-matches-this-template');
@@ -841,6 +887,8 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
   await templateList(picker);
   await dv.getByTestId('device-hardware').click();
   check(await picker.getAttribute('aria-expanded') === 'false', 'clicking outside closes the template popup');
+  await selectTemplate(picker, 'builtin-moza-ab6');
+  check(/^MOZA AB6\/9 base \+ MHG grip · 62 buttons$/i.test(await picker.inputValue()), 'closed combobox retains the full brand name and button count');
   await selectTemplate(picker, 'builtin-stick');
 }
 { // the default holographic throttle: 20 callouts; the keypad, E1 push and the left lever glow on input
@@ -1654,7 +1702,7 @@ const moza133 = mozaSlots.find(([, t]) => /133 buttons/.test(t))?.[0];
   const tsel = stickRow.getByTestId('slot-template');
   const grips = await (await templateList(tsel)).locator('[data-group=suggestions] [role=option]').allInnerTexts();
   const autoTxt = await (await templateOption(tsel, '')).innerText();
-  check(/MOZA AB6\/9 base \+ MHG/i.test(autoTxt) && grips.length === 4 && /MHG/i.test(grips[0]) && /MH16/i.test(grips[1]) && /CarrierAce/i.test(grips[2]) && /ViperAce/i.test(grips[3]),
+  check(/MOZA AB6\/9 base \+ MHG/i.test(autoTxt) && grips.length === 4 && grips.every((name) => /MOZA AB6\/9 base/i.test(name)) && /MHG/i.test(grips[0]) && /MH16/i.test(grips[1]) && /CarrierAce/i.test(grips[2]) && /ViperAce/i.test(grips[3]),
     `AB6 stick slot: Automatic = plain AB6, suggested grips A-Z = AB6 / MH16 / CarrierAce / ViperAce (${autoTxt} | ${grips.join(' | ')})`);
   check(await (await templateList(otherRow.getByTestId('slot-template'))).locator('[data-group=suggestions] [data-variant]').count() === 0, 'the other AB6 (guessed MTQ throttle) has no grip group');
   await selectTemplate(tsel, 'builtin-moza-ab6-viperace');
