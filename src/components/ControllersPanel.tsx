@@ -6,8 +6,9 @@ import {
   type CopyPlan, type GameSlot, type SlotHardware, type SlotMap,
 } from '../lib/slots';
 import { AUTO_TEMPLATE, autoSlotTemplate, resolveSlotTemplate } from '../lib/slotTemplates';
-import { coveredInputs, GRIPS_GROUP, maxButton, templateGroups, templateVariants, useTemplates, type DeviceTemplate } from '../lib/templates';
+import { coveredInputs, useTemplates, type DeviceTemplate } from '../lib/templates';
 import type { Group, Profile, ProfileDevice, Slot } from '../lib/types';
+import { TemplateCombobox } from './TemplateCombobox';
 import { ChromiumBanner } from './ChromiumBanner';
 import { GamePathHint, RefreshGameButton } from './GameState';
 import { CopyText } from './CopyButton';
@@ -323,7 +324,6 @@ function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, onArm, onRemove, o
   };
   const st = ctl ? resolveSlotTemplate(T.templates, slots.map, gs, pad, T.picks) : null;
   const auto = ctl ? autoSlotTemplate(T.templates, gs, pad) : null;
-  const grips = templateVariants(T.templates, auto ?? undefined).filter((t) => t.slot === gs.slot); // e.g. the AB6 base with another grip: same USB id, picked by hand
   const up = ctl ? neighbourSlot(slots.map, gs, -1) : undefined;
   const down = ctl ? neighbourSlot(slots.map, gs, 1) : undefined;
   const ARROW = 'flex h-5 w-5 items-center justify-center rounded border border-edge text-slate-400 hover:border-hud/60 hover:text-hud2 disabled:pointer-events-none disabled:opacity-25';
@@ -400,13 +400,10 @@ function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, onArm, onRemove, o
         <div className="text-[10px] uppercase tracking-widest text-slate-500">Template</div>
         {!ctl || !st ? <div className="text-slate-500">— (keyboard view)</div> : (
           <>
-            <select value={st.pick} onChange={(e) => slots.pickTemplate(gs, e.target.value || (st.legacy ? AUTO_TEMPLATE : null))} aria-label={`Template for ${slotId(gs)}`} data-testid="slot-template" className={`${SEL} w-full`}>
-              <option value="">Automatic ({auto!.name})</option>
-              {grips.length > 0 && <optgroup label={GRIPS_GROUP} data-group="grips">{grips.map((t) => <option key={t.id} value={t.id}>{t.name}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}</optgroup>}
-              {templateGroups(T.templates.filter((t) => t.slot === gs.slot)).map((g) => (
-                <optgroup key={g.label} label={g.label}>{g.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}</optgroup>
-              ))}
-            </select>
+            <TemplateCombobox templates={T.templates.filter((t) => t.slot === gs.slot)} automatic={auto!}
+              deviceName={st.ident.name} slot={gs.slot} value={st.pick}
+              onChange={(value) => slots.pickTemplate(gs, value || (st.legacy ? AUTO_TEMPLATE : null))}
+              testId="slot-template" label={`Template for ${slotId(gs)}`} className="w-full" />
             <div className="mt-1 font-mono text-[10px] text-slate-500">
               {st.how === 'chosen' ? (gs.hw ? 'picked by you · follows this hardware' : 'picked by you for this slot') : st.how === 'guessed' ? 'guessed from the order of identical devices' : st.how === 'matched' ? 'matched to the hardware' : 'generic (no template linked yet)'}
             </div>

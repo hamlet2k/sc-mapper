@@ -129,7 +129,8 @@ round-trips every file through it).
   counter-clockwise, optional push), `switch` (one input per position) or `buttons` (a row, one input per key). `group` is a
   display grouping.
 - **Mini-stick press (optional).** An `axis` callout can use `inputs: ["rotx", "roty", "button6"]`: the first two entries are
-  axes and the third is a numbered button id (`buttonN`, N ≥ 1). The third entry is only valid after two assigned axes; a
+  axes and the third is a button id: a numbered joystick button (`buttonN`, N ≥ 1) or a supported gamepad button
+  (for example, `["thumblx", "thumbly", "thumbl"]` for the left stick and its click). The third entry is only valid after two assigned axes; a
   single-axis callout cannot carry a press, and a non-button third entry is invalid. Omit the third entry to clear the press
   (do not write `''`). DCS Mapper consumers should render the third entry as a separate **Press** line/chip, show its button
   mappings and pressed highlights, and offer it as a button binding target alongside the two axes. It is not an axis and

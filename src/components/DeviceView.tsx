@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { isController, slotDeviceName, slotId, type GameSlot, type SlotMap } from '../lib/slots';
 import { AUTO_TEMPLATE, autoSlotTemplate, resolveSlotTemplate } from '../lib/slotTemplates';
-import { suggestCategory, suggestedTemplates, suggestionHeading } from '../lib/suggest';
+import { TemplateCombobox } from './TemplateCombobox';
 import { formatInput, searchSpec } from '../lib/inputs';
 import { useHeldKeyMods, usePadHits, type PressHit } from '../lib/listen';
 import { browserName } from '../lib/browser';
@@ -13,7 +13,7 @@ import { pressBindTarget } from '../lib/pressBind';
 import { parseQuery, scoreRow } from '../lib/search';
 import {
   DUP_ORDER_GUESSES, calloutFor, calloutTitle, cloneTemplate, coveredInputs, identityKey, inputRole, matchScore, maxButton, newTemplateForDevice,
-  calloutView, imageSrc, parseTemplates, resolveTemplateImage, templateViews, shortInput, splitCombo, templateGroups, templateVariants, GRIPS_GROUP, unassignedCount, useTemplateImage, type useTemplates,
+  calloutView, imageSrc, parseTemplates, resolveTemplateImage, templateViews, shortInput, splitCombo, unassignedCount, useTemplateImage, type useTemplates,
   type Callout, type DeviceIdentity, type DeviceTemplate,
 } from '../lib/templates';
 import type { Binding, Row, Slot } from '../lib/types';
@@ -178,9 +178,6 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
   const idKey = identityKey(ident);
   const tpl = useTemplateImage(chosen.template); // built-in device templates: the picture arrives on demand
   const autoTpl = autoSlotTemplate(T.templates, opt.gs, opt.pad);
-  const grips = templateVariants(T.templates, autoTpl); // grip variants of the automatic template (e.g. MOZA AB6/9 + another grip: same USB id)
-  const suggestions = slot === 'js' && ((!autoTpl.brand && autoTpl.builtin) || (!tpl.brand && tpl.builtin))
-    ? suggestedTemplates(ident.name, T.templates) : [];
   const tplMax = maxButton(tpl);
   const unassigned = tpl.callouts.reduce((n, c) => n + unassignedCount(c), 0);
   const rawLive = useLiveInputs(opt.pad);
@@ -418,28 +415,12 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
               : <span className="rounded border border-edge px-1 font-mono text-[10px] text-slate-500">not connected</span>)}
           </span>
           <span className="flex flex-wrap items-center gap-2" data-testid="template-line">
-            <label className="flex items-center gap-1.5 text-slate-400">
+            <span className="flex items-center gap-1.5 text-slate-400">
               <span className={LABEL}>Template</span>
-              <select value={chosen.pick} onChange={(e) => onPickTemplate(opt.gs, e.target.value || (chosen.legacy ? AUTO_TEMPLATE : null))} data-testid="template-select" aria-label={`Template for ${slot}${instance}`}
-                className="max-w-[18rem] rounded border border-edge bg-panel2 px-2 py-1 text-xs text-slate-200 outline-none focus:border-hud">
-                <option value="">Automatic ({autoTpl.name})</option>
-                {grips.length > 0 && (
-                  <optgroup label={GRIPS_GROUP} data-group="grips">
-                    {grips.map((t) => <option key={t.id} value={t.id}>{t.name}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
-                  </optgroup>
-                )}
-                {suggestions.length > 0 && (
-                  <optgroup label={suggestionHeading(suggestCategory(ident.name)!)} data-group="suggestions">
-                    {suggestions.map((t) => <option key={t.id} value={t.id}>{t.name}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
-                  </optgroup>
-                )}
-                {templateGroups(T.templates).map((g) => (
-                  <optgroup key={g.label} label={g.label} data-group={g.label}>
-                    {g.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.slot !== opt.slot ? ` · ${t.slot}` : ''}{maxButton(t) > 32 ? ` · ${maxButton(t)} buttons` : ''}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
+              <TemplateCombobox templates={T.templates} automatic={autoTpl} deviceName={ident.name} slot={slot}
+                value={chosen.pick} onChange={(value) => onPickTemplate(opt.gs, value || (chosen.legacy ? AUTO_TEMPLATE : null))}
+                testId="template-select" label={`Template for ${slot}${instance}`} className="w-[18rem] max-w-full" />
+            </span>
             <span className={ICON_GROUP} role="group" aria-label="Template" data-testid="template-tools">
               {tpl.builtin
                 ? <IconButton icon="edit" label="Customize a copy of this template" onClick={() => void customize()} testid="template-customize" />

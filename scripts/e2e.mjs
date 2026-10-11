@@ -16,6 +16,22 @@ const check = (ok, msg) => { console.log(ok ? '  ✓' : '  ✗', msg); if (!ok) 
 /** the picture preparation's output is rendered for the current framing (no model / render in progress) */
 const prepSettled = (pg) => pg.waitForFunction(() => { const a = document.querySelector('[data-testid=photo-prep-after]'); return a && a.dataset.stale !== '1' && !document.querySelector('[data-testid=photo-prep-progress]') && !document.querySelector('[data-testid=photo-prep-rendering]'); }, null, { timeout: 90000 }).then(() => pg.waitForTimeout(100));
 
+/** Drive the editable template combobox through its visible listbox. */
+const templateList = async (picker) => {
+  await picker.click();
+  await picker.fill('');
+  const id = await picker.getAttribute('aria-controls');
+  const list = picker.page().locator(`[id="${id}"]`);
+  await list.waitFor({ state: 'visible' });
+  return list;
+};
+const templateOption = async (picker, value) => (await templateList(picker)).locator(`[role="option"][data-value="${value}"]`);
+const selectTemplate = async (picker, choice) => {
+  const value = typeof choice === 'string' ? choice : choice.value;
+  await (await templateOption(picker, value)).click();
+};
+const templateValue = (picker) => picker.getAttribute('data-value');
+
 // ---- Gamepad API mock, modelled on Chrome's real behaviour:
 //  * navigator.getGamepads() returns [null, null, null, null] until a button is pressed on some controller (user gesture);
 //    gamepadconnected is NOT dispatched, so the app must poll;
@@ -727,7 +743,7 @@ await page.waitForTimeout(300);
   const line = bar.getByTestId('template-line');
   const tools = line.getByTestId('template-tools'), pic = line.getByTestId('picture-tools');
   const labels = await tools.locator('button').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')));
-  const titlesOk = await line.locator('button').evaluateAll((bs) => bs.every((b) => b.getAttribute('aria-label') && !b.title && !b.innerText.trim())); // tooltip: the Tip bubble (round 5)
+  const titlesOk = await line.locator('[data-testid=template-tools] button, [data-testid=picture-tools] button').evaluateAll((bs) => bs.every((b) => b.getAttribute('aria-label') && !b.title && !b.innerText.trim())); // tooltip: the Tip bubble (round 5)
   check(await line.getByTestId('template-select').isVisible() && labels.length === 4 && /Customize a copy|Edit this template/.test(labels[0]) && /^New/.test(labels[1]) && /^Import/.test(labels[2]) && /^Export/.test(labels[3]),
     `template group: Customize a copy, New, Import, Export as icon buttons next to the Template dropdown (${labels.join(' | ')})`);
   check(await pic.locator('button').count() === 2 && /PNG/.test(await pic.getByTestId('device-png').getAttribute('aria-label')) && /Print/.test(await pic.getByTestId('device-print').getAttribute('aria-label')), 'second group: PNG, Print');
@@ -774,13 +790,13 @@ await page.waitForTimeout(300);
   check(await dv.getByTestId('chromium-button-notice').getByTestId('firefox-download').isVisible() && await dv.getByRole('button', { name: /Copy link for Firefox/ }).isVisible(),
     'button-limit notice: Firefox logo download link + Copy link for Firefox button');
   gladIds = await dv.locator('[data-callout]').evaluateAll((els) => els.map((e) => e.getAttribute('data-callout')));
-  await dv.getByTestId('template-select').selectOption('builtin-stick');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-stick');
   await page.waitForTimeout(300);
 }
-check(/Generic stick/.test(await dv.getByTestId('device-status').innerText()), 'generic stick picked for the profile tests');
+check(/Generic stick/i.test(await dv.getByTestId('device-status').innerText()), 'generic stick picked for the profile tests');
 const b1 = dv.locator('[data-callout="trig"]');
 check((await b1.innerText()).includes('Engage Quantum Drive'), 'trigger (2-stage) callout shows the js1_button1 action of the profile');
-check((await dv.locator('[data-callout]').count()) === 24 && /Deck buttons \(left\)/.test(await dv.locator('[data-callout="rowL"]').innerText()) && (await dv.locator('[data-callout="whl1"]').innerText()).includes('Lever wheel'), 'default stick: holographic grip + base with 24 callouts (grip, deck button rows, toggles, F keys, wheels)');
+check((await dv.locator('[data-callout]').count()) === 23 && /Deck buttons \(left\)/.test(await dv.locator('[data-callout="rowL"]').innerText()) && (await dv.locator('[data-callout="whl1"]').innerText()).includes('Lever wheel'), 'default stick: holographic grip + base with 23 callouts (grip, deck button rows, toggles, F keys, wheels)');
 check((await dv.locator('[data-callout="b5"]').getAttribute('data-tone')) === 'custom' && (await dv.locator('[data-callout="b5"]').innerText()).includes('Cycle Master Mode'), 'customized js1_button5 (pinky) coloured as customized');
 check((await dv.locator('[data-callout="b4"]').getAttribute('data-tone')) === 'conflict', 'conflicting js1_button4 coloured as conflict');
 check(/Auto Targeting/.test(await dv.locator('[data-callout="hat1"] [data-dir="hat1_up"]').getAttribute('title')), 'hat drawn as a 5-way cross with an action per direction');
@@ -796,35 +812,67 @@ await page.screenshot({ path: shots + '24-device-view.png' });
 await page.evaluate(() => { window.__axis(1, 9, 9 / 7); window.__axis(1, 0, 0); });
 check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button12"]').getAttribute('title')), 'js1_button12 (Autoland) shown as the push of hat 1');
 { // the classic stick/throttle templates are gone; the gamepad template stays
-  const names = await dv.getByTestId('template-select').locator('option').allInnerTexts();
-  check(!names.some((n) => /classic/i.test(n)) && names.some((n) => /^Generic stick/.test(n)) && names.some((n) => /^Generic throttle/.test(n)) && names.some((n) => /^Gamepad/.test(n)),
-    `template picker: no classic templates; default stick, throttle and gamepad listed (${names.filter((n) => !n.startsWith('Automatic')).join(' | ')})`);
+  const names = await (await templateList(dv.getByTestId('template-select'))).getByRole('option').allInnerTexts();
+  check(!names.some((n) => /classic/i.test(n)) && names.some((n) => /^Generic stick/i.test(n)) && names.some((n) => /^Generic throttle/i.test(n)) && names.some((n) => /^Gamepad/i.test(n)),
+    `template picker: no classic templates; default stick, throttle and gamepad listed (${names.filter((n) => !/^automatic/i.test(n)).join(' | ')})`);
 }
-{ // the default holographic throttle: 21 callouts; the keypad, E1 push and the left lever glow on input
-  await dv.getByTestId('template-select').selectOption('builtin-throttle');
+{ // Shared template combobox: live filtering, keyboard selection, dismissal and grouped families.
+  const picker = dv.getByTestId('template-select');
+  const list = await templateList(picker);
+  const ids = await list.getByRole('option').evaluateAll((els) => els.map((e) => e.dataset.value));
+  check(new Set(ids).size === ids.length, 'template suggestions and lower groups contain no duplicate picks');
+  const family = await list.locator('[data-brand=MOZA] [role=option]').evaluateAll((els) => els.map((e) => e.dataset.value));
+  const base = family.indexOf('builtin-moza-ab6');
+  check(base >= 0 && family.slice(base + 1, base + 4).every((id) => id.startsWith('builtin-moza-ab6-')), 'grip variants sit directly below their base');
+  await picker.fill('tHrUsTmAsTeR');
+  check((await list.getByRole('option').count()) > 0 && (await list.getByRole('option').allInnerTexts()).every((name) => /thrustmaster/i.test(name)), 'typing filters by brand, ignoring case');
+  await picker.fill('pEdAlS');
+  check((await list.getByRole('option').count()) >= 9, 'typing a device type finds its models');
+  await picker.fill('nothing-matches-this-template');
+  check(await list.getByRole('status').isVisible() && await list.getByRole('option').count() === 0 && await picker.getAttribute('aria-activedescendant') === null, 'no matches has an accessible empty state and no active option');
+  await picker.press('Escape');
+  check(await picker.getAttribute('aria-expanded') === 'false' && await templateValue(picker) === 'builtin-stick' && /generic stick/i.test(await picker.inputValue()), 'Escape restores the current selection without applying search text');
+  await picker.press('Enter');
+  await picker.fill('generic throttle');
+  await picker.press('ArrowDown');
+  await picker.press('ArrowUp');
+  await picker.press('Enter');
+  check(await templateValue(picker) === 'builtin-throttle' && await picker.getAttribute('aria-expanded') === 'false', 'arrows and Enter choose the filtered template');
+  await templateList(picker);
+  await dv.getByTestId('device-hardware').click();
+  check(await picker.getAttribute('aria-expanded') === 'false', 'clicking outside closes the template popup');
+  await selectTemplate(picker, 'builtin-stick');
+}
+{ // the default holographic throttle: 20 callouts; the keypad, E1 push and the left lever glow on input
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-throttle');
   await page.waitForTimeout(250);
   await page.evaluate(() => { window.__btn(1, 11, true); window.__btn(1, 19, true); window.__axis(1, 2, 0.6); });
   await page.waitForTimeout(250);
   const on = async (r) => (await dv.locator(`[data-region="${r}"]`).getAttribute('data-active')) === '1';
-  check((await dv.locator('[data-callout]').count()) === 21 && await on('e1') && await on('lz') && (await dv.locator('[data-callout="e1"] [data-dir="button20"]').getAttribute('data-active')) === '1',
-    'default throttle template: 21 callouts; encoder push and the left lever glow on the picture');
+  check((await dv.locator('[data-callout]').count()) === 20 && await on('e1') && await on('lz') && (await dv.locator('[data-callout="e1"] [data-dir="button20"]').getAttribute('data-active')) === '1',
+    'default throttle template: 20 callouts; encoder push and the left lever glow on the picture');
   const lit = await dv.locator('[data-region="keys"][data-active="1"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-input')));
   check(lit.length === 1 && lit[0] === 'button12' && (await dv.locator('[data-callout="trgL"]').innerText()).includes('Left trigger'), `keypad: only the pressed key glows (${lit.join(', ')}); left grip trigger has a callout`);
   await page.evaluate(() => { window.__btn(1, 11, false); window.__btn(1, 19, false); window.__axis(1, 2, 0); });
-  await dv.getByTestId('template-select').selectOption('builtin-stick');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-stick');
   await page.waitForTimeout(250);
 }
-{ // the default holographic gamepad: 15 callouts; pressing D-pad up lights only that arm, A / LT / the left stick glow
+{ // the default holographic gamepad: 13 callouts; pressing D-pad up lights only that arm, A / LT / the left stick glow
   await slotChip('gp1');
   await page.waitForTimeout(300);
-  check(/Gamepad/.test(await dv.getByTestId('device-status').innerText()) && (await dv.locator('[data-callout]').count()) === 15 && (await dv.getByTestId('template-select').locator('option:checked').innerText()).startsWith('Automatic'),
-    'gamepad: default holographic gamepad template applies automatically (15 callouts)');
+  check(/Gamepad/i.test(await dv.getByTestId('device-status').innerText()) && (await dv.locator('[data-callout]').count()) === 13 && /^automatic/i.test(await dv.getByTestId('template-select').inputValue()),
+    'gamepad: default holographic gamepad template applies automatically (13 callouts)');
   await page.evaluate(() => { window.__btn(0, 12, true); window.__btn(0, 0, true); window.__btn(0, 6, true); window.__axis(0, 0, 0.8); });
   await page.waitForTimeout(300);
   const lit = await dv.locator('[data-region][data-active="1"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-region') + (e.getAttribute('data-input') ? ':' + e.getAttribute('data-input') : '')).sort());
   check(JSON.stringify(lit) === JSON.stringify(['a', 'dpad:dpad_up', 'ls', 'lt']) && (await dv.locator('[data-callout="dpad"] [data-dir="dpad_up"]').getAttribute('data-active')) === '1',
     `gamepad: only the pressed D-pad arm glows; A, LT and the moved left stick light up (${lit.join(', ')})`);
-  check(/triggerl_btn/.test(await dv.locator('[data-callout="lt"]').innerText()) && /thumbl/.test(await dv.locator('[data-callout="l3"]').innerText()), 'gamepad: callouts show the gp1_ input names (triggerl_btn, thumbl)');
+  check(/triggerl_btn/.test(await dv.locator('[data-callout="lt"]').innerText()) && /thumbl/.test(await dv.locator('[data-callout="ls"]').innerText()), 'gamepad: callouts show the gp1_ input names (triggerl_btn, thumbl)');
+  await page.evaluate(() => { window.__btn(0, 10, true); window.__btn(0, 11, true); });
+  await page.waitForTimeout(250);
+  check((await dv.locator('[data-callout="ls"] [data-dir="thumbl"]').getAttribute('data-active')) === '1'
+    && (await dv.locator('[data-callout="rs"] [data-dir="thumbr"]').getAttribute('data-active')) === '1', 'gamepad clicks light the Press cells inside both stick axis callouts');
+  await page.evaluate(() => { window.__btn(0, 10, false); window.__btn(0, 11, false); });
   await page.setViewportSize({ width: 1680, height: 1400 }); // the whole canvas fits for the screenshot
   await dv.getByTestId('device-canvas').screenshot({ path: shots + '31-device-view-default-gamepad.png' });
   await page.setViewportSize({ width: 1680, height: 1000 });
@@ -1012,7 +1060,7 @@ await page.waitForTimeout(200);
   await page.evaluate(() => window.__axis(1, 9, 9 / 7));
   await page.waitForTimeout(200);
   // photo template (Warthog stick): trigger stage 2 (button6) on a multi-input callout, then a single-button callout, then the inspector
-  await dv.getByTestId('template-select').selectOption('builtin-tm-warthog-stick');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-tm-warthog-stick');
   await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=device-canvas-view] img')].some((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(500);
   const wt = dv.locator('[data-callout="trig"]');
@@ -1044,7 +1092,7 @@ await page.waitForTimeout(200);
   await page.waitForTimeout(250);
   check((await liveRows(ip)).length === 0 && (await liveRows(wt)).length === 0, 'released: the inspector rows clear too');
   await closePanel();
-  await dv.getByTestId('template-select').selectOption('builtin-stick');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-stick');
   await page.waitForTimeout(300);
   // gamepad defaults: LB (shoulderl) is a modifier layer. A alone fires A's actions; LB + A fires only the LB layer's
   await slotChip('gp1');
@@ -1077,7 +1125,7 @@ await page.waitForTimeout(200);
   check(d.suggestedFilename().endsWith('.png') && buf.subarray(1, 4).toString() === 'PNG' && buf.length > 20000, `PNG export of the device with its mappings (${d.suggestedFilename()}, ${(buf.length / 1024) | 0} KB)`);
 }
 
-await dv.getByTestId('template-select').selectOption(''); // back to automatic (the Gladiator template) before creating one
+await selectTemplate(dv.getByTestId('template-select'), ''); // back to automatic (the Gladiator template) before creating one
 await page.waitForTimeout(300);
 
 // ===================== template editor =====================
@@ -1262,7 +1310,7 @@ await slotChip('js2');
 await page.waitForTimeout(300);
 check(/Shared stick/.test(await dv.getByTestId('device-status').innerText()) && /name “Gladiator EVO L”/.test(await dv.getByTestId('device-status').innerText()), 'imported template auto-applies to the EVO L by name');
 { // a pick of a removed classic template saved by an earlier version: pick the throttle for JS2, then rewrite it to the old classic id
-  await dv.getByTestId('template-select').selectOption('builtin-throttle');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-throttle');
   await page.waitForTimeout(200);
   await page.evaluate(() => {
     // template picks live in the profile's slot map (per hardware) since the game-slots rework
@@ -1283,16 +1331,16 @@ await page.waitForTimeout(500);
   await page.waitForTimeout(300);
   const saved = await page.evaluate(() => localStorage.getItem('sc-mapper:slots:v1') ?? '');
   const st = await dv.getByTestId('device-status').innerText();
-  check(saved.includes('builtin-throttle-classic') && (await dv.getByTestId('template-select').inputValue()) === 'builtin-throttle' && /Generic throttle/.test(st) && /picked by you/.test(st) && (await dv.locator('[data-callout]').count()) === 21,
+  check(saved.includes('builtin-throttle-classic') && (await templateValue(dv.getByTestId('template-select'))) === 'builtin-throttle' && /Generic throttle/i.test(st) && /picked by you/.test(st) && (await dv.locator('[data-callout]').count()) === 20,
     `saved pick of the removed classic throttle migrated to the default throttle (${st.split('\n')[0]})`);
-  await dv.getByTestId('template-select').selectOption('');
+  await selectTemplate(dv.getByTestId('template-select'), '');
   await page.waitForTimeout(200);
 }
 await slotChip('js1');
 await page.waitForTimeout(300);
 check(/linked to this device/.test(await dv.getByTestId('device-status').innerText()) && (await dv.locator('[data-callout]').count()) === 4, 'templates survive a reload (IndexedDB) and still match the profile device');
 { // Orion Combat Rudder Pedals: faithful Federico export (exact anchor+box); Left Buttons chips = DI numbers 2,7,8,9,10
-  await dv.getByTestId('template-select').selectOption('builtin-winctrl-orion-pedals');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-winctrl-orion-pedals');
   await page.waitForTimeout(600);
   check((await dv.locator('[data-callout]').count()) === 6, 'Orion pedals: 6 callouts');
   const left = dv.locator('[data-callout="lbtns"]');
@@ -1303,11 +1351,11 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
     `Orion pedals Left Buttons chips show DI numbers 2/7/8/9/10 (not invented 1..n) (${leftTxt.replace(/\n/g, ' | ').slice(0, 120)})`);
   // stored fractions are asserted in unit tests (DOM labels may be nudged to avoid overlap)
   await dv.getByTestId('device-canvas').screenshot({ path: shots + '124-orion-faithful.png' });
-  await dv.getByTestId('template-select').selectOption('');
+  await selectTemplate(dv.getByTestId('template-select'), '');
   await page.waitForTimeout(300);
 }
 { // Honeycomb Bravo: researched DI callouts on Federico photo
-  await dv.getByTestId('template-select').selectOption('builtin-honeycomb-bravo');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-honeycomb-bravo');
   await page.waitForTimeout(600);
   check((await dv.locator('[data-callout]').count()) === 16, 'Bravo: 16 callouts (consolidated panel switches)');
   const ap = dv.locator('[data-callout="ap"]');
@@ -1325,11 +1373,11 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
     check(off.every((d) => d < 0.006), `Bravo markers on Federico's anchors (max off ${Math.max(...off).toFixed(4)})`);
   }
   await dv.getByTestId('device-canvas').screenshot({ path: shots + '128-bravo-federico.png' });
-  await dv.getByTestId('template-select').selectOption('');
+  await selectTemplate(dv.getByTestId('template-select'), '');
   await page.waitForTimeout(300);
 }
 { // MOZA AB6: faithful Federico export (exact coords)
-  await dv.getByTestId('template-select').selectOption('builtin-moza-ab6');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-moza-ab6');
   await page.waitForTimeout(600);
   check((await dv.locator('[data-callout]').count()) === 19, 'MOZA AB6: 19 callouts');
   const front = dv.locator('[data-testid=device-canvas-view][data-view=front]');
@@ -1339,23 +1387,23 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await front.screenshot({ path: shots + '126-moza-ab6-faithful-front.png' });
   await back.scrollIntoViewIfNeeded();
   await back.screenshot({ path: shots + '126-moza-ab6-faithful-back.png' });
-  await dv.getByTestId('template-select').selectOption('');
+  await selectTemplate(dv.getByTestId('template-select'), '');
   await page.waitForTimeout(300);
 }
 { // URSA Combat: faithful Federico export
-  await dv.getByTestId('template-select').selectOption('builtin-winctrl-ursa-combat');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-winctrl-ursa-combat');
   await page.waitForTimeout(600);
   check((await dv.locator('[data-callout]').count()) === 32, 'URSA: 32 callouts');
   const base = dv.locator('[data-testid=device-canvas-view][data-view=base]');
   await base.scrollIntoViewIfNeeded();
   await base.screenshot({ path: shots + '127-ursa-faithful-base.png' });
-  await dv.getByTestId('template-select').selectOption('');
+  await selectTemplate(dv.getByTestId('template-select'), '');
   await page.waitForTimeout(300);
 }
 { // Warthog throttle: faithful Federico export (exact coords, new rear photo on the top view)
-  await dv.getByTestId('template-select').selectOption('builtin-tm-warthog-throttle');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-tm-warthog-throttle');
   await page.waitForTimeout(600);
-  check((await dv.locator('[data-callout]').count()) === 24, 'Warthog throttle: 24 callouts');
+  check((await dv.locator('[data-callout]').count()) === 23, 'Warthog throttle: 23 callouts');
   const top = dv.locator('[data-testid=device-canvas-view][data-view=top]');
   const front = dv.locator('[data-testid=device-canvas-view][data-view=front]');
   check(await top.count() === 1 && await front.count() === 1, 'Warthog throttle: top + front photo pages');
@@ -1363,12 +1411,12 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await top.screenshot({ path: shots + '170-warthog-throttle-top.png' });
   await front.scrollIntoViewIfNeeded();
   await front.screenshot({ path: shots + '171-warthog-throttle-front.png' });
-  await dv.getByTestId('template-select').selectOption('');
+  await selectTemplate(dv.getByTestId('template-select'), '');
   await page.waitForTimeout(300);
 }
 { // the inspector (side panel) sticks under the slot bar + Groups line while a template's photo pages scroll by (1440x900)
   await page.setViewportSize({ width: 1440, height: 900 });
-  await dv.getByTestId('template-select').selectOption('builtin-moza-ab6-viperace');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-moza-ab6-viperace');
   await page.waitForTimeout(800);
   const side = dv.locator('[data-testid=device-canvas-view][data-view=side]');
   check(await side.count() === 1 && (await dv.getByTestId('device-row').getAttribute('data-layout')) === 'side', 'AB6 + ViperAce at 1440x900: two photo pages, the inspector beside them');
@@ -1422,11 +1470,11 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   check((await dv.getByTestId('device-row').getAttribute('data-layout')) === 'stacked' && p4.pos === 'static' && p4.top >= p4.sideTop, `narrow (700px): the inspector stacks under the pictures, not sticky (${p4.pos})`);
   await page.setViewportSize({ width: 1680, height: 1000 });
   await page.evaluate(() => document.getElementById('main').scrollTo(0, 0));
-  await dv.getByTestId('template-select').selectOption('');
+  await selectTemplate(dv.getByTestId('template-select'), '');
   await page.waitForTimeout(300);
 }
 { // CarrierAce UFC + HUD: Federico's WinCtrl diagrams (UFC 1-41 incl. top toggles 33-38, HUD 65-83 + X/Y/Z/Dial)
-  await dv.getByTestId('template-select').selectOption('builtin-winctrl-carrierace-ufc-hud');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-winctrl-carrierace-ufc-hud');
   await page.waitForTimeout(600);
   check((await dv.locator('[data-callout]').count()) === 25, 'UFC + HUD: 25 callouts');
   const ufc = dv.locator('[data-testid=device-canvas-view][data-view=ufc]');
@@ -1444,17 +1492,17 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await page.waitForTimeout(200);
   await hud.screenshot({ path: shots + '130-ufc-hud.png' });
   await page.setViewportSize({ width: 1680, height: 1000 });
-  await dv.getByTestId('template-select').selectOption('');
+  await selectTemplate(dv.getByTestId('template-select'), '');
   await page.waitForTimeout(300);
 }
 { // CarrierAce PTO 2: Federico's WinCtrl diagram (1, 3-41)
-  await dv.getByTestId('template-select').selectOption('builtin-winctrl-carrierace-pto2');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-winctrl-carrierace-pto2');
   await page.waitForTimeout(600);
   check((await dv.locator('[data-callout]').count()) === 14, 'PTO 2: 14 callouts');
   const sj = (await dv.locator('[data-callout="seljett"]').innerText()).replace(/\n/g, ' ');
   check(/17/.test(sj) && /21/.test(sj), `PTO 2 SELECT JETT chips show 17-21 (${sj.slice(0, 80)})`);
   await dv.getByTestId('device-canvas').screenshot({ path: shots + '132-pto2.png' });
-  await dv.getByTestId('template-select').selectOption('');
+  await selectTemplate(dv.getByTestId('template-select'), '');
   await page.waitForTimeout(300);
 }
 { // MOZA AB6 base + other grips: grip variants of the AB6 (same USB id, never auto-linked), one photo page per view
@@ -1464,11 +1512,11 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
     ['builtin-moza-ab6-carrierace', 16, [['front', '135-moza-ab6-carrierace-front'], ['side', '136-moza-ab6-carrierace-side'], ['rear', '137-moza-ab6-carrierace-rear']], ['hatC', /21/, /25/]],
     ['builtin-moza-ab6-viperace', 22, [['front', '138-moza-ab6-viperace-front'], ['side', '139-moza-ab6-viperace-side']], ['hatE', /36/, /40/]],
   ];
-  check(await sel.locator('optgroup[data-group=grips]').count() === 0, 'grip variants: no “Grips for this base” group when the slot is not an AB6');
-  check(await sel.locator('optgroup[data-group=MOZA] option[value="builtin-moza-ab6-mh16"]').count() === 1, 'grip variants listed under MOZA in the template picker');
+  check(await (await templateList(sel)).locator('[data-group=suggestions] [data-variant]').count() === 0, 'no suggested grip variants when the automatic template is not a base with variants');
+  check(await (await templateList(sel)).locator('[data-brand=MOZA] [data-value="builtin-moza-ab6-mh16"]').count() === 1, 'grip variants listed under their device type and MOZA brand');
   await page.setViewportSize({ width: 1680, height: 1600 }); // each whole photo page clear of the sticky header
   for (const [id, n, views, [cid, lo, hi]] of GRIPS) {
-    await sel.selectOption(id);
+    await selectTemplate(sel, id);
     await page.waitForTimeout(600);
     check((await dv.locator('[data-callout]').count()) === n, `${id}: ${n} callouts (${await dv.locator('[data-callout]').count()})`);
     const chips = (await dv.locator(`[data-callout="${cid}"]`).innerText()).replace(/\n/g, ' ');
@@ -1485,7 +1533,7 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
     }
   }
   await page.setViewportSize({ width: 1680, height: 1000 });
-  await sel.selectOption('');
+  await selectTemplate(sel, '');
   await page.waitForTimeout(300);
 }
 { // rudder pedal built-ins: one photo page each, axis chips, markers on the measured spots (photo fractions -> canvas)
@@ -1502,7 +1550,7 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   ];
   await page.setViewportSize({ width: 1680, height: 1600 }); // the whole photo page clear of the sticky header
   for (const [id, photo, file, cs] of PEDALS) {
-    await sel.selectOption(id);
+    await selectTemplate(sel, id);
     await page.waitForTimeout(600);
     const n = Object.keys(cs).length;
     check((await dv.locator('[data-callout]').count()) === n, `${id}: ${n} axis callouts`);
@@ -1523,17 +1571,17 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
     await view.screenshot({ path: shots + file + '.png' });
   }
   await page.setViewportSize({ width: 1680, height: 1000 });
-  await sel.selectOption('');
+  await selectTemplate(sel, '');
   await page.waitForTimeout(300);
 }
 { // device templates: a >32-button device warns in Chrome; numbers can be assigned on a copy of an unassigned built-in
-  await dv.getByTestId('template-select').selectOption('builtin-winctrl-orion');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-winctrl-orion');
   await page.waitForTimeout(600);
   const n = await dv.getByTestId('chromium-button-notice').innerText().catch(() => '');
   check(/buttons up to\s*\d{2,}/.test(n) && /Open this page in Firefox/.test(n), `>32-button template (WinCtrl Orion) shows the Chromium limit notice (${n.split('\n')[0]})`);
-  const opt = await dv.getByTestId('template-select').locator('option:checked').innerText();
+  const opt = await dv.getByTestId('template-select').inputValue();
   check(/· \d+ buttons$/.test(opt), `template picker shows the button count of big devices (${opt})`);
-  await dv.getByTestId('template-select').selectOption('builtin-vkb-gladiator-scg');
+  await selectTemplate(dv.getByTestId('template-select'), 'builtin-vkb-gladiator-scg');
   await page.waitForTimeout(600);
   await dv.getByTestId('template-unassigned').getByRole('button', { name: /Assign numbers/ }).click();
   await page.waitForTimeout(500);
@@ -1548,7 +1596,7 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await page.waitForTimeout(500);
   const st = await dv.getByTestId('device-status').innerText();
   const a2 = await dv.locator('[data-callout="a2"]').innerText();
-  const sel = await dv.getByTestId('template-select').locator('option:checked').innerText();
+  const sel = await dv.getByTestId('template-select').inputValue();
   check(/^A2 red button\s+7\b/.test(a2) && !/^VKB Gladiator NXT EVO \(Space Combat Grip\)$/.test(sel), `saved copy is used and the A2 callout now shows button 7 (${a2.replace(/\n/g, ' ')}; ${st.split('\n')[0]})`);
   const src = await dv.locator('[data-testid=device-canvas] img').first().getAttribute('src').catch(() => '');
   check(/^data:image\/svg\+xml|\/device-photos\/vkb-gladiator-scg-[a-z]+\.webp$/.test(src ?? ''), `the copy keeps the device drawing / photos (${(src ?? '').slice(0, 60)})`);
@@ -1604,14 +1652,14 @@ const moza133 = mozaSlots.find(([, t]) => /133 buttons/.test(t))?.[0];
   const stickRow = fpanel.locator(`[data-testid=slot-row][data-slot="${moza133}"]`);
   const otherRow = fpanel.locator(`[data-testid=slot-row][data-slot="${mozaSlots.find(([id]) => id !== moza133)[0]}"]`);
   const tsel = stickRow.getByTestId('slot-template');
-  const grips = await tsel.locator('optgroup[data-group=grips] option').allInnerTexts();
-  const autoTxt = await tsel.locator('option[value=""]').innerText();
-  check(/MOZA AB6\/9 base \+ MHG/.test(autoTxt) && grips.length === 4 && /MHG/.test(grips[0]) && /MH16/.test(grips[1]) && /CarrierAce/.test(grips[2]) && /ViperAce/.test(grips[3]),
-    `AB6 stick slot: Automatic = plain AB6, “Grips for this base” = AB6 + MH16 / CarrierAce / ViperAce (${autoTxt} | ${grips.join(' | ')})`);
-  check(await otherRow.getByTestId('slot-template').locator('optgroup[data-group=grips]').count() === 0, 'the other AB6 (guessed MTQ throttle) has no grip group');
-  await tsel.selectOption('builtin-moza-ab6-viperace');
+  const grips = await (await templateList(tsel)).locator('[data-group=suggestions] [role=option]').allInnerTexts();
+  const autoTxt = await (await templateOption(tsel, '')).innerText();
+  check(/MOZA AB6\/9 base \+ MHG/i.test(autoTxt) && grips.length === 4 && /MHG/i.test(grips[0]) && /MH16/i.test(grips[1]) && /CarrierAce/i.test(grips[2]) && /ViperAce/i.test(grips[3]),
+    `AB6 stick slot: Automatic = plain AB6, suggested grips A-Z = AB6 / MH16 / CarrierAce / ViperAce (${autoTxt} | ${grips.join(' | ')})`);
+  check(await (await templateList(otherRow.getByTestId('slot-template'))).locator('[data-group=suggestions] [data-variant]').count() === 0, 'the other AB6 (guessed MTQ throttle) has no grip group');
+  await selectTemplate(tsel, 'builtin-moza-ab6-viperace');
   await fp.waitForTimeout(300);
-  check((await tsel.inputValue()) === 'builtin-moza-ab6-viperace' && /picked by you/.test(await stickRow.innerText()), 'picking the ViperAce grip variant sticks on the AB6 slot');
+  check((await templateValue(tsel)) === 'builtin-moza-ab6-viperace' && /picked by you/.test(await stickRow.innerText()), 'picking the ViperAce grip variant sticks on the AB6 slot');
   await stickRow.scrollIntoViewIfNeeded();
   await stickRow.screenshot({ path: shots + '140-ab6-grip-variant-picked.png' });
   { // the picked ViperAce grip on the Devices page: Federico's positions (photoTplExactViews), markers on his exported anchors
@@ -1621,7 +1669,7 @@ const moza133 = mozaSlots.find(([, t]) => /133 buttons/.test(t))?.[0];
     await fp.getByTestId('sidebar-slots').locator(`[data-slot-row="${moza133}"]`).click();
     await fp.waitForTimeout(600);
     const vdv = fp.getByTestId('device-view');
-    check((await vdv.getByTestId('template-select').inputValue()) === 'builtin-moza-ab6-viperace', `Devices page on ${moza133}: the picked ViperAce grip`);
+    check((await templateValue(vdv.getByTestId('template-select'))) === 'builtin-moza-ab6-viperace', `Devices page on ${moza133}: the picked ViperAce grip`);
     check((await vdv.locator('[data-callout]').count()) === 22, `ViperAce grip on the AB6: 22 callouts (${await vdv.locator('[data-callout]').count()})`);
     await fp.setViewportSize({ width: 1680, height: 1800 }); // each whole photo page clear of the sticky header
     const AT = {
@@ -1650,9 +1698,9 @@ const moza133 = mozaSlots.find(([, t]) => /133 buttons/.test(t))?.[0];
     await fp.getByTestId('open-slots').click();
     await fp.waitForTimeout(300);
   }
-  await tsel.selectOption('');
+  await selectTemplate(tsel, '');
   await fp.waitForTimeout(300);
-  check((await tsel.inputValue()) === '', 'back to Automatic (plain AB6)');
+  check((await templateValue(tsel)) === '', 'back to Automatic (plain AB6)');
 }
 await fpanel.getByTestId('tab-tester').click();
 await fp.waitForTimeout(400);
@@ -1773,7 +1821,7 @@ console.log('\nslot order & axis settings limit (Firefox, 10 joysticks)');
   await fam.getByRole('button', { name: 'Close' }).first().click();
   // a template pick and a binding of your own on js1, to see them travel too
   const fdv = fp.getByTestId('device-view');
-  await fdv.getByTestId('template-select').selectOption('builtin-stick');
+  await selectTemplate(fdv.getByTestId('template-select'), 'builtin-stick');
   await fp.waitForTimeout(300);
     await fdv.locator('[data-callout="b6"]').click();
   const fip = fdv.getByTestId('input-panel');
@@ -1803,7 +1851,7 @@ console.log('\nslot order & axis settings limit (Firefox, 10 joysticks)');
   check((await fHw('js2')) === hw1 && (await fHw('js1')) === hw2, `move down: js1's hardware is now js2 and the other way round (${hw1.slice(0, 30)} / ${hw2.slice(0, 30)})`);
   const c2 = await fRow('js2').getByTestId('slot-count').innerText().catch(() => '');
   check(/^\(\d+ custom\)$/.test(c1) && c2 === c1 && await fRow('js1').getByTestId('slot-count').count() === 0, `your js1 bindings moved to js2 (${c1} -> ${c2}); none left on js1 (game defaults stay on their number)`);
-  check((await fRow('js2').getByTestId('slot-template').inputValue()) === 'builtin-stick' && (await fRow('js1').getByTestId('slot-template').inputValue()) === '', 'the template pick moved with it');
+  check((await templateValue(fRow('js2').getByTestId('slot-template'))) === 'builtin-stick' && (await templateValue(fRow('js1').getByTestId('slot-template'))) === '', 'the template pick moved with it');
   check(/Move mappings js1 ⇄ js2/.test(await fpanel.getByTestId('slot-move-notice').innerText()) && /game's own device order is never changed/.test(await fpanel.getByTestId('slot-move-notice').innerText()), 'move notice with Undo (says the game order is unchanged)');
   check(/Move mappings to the next slot \(use when the game renumbered your devices\)/.test(await fRow('js1').getByTestId('slot-move-down').getAttribute('title') ?? '')
     && /use when the game renumbered your devices/.test(await fRow('js2').getByTestId('slot-move-up').getAttribute('aria-label') ?? ''), 'arrows are labelled as moving mappings, not changing the game order');
@@ -1970,7 +2018,7 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   await rp.locator('[data-view-tab=devices]').click();
   await rp.waitForTimeout(400);
   await rp.getByTestId('sidebar-slots').locator('[data-slot-row="js4"]').click();
-  await rp.getByTestId('template-select').selectOption('builtin-winctrl-ursa-combat');
+  await selectTemplate(rp.getByTestId('template-select'), 'builtin-winctrl-ursa-combat');
   await rp.waitForTimeout(1500);
   const gl = rp.getByTestId('device-groups-line');
   check(await gl.getByText('customized').isVisible() && await gl.getByRole('button', { name: 'All' }).isVisible(), 'legend moved onto the Groups line');
@@ -2698,7 +2746,7 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   await ed.getByTestId('tpl-save').click();
   await p7.waitForTimeout(800);
   const tsel = dv7.getByTestId('template-select');
-  await tsel.selectOption(await tsel.locator('option', { hasText: 'Round 7 classic' }).first().getAttribute('value'));
+  await selectTemplate(tsel, await (await templateList(tsel)).getByRole('option', { name: /Round 7 classic/i }).first().getAttribute('data-value'));
   await p7.waitForTimeout(500);
   const dc = await dv7.getByTestId('device-canvas').evaluate((el) => ({ w: el.offsetWidth, h: el.offsetHeight }));
   check(Math.abs(dc.h - cv.layoutH) < 1 && Math.abs(dc.w - cv.layoutW) < 1, `Devices view uses the same capped layout (${dc.w}×${dc.h})`);
@@ -3397,8 +3445,8 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
       const fixturePath = new URL(`./fixtures/${fixtureName}.sc-template.json`, import.meta.url).pathname;
       const fixture = JSON.parse(readFileSync(fixturePath, 'utf8')).templates[0];
       await lp.getByTestId('template-import-file').setInputFiles(fixturePath);
-      await lp.getByTestId('template-select').locator(`option[value="${fixture.id}"]`).waitFor({ state: 'attached' });
-      await lp.getByTestId('template-select').selectOption(fixture.id);
+      await (await templateOption(lp.getByTestId('template-select'), fixture.id)).waitFor({ state: 'attached' });
+      await selectTemplate(lp.getByTestId('template-select'), fixture.id);
       await lp.locator(`[data-testid=device-view] [data-view="${fixture.views[0].id}"] [data-callout]`).first().waitFor();
       // The tall wide viewport verifies literal width fill and side-by-side Devices views. Normal desktop heights
       // also verify the visible-height limit, which can intentionally stop zoom before the full pane width.
@@ -3409,7 +3457,7 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
             await lp.reload({ waitUntil: 'networkidle' });
             await lp.locator('[data-view-tab=devices]').click();
             await lp.getByTestId('sidebar-slots').locator('[data-slot-row="js1"]').click();
-            await lp.getByTestId('template-select').selectOption(fixture.id);
+            await selectTemplate(lp.getByTestId('template-select'), fixture.id);
           }
           await lp.waitForTimeout(400);
           const original = new Map();
@@ -3506,16 +3554,16 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
     const selectSlot = async (id) => { await hp.getByTestId('sidebar-slots').locator(`[data-slot-row="${id}"]`).click(); };
     await selectSlot('js3');
     await hp.waitForTimeout(400);
-    const pedalGroup = picker.locator('optgroup[data-group=suggestions]');
-    check((await picker.inputValue()) === '' && /generic/.test(await hv.getByTestId('device-status').innerText()), 'unmatched pedal name stays Automatic with a generic template');
-    check((await pedalGroup.getAttribute('label')) === 'Pedal templates' && (await pedalGroup.locator('option').count()) === 9, 'unmatched pedal hardware offers all nine pedal built-ins (R1-LEGEND added)');
-    await picker.selectOption({ value: 'builtin-vkb-t-rudder' });
-    check((await picker.inputValue()) === 'builtin-vkb-t-rudder', 'choosing a pedal suggestion applies it with one selection');
+    const pedalGroup = (await templateList(picker)).locator('[data-group=suggestions]');
+    check((await templateValue(picker)) === '' && /generic/i.test(await hv.getByTestId('device-status').innerText()), 'unmatched pedal name stays Automatic with a generic template');
+    check((await pedalGroup.getByRole('option', { name: /pedal|rudder|crosswind|falcon|legend/i }).count()) === 9, 'unmatched pedal hardware offers all nine pedal built-ins (R1-LEGEND added)');
+    await selectTemplate(picker, { value: 'builtin-vkb-t-rudder' });
+    check((await templateValue(picker)) === 'builtin-vkb-t-rudder', 'choosing a pedal suggestion applies it with one selection');
     await selectSlot('js1');
     await hp.waitForTimeout(300);
     check(/Thrustmaster Pendular Rudder/.test(await hv.getByTestId('device-status').innerText()), 'T-Pendular-Rudder still matches its existing built-in automatically');
-    await picker.selectOption('builtin-stick');
-    check((await picker.locator('optgroup[data-group=suggestions]').getAttribute('label')) === 'Pedal templates', 'T-Pendular-Rudder offers pedal templates when displaying a generic template');
+    await selectTemplate(picker, 'builtin-stick');
+    check((await (await templateList(picker)).locator('[data-group=suggestions]').getByRole('option', { name: /pedal|rudder|crosswind|falcon|legend/i }).count()) === 9, 'T-Pendular-Rudder offers pedal templates when displaying a generic template');
     await selectSlot('js2');
     await hp.waitForTimeout(300);
     // Selecting another brand's artwork on the connected URSA must never link its copy to URSA.
@@ -3524,7 +3572,7 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
       ['builtin-tm-twcs', [{ vendor: '044F', product: 'B687' }, { name: 'TWCS' }]],
       ['builtin-virpil-vmax-prime', [{ name: 'VMAX' }]],
     ]) {
-      await picker.selectOption(id);
+      await selectTemplate(picker, id);
       await hv.getByTestId('template-customize').click();
       const editor = hp.getByTestId('template-editor');
       const [download] = await Promise.all([hp.waitForEvent('download'), editor.getByTestId('tpl-export').click()]);
@@ -3537,7 +3585,11 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
     }
     for (const [file, id] of [['bravo', 'builtin-honeycomb-bravo'], ['mtp', 'builtin-moza-mtp'], ['x56', 'builtin-logitech-x56-throttle'], ['twcs', 'builtin-tm-twcs']]) {
       const expected = JSON.parse(readFileSync(`scripts/fixtures/oct9b-${file}.json`, 'utf8'));
-      await picker.selectOption(id);
+      if (['mtp', 'twcs'].includes(file)) {
+        expected.callouts = expected.callouts.filter((c) => c.id !== 'minib');
+        expected.callouts.find((c) => c.id === 'mini').inputs.push(file === 'mtp' ? 'button1' : 'button6');
+      }
+      await selectTemplate(picker, id);
       await hp.waitForTimeout(300);
       check((await hv.locator('[data-callout]').count()) === expected.callouts.length, `${id}: all exported callouts rendered`);
       for (const view of expected.views) {
@@ -3558,8 +3610,8 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
     const editor = hp.getByTestId('template-editor');
     check((await editor.getByLabel('Rule 1 vendor id').inputValue()) === '4098' && (await editor.getByLabel('Rule 1 product id').inputValue()) === 'B970', 'New template deliberately links the currently selected URSA device');
     await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await picker.selectOption('builtin-moza-ab6');
-    check((await picker.locator('option:checked').innerText()).startsWith('MOZA AB6/9 base + MHG grip'), 'shared AB6/9 template uses the new name and its original id');
+    await selectTemplate(picker, 'builtin-moza-ab6');
+    check(/^MOZA AB6\/9 base \+ MHG grip/i.test(await picker.inputValue()), 'shared AB6/9 template uses the new name and its original id');
   } finally {
     await hintsContext.close();
   }
@@ -3609,7 +3661,7 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
     await qp.getByTestId('template-import-file').setInputFiles({ name: 'editor-quality.sc-template.json', mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify({ version: 1, templates: [fixture] })) });
     const qv = qp.getByTestId('device-view');
-    await qv.getByTestId('template-select').selectOption(fixture.id);
+    await selectTemplate(qv.getByTestId('template-select'), fixture.id);
     check(await qv.locator('[data-callout][data-unassigned-count]').count() === 0, 'Devices canvas has no editor-only incomplete markers');
     await qv.getByTestId('template-edit').click();
     const qe = qp.getByTestId('template-editor');

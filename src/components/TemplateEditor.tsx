@@ -136,7 +136,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
         if (c.kind === 'axis') {
           if (pressTarget.idx === 2 && (c.inputs.length < 2 || !c.inputs.slice(0, 2).every(isAxisInput))) { setPressTarget(null); return; }
           if (!(pressTarget.idx === 2 ? isButtonInput(input) : isAxisInput(input))) {
-            notify('err', pressTarget.idx === 2 ? 'Press a numbered button for the stick press. Still listening…' : 'Move an axis to set this input. Still listening…');
+            notify('err', pressTarget.idx === 2 ? 'Press a button for the stick press. Still listening…' : 'Move an axis to set this input. Still listening…');
             return;
           }
         }
@@ -592,7 +592,7 @@ function InputsEditor({ c, slot, devIn, callouts, pressTarget, setPressTarget, c
         ))}
         {canSetPress && <>
           <label className="flex items-center gap-2">Press button
-            <input defaultValue={c.inputs[2] ?? ''} key={`${c.id}:press:${c.inputs[2] ?? ''}`} placeholder="optional, e.g. button6" aria-label="Press button input"
+            <input defaultValue={c.inputs[2] ?? ''} key={`${c.id}:press:${c.inputs[2] ?? ''}`} placeholder={slot === 'gp' ? 'optional, e.g. thumbl' : 'optional, e.g. button6'} aria-label="Press button input"
               onBlur={(e) => { const v = numIn(e.target.value); if (v === '' || isButtonInput(v)) setPress(v); else e.target.value = c.inputs[2] ?? ''; }}
               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className={`${field} min-w-0 flex-1 font-mono`} />
             {pickBtn(2, 'the press button')}

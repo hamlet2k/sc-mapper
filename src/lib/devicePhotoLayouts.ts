@@ -33,6 +33,8 @@ export interface PhotoAnchor {
   y: number;
   /** label column to put this control's box in (default: by position) */
   side?: 'L' | 'R';
+  /** Optional fixed label centre in canvas fractions. */
+  box?: [number, number];
 }
 export interface DevicePhotoLayout {
   views: PhotoLayoutView[];
@@ -207,8 +209,7 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       t25: { view: 'panel', x: 0.36, y: 0.707 },
       t27: { view: 'panel', x: 0.424, y: 0.72 },
       t29: { view: 'panel', x: 0.487, y: 0.718 },
-      mini: { view: 'combat', x: 0.535, y: 0.207 },
-      minib: { view: 'combat', x: 0.545, y: 0.22 },
+      mini: { view: 'combat', x: 0.535, y: 0.207, box: [0.115, 0.12428030303030302] },
       b65: { view: 'combat', x: 0.683, y: 0.224 },
       wheel: { view: 'combat', x: 0.81, y: 0.19 },
       ab66: { view: 'airbus', x: 0.32, y: 0.312 },

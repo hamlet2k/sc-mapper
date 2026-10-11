@@ -39,8 +39,7 @@ const DEFAULT_THROTTLE: DeviceTemplate = {
     // right column: right grip, right lever, flaps
     t('whl', 'whl', 'encoder', b(6, 7), 0.885, 0.055, 'Thumb wheel', 'Right grip'),
     t('hat1', 'hat1', 'hat', [...hat(1), 'button8'], 0.875, 0.165, undefined, 'Right grip'),
-    t('ms', 'ms', 'axis', ['x', 'y'], 0.885, 0.3, 'Mini-stick', 'Right grip'),
-    t('msb', 'ms', 'button', b(5), 0.885, 0.38, 'Mini-stick press', 'Right grip'),
+    t('ms', 'ms', 'axis', ['x', 'y', 'button5'], 0.885, 0.3, 'Mini-stick', 'Right grip'),
     t('hat2', 'hat2', 'hat', [...hat(2), 'button9'], 0.875, 0.49, undefined, 'Right grip'),
     t('trgR', 'trgR', 'switch', b(1, 2), 0.885, 0.605, 'Trigger (2-stage)', 'Right grip'),
     t('gb1', 'gb1', 'button', b(3), 0.885, 0.685, 'Thumb button', 'Right grip'),
@@ -71,8 +70,7 @@ const DEFAULT_STICK: DeviceTemplate = {
     d('rz', 'rz', 'axis', ['rotz'], 0.115, 0.825, 'Twist', 'Axes'),
     d('rowL', 'rowL', 'buttons', ['button16', 'button17', 'button18', 'button19'], 0.125, 0.915, 'Deck buttons (left)', 'Base'),
     // right column, top to bottom (top panel, base deck)
-    d('ms', 'ms', 'axis', ['rotx', 'roty'], 0.885, 0.07, 'Mini-stick', 'Grip head'),
-    d('msb', 'ms', 'button', ['button9'], 0.885, 0.175, 'Mini-stick press', 'Grip head'),
+    d('ms', 'ms', 'axis', ['rotx', 'roty', 'button9'], 0.885, 0.07, 'Mini-stick', 'Grip head'),
     d('b3', 'b3', 'button', ['button3'], 0.885, 0.255, 'Weapon release', 'Grip head'),
     d('hat2', 'hat2', 'hat', [...hat(2), 'button13'], 0.875, 0.345, undefined, 'Grip head'),
     d('b7', 'b7', 'button', ['button7'], 0.885, 0.44, 'Thumb button (rear)', 'Grip head'),
@@ -102,8 +100,7 @@ const DEFAULT_GAMEPAD: DeviceTemplate = {
     // left column, top to bottom; the triggers also show bindings of the analog triggerl / triggerr axes
     g('lt', 'lt', 'button', ['triggerl_btn'], 0.115, 0.055, 'Left trigger (LT)', 'Left'),
     g('lb', 'lb', 'button', ['shoulderl'], 0.115, 0.16, 'Left bumper (LB)', 'Left'),
-    g('ls', 'ls', 'axis', ['thumblx', 'thumbly'], 0.115, 0.31, 'Left stick', 'Left'),
-    g('l3', 'ls', 'button', ['thumbl'], 0.115, 0.46, 'Left stick press', 'Left'),
+    g('ls', 'ls', 'axis', ['thumblx', 'thumbly', 'thumbl'], 0.115, 0.31, 'Left stick', 'Left'),
     g('dpad', 'dpad', 'hat', ['dpad_up', 'dpad_right', 'dpad_down', 'dpad_left'], 0.125, 0.6, 'D-pad', 'Left'),
     // top centre
     g('back', 'back', 'button', ['back'], 0.4, 0.06, 'View', 'Centre'),
@@ -115,8 +112,7 @@ const DEFAULT_GAMEPAD: DeviceTemplate = {
     g('x', 'x', 'button', ['x'], 0.885, 0.355, 'X button', 'Face buttons'),
     g('b', 'b', 'button', ['b'], 0.885, 0.455, 'B button', 'Face buttons'),
     g('a', 'a', 'button', ['a'], 0.885, 0.56, 'A button', 'Face buttons'),
-    g('rs', 'rs', 'axis', ['thumbrx', 'thumbry'], 0.62, 0.895, 'Right stick', 'Right'),
-    g('r3', 'rs', 'button', ['thumbr'], 0.885, 0.7, 'Right stick press', 'Right'),
+    g('rs', 'rs', 'axis', ['thumbrx', 'thumbry', 'thumbr'], 0.62, 0.895, 'Right stick', 'Right'),
   ],
 };
 

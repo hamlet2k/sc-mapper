@@ -1,6 +1,7 @@
 // Unit tests: input-name mapping, editing, export structure and import -> export -> import round-trips.
 // Usage: npm run test:unit -- [game-exported layout files...]   (or SC_TEST_LAYOUTS=a.xml,b.xml)
 import assert from 'node:assert/strict';
+import type { DeviceTemplate } from '../src/lib/templates';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
@@ -22,6 +23,11 @@ const listen = await import('../src/lib/listen');
 const { browserName } = await import('../src/lib/browser');
 const defaults = JSON.parse(readFileSync('src/data/defaults.json', 'utf8'));
 const idx = ed.indexDefaults(defaults);
+
+// Retain original export fixtures and compare the intended merge without changing authored positions.
+function mergeExpectedPress(callouts: DeviceTemplate['callouts'], axis: string, press: string, button: string): DeviceTemplate['callouts'] {
+  return callouts.filter((c) => c.id !== press).map((c) => c.id === axis ? { ...c, inputs: [...c.inputs, button] } : c);
+}
 
 let passed = 0;
 const t = (name: string, fn: () => void) => {
@@ -565,10 +571,19 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       assert.deepEqual(tp.cleanTemplate(axisTemplate(inputs)).callouts[0].inputs, inputs, 'old axis inputs unchanged');
     }
   });
+  t('axis press: all supported gamepad buttons validate, round-trip and retain the Press role', () => {
+    for (const button of cap.GP_BUTTONS) {
+      const clean = tp.cleanTemplate({ ...axisTemplate(['thumblx', 'thumbly', button]), slot: 'gp' });
+      const roundTrip = tp.parseTemplates(tp.exportTemplates([clean]))[0];
+      assert.deepEqual(roundTrip.callouts[0].inputs, ['thumblx', 'thumbly', button]);
+      assert.equal(tp.inputRole(roundTrip.callouts[0], 2), 'Press');
+      assert.ok(tp.coveredInputs(roundTrip.callouts[0]).includes(button));
+    }
+  });
   t('axis press: refuse a button after one axis, non-button third entries, missing axes, and extra inputs', () => {
     for (const inputs of [['x', 'button6'], ['x', 'y', 'z'], ['x', 'y', 'hat1_up'], ['x', 'y', ''], ['x', 'y', 6],
       ['x', 'y', 'button6!'], ['x', 'y', 'button' + '6'.repeat(30)], ['x', 'y', 'button0'], ['x', '', 'button6'], ['button5', 'y', 'button6'], ['x', 'y', 'button6', 'button7']]) {
-      assert.throws(() => tp.cleanTemplate(axisTemplate(inputs)), /optional third input must be a buttonN after two axes/, String(inputs));
+      assert.throws(() => tp.cleanTemplate(axisTemplate(inputs)), /optional third input must be a button input after two axes/, String(inputs));
       assert.throws(() => tp.parseTemplates(JSON.stringify(axisTemplate(inputs))), /optional third input/);
     }
   });
@@ -751,7 +766,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       assert.deepEqual(back.callouts.map((c) => c.region), b.callouts.map((c) => c.region), `${id}: regions survive export/import`);
     }
     const th = byId('builtin-throttle');
-    assert.equal(byId('builtin-stick').callouts.length, 24); assert.equal(th.callouts.length, 21);
+    assert.equal(byId('builtin-stick').callouts.length, 23); assert.equal(th.callouts.length, 20);
     const row = byId('builtin-stick').callouts.find((c) => c.id === 'rowL')!;
     assert.equal(row.kind, 'buttons'); assert.equal(tp.inputRole(row, 3), '4');
     assert.deepEqual(th.callouts.find((c) => c.id === 'e1')!.inputs.map((_, k) => tp.inputRole(th.callouts.find((c) => c.id === 'e1')!, k)), ['⟳', '⟲', '●']);
@@ -781,7 +796,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     // analog trigger axes and stick directions show on the trigger / stick callouts
     const cov = (id: string) => tp.coveredInputs(gp.callouts.find((c) => c.id === id)!);
     assert.ok(cov('lt').includes('triggerl') && cov('rt').includes('triggerr') && cov('ls').includes('thumbl_up') && cov('rs').includes('thumbr_left'));
-    assert.equal(gp.callouts.length, 15);
+    assert.equal(gp.callouts.length, 13);
     for (const c of gp.callouts) {
       assert.ok(c.region && tp.REGION_RE.test(c.region), `${c.id}: glow region`);
       for (const o of gp.callouts) if (o !== c) assert.ok(Math.abs(o.box.x - c.box.x) > 0.12 || Math.abs(o.box.y - c.box.y) > 0.085, `boxes ${c.id} / ${o.id} too close`);
@@ -789,15 +804,30 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const dp = gp.callouts.find((c) => c.id === 'dpad')!;
     assert.equal(dp.kind, 'hat'); assert.deepEqual(dp.inputs, ['dpad_up', 'dpad_right', 'dpad_down', 'dpad_left']);
     assert.equal(dp.inputRegions?.length, 4); assert.ok(dp.inputRegions!.every((r) => tp.REGION_RE.test(r)) && new Set(dp.inputRegions).size === 4, 'four distinct arm outlines');
-    for (const [press, stick] of [['l3', 'ls'], ['r3', 'rs']]) {
-      const a = gp.callouts.find((c) => c.id === press)!, b = gp.callouts.find((c) => c.id === stick)!;
-      assert.deepEqual(a.anchor, b.anchor, `${press} points at its stick`); assert.equal(a.inputRegions, undefined);
+    for (const [stick, press] of [['ls', 'thumbl'], ['rs', 'thumbr']]) {
+      const c = gp.callouts.find((c) => c.id === stick)!;
+      assert.equal(c.inputs[2], press); assert.ok(tp.coveredInputs(c).includes(press));
     }
     const back = tp.parseTemplates(tp.exportTemplates([{ ...gp, builtin: undefined, id: 'copy' } as any]))[0];
     assert.deepEqual(back.callouts.map((c) => c.region), gp.callouts.map((c) => c.region), 'regions survive export/import');
     assert.deepEqual(back.callouts.find((c) => c.id === 'dpad')!.inputRegions, dp.inputRegions, 'D-pad outlines survive export/import');
   });
   const { DEVICE_TEMPLATES } = await import('../src/lib/deviceTemplates');
+  t('built-in ministicks: merge every press, preserve axis positions and labels, lose no inputs', () => {
+    const fixtures = JSON.parse(readFileSync(new URL('./fixtures/ministick-merges.json', import.meta.url), 'utf8'));
+    const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+    for (const fixture of fixtures) {
+      const actual = all.find((t) => t.id === fixture.id)!;
+      assert.equal(actual.callouts.length, fixture.count - fixture.merges.length, fixture.id);
+      assert.deepEqual(actual.callouts.flatMap((c) => c.inputs).sort(), fixture.inputs, `${fixture.id}: every input retained`);
+      for (const { axis, pressId, button } of fixture.merges) {
+        assert.deepEqual(actual.callouts.find((c) => c.id === axis.id), { ...axis, inputs: [...axis.inputs, button] }, `${fixture.id}: original axis callout and position`);
+        assert.ok(!actual.callouts.some((c) => c.id === pressId), `${fixture.id}: separate press removed`);
+      }
+      const clean = tp.parseTemplates(tp.exportTemplates([actual]))[0];
+      assert.deepEqual(clean.callouts.map((c) => c.inputs), actual.callouts.map((c) => c.inputs));
+    }
+  });
   const dt = await import('../src/lib/deviceTemplates');
   const { DEVICE_PHOTO_LAYOUTS } = await import('../src/lib/devicePhotoLayouts');
   const { DEVICE_PHOTO_SIZES } = await import('../src/lib/devicePhotoSizes');
@@ -1089,7 +1119,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(ins(st, 'trim'), ['hat1_up', 'hat1_right', 'hat1_down', 'hat1_left']); assert.deepEqual(ins(st, 'xy'), ['x', 'y']);
     assert.deepEqual(ins(th, 'mic'), ['button3', 'button4', 'button5', 'button6', 'button2'], 'MIC: up/right/down/left + push');
     assert.deepEqual(ins(th, 'eol'), ['button31', 'button18'], 'engine operate L: IGN (up) = 31, MOTOR (down) = 18');
-    assert.deepEqual([ins(th, 'rthr'), ins(th, 'lthr'), ins(th, 'frict'), ins(th, 'slew')], [['z'], ['rotz'], ['slider1'], ['x', 'y']]);
+    assert.deepEqual([ins(th, 'rthr'), ins(th, 'lthr'), ins(th, 'frict'), ins(th, 'slew')], [['z'], ['rotz'], ['slider1'], ['x', 'y', 'button1']]);
     if (!th.views) assert.equal(th.callouts.find((c) => c.id === 'ff')!.inputRegions?.length, 2, 'fuel flow: one outline per switch'); // (art only: photos have markers)
     assert.deepEqual([st.views?.map((v) => v.id), th.views?.map((v) => v.id)], [['thumb', 'side'], ['top', 'front']], 'Warthog: photo templates (measured layouts)');
     assert.deepEqual(ins(by('tm-t16000m'), 'lpanel'), ['button5', 'button6', 'button7', 'button8', 'button9', 'button10']);
@@ -1099,10 +1129,10 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     {
       // MTQ: ministick 62, button 65 and the side wheel 63 / 64 apart; Airbus / Boeing grip buttons on their own (swappable) photos
       const q = by('moza-mtq'), on = (v: string) => q.callouts.filter((c) => c.view === v).map((c) => c.id);
-      assert.deepEqual([ins(q, 'minib'), ins(q, 'b65'), ins(q, 'wheel'), q.callouts.find((c) => c.id === 'wheel')!.kind], [['button62'], ['button65'], ['button63', 'button64'], 'encoder']);
+      assert.deepEqual([ins(q, 'mini'), ins(q, 'b65'), ins(q, 'wheel'), q.callouts.find((c) => c.id === 'wheel')!.kind], [['x', 'y', 'button62'], ['button65'], ['button63', 'button64'], 'encoder']);
       assert.ok(!q.callouts.some((c) => c.id === 'b63'), 'no combined 63-65 callout');
       assert.deepEqual(q.views!.map((v) => [v.id, v.swap ?? '']), [['levers', ''], ['panel', ''], ['combat', 'Grip'], ['airbus', 'Grip'], ['boeing', 'Grip']]);
-      assert.deepEqual(on('combat'), ['mini', 'minib', 'b65', 'wheel']);
+      assert.deepEqual(on('combat'), ['mini', 'b65', 'wheel']);
       assert.deepEqual(on('airbus'), ['ab66', 'ab67']); assert.deepEqual([ins(q, 'ab66'), ins(q, 'ab67')], [['button66'], ['button67']]);
       assert.deepEqual(on('boeing').map((id) => ins(q, id)[0]).sort(), seq(68, 75).map((n) => `button${n}`).sort());
       assert.deepEqual([ins(q, 'ap72'), ins(q, 'toga73'), ins(q, 'rev74'), ins(q, 'rev75')], [['button72'], ['button73'], ['button74'], ['button75']], 'Boeing left: AP disc / TOGA / reverser up / normal');
@@ -1184,8 +1214,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const control = (d: DeviceTemplate, id: string) => d.callouts.find((c) => c.id === id)!;
     const inputs = (d: DeviceTemplate, id: string) => control(d, id).inputs;
     for (const [d, name, match, count, last] of [
-      [aero, 'VIRPIL VPC CDT-Aeromax', 'Aeromax', 17, 24],
-      [flanker, 'VIRPIL Constellation Flanker', 'Flanker', 14, 30],
+      [aero, 'VIRPIL VPC CDT-Aeromax', 'Aeromax', 16, 24],
+      [flanker, 'VIRPIL Constellation Flanker', 'Flanker', 13, 30],
     ] as const) {
       assert.equal(d.name, name); assert.equal(d.brand, 'VIRPIL'); assert.equal(d.category, 'stick');
       assert.deepEqual(d.match, [{ name: match }]);
@@ -1217,8 +1247,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(inputs(aero, 'trigger'), b(1, 2)); assert.deepEqual(inputs(aero, 'flip'), b(3, 4));
     assert.deepEqual([control(aero, 'mode').kind, inputs(aero, 'mode')], ['switch', ['', '']]);
     assert.deepEqual(Object.fromEntries(aero.callouts.filter((c) => c.kind === 'axis').map((c) => [c.id, c.inputs])),
-      { mini: ['rotx', 'roty'], xy: ['x', 'y'], sl: ['slider1'], dl: ['slider2'], brake: ['rotz'], twist: ['z'] });
-    assert.deepEqual(inputs(aero, 'minib'), b(6));
+      { mini: ['rotx', 'roty', 'button6'], xy: ['x', 'y'], sl: ['slider1'], dl: ['slider2'], brake: ['rotz'], twist: ['z'] });
+    assert.ok(!aero.callouts.some((c) => c.id === 'minib'));
     assert.match(aero.notes!, /Mode 2 shifts buttons 13-24 to 25-36/);
     assert.match(aero.notes!, /optional.*absent from these photos/); assert.match(aero.notes!, /Firefox/);
     assert.deepEqual(inputs(flanker, 'h2'), b(3, 4, 5, 6, 2));
@@ -1227,9 +1257,9 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(inputs(flanker, 'h14'), b(15, 16, 17, 18, 14));
     assert.deepEqual(inputs(flanker, 'trigger'), b(27, 28)); assert.deepEqual(inputs(flanker, 'flip'), b(25, 26));
     assert.deepEqual(inputs(flanker, 'b29'), b(29)); assert.deepEqual(inputs(flanker, 'brakeb'), b(30));
-    assert.deepEqual(inputs(flanker, 'minib'), b(8));
+    assert.ok(!flanker.callouts.some((c) => c.id === 'minib'));
     assert.deepEqual(Object.fromEntries(flanker.callouts.filter((c) => c.kind === 'axis').map((c) => [c.id, c.inputs])),
-      { mini: ['rotx', 'roty'], brakea: ['slider1'] }, 'grip only: no invented base axes');
+      { mini: ['rotx', 'roty', 'button8'], brakea: ['slider1'] }, 'grip only: no invented base axes');
     assert.deepEqual(['h14', 'flip', 'trigger', 'b29', 'brakea'].map((id) => control(flanker, id).view), Array(5).fill('side'));
     assert.match(flanker.notes!, /alternate four-way configuration/i);
   });
@@ -1238,7 +1268,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const expected: Record<string, Record<string, [string, string[]]>> = {
       alpha: {
         b12: ['button', b(12)], h13: ['hat', b(14, 15, 16, 17, 13)],
-        mini: ['axis', ['rotx', 'roty']], minib: ['button', b(5)], b6: ['button', b(6)],
+        mini: ['axis', ['rotx', 'roty', 'button5']], b6: ['button', b(6)],
         h7: ['hat', b(8, 9, 10, 11, 7)], l21: ['switch', b(24, 21, 22, 23)],
         h25: ['hat', b(26, 27, 28, 29, 25)], r18: ['switch', b(19, 18, 20)],
         trigger: ['switch', b(1, 2)], lower: ['switch', b(3, 4)], b30: ['button', b(30)],
@@ -1246,8 +1276,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       },
       delta: {
         h14: ['hat', b(15, 16, 17, 18, 14)], h9: ['hat', b(10, 11, 12, 13, 9)],
-        h19: ['hat', b(20, 21, 22, 23, 19)], mini: ['axis', ['rotx', 'roty']],
-        minib: ['button', b(7)], encoder: ['encoder', b(1, 2, 3)],
+        h19: ['hat', b(20, 21, 22, 23, 19)], mini: ['axis', ['rotx', 'roty', 'button7']], encoder: ['encoder', b(1, 2, 3)],
         trigger: ['switch', b(5, 6)], b4: ['button', b(4)], twist: ['axis', ['z']],
       },
     };
@@ -1358,7 +1387,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       const actual = DEVICE_TEMPLATES.find((x) => x.id === id)!;
       assert.ok(actual, id);
       assert.deepEqual({ aspect: actual.aspect, views: actual.views, callouts: actual.callouts },
-        { aspect: expected.aspect, views: expected.views, callouts: expected.callouts }, `${id}: every authored field`);
+        { aspect: expected.aspect, views: expected.views, callouts: file === 'gunfighter' ? mergeExpectedPress(expected.callouts, 'gca', '1hu0ipa2', 'button8') : expected.callouts }, `${id}: every authored field`);
       assert.equal(DEVICE_PHOTO_LAYOUTS[id], undefined, `${id}: bypass automatic placement`);
       for (const [photo, hash] of Object.entries(expected.photoHashes)) {
         assert.equal(createHash('sha256').update(readFileSync(new URL(`../public${photo}`, import.meta.url))).digest('hex'), hash, `${id}: exact exported WebP bytes`);
@@ -1379,13 +1408,13 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     }
     const gun = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-gunfighter-mcg')!;
     const original = JSON.parse(readFileSync(new URL('./fixtures/vkb-gunfighter-mcg-pro.sc-template.json', import.meta.url), 'utf8')).templates[0];
-    assert.deepEqual(gun.callouts, original.callouts, 'Gunfighter: exact supplied export');
-    assert.equal(gun.callouts.length, 15, 'v2 adds GATE CONT Push');
+    assert.deepEqual(gun.callouts, mergeExpectedPress(original.callouts, 'gca', '1hu0ipa2', 'button8'), 'Gunfighter: exact supplied export with merged press');
+    assert.equal(gun.callouts.length, 14, 'GATE CONT Push merged into analog callout');
     const gc = (id: string) => gun.callouts.find((c) => c.id === id)!;
     assert.deepEqual([gc('flip').kind, gc('flip').inputs, gc('flip').label], ['button', ['button3'], 'Flip trigger']);
     assert.deepEqual(gc('brakea').inputs, ['slider2']);
     assert.deepEqual(gc('lvl').inputs, ['button5']); assert.deepEqual(gc('gun').inputs, ['button6']);
-    assert.deepEqual(gc('1hu0ipa2').inputs, ['button8']);
+    assert.deepEqual(gc('gca').inputs, ['rotz', 'slider1', 'button8']);
     assert.deepEqual(['reset', 'xy', '6dmumr55'].map((id) => gc(id).view), ['thumb', 'thumb', 'thumb']);
     assert.equal(gun.name, 'VKB Gunfighter + MCG Pro');
     assert.equal(gun.brand, 'VKB'); assert.equal(gun.category, 'stick');
@@ -1440,11 +1469,11 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         ['grip', 'Hawk-60 grip', '/device-photos/virpil-rotor-tcs-hawk60-main.webp', 1555, 990],
         ['plus', 'Rotor TCS Plus base', '/device-photos/virpil-rotor-tcs-plus-main.webp', 1489, 739],
       ]],
-      ['builtin-virpil-vmax-prime', '177ea8dafe511a6abc272e17f8d01ab88e070c89534ee7b45103a933fff54358', [
+      ['builtin-virpil-vmax-prime', 'eef4b9ede1a85350a294a88a75750330e02cd9d54c1a7f9cf0e2eb7ae62ddc95', [
         ['left', 'Front Grip', '/device-photos/virpil-vmax-prime-front.webp', 1868, 966],
         ['panel', 'Back Grip and Panel', '/device-photos/virpil-vmax-prime-panel.webp', 2092, 1182],
       ]],
-      ['builtin-virpil-t50cm4', 'd73c3522879b11a308b095938b8baf8d78f3002401d87e8a83fb632aa27b6970', [
+      ['builtin-virpil-t50cm4', 'e0cbceeb2327149068ee4529e311aa27f0cb723fd8a749bd16c276eabeeea49d', [
         ['left', 'Front Grip', '/device-photos/virpil-t50cm4-front.webp', 1657, 936],
         ['panel', 'Back Grip and Panel', '/device-photos/virpil-t50cm4-panel.webp', 1777, 1004],
       ]],
@@ -1760,7 +1789,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       const expected = JSON.parse(readFileSync(new URL(`./fixtures/oct9b-${file}.json`, import.meta.url), 'utf8'));
       const actual = DEVICE_TEMPLATES.find((x) => x.id === id)!;
       assert.deepEqual({ aspect: actual.aspect, views: actual.views, callouts: actual.callouts },
-        { aspect: expected.aspect, views: expected.views, callouts: expected.callouts }, `${id}: all authored fields`);
+        { aspect: expected.aspect, views: expected.views, callouts: ['mtp', 'twcs'].includes(file) ? mergeExpectedPress(expected.callouts, 'mini', 'minib', file === 'mtp' ? 'button1' : 'button6') : expected.callouts }, `${id}: all authored fields`);
       for (const [key, value] of Object.entries(expected.metadata)) assert.deepEqual(actual[key as keyof DeviceTemplate], value, `${id}: own ${key}`);
       for (const [photo, hash] of Object.entries(expected.photoHashes)) {
         assert.equal(createHash('sha256').update(readFileSync(new URL(`../public${photo}`, import.meta.url))).digest('hex'), hash, `${id}: photo bytes decoded as-is`);
@@ -2883,7 +2912,7 @@ console.log('\nshared controller files');
     assert.deepEqual(back.bindings, pk.bindings);
     const bad = JSON.parse(sh.serializeShared(pk));
     bad.template.template.callouts[0].inputs = ['rotx', 'roty', 'z'];
-    assert.match(errOf(JSON.stringify(bad)), /damaged: .*optional third input must be a buttonN/);
+    assert.match(errOf(JSON.stringify(bad)), /damaged: .*optional third input must be a button input/);
   });
   t('version and format validation: friendly errors for wrong, corrupt and newer files', () => {
     const ok = sh.packController({ game, device, template: builtin, bindings });
@@ -3011,6 +3040,38 @@ console.log('\nshared controller files');
     for (const name of ['', 'USB Controller', 'VKB Gladiator', 'TCSim', 'R100', 'Pedalboard', 'Bravoish', 'MTPlus']) assert.equal(sg.suggestCategory(name), undefined, name);
     assert.equal(sg.suggestCategory(undefined), undefined);
     assert.equal(sg.suggestCategory('Throttle and rudder pedals'), 'pedals', 'specific pedal hint takes precedence');
+  });
+  const picker = await import('../src/lib/templatePicker');
+  t('template combobox: type order, categorized users, brands, models and adjacent variants', () => {
+    const make = (id: string, name: string, category?: string, extra: Partial<DeviceTemplate> = {}): DeviceTemplate => ({ ...tp.newTemplate('js', name), id, category, builtin: true, ...extra });
+    const base = make('base', 'Z base', 'stick', { brand: 'Acme' });
+    const variant = make('variant', 'A grip', 'stick', { brand: 'Acme', variantOf: base.id });
+    const list = [variant, make('mine', 'My uncategorized', undefined, { builtin: false }),
+      make('panel', 'Panel', 'panel'), make('collective', 'Collective', 'collective'),
+      make('generic', 'Generic'), make('gamepad', 'Pad', 'gamepad'), make('pedals', 'Pedals', 'pedals'),
+      make('throttle', 'Throttle', 'throttle'), make('userstick', 'Custom stick', 'stick', { builtin: false, brand: 'Zed' }),
+      make('stick-a', 'A model', 'stick', { brand: 'Acme' }), base];
+    const groups = picker.templatePickerGroups(list);
+    assert.deepEqual([...new Set(groups.map((g) => g.label))], ['Sticks', 'Throttles', 'Pedals', 'Collectives', 'Panels', 'Gamepads', 'Generic', 'My templates']);
+    assert.deepEqual(groups.filter((g) => g.label === 'Sticks').map((g) => g.brand), ['Acme', 'Zed']);
+    assert.deepEqual(groups[0].templates.map((t) => t.id), ['stick-a', 'base', 'variant']);
+    assert.equal(groups.at(-1)!.templates[0].id, 'mine');
+    assert.equal(groups[1].templates[0].id, 'userstick');
+    assert.deepEqual(picker.orderTemplateFamilies([variant]).map((t) => t.id), ['variant'], 'a filtered variant remains selectable without its base');
+  });
+  t('template combobox: pinned automatic, name suggestions and grips are unique; live search covers names, brands and types', () => {
+    const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+    const auto = all.find((t) => t.id === 'builtin-moza-ab6')!;
+    const groups = picker.templatePickerGroups(all, auto, 'rudder pedals');
+    assert.equal(groups[0].label, 'Suggested for this device');
+    for (const t of [auto, ...tp.templateVariants(all, auto), ...sg.suggestedTemplates('rudder pedals', all)]) assert.ok(groups[0].templates.some((v) => v.id === t.id), t.id);
+    const ids = groups.flatMap((g) => g.templates.map((t) => t.id));
+    assert.equal(new Set(ids).size, ids.length); assert.equal(ids.length, all.length);
+    assert.ok(picker.matchesTemplate(auto, 'mOzA'));
+    assert.ok(picker.matchesTemplate(auto, 'STICK', 'Sticks'));
+    assert.ok(picker.matchesTemplate(auto, 'AB6'));
+    assert.ok(!picker.matchesTemplate(auto, 'nonexistent'));
+    assert.ok(picker.matchesTemplate(auto, 'moza stick', 'Sticks'));
   });
   t('suggestions use a single category field on built-ins; never users or generic templates', () => {
     assert.ok(all.every((x) => x.category));

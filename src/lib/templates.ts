@@ -17,7 +17,7 @@ export interface Pt { x: number; y: number }
 export interface Callout {
   id: string;
   kind: CalloutKind;
-  /** game input names (no js1_ prefix): button: [button3]; hat: [hat1_up, hat1_right, hat1_down, hat1_left, (push)]; axis: [x], [x, y] or [x, y, buttonN];
+  /** game input names (no js1_ prefix): button: [button3]; hat: [hat1_up, hat1_right, hat1_down, hat1_left, (push)]; axis: [x], [x, y] or [x, y, buttonN] (gamepad buttons such as thumbl also supported);
    * encoder: [cw, ccw] or [cw, ccw, push]; switch: one per position; buttons (row): one per button.
    * '' = not assigned yet (device templates whose button numbers depend on the user's configuration: set them in a copy) */
   inputs: string[];
@@ -83,7 +83,7 @@ export interface DeviceTemplate {
   aspect: number;
   match: TemplateMatch[];
   callouts: Callout[];
-  /** maker, for grouping in the template picker (built-in device templates; user templates are listed under “Your templates”) */
+  /** maker, for brand subgroups within the template picker’s device type groups */
   brand?: string;
   /** optional hardware family, used for name-based suggestions (never automatic matching) */
   category?: TemplateCategory;
@@ -129,8 +129,8 @@ export const hatInputs = (n: number) => HAT_DIRS.map((d) => `hat${n}_${d}`);
 const HAT_RE = /^hat(\d)_(up|down|left|right)$/;
 const DPAD_RE = /^dpad_(up|down|left|right)$/;
 export const isAxisInput = (i: string) => JS_AXES.includes(i) || GP_AXES.includes(i) || i === 'triggerl' || i === 'triggerr';
-/** numbered button id used by an optional mini-stick press input */
-export const isButtonInput = (i: string) => i.length <= 25 && /^button[1-9]\d*$/.test(i);
+/** Supported joystick / gamepad button id used by an optional mini-stick press input. */
+export const isButtonInput = (i: string) => i.length <= 25 && (/^button[1-9]\d*$/.test(i) || GP_BUTTONS.includes(i));
 
 /** callout kind and inputs for a pressed input */
 export function calloutFor(input: string): { kind: CalloutKind; inputs: string[] } {
@@ -421,7 +421,7 @@ export function cleanTemplate(o: unknown, i = 0): DeviceTemplate {
       const rawInputs = q.inputs, axes = rawInputs.slice(0, 2);
       if (rawInputs.length > 3 || !axes.every((x) => typeof x === 'string' && (isAxisInput(x) || (rawInputs.length === 2 && x === ''))) ||
           (rawInputs.length === 3 && (typeof rawInputs[2] !== 'string' || !isButtonInput(rawInputs[2])))) {
-        throw new Error(`Template “${t.name}”: callout ${j + 1}: an axis callout needs one or two axes; an optional third input must be a buttonN after two axes`);
+        throw new Error(`Template “${t.name}”: callout ${j + 1}: an axis callout needs one or two axes; an optional third input must be a button input after two axes`);
       }
     }
     const inputs = Array.isArray(q.inputs) ? q.inputs.filter((x): x is string => typeof x === 'string' && (x === '' || INPUT_RE.test(x))) : [];
