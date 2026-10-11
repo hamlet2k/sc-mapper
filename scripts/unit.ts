@@ -920,10 +920,10 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[2].id]: { view: 'front', x: 1.5, y: 0.5 } } })), 'coordinates outside 0..1 rejected');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { views: [], anchors: {} })), 'empty layout rejected');
   });
-  t('device templates (45 devices): photos per device, real numbering where published, unassigned spots elsewhere, links, groups', () => {
+  t('device templates (47 devices): photos per device, real numbering where published, unassigned spots elsewhere, links, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    assert.equal(DEVICE_TEMPLATES.length, 45, '43 existing + Aeromax and Flanker');
+    assert.equal(DEVICE_TEMPLATES.length, 47, '45 existing + Constellation Alpha and Delta');
     assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
     // devices without published numbers: callout spots only (stick X / Y where obvious)
     const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
@@ -1187,6 +1187,83 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       { mini: ['rotx', 'roty'], brakea: ['slider1'] }, 'grip only: no invented base axes');
     assert.deepEqual(['h14', 'flip', 'trigger', 'b29', 'brakea'].map((id) => control(flanker, id).view), Array(5).fill('side'));
     assert.match(flanker.notes!, /alternate four-way configuration/i);
+  });
+  t('VIRPIL Constellation Alpha and Delta: supplied diagrams, axes and hosted photo views', () => {
+    const b = (...n: number[]) => n.map((i) => `button${i}`);
+    const expected: Record<string, Record<string, [string, string[]]>> = {
+      alpha: {
+        b12: ['button', b(12)], h13: ['hat', b(14, 15, 16, 17, 13)],
+        mini: ['axis', ['rotx', 'roty']], minib: ['button', b(5)], b6: ['button', b(6)],
+        h7: ['hat', b(8, 9, 10, 11, 7)], l21: ['switch', b(24, 21, 22, 23)],
+        h25: ['hat', b(26, 27, 28, 29, 25)], r18: ['switch', b(19, 18, 20)],
+        trigger: ['switch', b(1, 2)], lower: ['switch', b(3, 4)], b30: ['button', b(30)],
+        brakeb: ['button', b(31)], brakea: ['axis', ['slider1']], twist: ['axis', ['z']],
+      },
+      delta: {
+        h14: ['hat', b(15, 16, 17, 18, 14)], h9: ['hat', b(10, 11, 12, 13, 9)],
+        h19: ['hat', b(20, 21, 22, 23, 19)], mini: ['axis', ['rotx', 'roty']],
+        minib: ['button', b(7)], encoder: ['encoder', b(1, 2, 3)],
+        trigger: ['switch', b(5, 6)], b4: ['button', b(4)], twist: ['axis', ['z']],
+      },
+    };
+    for (const [grip, controls] of Object.entries(expected)) {
+      const d = DEVICE_TEMPLATES.find((x) => x.id === `builtin-virpil-constellation-${grip}`)!;
+      assert.equal(d.name, `VIRPIL Constellation ${grip === 'alpha' ? 'Alpha' : 'Delta'}`);
+      assert.equal(d.brand, 'VIRPIL'); assert.equal(d.category, 'stick');
+      assert.equal(DEVICE_PHOTO_LAYOUTS[d.id], undefined, 'exact positions bypass automatic layout');
+      assert.deepEqual(Object.fromEntries(d.callouts.map((c) => [c.id, [c.kind, c.inputs]])), controls,
+        'all diagram inputs; hats in up/right/down/left/depress order');
+      const numbers = d.callouts.flatMap((c) => c.inputs).filter((i) => /^button/.test(i)).map((i) => +i.slice(6)).sort((a, b) => a - b);
+      assert.deepEqual(numbers, Array.from({ length: grip === 'alpha' ? 31 : 23 }, (_, i) => i + 1).filter((n) => grip !== 'delta' || n !== 8),
+        'every diagram button exactly once; Delta diagram leaves button 8 unused');
+      assert.deepEqual(d.views!.map((v) => [v.id, v.label]), [['front', 'Grip face'], ['side', 'Trigger side']]);
+      for (const v of d.views!) {
+        const [pw, ph, px, py, productW, productH] = DEVICE_PHOTO_SIZES[`virpil-constellation-${grip}-${v.id}`];
+        const photo = readFileSync(new URL(`../public${v.image}`, import.meta.url));
+        assert.equal(photo.toString('ascii', 0, 4), 'RIFF'); assert.equal(photo.toString('ascii', 8, 12), 'WEBP');
+        assert.deepEqual([v.width, v.height], [Math.round(pw + 0.6 * ph), ph], 'standard label gutters');
+        const gx = (v.width - pw) / 2, on = d.callouts.filter((c) => c.view === v.id);
+        assert.ok(on.length > 0);
+        for (const c of on) {
+          const x = (c.anchor.x * v.width - gx) / pw;
+          assert.ok(x >= px && x <= px + productW && c.anchor.y >= py && c.anchor.y <= py + productH, `${d.id}/${c.id}: anchor within product bounds`);
+          assert.ok(c.box.x * v.width < gx || c.box.x * v.width > gx + pw, `${d.id}/${c.id}: label beside photo`);
+          for (const other of on) if (other !== c && other.box.x === c.box.x) {
+            assert.ok(Math.abs(c.box.y - other.box.y) >= 0.13, `${d.id}: spaced label column ${c.id}/${other.id}`);
+          }
+        }
+      }
+      assert.match(d.notes!, /Grip only; no base axes/);
+      if (grip === 'delta') {
+        assert.match(d.notes!, /diagonals press two buttons/);
+        for (const combo of ['15+18', '15+16', '17+18', '16+17']) assert.ok(d.notes!.includes(combo));
+      }
+    }
+  });
+  t('Constellation Alpha and Alpha Prime never match each other, including customized copies', () => {
+    const alpha = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-virpil-constellation-alpha')!;
+    const prime = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-virpil-alpha-prime')!;
+    const delta = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-virpil-constellation-delta')!;
+    assert.deepEqual(alpha.match, [{ name: 'Constellation Alpha', nameBoundary: true, excludeName: 'Alpha Prime' }]);
+    assert.deepEqual(prime.match, [{ name: 'Alpha Prime' }], 'Alpha Prime stays untouched');
+    const copy = tp.parseTemplates(tp.exportTemplates([tp.cloneTemplate(alpha, 'My Alpha')]))[0];
+    assert.deepEqual(copy.match, alpha.match, 'exclusion and boundary survive export/import');
+    for (const name of ['VPC Constellation Alpha R', 'VPC Constellation ALPHA L', 'VPC Constellation-Alpha']) {
+      const ident = { name, slot: 'js' as const };
+      assert.equal(tp.matchScore(alpha, ident), 5); assert.equal(tp.matchScore(prime, ident), 0);
+      assert.equal(tp.pickTemplate([...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES], ident).template.id, alpha.id);
+    }
+    for (const name of ['VPC Constellation Alpha Prime R', 'VPC Constellation ALPHA PRIME L', 'VPC Constellation-Alpha-Prime', 'VPC Constellation AlphaPrime', 'VPC Alpha Prime']) {
+      const ident = { name, slot: 'js' as const };
+      assert.equal(tp.matchScore(alpha, ident), 0); assert.equal(tp.matchScore(copy, ident), 0);
+      assert.equal(tp.matchScore(prime, ident), 5);
+      for (const pair of [[alpha, prime], [prime, alpha]]) assert.equal(tp.pickTemplate(pair, ident).template.id, prime.id, 'independent of template order');
+      assert.equal(tp.pickTemplate([...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES], ident).template.id, prime.id);
+    }
+    const ident = { name: 'VPC Constellation Delta', slot: 'js' as const };
+    assert.equal(tp.pickTemplate([...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES], ident).template.id, delta.id);
+    assert.equal(tp.matchScore(alpha, ident), 0); assert.equal(tp.matchScore(prime, ident), 0);
+    assert.equal(tp.matchScore(alpha, { name: 'VPC Constellation Alphabet', slot: 'js' }), 0);
   });
   t('STECS: user-verified map, directional order and exact front/back photo layout', () => {
     const stecs = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-stecs')!;
@@ -1664,16 +1741,16 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const d = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion')!;
     assert.ok(!d.loadImage && d.views!.length === 2 && d.views!.every((v) => v.image!.startsWith('/device-photos/')), 'Orion uses its two exported photo views');
     assert.deepEqual(DEVICE_TEMPLATES.filter((x) => !x.views?.length).map((x) => x.id), [], 'every device template has a photo layout');
-    assert.equal(DEVICE_TEMPLATES.filter((x) => x.views?.length).length, 45, 'Alpha conversion retains all 45 photo templates');
-    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 83, 'Alpha conversion retains both views: 83 photo views total');
+    assert.equal(DEVICE_TEMPLATES.filter((x) => x.views?.length).length, 47, 'all 47 device templates have photo views');
+    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 87, 'Alpha and Delta add four views: 87 photo views total');
     let calls = 0;
     const lazy = { ...d, id: 'test-lazy-picture', views: undefined, loadImage: async () => { calls++; return 'data:image/svg+xml,<svg/>'; } };
     const r = await tp.resolveTemplateImage(lazy);
     assert.ok(r.image === 'data:image/svg+xml,<svg/>' && !(lazy as { image?: string }).image, 'picture resolves, template untouched');
     assert.equal((await tp.resolveTemplateImage(lazy)).image, r.image, 'cached'); assert.equal(calls, 1);
     const imgs = await Promise.all(DEVICE_TEMPLATES.map((x) => tp.resolveTemplateImage(x).then((y) => y.image ?? y.views!.map((v) => v.image).join()))); // (photo templates: their views' photos)
-    assert.equal(new Set(imgs).size, 45, 'one distinct set of pictures per device');
-    passed++; console.log('  ✓ device template pictures: all 45 photo templates (distinct), lazy pictures cached');
+    assert.equal(new Set(imgs).size, 47, 'one distinct set of pictures per device');
+    passed++; console.log('  ✓ device template pictures: all 47 photo templates (distinct), lazy pictures cached');
   }
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };

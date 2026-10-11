@@ -441,6 +441,76 @@ photoTplExactViews({
   { id: 'xy', kind: 'axis', inputs: ['x', 'y'], label: 'Stick X / Y', group: 'Axes', view: 'front',
     anchor: { x: 0.6266514250249146, y: 0.7954166836208767 }, box: { x: 0.3943051835670558, y: 0.9376388549804687 } },
 ]);
+// Supplied Constellation Alpha (not Alpha Prime) and Delta diagrams and renders (2026-10-10).
+// Exact anchors on cutout.py WebPs; photo1 = grip face, photo2 = trigger side.
+photoTplExactViews({
+  id: 'builtin-virpil-constellation-alpha', category: 'stick', name: 'VIRPIL Constellation Alpha', brand: 'VIRPIL',
+  notes: VPC_NOTE + ' Grip only; no base axes. Hats: up/right/down/left/depress. S = slider1 pinky lever; button 31 = lever click.',
+  match: [{ name: 'Constellation Alpha', nameBoundary: true, excludeName: 'Alpha Prime' }],
+}, [
+  { id: 'front', label: 'Grip face', photo: 'virpil-constellation-alpha-front', width: 1652, height: 1339 },
+  { id: 'side', label: 'Trigger side', photo: 'virpil-constellation-alpha-side', width: 1705, height: 1298 },
+], [
+  { id: 'b12', kind: 'button', inputs: b(12), label: 'Head button 12', group: 'Grip head', view: 'front',
+    anchor: { x: 0.43856, y: 0.14563 }, box: { x: 0.11, y: 0.07 } },
+  { id: 'h13', kind: 'hat', inputs: b(14, 15, 16, 17, 13), label: 'Top hat', group: 'Grip head', view: 'front',
+    anchor: { x: 0.51120, y: 0.11875 }, box: { x: 0.89, y: 0.1 } },
+  { id: 'mini', kind: 'axis', inputs: ['rotx', 'roty'], label: 'Ministick RX / RY', group: 'Grip head', view: 'front',
+    anchor: { x: 0.39558, y: 0.24272 }, box: { x: 0.11, y: 0.23 } },
+  { id: 'minib', kind: 'button', inputs: b(5), label: 'Ministick press', group: 'Grip head', view: 'front',
+    anchor: { x: 0.39558, y: 0.24272 }, box: { x: 0.11, y: 0.4 } },
+  { id: 'b6', kind: 'button', inputs: b(6), label: 'Head button 6', group: 'Grip head', view: 'front',
+    anchor: { x: 0.52028, y: 0.20986 }, box: { x: 0.89, y: 0.27 } },
+  { id: 'h7', kind: 'hat', inputs: b(8, 9, 10, 11, 7), label: 'Thumb hat', group: 'Grip head', view: 'front',
+    anchor: { x: 0.46096, y: 0.24347 }, box: { x: 0.11, y: 0.56 } },
+  { id: 'l21', kind: 'switch', inputs: b(24, 21, 22, 23), label: 'Thumb lever (up / stage 1 / 2 / down)', group: 'Grip', view: 'front',
+    anchor: { x: 0.52633, y: 0.31441 }, box: { x: 0.89, y: 0.46 } },
+  { id: 'h25', kind: 'hat', inputs: b(26, 27, 28, 29, 25), label: 'Index-side hat', group: 'Grip', view: 'front',
+    anchor: { x: 0.45551, y: 0.47125 }, box: { x: 0.11, y: 0.76 } },
+  { id: 'r18', kind: 'switch', inputs: b(19, 18, 20), label: 'Side rocker (up / push / down)', group: 'Grip head', view: 'side',
+    anchor: { x: 0.56745, y: 0.40909 }, box: { x: 0.89, y: 0.27 } },
+  { id: 'trigger', kind: 'switch', inputs: b(1, 2), label: 'Trigger (stage 1 / 2)', group: 'Grip', view: 'side',
+    anchor: { x: 0.59091, y: 0.55085 }, box: { x: 0.89, y: 0.47 } },
+  { id: 'lower', kind: 'switch', inputs: b(3, 4), label: 'Lower trigger (stage 1 / 2)', group: 'Grip', view: 'side',
+    anchor: { x: 0.54164, y: 0.47612 }, box: { x: 0.11, y: 0.33 } },
+  { id: 'b30', kind: 'button', inputs: b(30), label: 'Rear button 30', group: 'Grip', view: 'side',
+    anchor: { x: 0.50938, y: 0.60092 }, box: { x: 0.11, y: 0.51 } },
+  { id: 'brakeb', kind: 'button', inputs: b(31), label: 'Pinky lever click', group: 'Grip', view: 'side',
+    anchor: { x: 0.58035, y: 0.68798 }, box: { x: 0.89, y: 0.65 } },
+  { id: 'brakea', kind: 'axis', inputs: ['slider1'], label: 'Pinky lever S', group: 'Grip', view: 'side',
+    anchor: { x: 0.58035, y: 0.68798 }, box: { x: 0.89, y: 0.81 } },
+  { id: 'twist', kind: 'axis', inputs: ['z'], label: 'Twist Z', group: 'Axes', view: 'side',
+    anchor: { x: 0.43314, y: 0.88136 }, box: { x: 0.11, y: 0.9 } },
+]);
+
+photoTplExactViews({
+  id: 'builtin-virpil-constellation-delta', category: 'stick', name: 'VIRPIL Constellation Delta', brand: 'VIRPIL',
+  notes: VPC_NOTE + ' Grip only; no base axes. Hats: up/right/down/left/depress. The top hat’s diagonals press two buttons: up/left = 15+18, up/right = 15+16, down/left = 17+18, down/right = 16+17. Scroll up/down = buttons 1/2; push = 3.',
+  match: [{ name: 'Constellation Delta', nameBoundary: true }],
+}, [
+  { id: 'front', label: 'Grip face', photo: 'virpil-constellation-delta-front', width: 1610, height: 1359 },
+  { id: 'side', label: 'Trigger side', photo: 'virpil-constellation-delta-side', width: 1651, height: 1405 },
+], [
+  { id: 'h14', kind: 'hat', inputs: b(15, 16, 17, 18, 14), label: 'Top hat (8-way + push)', group: 'Grip head', view: 'front',
+    anchor: { x: 0.51398, y: 0.13319 }, box: { x: 0.89, y: 0.12 } },
+  { id: 'h9', kind: 'hat', inputs: b(10, 11, 12, 13, 9), label: 'Left hat', group: 'Grip head', view: 'front',
+    anchor: { x: 0.48106, y: 0.22075 }, box: { x: 0.11, y: 0.17 } },
+  { id: 'h19', kind: 'hat', inputs: b(20, 21, 22, 23, 19), label: 'Right hat', group: 'Grip head', view: 'front',
+    anchor: { x: 0.59472, y: 0.18175 }, box: { x: 0.89, y: 0.31 } },
+  { id: 'mini', kind: 'axis', inputs: ['rotx', 'roty'], label: 'Analog stick RX / RY', group: 'Grip head', view: 'front',
+    anchor: { x: 0.52950, y: 0.28771 }, box: { x: 0.11, y: 0.38 } },
+  { id: 'minib', kind: 'button', inputs: b(7), label: 'Analog stick press', group: 'Grip head', view: 'front',
+    anchor: { x: 0.52950, y: 0.28771 }, box: { x: 0.11, y: 0.57 } },
+  { id: 'encoder', kind: 'encoder', inputs: b(1, 2, 3), label: 'Scroll (up / down / push)', group: 'Grip', view: 'front',
+    anchor: { x: 0.55621, y: 0.38999 }, box: { x: 0.89, y: 0.54 } },
+  { id: 'trigger', kind: 'switch', inputs: b(5, 6), label: 'Trigger (stage 1 / 2)', group: 'Grip', view: 'side',
+    anchor: { x: 0.40006, y: 0.43915 }, box: { x: 0.11, y: 0.36 } },
+  { id: 'b4', kind: 'button', inputs: b(4), label: 'Neck button 4', group: 'Grip', view: 'side',
+    anchor: { x: 0.45821, y: 0.50036 }, box: { x: 0.89, y: 0.52 } },
+  { id: 'twist', kind: 'axis', inputs: ['z'], label: 'Twist Z', group: 'Axes', view: 'side',
+    anchor: { x: 0.55391, y: 0.84698 }, box: { x: 0.89, y: 0.86 } },
+]);
+
 // Supplied VIRPIL diagrams and product photos (2026-10-10). Anchors/boxes authored on the cutout.py photos.
 // Aeromax photos omit the optional throttle modules: SL/DL mark their mounting sides, not visible levers.
 photoTplExactViews({

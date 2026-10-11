@@ -88,7 +88,8 @@ have no edit date, so compare `hash` instead.
 - **`match`**: a list of rules, and a device matches when any one rule fits. Inside a rule, every field present must fit. `vendor` /
   `product` are 4 hex digits in upper case (USB VID / PID). `name` is part of the device name (compare case-insensitively, ignoring
   punctuation and spaces). `buttons` is an exact button count, used to tell apart devices sharing a USB id. SC Keymap scores a USB id
-  as 10, a name as 5 and a button count as 3, and the best total wins. An empty list means the template is never matched
+  as 10, a name as 5 and a button count as 3, and the best total wins. Optional `excludeName` (same comparison as `name`) makes the
+  rule skip devices whose name contains it, e.g. Constellation Alpha uses `excludeName: "Alpha Prime"` so it never matches an Alpha Prime. An empty list means the template is never matched
   automatically (the generic templates and the variants).
 
 ## /templates/&lt;id&gt;.json
