@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Device photos for the built-in device templates (offline tool, not part of the app build).
 
-For every view in views.json: cut the product out of its white studio background (rembg / IS-Net mask, or the photo's own alpha),
+For every view in views.json: cut the product out of its white studio background (rembg / IS-Net mask,
+edge-connected white when background is white, or the photo's own alpha),
 clean the matte (largest parts only, sharpened edge, white spill removed), then blend it for the dark UI (soft haze behind it,
 faint cyan outer glow and rim, blacks lifted a little) and write public/device-photos/<device>-<view>.webp plus
 src/lib/devicePhotoSizes.ts (pixel size of every picture, used to place the callouts).
@@ -55,6 +56,16 @@ def process(v):
     rgb = np.asarray(rgba.convert('RGB'), np.float32)
     if (own < 0.5).mean() > 0.05:      # the photo already has a transparent background
         a = own; bg = np.array([255, 255, 255], np.float32); have_alpha = True
+    elif v.get('background') == 'white':
+        # Studio exports: remove only near-white pixels connected to the border.
+        # White keys / knobs enclosed by the panel retain their original colour.
+        white = rgb.min(axis=2) >= 245
+        border = np.zeros(white.shape, dtype=bool)
+        border[0, :] = border[-1, :] = True
+        border[:, 0] = border[:, -1] = True
+        outside = ndimage.binary_propagation(border & white, mask=white)
+        a = (~outside).astype(np.float32)
+        bg = np.array([255, 255, 255], np.float32); have_alpha = False
     else:
         a = model_mask(rgba, key); have_alpha = False
         border = np.concatenate([rgb[:4].reshape(-1, 3), rgb[-4:].reshape(-1, 3), rgb[:, :4].reshape(-1, 3), rgb[:, -4:].reshape(-1, 3)])

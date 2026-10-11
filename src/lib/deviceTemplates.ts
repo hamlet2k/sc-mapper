@@ -1943,4 +1943,271 @@ photoTplExactViews({
     anchor: { x: 0.5627029324758842, y: 0.25657 }, box: { x: 0.875, y: 0.3141919191919192 } },
 ]);
 
+/* ------------------------------------------------------------------ Panels 7: supplied photos and button maps */
+// Anchors measured on the processed WebPs; centred photo mapped to each wider view canvas.
+photoTplExactViews({
+  "id": "builtin-winctrl-32-fcu-efis-l",
+  "name": "WINCTRL 32 FCU + EFIS-L",
+  "brand": "WINCTRL",
+  "match": [
+    {
+      "vendor": "4098",
+      "product": "BC1D"
+    },
+    {
+      "name": "FCU"
+    }
+  ],
+  "notes": "1-based DirectInput numbering verified against official FCU1 and EFIS32L diagrams. FCU reports X (SPD), Y (HDG), Z (ALT), RX (V/S) axes; axis callouts omitted. ALT step 26/27 blocks Z rotation; BARO units 44/45 block 42/43 rotation. Buttons above 32: use Firefox (Chrome/Edge stop at 32).",
+  "category": "panel"
+}, [
+  {"id": "fcu", "label": "FCU", "photo": "winctrl-32-fcu-efis-l-fcu", "width": 2436, "height": 1047},
+  {"id": "efis", "label": "EFIS-L", "photo": "winctrl-32-fcu-efis-l-efis", "width": 2552, "height": 1211},
+], [
+  { "id": "mach", "kind": "button", "inputs": ["button1"], "label": "SPD / MACH", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.2701149, "y": 0.2531041}, box: {"x": 0.103243, "y": 0.07} },
+  { "id": "spd", "kind": "encoder", "inputs": ["button11", "button10", "button12"], "label": "SPD (CW / CCW / PUSH)", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.2606732, "y": 0.3295129}, box: {"x": 0.103243, "y": 0.1775} },
+  { "id": "spd-pull", "kind": "button", "inputs": ["button13"], "label": "SPD PULL", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.2857143, "y": 0.3295129}, box: {"x": 0.103243, "y": 0.285} },
+  { "id": "hdg", "kind": "encoder", "inputs": ["button15", "button14", "button16"], "label": "HDG (CW / CCW / PUSH)", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.319376, "y": 0.3715377}, box: {"x": 0.103243, "y": 0.3925} },
+  { "id": "hdg-pull", "kind": "button", "inputs": ["button17"], "label": "HDG PULL", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.3362069, "y": 0.3724928}, box: {"x": 0.103243, "y": 0.5} },
+  { "id": "ap1", "kind": "button", "inputs": ["button4"], "label": "AP1", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.3887521, "y": 0.434575}, box: {"x": 0.103243, "y": 0.6075} },
+  { "id": "ap2", "kind": "button", "inputs": ["button5"], "label": "AP2", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.4211823, "y": 0.4613181}, box: {"x": 0.103243, "y": 0.715} },
+  { "id": "loc", "kind": "button", "inputs": ["button2"], "label": "LOC", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.3316913, "y": 0.4804202}, box: {"x": 0.103243, "y": 0.8225} },
+  { "id": "athr", "kind": "button", "inputs": ["button6"], "label": "A/THR", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.3969622, "y": 0.530086}, box: {"x": 0.103243, "y": 0.93} },
+  { "id": "trk", "kind": "button", "inputs": ["button3"], "label": "HDG-TRK / VS-FPA", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.4129721, "y": 0.3801337}, box: {"x": 0.896757, "y": 0.07} },
+  { "id": "metric", "kind": "button", "inputs": ["button8"], "label": "METRIC ALT", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.5258621, "y": 0.4775549}, box: {"x": 0.896757, "y": 0.1775} },
+  { "id": "alt-step", "kind": "switch", "inputs": ["button26", "button27"], "label": "ALT step (100 / 1000)", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.478243, "y": 0.5014327}, box: {"x": 0.896757, "y": 0.285} },
+  { "id": "alt-pull", "kind": "button", "inputs": ["button21"], "label": "ALT PULL", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.4597701, "y": 0.5062082}, box: {"x": 0.896757, "y": 0.3925} },
+  { "id": "alt", "kind": "encoder", "inputs": ["button19", "button18", "button20"], "label": "ALT (CW / CCW / PUSH)", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.4334975, "y": 0.5100287}, box: {"x": 0.896757, "y": 0.5} },
+  { "id": "vs-pull", "kind": "button", "inputs": ["button25"], "label": "V/S PULL", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.5689655, "y": 0.5921681}, box: {"x": 0.896757, "y": 0.6075} },
+  { "id": "vs", "kind": "encoder", "inputs": ["button23", "button22", "button24"], "label": "V/S (CW / CCW / PUSH)", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.546798, "y": 0.6017192}, box: {"x": 0.896757, "y": 0.715} },
+  { "id": "exped", "kind": "button", "inputs": ["button7"], "label": "EXPED", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.4605911, "y": 0.6198663}, box: {"x": 0.896757, "y": 0.8225} },
+  { "id": "appr", "kind": "button", "inputs": ["button9"], "label": "APPR", "group": "FCU", "view": "fcu",
+    anchor: {"x": 0.5521346, "y": 0.7163324}, box: {"x": 0.896757, "y": 0.93} },
+  { "id": "baro-unit", "kind": "switch", "inputs": ["button44", "button45"], "label": "BARO unit (inHg / hPa)", "group": "EFIS-L", "view": "efis",
+    anchor: {"x": 0.3334639, "y": 0.4384806}, box: {"x": 0.1138323, "y": 0.07} },
+  { "id": "baro", "kind": "encoder", "inputs": ["button43", "button42", "button40"], "label": "BARO (CW / CCW / STD PUSH)", "group": "EFIS-L", "view": "efis",
+    anchor: {"x": 0.2750784, "y": 0.4541701}, box: {"x": 0.1138323, "y": 0.285} },
+  { "id": "baro-pull", "kind": "button", "inputs": ["button41"], "label": "BARO STD PULL", "group": "EFIS-L", "view": "efis",
+    anchor: {"x": 0.302116, "y": 0.4541701}, box: {"x": 0.1138323, "y": 0.5} },
+  { "id": "fd", "kind": "button", "inputs": ["button33"], "label": "FD", "group": "EFIS-L", "view": "efis",
+    anchor: {"x": 0.3013323, "y": 0.5499587}, box: {"x": 0.1138323, "y": 0.715} },
+  { "id": "ls", "kind": "button", "inputs": ["button34"], "label": "LS", "group": "EFIS-L", "view": "efis",
+    anchor: {"x": 0.3413009, "y": 0.5937242}, box: {"x": 0.1138323, "y": 0.93} },
+  { "id": "filters", "kind": "buttons", "inputs": ["button35", "button36", "button37", "button38", "button39"], "label": "CSTR / WPT / VOR.D / NDB / ARPT", "group": "EFIS-L", "view": "efis",
+    anchor: {"x": 0.5231191, "y": 0.3724195}, box: {"x": 0.8861677, "y": 0.07} },
+  { "id": "mode", "kind": "switch", "inputs": ["button46", "button47", "button48", "button49", "button50"], "label": "Mode (ROSE LS / VOR / NAV / ARC / PLAN)", "group": "EFIS-L", "view": "efis",
+    anchor: {"x": 0.4294671, "y": 0.5144509}, box: {"x": 0.8861677, "y": 0.285} },
+  { "id": "range", "kind": "switch", "inputs": ["button51", "button52", "button53", "button54", "button55", "button56"], "label": "Range (10 / 20 / 40 / 80 / 160 / 320)", "group": "EFIS-L", "view": "efis",
+    anchor: {"x": 0.5568182, "y": 0.6358382}, box: {"x": 0.8861677, "y": 0.5} },
+  { "id": "navaid1", "kind": "switch", "inputs": ["button57", "button58", "button59"], "label": "Switch 1 (ADF / OFF / VOR)", "group": "EFIS-L", "view": "efis",
+    anchor: {"x": 0.4090909, "y": 0.6630884}, box: {"x": 0.8861677, "y": 0.715} },
+  { "id": "navaid2", "kind": "switch", "inputs": ["button60", "button61", "button62"], "label": "Switch 2 (ADF / OFF / VOR)", "group": "EFIS-L", "view": "efis",
+    anchor: {"x": 0.5293887, "y": 0.7927333}, box: {"x": 0.8861677, "y": 0.93} },
+]);
+photoTplExactViews({
+  "id": "builtin-winctrl-32-rmp",
+  "name": "WINCTRL 32 RMP",
+  "brand": "WINCTRL",
+  "match": [
+    {
+      "vendor": "4098",
+      "product": "BB85"
+    },
+    {
+      "vendor": "4098",
+      "product": "BB83"
+    },
+    {
+      "vendor": "4098",
+      "product": "BB84"
+    },
+    {
+      "name": "RMP"
+    }
+  ],
+  "notes": "Community-sourced numbering: rswilem winctrl-xplane-plugin (0-based hardware bit index + 1 = DirectInput button). Unverified on hardware. Button 5 is LOAD, as printed on the supplied photo. Covers C/L/R units.",
+  "category": "panel"
+}, [
+  {"id": "main", "label": "RMP", "photo": "winctrl-32-rmp-main", "width": 2678, "height": 1299},
+], [
+  { "id": "vhf", "kind": "buttons", "inputs": ["button2", "button3", "button4"], "label": "VHF1 / VHF2 / VHF3", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3909634, "y": 0.369515}, box: {"x": 0.1165049, "y": 0.07} },
+  { "id": "hf", "kind": "buttons", "inputs": ["button6", "button7", "button8"], "label": "HF1 / HF2 / AM", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4070202, "y": 0.5057737}, box: {"x": 0.1165049, "y": 0.3566667} },
+  { "id": "nav", "kind": "button", "inputs": ["button9"], "label": "NAV", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3076923, "y": 0.5273287}, box: {"x": 0.1165049, "y": 0.6433333} },
+  { "id": "nav-mode", "kind": "buttons", "inputs": ["button10", "button11", "button12", "button13", "button14"], "label": "VOR / ILS / GLS / MLS / ADF", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3883495, "y": 0.6289453}, box: {"x": 0.1165049, "y": 0.93} },
+  { "id": "transfer", "kind": "button", "inputs": ["button1"], "label": "Transfer", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4899178, "y": 0.334873}, box: {"x": 0.8834951, "y": 0.07} },
+  { "id": "load", "kind": "button", "inputs": ["button5"], "label": "LOAD", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4663928, "y": 0.4618938}, box: {"x": 0.8834951, "y": 0.285} },
+  { "id": "inner", "kind": "encoder", "inputs": ["button18", "button17", "button19"], "label": "Inner knob (CW / CCW / PUSH)", "group": "Panel", "view": "main",
+    anchor: {"x": 0.476475, "y": 0.5773672}, box: {"x": 0.8834951, "y": 0.5} },
+  { "id": "outer", "kind": "encoder", "inputs": ["button16", "button15"], "label": "Outer knob (CW / CCW)", "group": "Panel", "view": "main",
+    anchor: {"x": 0.5242718, "y": 0.5812163}, box: {"x": 0.8834951, "y": 0.715} },
+  { "id": "power", "kind": "switch", "inputs": ["button20", "button21"], "label": "Power (ON / OFF)", "group": "Panel", "view": "main",
+    anchor: {"x": 0.5153099, "y": 0.8106236}, box: {"x": 0.8834951, "y": 0.93} },
+]);
+photoTplExactViews({
+  "id": "builtin-winctrl-32-tcas",
+  "name": "WINCTRL 32 TCAS",
+  "brand": "WINCTRL",
+  "match": [
+    {
+      "vendor": "4098",
+      "product": "BB81"
+    },
+    {
+      "name": "TCAS"
+    }
+  ],
+  "notes": "Community-sourced numbering: rswilem winctrl-xplane-plugin (0-based hardware bit index + 1 = DirectInput button). Unverified on hardware.",
+  "category": "panel"
+}, [
+  {"id": "main", "label": "TCAS", "photo": "winctrl-32-tcas-main", "width": 2582, "height": 1199},
+], [
+  { "id": "xpdr", "kind": "switch", "inputs": ["button11", "button12", "button13"], "label": "XPDR (STBY / AUTO / ON)", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3353989, "y": 0.2101751}, box: {"x": 0.1115414, "y": 0.07} },
+  { "id": "system", "kind": "switch", "inputs": ["button14", "button15"], "label": "ATC system (1 / 2)", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3195198, "y": 0.3119266}, box: {"x": 0.1115414, "y": 0.242} },
+  { "id": "row1", "kind": "buttons", "inputs": ["button1", "button2", "button3"], "label": "1 / 2 / 3", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4264136, "y": 0.3369475}, box: {"x": 0.1115414, "y": 0.414} },
+  { "id": "alt-rptg", "kind": "switch", "inputs": ["button16", "button17"], "label": "ALT RPTG (OFF / ON)", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3013168, "y": 0.4311927}, box: {"x": 0.1115414, "y": 0.586} },
+  { "id": "row2", "kind": "buttons", "inputs": ["button4", "button5", "button6"], "label": "4 / 5 / 6", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4066615, "y": 0.4478732}, box: {"x": 0.1115414, "y": 0.758} },
+  { "id": "row3", "kind": "buttons", "inputs": ["button7", "button8", "button9"], "label": "7 / 0 / CLR", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3911696, "y": 0.559633}, box: {"x": 0.1115414, "y": 0.93} },
+  { "id": "ident", "kind": "button", "inputs": ["button10"], "label": "IDENT", "group": "Panel", "view": "main",
+    anchor: {"x": 0.5193648, "y": 0.5721435}, box: {"x": 0.8884586, "y": 0.07} },
+  { "id": "traffic", "kind": "switch", "inputs": ["button18", "button19", "button20", "button21"], "label": "Traffic (THRT / ALL / ABV / BLW)", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4701782, "y": 0.6814012}, box: {"x": 0.8884586, "y": 0.5} },
+  { "id": "tcas-mode", "kind": "switch", "inputs": ["button22", "button23", "button24"], "label": "TCAS (STBY / TA / TA-RA)", "group": "Panel", "view": "main",
+    anchor: {"x": 0.5476375, "y": 0.7914929}, box: {"x": 0.8884586, "y": 0.93} },
+]);
+photoTplExactViews({
+  "id": "builtin-winctrl-pfp-3n",
+  "name": "WINCTRL PFP-3N (737 CDU)",
+  "brand": "WINCTRL",
+  "match": [
+    {
+      "vendor": "4098",
+      "product": "BB35"
+    },
+    {
+      "vendor": "4098",
+      "product": "BB39"
+    },
+    {
+      "vendor": "4098",
+      "product": "BB3D"
+    },
+    {
+      "name": "PFP"
+    }
+  ],
+  "notes": "Community-sourced numbering: rswilem winctrl-xplane-plugin (0-based hardware bit index + 1 = DirectInput button). Unverified on hardware. Uses buttons above 32: use Firefox; Chrome / Edge report only the first 32.",
+  "category": "panel"
+}, [
+  {"id": "main", "label": "CDU", "photo": "winctrl-pfp-3n-main", "width": 2566, "height": 1379},
+], [
+  { "id": "lsk-left", "kind": "buttons", "inputs": ["button1", "button2", "button3", "button4", "button5", "button6"], "label": "LSK1L / LSK2L / LSK3L / LSK4L / LSK5L / LSK6L", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4232268, "y": 0.2364032}, box: {"x": 0.1289945, "y": 0.07} },
+  { "id": "pages1", "kind": "buttons", "inputs": ["button13", "button14", "button15", "button16", "button17"], "label": "INIT REF / RTE / CLB / CRZ / DES", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4520655, "y": 0.4387237}, box: {"x": 0.1289945, "y": 0.1775} },
+  { "id": "pages2", "kind": "buttons", "inputs": ["button20", "button21", "button22", "button23", "button24"], "label": "MENU / LEGS / DEP ARR / HOLD / PROG", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4403741, "y": 0.4829587}, box: {"x": 0.1289945, "y": 0.285} },
+  { "id": "pages3", "kind": "buttons", "inputs": ["button26", "button27"], "label": "N1 LIMIT / FIX", "group": "Panel", "view": "main",
+    anchor: {"x": 0.372954, "y": 0.5076142}, box: {"x": 0.1289945, "y": 0.3925} },
+  { "id": "pages4", "kind": "buttons", "inputs": ["button28", "button29"], "label": "PREV PAGE / NEXT PAGE", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3593141, "y": 0.5525743}, box: {"x": 0.1289945, "y": 0.5} },
+  { "id": "num1", "kind": "buttons", "inputs": ["button30", "button31", "button32"], "label": "1 / 2 / 3", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3674981, "y": 0.6156635}, box: {"x": 0.1289945, "y": 0.6075} },
+  { "id": "num2", "kind": "buttons", "inputs": ["button33", "button34", "button35"], "label": "4 / 5 / 6", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3546376, "y": 0.6606236}, box: {"x": 0.1289945, "y": 0.715} },
+  { "id": "num3", "kind": "buttons", "inputs": ["button36", "button37", "button38"], "label": "7 / 8 / 9", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3413874, "y": 0.7084844}, box: {"x": 0.1289945, "y": 0.8225} },
+  { "id": "num4", "kind": "buttons", "inputs": ["button39", "button40", "button41"], "label": ". / 0 / +/−", "group": "Panel", "view": "main",
+    anchor: {"x": 0.3293063, "y": 0.7592458}, box: {"x": 0.1289945, "y": 0.93} },
+  { "id": "lsk-right", "kind": "buttons", "inputs": ["button7", "button8", "button9", "button10", "button11", "button12"], "label": "LSK1R / LSK2R / LSK3R / LSK4R / LSK5R / LSK6R", "group": "Panel", "view": "main",
+    anchor: {"x": 0.6457521, "y": 0.2603336}, box: {"x": 0.8710055, "y": 0.07} },
+  { "id": "brightness", "kind": "switch", "inputs": ["button18", "button19"], "label": "BRT (− / +)", "group": "Panel", "view": "main",
+    anchor: {"x": 0.5537802, "y": 0.4771574}, box: {"x": 0.8710055, "y": 0.1775} },
+  { "id": "exec", "kind": "button", "inputs": ["button25"], "label": "EXEC", "group": "Panel", "view": "main",
+    anchor: {"x": 0.5393609, "y": 0.5351704}, box: {"x": 0.8710055, "y": 0.285} },
+  { "id": "alpha1", "kind": "buttons", "inputs": ["button42", "button43", "button44", "button45", "button46"], "label": "A / B / C / D / E", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4840218, "y": 0.5656273}, box: {"x": 0.8710055, "y": 0.3925} },
+  { "id": "alpha2", "kind": "buttons", "inputs": ["button47", "button48", "button49", "button50", "button51"], "label": "F / G / H / I / J", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4715511, "y": 0.6120377}, box: {"x": 0.8710055, "y": 0.5} },
+  { "id": "alpha3", "kind": "buttons", "inputs": ["button52", "button53", "button54", "button55", "button56"], "label": "K / L / M / N / O", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4590803, "y": 0.6635243}, box: {"x": 0.8710055, "y": 0.6075} },
+  { "id": "alpha4", "kind": "buttons", "inputs": ["button57", "button58", "button59", "button60", "button61"], "label": "P / Q / R / S / T", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4454404, "y": 0.7128354}, box: {"x": 0.8710055, "y": 0.715} },
+  { "id": "alpha5", "kind": "buttons", "inputs": ["button62", "button63", "button64", "button65", "button66"], "label": "U / V / W / X / Y", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4333593, "y": 0.7614213}, box: {"x": 0.8710055, "y": 0.8225} },
+  { "id": "alpha6", "kind": "buttons", "inputs": ["button67", "button68", "button69", "button70", "button71"], "label": "Z / SP / DEL / SLASH (/) / CLR", "group": "Panel", "view": "main",
+    anchor: {"x": 0.4208885, "y": 0.8172589}, box: {"x": 0.8710055, "y": 0.93} },
+]);
+photoTplExactViews({
+  "id": "builtin-tc-apache-mpd",
+  "name": "Total Controls Apache MPD",
+  "brand": "Total Controls",
+  "match": [
+    {
+      "name": "TC Apache MPD"
+    }
+  ],
+  "notes": "1-based DirectInput verified against official diagram/manual and Left/Right Pilot/CPG DCS profiles. BRT=X, VID=Y; mode MONO/NT/DAY=32/33/34. Works for Left/Center/Right: hold TSD + B2, then T1/T2/T3 selects L/C/R; that chord plus L3–L6 sets lights full/medium/dim/off. Buttons above 32: use Firefox (Chrome/Edge stop at 32).",
+  "category": "panel"
+}, [
+  {"id": "main", "label": "MPD", "photo": "tc-apache-mpd-main", "width": 2450, "height": 1063},
+], [
+  { "id": "top", "kind": "buttons", "inputs": ["button1", "button2", "button3", "button4", "button5", "button6"], "label": "T1 / T2 / T3 / T4 / T5 / T6", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.4330612, "y": 0.20508}, box: {"x": 0.1040816, "y": 0.07} },
+  { "id": "vid", "kind": "axis", "inputs": ["y"], "label": "VID (Y axis)", "group": "Controls", "view": "main",
+    anchor: {"x": 0.3008163, "y": 0.2718721}, box: {"x": 0.1040816, "y": 0.2133333} },
+  { "id": "brt", "kind": "axis", "inputs": ["x"], "label": "BRT (X axis)", "group": "Controls", "view": "main",
+    anchor: {"x": 0.2771429, "y": 0.3546566}, box: {"x": 0.1040816, "y": 0.3566667} },
+  { "id": "left", "kind": "buttons", "inputs": ["button31", "button30", "button29", "button28", "button27", "button26"], "label": "L1 / L2 / L3 / L4 / L5 / L6", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.3302041, "y": 0.533396}, box: {"x": 0.1040816, "y": 0.5} },
+  { "id": "fcr", "kind": "button", "inputs": ["button25"], "label": "FCR", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.3918367, "y": 0.7450611}, box: {"x": 0.1040816, "y": 0.6433333} },
+  { "id": "tsd", "kind": "button", "inputs": ["button23"], "label": "TSD", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.4559184, "y": 0.7873942}, box: {"x": 0.1040816, "y": 0.7866667} },
+  { "id": "wpn", "kind": "button", "inputs": ["button24"], "label": "WPN", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.4057143, "y": 0.7892756}, box: {"x": 0.1040816, "y": 0.93} },
+  { "id": "mode", "kind": "switch", "inputs": ["button32", "button33", "button34"], "label": "Mode (MONO / NT / DAY)", "group": "Controls", "view": "main",
+    anchor: {"x": 0.5257143, "y": 0.1053622}, box: {"x": 0.8959184, "y": 0.07} },
+  { "id": "asterisk", "kind": "button", "inputs": ["button7"], "label": "*", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.5816327, "y": 0.1627469}, box: {"x": 0.8959184, "y": 0.2133333} },
+  { "id": "right", "kind": "buttons", "inputs": ["button8", "button9", "button10", "button11", "button12", "button13"], "label": "R1 / R2 / R3 / R4 / R5 / R6", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.6514286, "y": 0.34619}, box: {"x": 0.8959184, "y": 0.3566667} },
+  { "id": "vid-key", "kind": "button", "inputs": ["button14"], "label": "VID", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.7085714, "y": 0.4882408}, box: {"x": 0.8959184, "y": 0.5} },
+  { "id": "com", "kind": "button", "inputs": ["button15"], "label": "COM", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.7240816, "y": 0.5296331}, box: {"x": 0.8959184, "y": 0.6433333} },
+  { "id": "ac", "kind": "button", "inputs": ["button16"], "label": "A/C", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.697551, "y": 0.5879586}, box: {"x": 0.8959184, "y": 0.7866667} },
+  { "id": "bottom", "kind": "buttons", "inputs": ["button22", "button21", "button20", "button19", "button18", "button17"], "label": "B1 (M) / B2 / B3 / B4 / B5 / B6", "group": "Bezel", "view": "main",
+    anchor: {"x": 0.5946939, "y": 0.6726246}, box: {"x": 0.8959184, "y": 0.93} },
+]);
+
 export const DEVICE_TEMPLATES: DeviceTemplate[] = ALL;

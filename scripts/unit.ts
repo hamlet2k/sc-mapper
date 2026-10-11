@@ -1010,17 +1010,109 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[2].id]: { view: 'front', x: 1.5, y: 0.5 } } })), 'coordinates outside 0..1 rejected');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { views: [], anchors: {} })), 'empty layout rejected');
   });
-  t('device templates (48 devices): photos per device, real numbering where published, unassigned spots elsewhere, links, groups', () => {
+  t('Panels 7: official/community DI maps, encoder direction, switch positions and every keypad input', () => {
+    const by = (id: string) => DEVICE_TEMPLATES.find((t) => t.id === `builtin-${id}`)!;
+    const numbers = (a: number, z: number) => Array.from({ length: z - a + 1 }, (_, i) => a + i);
+    const expectMap = (id: string, map: Record<string, number[]>) => {
+      const template = by(id);
+      assert.ok(template, id);
+      const actual = Object.fromEntries(template.callouts.filter((c) => c.kind !== 'axis').map((c) => [c.id, c.inputs]));
+      assert.deepEqual(actual, Object.fromEntries(Object.entries(map).map(([key, ns]) => [key, ns.map((n) => `button${n}`)])), id);
+      const inputs = template.callouts.flatMap((c) => c.inputs);
+      assert.equal(new Set(inputs).size, inputs.length, `${id}: no missing keys hidden by duplicates`);
+      assert.ok(template.callouts.every((c) => c.inputs.every(Boolean)), `${id}: every key assigned`);
+    };
+    expectMap('winctrl-32-fcu-efis-l', {
+      mach: [1], loc: [2], trk: [3], ap1: [4], ap2: [5], athr: [6], exped: [7], metric: [8], appr: [9],
+      spd: [11, 10, 12], 'spd-pull': [13], hdg: [15, 14, 16], 'hdg-pull': [17],
+      alt: [19, 18, 20], 'alt-pull': [21], vs: [23, 22, 24], 'vs-pull': [25], 'alt-step': [26, 27],
+      fd: [33], ls: [34], filters: [35, 36, 37, 38, 39], baro: [43, 42, 40], 'baro-pull': [41], 'baro-unit': [44, 45],
+      mode: [46, 47, 48, 49, 50], range: [51, 52, 53, 54, 55, 56], navaid1: [57, 58, 59], navaid2: [60, 61, 62],
+    });
+    const fcu = by('winctrl-32-fcu-efis-l');
+    assert.deepEqual(fcu.views!.map((v) => v.id), ['fcu', 'efis']);
+    assert.ok(fcu.callouts.every((c) => c.view === (Number(c.inputs[0].slice(6)) < 33 ? 'fcu' : 'efis')));
+    assert.ok(!fcu.callouts.some((c) => c.kind === 'axis'), 'reported FCU axes documented, no invented bindings');
+    assert.match(fcu.notes!, /X \(SPD\).*Y \(HDG\).*Z \(ALT\).*RX \(V\/S\)/);
+    expectMap('winctrl-32-rmp', {
+      transfer: [1], vhf: [2, 3, 4], load: [5], hf: [6, 7, 8], nav: [9], 'nav-mode': [10, 11, 12, 13, 14],
+      outer: [16, 15], inner: [18, 17, 19], power: [20, 21],
+    });
+    assert.equal(by('winctrl-32-rmp').callouts.find((c) => c.id === 'load')!.label, 'LOAD');
+    expectMap('winctrl-32-tcas', {
+      row1: [1, 2, 3], row2: [4, 5, 6], row3: [7, 8, 9], ident: [10], xpdr: [11, 12, 13],
+      system: [14, 15], 'alt-rptg': [16, 17], traffic: [18, 19, 20, 21], 'tcas-mode': [22, 23, 24],
+    });
+    expectMap('winctrl-pfp-3n', {
+      'lsk-left': numbers(1, 6), 'lsk-right': numbers(7, 12), pages1: [13, 14, 15, 16, 17], brightness: [18, 19],
+      pages2: [20, 21, 22, 23, 24], exec: [25], pages3: [26, 27], pages4: [28, 29],
+      num1: [30, 31, 32], num2: [33, 34, 35], num3: [36, 37, 38], num4: [39, 40, 41],
+      alpha1: numbers(42, 46), alpha2: numbers(47, 51), alpha3: numbers(52, 56),
+      alpha4: numbers(57, 61), alpha5: numbers(62, 66), alpha6: numbers(67, 71),
+    });
+    const pfp = by('winctrl-pfp-3n');
+    assert.equal(pfp.callouts.flatMap((c) => c.inputs).length, 71);
+    for (const [id, label] of Object.entries({ pages1: 'INIT REF / RTE / CLB / CRZ / DES', pages2: 'MENU / LEGS / DEP ARR / HOLD / PROG',
+      num4: '. / 0 / +/−', alpha1: 'A / B / C / D / E', alpha5: 'U / V / W / X / Y', alpha6: 'Z / SP / DEL / SLASH (/) / CLR' }))
+      assert.equal(pfp.callouts.find((c) => c.id === id)!.label, label, `physical row ${id}`);
+    expectMap('tc-apache-mpd', {
+      top: numbers(1, 6), asterisk: [7], right: numbers(8, 13), 'vid-key': [14], com: [15], ac: [16],
+      bottom: [22, 21, 20, 19, 18, 17], tsd: [23], wpn: [24], fcr: [25], left: [31, 30, 29, 28, 27, 26], mode: [32, 33, 34],
+    });
+    const mpd = by('tc-apache-mpd');
+    assert.deepEqual(mpd.callouts.filter((c) => c.kind === 'axis').map((c) => [c.id, c.inputs]), [['vid', ['y']], ['brt', ['x']]]);
+    assert.equal(mpd.callouts.find((c) => c.id === 'mode')!.kind, 'switch', 'three-position selector, not encoder');
+    assert.match(mpd.notes!, /TSD \+ B2.*T1\/T2\/T3.*L\/C\/R/);
+    for (const id of ['winctrl-32-rmp', 'winctrl-32-tcas', 'winctrl-pfp-3n']) {
+      assert.match(by(id).notes!, /rswilem winctrl-xplane-plugin/);
+      assert.match(by(id).notes!, /Unverified on hardware/);
+    }
+    for (const template of [fcu, pfp, mpd]) assert.match(template.notes!, /Firefox/);
+  });
+  t('Panels 7: USB variants and name matching, hosted photos, mapped anchors and clear gutter columns', () => {
+    const panels = [
+      ['winctrl-32-fcu-efis-l', ['BC1D'], 'FCU'], ['winctrl-32-rmp', ['BB85', 'BB83', 'BB84'], 'RMP'],
+      ['winctrl-32-tcas', ['BB81'], 'TCAS'], ['winctrl-pfp-3n', ['BB35', 'BB39', 'BB3D'], 'PFP'],
+      ['tc-apache-mpd', [], 'TC Apache MPD'],
+    ] as const;
+    const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+    for (const [id, products, name] of panels) {
+      const template = DEVICE_TEMPLATES.find((t) => t.id === `builtin-${id}`)!;
+      assert.equal(template.category, 'panel');
+      for (const product of products) assert.equal(tp.pickTemplate(all, { vendor: '4098', productId: product, slot: 'js' }).template.id, template.id);
+      for (const suffix of (id === 'tc-apache-mpd' ? [' Left', ' Center', ' Right'] : ['']))
+        assert.equal(tp.pickTemplate(all, { name: name + suffix, slot: 'js' }).template.id, template.id);
+      for (const view of template.views!) {
+        const key = view.image!.slice('/device-photos/'.length, -'.webp'.length);
+        const [pw, ph, px, py, productW, productH] = DEVICE_PHOTO_SIZES[key];
+        assert.ok(existsSync(new URL(`../public${view.image}`, import.meta.url)), key);
+        assert.equal(view.height, ph);
+        const gutter = (view.width - pw) / 2;
+        assert.ok(gutter > 0, 'canvas leaves label room');
+        for (const c of template.callouts.filter((c) => c.view === view.id)) {
+          const photoX = (c.anchor.x * view.width - gutter) / pw;
+          assert.ok(photoX >= px && photoX <= px + productW && c.anchor.y >= py && c.anchor.y <= py + productH, `${id}/${c.id}: anchor on product rect`);
+          assert.ok(c.box.x * view.width < gutter || c.box.x * view.width > view.width - gutter, `${id}/${c.id}: box in side gutter`);
+          for (const o of template.callouts.filter((o) => o.view === view.id && o.id !== c.id && o.box.x === c.box.x))
+            assert.ok(Math.abs(c.box.y - o.box.y) * ph > 100, `${id}: separated column labels`);
+        }
+      }
+      const back = tp.parseTemplates(tp.exportTemplates([template]))[0];
+      assert.deepEqual(back.callouts.map((c) => [c.id, c.inputs, c.label, c.view]), template.callouts.map((c) => [c.id, c.inputs, c.label, c.view]), `${id}: no keys lost on export/import`);
+    }
+  });
+  t('device templates (53 devices): photos per device, real numbering where published, unassigned spots elsewhere, links, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    assert.equal(DEVICE_TEMPLATES.length, 48, '47 existing + Black Shark collective');
+    assert.equal(DEVICE_TEMPLATES.length, 53, '48 existing + five Panels 7 templates');
     assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
     // devices without published numbers: callout spots only (stick X / Y where obvious)
     const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
     const USB = new Set(['builtin-tm-warthog-stick', 'builtin-tm-warthog-throttle', 'builtin-tm-t16000m', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-winctrl-ursa-combat',
       'builtin-winctrl-orion-pedals', 'builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad', 'builtin-honeycomb-bravo',
       'builtin-honeycomb-charlie', 'builtin-logitech-flight-rudder', 'builtin-mfg-crosswind', 'builtin-tm-tfrp', 'builtin-tm-tpr', 'builtin-vkb-t-rudder', 'builtin-winctrl-viperace-icp',
-      'builtin-vkb-gunfighter-mcg', 'builtin-virpil-mt50cm', 'builtin-tm-cougar-mfd']);
+      'builtin-vkb-gunfighter-mcg', 'builtin-virpil-mt50cm', 'builtin-tm-cougar-mfd',
+      'builtin-winctrl-32-fcu-efis-l', 'builtin-winctrl-32-rmp', 'builtin-winctrl-32-tcas', 'builtin-winctrl-pfp-3n']);
     const PHOTO_ONLY = new Set(['builtin-azeron-keypad']);
     const ASPECTS = new Set<number>();
     for (const d of DEVICE_TEMPLATES) {
@@ -1214,7 +1306,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     // picker groups: user templates, generic built-ins, then brands A-Z
     const mine = { ...tp.newTemplate('js', 'Mine'), brand: 'Thrustmaster' };
     const gr = tp.templateGroups([mine, ...all]);
-    assert.deepEqual(gr.map((g) => g.label), ['Your templates', 'Generic (built-in)', 'Azeron', 'Honeycomb', 'Logitech', 'MFG', 'MOZA', 'Thrustmaster', 'VIRPIL', 'VKB', 'WINCTRL']);
+    assert.deepEqual(gr.map((g) => g.label), ['Your templates', 'Generic (built-in)', 'Azeron', 'Honeycomb', 'Logitech', 'MFG', 'MOZA', 'Thrustmaster', 'Total Controls', 'VIRPIL', 'VKB', 'WINCTRL']);
     assert.deepEqual(gr[0].templates.map((x) => x.name), ['Mine'], 'a user copy of a brand template stays under “Your templates”');
     assert.equal(gr[7].templates.length, 7, 'Thrustmaster: Warthog stick + throttle, T.16000M, TWCS, TFRP, TPR, MFD Cougar');
     // a copy of an unassigned template takes numbers per callout (the editor's “Customize a copy” path)
@@ -1865,16 +1957,16 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const d = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion')!;
     assert.ok(!d.loadImage && d.views!.length === 2 && d.views!.every((v) => v.image!.startsWith('/device-photos/')), 'Orion uses its two exported photo views');
     assert.deepEqual(DEVICE_TEMPLATES.filter((x) => !x.views?.length).map((x) => x.id), [], 'every device template has a photo layout');
-    assert.equal(DEVICE_TEMPLATES.filter((x) => x.views?.length).length, 48, 'all 48 device templates have photo views');
-    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 84, 'Rotor exports remove four views; Black Shark adds one: 84 photo views total');
+    assert.equal(DEVICE_TEMPLATES.filter((x) => x.views?.length).length, 53, 'all 53 device templates have photo views');
+    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 90, '84 existing + six Panels 7 photo views');
     let calls = 0;
     const lazy = { ...d, id: 'test-lazy-picture', views: undefined, loadImage: async () => { calls++; return 'data:image/svg+xml,<svg/>'; } };
     const r = await tp.resolveTemplateImage(lazy);
     assert.ok(r.image === 'data:image/svg+xml,<svg/>' && !(lazy as { image?: string }).image, 'picture resolves, template untouched');
     assert.equal((await tp.resolveTemplateImage(lazy)).image, r.image, 'cached'); assert.equal(calls, 1);
     const imgs = await Promise.all(DEVICE_TEMPLATES.map((x) => tp.resolveTemplateImage(x).then((y) => y.image ?? y.views!.map((v) => v.image).join()))); // (photo templates: their views' photos)
-    assert.equal(new Set(imgs).size, 48, 'one distinct set of pictures per device');
-    passed++; console.log('  ✓ device template pictures: all 48 photo templates (distinct), lazy pictures cached');
+    assert.equal(new Set(imgs).size, 53, 'one distinct set of pictures per device');
+    passed++; console.log('  ✓ device template pictures: all 53 photo templates (distinct), lazy pictures cached');
   }
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };

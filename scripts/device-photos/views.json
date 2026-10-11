@@ -1,5 +1,5 @@
 {
-  "_doc": "Photo views of the device-specific built-in templates: source photo (relative to the photo folder), optional crop [x0,y0,x1,y1] in source pixels. Processed by scripts/device-photos/cutout.py into public/device-photos/<device>-<view>.webp.",
+  "_doc": "Photo views of the device-specific built-in templates: source photo (relative to the photo folder), optional crop [x0,y0,x1,y1] in source pixels, background: white for edge-connected white studio backgrounds. Processed by scripts/device-photos/cutout.py into public/device-photos/<device>-<view>.webp.",
   "views": [
     { "device": "tm-warthog-stick", "view": "thumb", "label": "Thumb side", "src": "stick/thrustmaster/warthog/gallery-hotas-warthog-flight-stick1.png" },
     { "device": "tm-warthog-stick", "view": "side", "label": "Right side", "src": "stick/thrustmaster/warthog/71oQvyJJAvL.jpg" },
@@ -64,6 +64,12 @@
     { "device": "virpil-rotor-tcs-dual", "view": "rear", "label": "Rear", "src": "../../oct9b/collectives/virpil/dual/vpc-014_06.jpg" },
     { "device": "virpil-rotor-tcs-sharka50", "view": "main", "label": "Main", "src": "../../oct9b/collectives/virpil/shakra-50/vpc-011_02-e.jpg" },
     { "device": "virpil-rotor-tcs-hawk60", "view": "main", "label": "Main", "src": "../../oct9b/collectives/virpil/hawk-60/vpc-012_01.jpg" },
-    { "device": "moza-ab9", "view": "main", "label": "Main", "src": "../../oct9b/stick/moza/ab9/10.jpg" }
+    { "device": "moza-ab9", "view": "main", "label": "Main", "src": "../../oct9b/stick/moza/ab9/10.jpg" },
+    {"device": "winctrl-32-fcu-efis-l", "view": "fcu", "label": "FCU", "src": "../../panels7/winwing-32-fcu-efis-l/user-fcu.png", "background": "white"},
+    {"device": "winctrl-32-fcu-efis-l", "view": "efis", "label": "EFIS-L", "src": "../../panels7/winwing-32-fcu-efis-l/user-efis-l.png", "background": "white"},
+    {"device": "winctrl-32-rmp", "view": "main", "label": "RMP", "src": "../../panels7/winwing-32-rmp/user-rmp.png", "background": "white"},
+    {"device": "winctrl-32-tcas", "view": "main", "label": "TCAS", "src": "../../panels7/winwing-32-tcas/user-tcas.png", "background": "white"},
+    {"device": "winctrl-pfp-3n", "view": "main", "label": "CDU", "src": "../../panels7/winwing-pfp-3n/user-pfp3n.png", "background": "white"},
+    {"device": "tc-apache-mpd", "view": "main", "label": "MPD", "src": "../../panels7/tc-apache-mpd/Total_Controls_1656webb.jpg"}
   ]
 }
