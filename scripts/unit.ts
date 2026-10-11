@@ -965,10 +965,10 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[2].id]: { view: 'front', x: 1.5, y: 0.5 } } })), 'coordinates outside 0..1 rejected');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { views: [], anchors: {} })), 'empty layout rejected');
   });
-  t('device templates (47 devices): photos per device, real numbering where published, unassigned spots elsewhere, links, groups', () => {
+  t('device templates (48 devices): photos per device, real numbering where published, unassigned spots elsewhere, links, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    assert.equal(DEVICE_TEMPLATES.length, 47, '45 existing + Constellation Alpha and Delta');
+    assert.equal(DEVICE_TEMPLATES.length, 48, '47 existing + Black Shark collective');
     assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
     // devices without published numbers: callout spots only (stick X / Y where obvious)
     const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle']);
@@ -1165,7 +1165,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     // picker groups: user templates, generic built-ins, then brands A-Z
     const mine = { ...tp.newTemplate('js', 'Mine'), brand: 'Thrustmaster' };
     const gr = tp.templateGroups([mine, ...all]);
-    assert.deepEqual(gr.map((g) => g.label), ['Your templates', 'Generic (built-in)', 'Azeron', 'Honeycomb', 'Logitech', 'MFG', 'MOZA', 'Thrustmaster', 'VIRPIL', 'VKB', 'WinCtrl']);
+    assert.deepEqual(gr.map((g) => g.label), ['Your templates', 'Generic (built-in)', 'Azeron', 'Honeycomb', 'Logitech', 'MFG', 'MOZA', 'Thrustmaster', 'VIRPIL', 'VKB', 'WinCtrl', 'WINCTRL']);
     assert.deepEqual(gr[0].templates.map((x) => x.name), ['Mine'], 'a user copy of a brand template stays under “Your templates”');
     assert.equal(gr[7].templates.length, 7, 'Thrustmaster: Warthog stick + throttle, T.16000M, TWCS, TFRP, TPR, MFD Cougar');
     // a copy of an unassigned template takes numbers per callout (the editor's “Customize a copy” path)
@@ -1423,9 +1423,22 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
   t('Oct 9–10 photo templates: exact exported callouts and view sizes, safe VIRPIL matching', () => {
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
     const cases = [
-      ['builtin-virpil-alpha-prime', 'ea9172cf8c8512e36477dcadd7bae8d249d09bbbc0441e817d356ddd19c299f0', [
-        ['front', 'Trigger side', '/device-photos/virpil-alpha-prime-front.webp', 1052, 863],
+      ['builtin-virpil-alpha-prime', '75dea85ea8a03965b20a6ed75951a32cfcc758604beb70f8a8fff7d8d31a3dc3', [
         ['back', 'Thumb side', '/device-photos/virpil-alpha-prime-back.webp', 1089, 944],
+        ['front', 'Rear', '/device-photos/virpil-alpha-prime-front.webp', 1052, 863],
+      ]],
+      ['builtin-virpil-rotor-tcs-dual', 'c9ae67f16a17b7c8c242a2183d2bda421ec6bda59375784dffdadcfa12625c5c', [
+        ['lower', 'Dual grip, lower controls', '/device-photos/virpil-rotor-tcs-dual-front.webp', 1439, 984],
+        ['rear', 'Dual grip, rear controls', '/device-photos/virpil-rotor-tcs-dual-rear.webp', 967, 990],
+        ['plus', 'Rotor TCS Plus base', '/device-photos/virpil-rotor-tcs-plus-main.webp', 1489, 739],
+      ]],
+      ['builtin-virpil-rotor-tcs-sharka50', '97bcd8753e352319676f885f9fad021975a4af73461480e58d264997d887b587', [
+        ['grip', 'SharKa-50 grip', '/device-photos/virpil-rotor-tcs-sharka50-main.webp', 1570, 966],
+        ['plus', 'Rotor TCS Plus base', '/device-photos/virpil-rotor-tcs-plus-main.webp', 1489, 739],
+      ]],
+      ['builtin-virpil-rotor-tcs-hawk60', '5f44b91aadb387497741c8c4e318f25356e1badfc3aa4e60972b9822668688aa', [
+        ['grip', 'Hawk-60 grip', '/device-photos/virpil-rotor-tcs-hawk60-main.webp', 1555, 990],
+        ['plus', 'Rotor TCS Plus base', '/device-photos/virpil-rotor-tcs-plus-main.webp', 1489, 739],
       ]],
       ['builtin-virpil-vmax-prime', '177ea8dafe511a6abc272e17f8d01ab88e070c89534ee7b45103a933fff54358', [
         ['left', 'Front Grip', '/device-photos/virpil-vmax-prime-front.webp', 1868, 966],
@@ -1471,15 +1484,17 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
   });
   t('Alpha Prime: exact exported photo bytes and bounds, original metadata and numbering', () => {
     const alpha = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-virpil-alpha-prime')!;
-    assert.equal(alpha.name, 'VIRPIL Alpha Prime (R) stick');
+    assert.equal(alpha.name, 'VIRPIL Alpha Prime stick');
     assert.equal(alpha.brand, 'VIRPIL'); assert.equal(alpha.category, 'stick');
     assert.deepEqual(alpha.match, [{ name: 'Alpha Prime' }]);
     assert.equal(alpha.notes, 'Default numbering from the VIRPIL diagrams (1-based: button N = jsX_buttonN). The VPC Configurator can renumber everything: if yours differs, use “Customize a copy”.');
-    assert.equal(alpha.callouts.length, 16);
+    assert.equal(alpha.callouts.length, 15);
     assert.ok(!alpha.loadImage && alpha.callouts.every((c) => !c.region && !c.inputRegions), 'no generated art');
     assert.ok(alpha.callouts.every((c) => c.label === c.label?.trim()), 'trimmed labels');
     assert.deepEqual(alpha.callouts.find((c) => c.id === 't1')!.inputs, ['button1', 'button2', 'button3']);
     assert.deepEqual(alpha.callouts.find((c) => c.id === 'braked')!.inputs, ['slider1']);
+    assert.deepEqual(alpha.callouts.find((c) => c.id === 'mini')!.inputs, ['rotx', 'roty', 'button6']);
+    assert.ok(!alpha.callouts.some((c) => c.id === 'minib'), 'ministick press is part of the axis callout');
     for (const [photo, hash, size] of [
       ['virpil-alpha-prime-front', '4e78fbe1fef231f3e9bfb8b560232ecc6e99215bbe91a548ed08362b356dae64', [534, 863, 0.03558, 0.02317, 0.92697, 0.95365]],
       ['virpil-alpha-prime-back', '8c90eeb666afe194a4a3385fc74498cb974abb5b541cef1b6a26278e4fa05021', [523, 944, 0.04015, 0.02225, 0.91778, 0.95551]],
@@ -1509,7 +1524,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         for (const c of d.callouts.filter((c) => c.view === v.id)) {
           assert.ok(c.inputs.length > 0 && c.inputs.length <= tp.MAX_CALLOUT_INPUTS, `${id}/${c.id}: sane inputs`);
           assert.ok(c.anchor.x * v.width >= gx && c.anchor.x * v.width <= gx + pw, `${id}/${c.id}: anchor on photo`);
-          assert.ok(c.box.x < gx / v.width || c.box.x > (gx + pw) / v.width, `${id}/${c.id}: label beside photo`);
+          if (!d.variantOf) assert.ok(c.box.x < gx / v.width || c.box.x > (gx + pw) / v.width, `${id}/${c.id}: label beside photo`); // grip variants preserve exact exported boxes
         }
       }
     }
@@ -1536,14 +1551,23 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(base.callouts.find((c) => c.id === 'idle')!.inputs, [''], 'unverified idle number is left unassigned');
     assert.deepEqual(base.match, [{ name: 'Rotor TCS' }], 'no invented USB id');
     for (const name of ['VPC Rotor TCS', 'VPC Rotor TCS Plus']) assert.equal(tp.pickTemplate(all, { name, slot: 'js' }).template.id, base.id);
-    for (const [id, count] of [['dual', 47], ['sharka50', 23], ['hawk60', 27]] as const) {
+    for (const [id, count, callouts, name] of [['dual', 47, 22, 'Dual'], ['sharka50', 23, 12, 'SharKa-50'], ['hawk60', 27, 11, 'Hawk-60']] as const) {
       const d = get(`virpil-rotor-tcs-${id}`);
       assert.equal(d.variantOf, base.id); assert.deepEqual(d.match, []);
-      for (const c of base.callouts) assert.deepEqual(d.callouts.find((x) => x.id === c.id), c, `${id}: includes the same base callouts`);
+      assert.equal(d.name, `VIRPIL Rotor TCS / TCS Plus + ${name} grip`);
+      assert.equal(d.brand, 'VIRPIL'); assert.equal(d.callouts.length, callouts);
+      for (const c of base.callouts) assert.deepEqual(d.callouts.find((x) => x.id === c.id)!.inputs, c.inputs, `${id}: includes the same base inputs with exported placement`);
       assert.deepEqual(buttons(d), nums(count).filter((n) => id !== 'sharka50' || n !== 13), `${id}: supplied grip diagram, no invented numbers`);
       assert.match(d.notes!, /VPC Configurator.*Customize a copy/);
     }
-    assert.deepEqual(get('virpil-rotor-tcs-dual').callouts.find((c) => c.id === 'cursor')!.inputs, ['rotx', 'roty']);
+    for (const [photo, hash] of [
+      ['virpil-rotor-tcs-dual-front', '8be3bafd69c7193242d348b9b37d74fabbbd7a7149fc9ca3bd6ac2477bef60fd'],
+      ['virpil-rotor-tcs-dual-rear', 'ec732a284d810075f44f8640bbe6f3cc2303969da9adaa7895bcb05fe35804d4'],
+      ['virpil-rotor-tcs-plus-main', '15753f6195b8dd791a9d517bc7ab599e21021f512375bafe5234cddcd3ee4643'],
+      ['virpil-rotor-tcs-sharka50-main', 'de7b695844c935b2a0101fa4d4de333a04b9939e26aad444d760a4667d8b6934'],
+      ['virpil-rotor-tcs-hawk60-main', '427d434b4e60442054ea0a228c2f26c361883582fb4b1d829f41bec36d774c26'],
+    ] as const) assert.equal(createHash('sha256').update(readFileSync(new URL(`../public/device-photos/${photo}.webp`, import.meta.url))).digest('hex'), hash, `${photo}: reused exported WebP bytes`);
+    assert.deepEqual(get('virpil-rotor-tcs-dual').callouts.find((c) => c.id === 'cursor')!.inputs, ['rotx', 'roty', 'button12']);
     assert.deepEqual(get('virpil-rotor-tcs-sharka50').callouts.find((c) => c.id === 'h9')!.inputs, ['button10', 'button11', 'button12', 'button23', 'button9']);
     assert.equal(tp.GRIPS_GROUP, 'Grips for this base (pick yours)');
     assert.deepEqual(tp.templateVariants(all, base).map((d) => d.id), [base.id, ...['dual', 'hawk60', 'sharka50'].map((id) => `builtin-virpil-rotor-tcs-${id}`)]);
@@ -1552,6 +1576,51 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(ab9.image, '/device-photos/moza-ab9-main.webp');
     assert.ok(!DEVICE_TEMPLATES.some((d) => d.id === 'builtin-moza-ab9'), 'no duplicate AB9 template');
     assert.ok(ab6.callouts.every((c) => c.view !== 'ab9'), 'AB6/MHG authored controls preserved on original views');
+  });
+
+  t('Black Shark collective: supplied diagram inputs, single hosted cutout, name matching and uncertainties', () => {
+    const d = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-blackshark-collective')!;
+    assert.equal(d.name, 'WINCTRL Black Shark Collective'); assert.equal(d.brand, 'WINCTRL');
+    assert.equal(d.category, 'collective'); assert.equal(d.slot, 'js');
+    assert.equal(d.variantOf, undefined); assert.deepEqual(d.match, [{ name: 'Black Shark' }]);
+    const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+    for (const name of ['WINCTRL Black Shark Collective', 'WinCtrl Black Shark', 'BLACK SHARK'])
+      assert.equal(tp.pickTemplate(all, { name, slot: 'js' }).template.id, d.id);
+    assert.equal(tp.matchScore(d, { name: 'Other WINCTRL collective', vendor: '4098', slot: 'js' }), 0, 'shared vendor alone must not match');
+    assert.equal(DEVICE_PHOTO_LAYOUTS[d.id], undefined);
+    assert.deepEqual(d.views!.map((v) => [v.id, v.label, v.image, v.width, v.height]),
+      [['main', 'Collective and grip', '/device-photos/winctrl-blackshark-collective-main.webp', 2044, 1430]]);
+    assert.deepEqual(DEVICE_PHOTO_SIZES['winctrl-blackshark-collective-main'], [1186, 1430, 0.05481, 0.04545, 0.89039, 0.90909]);
+    assert.ok(readFileSync(new URL('../public/device-photos/winctrl-blackshark-collective-main.webp', import.meta.url)).length > 0);
+    assert.equal(d.callouts.length, 18); assert.ok(d.callouts.every((c) => c.view === 'main'));
+    const inputs = (id: string) => d.callouts.find((c) => c.id === id)!.inputs;
+    assert.deepEqual(inputs('collective'), ['z']); assert.deepEqual(inputs('wheel'), ['rotz']);
+    assert.deepEqual(inputs('wheelb'), ['button15', 'button17', 'button16']);
+    assert.deepEqual(inputs('tgt'), ['button14']); assert.deepEqual(inputs('route'), ['button11', 'button12', 'button13']);
+    assert.deepEqual(inputs('mini'), ['x', 'y', 'button18']);
+    assert.deepEqual(inputs('minihat'), ['button19', 'button20', 'button21', 'button22']);
+    assert.deepEqual(inputs('pov'), ['hat1_up', 'hat1_right', 'hat1_down', 'hat1_left']);
+    assert.deepEqual(inputs('s8'), ['button8', 'button9', 'button10']); assert.deepEqual(inputs('air'), ['button5', 'button6', 'button7']);
+    for (const [id, n] of [['sling', 4], ['side23', 23], ['side26', 26], ['side25', 25], ['side24', 24], ['rear28', 28], ['rear27', 27]] as const)
+      assert.deepEqual(inputs(id), [`button${n}`], id);
+    assert.deepEqual(inputs('detents'), ['button29', 'button32']);
+    assert.equal(d.callouts.find((c) => c.id === 'detents')!.label, 'Lever detents (29 / 32)');
+    const buttons = d.callouts.flatMap((c) => c.inputs).filter((i) => /^button/.test(i)).map((i) => +i.slice(6)).sort((a, b) => a - b);
+    assert.deepEqual(buttons, [...Array.from({ length: 26 }, (_, i) => i + 4), 32], 'diagram buttons 4–29 and 32, once each');
+    assert.match(d.notes!, /29 \/ 32 are uncertain/); assert.match(d.notes!, /Rear buttons 28 \/ 27 are hidden/);
+    const v = d.views![0], gutter = (v.width - 1186) / 2;
+    for (const c of d.callouts) {
+      assert.ok(c.anchor.x * v.width >= gutter && c.anchor.x * v.width <= gutter + 1186, `${c.id}: anchor on photo`);
+      assert.ok(c.box.x * v.width < gutter || c.box.x * v.width > gutter + 1186, `${c.id}: box beside photo`);
+    }
+    // Reserve room for label text and binding rows in the authored columns, including the two-axis press box.
+    const boxes = d.callouts.map((c) => ({ id: c.id, x: c.box.x * v.width, y: c.box.y * v.height,
+      w: 340, h: c.id === 'mini' ? 160 : c.kind === 'hat' ? 100 : c.kind === 'button' ? 70 : 110 }));
+    for (const a of boxes) {
+      assert.ok(a.x - a.w / 2 >= 0 && a.x + a.w / 2 <= v.width && a.y - a.h / 2 >= 0 && a.y + a.h / 2 <= v.height, `${a.id}: label space inside canvas`);
+      for (const b of boxes) if (a !== b)
+        assert.ok(Math.abs(a.x - b.x) >= (a.w + b.w) / 2 || Math.abs(a.y - b.y) >= (a.h + b.h) / 2 + 3, `${a.id}/${b.id}: label spaces do not overlap`);
+    }
   });
 
   t('rudder pedal built-ins: USB / name auto-match, axes per set, nothing taken from the existing templates', () => {
@@ -1786,16 +1855,16 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const d = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion')!;
     assert.ok(!d.loadImage && d.views!.length === 2 && d.views!.every((v) => v.image!.startsWith('/device-photos/')), 'Orion uses its two exported photo views');
     assert.deepEqual(DEVICE_TEMPLATES.filter((x) => !x.views?.length).map((x) => x.id), [], 'every device template has a photo layout');
-    assert.equal(DEVICE_TEMPLATES.filter((x) => x.views?.length).length, 47, 'all 47 device templates have photo views');
-    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 87, 'Alpha and Delta add four views: 87 photo views total');
+    assert.equal(DEVICE_TEMPLATES.filter((x) => x.views?.length).length, 48, 'all 48 device templates have photo views');
+    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 84, 'Rotor exports remove four views; Black Shark adds one: 84 photo views total');
     let calls = 0;
     const lazy = { ...d, id: 'test-lazy-picture', views: undefined, loadImage: async () => { calls++; return 'data:image/svg+xml,<svg/>'; } };
     const r = await tp.resolveTemplateImage(lazy);
     assert.ok(r.image === 'data:image/svg+xml,<svg/>' && !(lazy as { image?: string }).image, 'picture resolves, template untouched');
     assert.equal((await tp.resolveTemplateImage(lazy)).image, r.image, 'cached'); assert.equal(calls, 1);
     const imgs = await Promise.all(DEVICE_TEMPLATES.map((x) => tp.resolveTemplateImage(x).then((y) => y.image ?? y.views!.map((v) => v.image).join()))); // (photo templates: their views' photos)
-    assert.equal(new Set(imgs).size, 47, 'one distinct set of pictures per device');
-    passed++; console.log('  ✓ device template pictures: all 47 photo templates (distinct), lazy pictures cached');
+    assert.equal(new Set(imgs).size, 48, 'one distinct set of pictures per device');
+    passed++; console.log('  ✓ device template pictures: all 48 photo templates (distinct), lazy pictures cached');
   }
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };
@@ -2911,7 +2980,7 @@ console.log('\nshared controller files');
     assert.equal(all.filter((x) => x.builtin && x.brand && x.category === 'throttle').length, 12);
     assert.deepEqual(sg.suggestedTemplates('pedals', all), all.filter((x) => x.category === 'pedals'));
     const collective = { ...tp.newTemplate('js', 'Future collective'), builtin: true, brand: 'Maker', category: 'collective' };
-    assert.equal(all.filter((x) => x.category === 'collective').length, 4);
+    assert.equal(all.filter((x) => x.category === 'collective').length, 5);
     assert.deepEqual(sg.suggestedTemplates('Rotor TCS', [...all, collective, { ...collective, builtin: false }]), [...all.filter((x) => x.category === 'collective'), collective]);
     assert.ok(sg.suggestedTemplates('R1 LEGEND', all).some((x) => x.id === 'builtin-virpil-r1-legend'));
     assert.ok(sg.suggestedTemplates('Rotor TCS Plus', all).some((x) => x.id === 'builtin-virpil-rotor-tcs-dual'));
