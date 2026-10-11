@@ -103,17 +103,33 @@ const VIGNETTE = 'radial-gradient(ellipse 75% 70% at 50% 50%, rgba(0,0,0,0) 55%,
 /** device picture(s) with callouts: classic templates one canvas; multi-view (photo) templates every view side by side (stacked when narrow) */
 export function DeviceCanvas(props: Props) {
   const { template: t, view, minWidth = 860 } = props;
-  // The editor shows one page at a time in a wider pane. Reuse the Devices page's actual column, including its
-  // side-by-side allocation, so both the layout width AND the final scale agree. Observe it while editing too.
+  // Keep the Devices layout column independent of the editor's visual zoom. For unseen/new pages, measure the
+  // same flex allocation as Devices would use, at its available width (860 px if there is no Devices pane).
   const [deviceColumns, setDeviceColumns] = useState<Record<string, number>>({});
+  const [deviceWidth, setDeviceWidth] = useState(860);
+  const viewSizes = t.views?.map((v) => `${v.id}:${v.width}:${v.height}`).join('|');
   useLayoutEffect(() => {
-    if (!props.editable || !t.views?.length) return;
+    if (!props.editable) return;
     const wrap = document.querySelector<HTMLElement>('[data-testid=device-canvas-wrap]');
-    if (!wrap) return;
-    const frames = [...wrap.querySelectorAll<HTMLElement>('[data-testid=device-canvas-frame]')];
     const measure = () => {
+      const width = wrap?.clientWidth || 860;
+      setDeviceWidth(width);
       const next: Record<string, number> = {};
-      for (const frame of frames) {
+      if (t.views?.length) {
+        // Let CSS do the wrapping, proportional flex growth and max-width clamping, exactly as on Devices.
+        const probe = document.createElement('div');
+        Object.assign(probe.style, { position: 'fixed', left: '0', top: '0', visibility: 'hidden', pointerEvents: 'none',
+          display: 'flex', flexWrap: 'wrap', gap: '12px', width: `${Math.max(width, Math.min(minWidth, MULTI_VIEW_MIN_W))}px` });
+        for (const v of t.views) {
+          const a = v.width / v.height, col = document.createElement('div');
+          Object.assign(col.style, { minWidth: '0', flex: `${a} 1 ${Math.round(a * VIEW_MIN_H)}px`, maxWidth: `${Math.round(a * VIEW_MAX_H)}px` });
+          probe.append(col);
+        }
+        document.body.append(probe);
+        t.views.forEach((v, i) => { next[v.id] = (probe.children[i] as HTMLElement).clientWidth; });
+        probe.remove();
+      }
+      for (const frame of wrap?.querySelectorAll<HTMLElement>('[data-testid=device-canvas-frame]') ?? []) {
         const id = frame.querySelector<HTMLElement>('[data-view]')?.dataset.view;
         if (id && frame.clientWidth) next[id] = frame.clientWidth;
       }
@@ -123,28 +139,28 @@ export function DeviceCanvas(props: Props) {
     measure();
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(measure);
-    ro.observe(wrap);
-    frames.forEach((frame) => ro.observe(frame));
+    if (wrap) {
+      ro.observe(wrap);
+      wrap.querySelectorAll<HTMLElement>('[data-testid=device-canvas-frame]').forEach((frame) => ro.observe(frame));
+    }
     return () => ro.disconnect();
-  }, [props.editable, t.id, !!t.views?.length]);
-  if (!t.views?.length) return <ViewCanvas {...props} />;
+  }, [props.editable, t.id, viewSizes, minWidth]);
+  if (!t.views?.length) return <ViewCanvas {...props} editorColumn={Math.max(minWidth, deviceWidth)} />;
   const views = view ? t.views.filter((v) => v.id === view).slice(0, 1) : t.views;
   const shown = views.length ? views : t.views.slice(0, 1);
   // Devices view, several pages shown: each page's heading sticks under the sticky lines while its page scrolls by
   const sticky = !!props.stickyHeadings && !props.editable && shown.length > 1;
   return (
-    <div data-testid="device-canvas" data-views={shown.length} className="flex w-full flex-wrap items-start justify-center gap-3" style={{ minWidth: Math.min(minWidth, MULTI_VIEW_MIN_W) }}>
+    <div data-testid="device-canvas" data-views={shown.length} className="flex w-full flex-wrap items-start justify-center gap-3" style={{ minWidth: props.editable ? 0 : Math.min(minWidth, MULTI_VIEW_MIN_W) }}>
       {shown.map((v) => {
         const a = v.width / v.height;
         const page = viewTemplate(t, v.id);
-        // Lock the displayed column, not the potentially larger canvas used to fit the callouts.
-        const locked = props.editable ? deviceColumns[v.id] : undefined;
         return (
-          <div key={v.id} className="min-w-0" style={locked
-            ? { flex: 'none', width: locked, maxWidth: '100%' }
+          <div key={v.id} className="min-w-0" style={props.editable
+            ? { flex: 'none', width: '100%' }
             : { flex: `${a} 1 ${Math.round(a * VIEW_MIN_H)}px`, maxWidth: Math.round(a * VIEW_MAX_H) }}>
             {sticky && <PageHeading label={v.label} viewId={v.id} focused={props.pulse?.view === v.id} />}
-            <ViewCanvas {...props} template={page} photo caption={!sticky && t.views!.length > 1 ? v.label : undefined} viewId={v.id} minWidth={0} />
+            <ViewCanvas {...props} template={page} photo caption={!sticky && t.views!.length > 1 ? v.label : undefined} viewId={v.id} minWidth={0} editorColumn={deviceColumns[v.id] ?? Math.round(a * VIEW_MIN_H)} />
           </div>
         );
       })}
@@ -181,7 +197,7 @@ function PageHeading({ label, viewId, focused }: { label: string; viewId: string
 }
 
 /** one device image with callout anchors, leader lines and label boxes (positions are fractions of the canvas) */
-function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, editable, onMove, onDragStart, onCanvasClick, minWidth = 860, photo: photoProp, caption, viewId, pulse }: Props & { photo?: boolean; caption?: string; viewId?: string }) {
+function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, editable, onMove, onDragStart, onCanvasClick, minWidth = 860, photo: photoProp, caption, viewId, pulse, editorColumn = 860 }: Props & { photo?: boolean; caption?: string; viewId?: string; editorColumn?: number }) {
   // product photos (built-in photo templates, multi-view templates): drawn aspect kept, blended into the UI, a marker per control
   const photo = !!t.image && (photoProp || BUILTIN_PHOTO_RE.test(t.image));
   const ref = useRef<HTMLDivElement>(null);
@@ -190,7 +206,11 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
   const VH = 1000 / t.aspect;
   const at = (e: { clientX: number; clientY: number }): Pt => {
     const r = ref.current!.getBoundingClientRect();
-    return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
+    const root = ref.current!;
+    // Percent positions use the content box. Its rendered border/content sizes include every ancestor scale.
+    const sx = r.width / root.offsetWidth, sy = r.height / root.offsetHeight;
+    return { x: Math.min(1, Math.max(0, (e.clientX - r.left - root.clientLeft * sx) / (root.clientWidth * sx))),
+      y: Math.min(1, Math.max(0, (e.clientY - r.top - root.clientTop * sy) / (root.clientHeight * sy))) };
   };
   const start = (id: string, part: 'anchor' | 'box') => (e: React.PointerEvent) => {
     onSelect?.(id);
@@ -213,7 +233,7 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
   // label stays readable. Done in the editor too, so the editor shows the boxes exactly where the Devices view will.
   const [nudge, setNudge] = useState<Record<string, number>>({});
   const frameRef = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState({ layoutW: viewId ? Math.round(t.aspect * VIEW_MIN_H) : 0, scale: 1, frameH: 0 });
+  const [fit, setFit] = useState({ layoutW: viewId ? Math.round(t.aspect * VIEW_MIN_H) : editable ? Math.min(shownWidth.get(widthKey(t)) ?? editorColumn, cappedWidth(t) ?? Infinity) : 0, scale: 1, frameH: 0 });
   const relayout = useRef<() => void>(() => {});
   relayout.current = () => {
     const root = ref.current;
@@ -226,17 +246,26 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
       if (!el) return [];
       return [{ id: c.id, x: c.box.x, y: c.box.y, w: el.offsetWidth, h: el.offsetHeight }];
     });
-    if (viewId) {
+    if (viewId || editable) {
       const frame = frameRef.current;
       const frameW = frame?.clientWidth ?? 0;
       if (!frameW) return;
       const borderX = root.offsetWidth - W, borderY = root.offsetHeight - H;
       // fit is decided on the content box (the border stays 1 px whatever width we try)
       const fits = (w: number, h: number) => w - borderX >= 32 && h - borderY >= 32 && layoutCallouts(w - borderX, h - borderY, boxes).fits;
-      const layoutW = chooseLayoutWidth(frameW, t.aspect, fits, VIEW_MIN_H, VIEW_MAX_H);
+      const column = editable ? editorColumn : frameW;
+      const layoutW = viewId ? chooseLayoutWidth(column, t.aspect, fits, VIEW_MIN_H, VIEW_MAX_H)
+        : Math.min(shownWidth.get(widthKey(t)) ?? column, cappedWidth(t) ?? Infinity);
+      const layoutH = viewId ? Math.round(layoutW / t.aspect) : layoutW / t.aspect;
       // scale down only when the column is narrower than the layout width; scale 1 draws with no transform
-      const scale = frameW + 0.5 < layoutW ? frameW / layoutW : 1;
-      const frameH = scale === 1 ? 0 : Math.ceil(Math.round(layoutW / t.aspect) * scale);
+      let scale = frameW + 0.5 < layoutW ? frameW / layoutW : 1;
+      if (editable && frame) {
+        const pane = frame.closest<HTMLElement>('[data-testid=tpl-canvas-pane]');
+        const availableH = pane ? pane.getBoundingClientRect().bottom - frame.getBoundingClientRect().top - pane.scrollTop - parseFloat(getComputedStyle(pane).paddingBottom) : layoutH;
+        // Fit the visible pane, but keep the original size when height alone is tight; the pane can scroll.
+        scale = Math.min(frameW / layoutW, Math.max(1, availableH / layoutH));
+      }
+      const frameH = !editable && scale === 1 ? 0 : Math.ceil(layoutH * scale);
       if (root.offsetWidth !== layoutW || Math.abs(fit.scale - scale) > 0.0005 || (scale !== 1 && Math.abs(fit.frameH - frameH) > 0.5)) {
         setFit({ layoutW, scale, frameH });
         return;
@@ -253,27 +282,29 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
     const ro = new ResizeObserver(() => relayout.current());
     ro.observe(root);
     if (frame) ro.observe(frame);
+    const pane = editable ? root.closest('[data-testid=tpl-canvas-pane]') : null;
+    if (pane) ro.observe(pane);
     return () => ro.disconnect();
-  }, [viewId]);
+  }, [viewId, editable]);
   const by = (c: { id: string; box: Pt }) => c.box.y + (nudge[c.id] ?? 0);
   const bx = (c: { id: string; box: Pt }) => c.box.x + (nudge[`x:${c.id}`] ?? 0);
   const focused = !!viewId && pulse?.view === viewId;
   // Multi-view: lay out at the column width (never under aspect × VIEW_MIN_H). Grow toward aspect × VIEW_MAX_H by at
   // most LAYOUT_GROW per step, stopping at the smallest width in the step where the boxes stay inside. Scale the page
-  // down to the column; at scale 1 there is no transform. The editor reuses the Devices view's displayed column.
-  const layoutW = viewId ? fit.layoutW : 0;
-  const layoutH = layoutW ? Math.round(layoutW / t.aspect) : 0;
-  const scaled = !!layoutW && fit.scale < 0.9995;
+  // down to the column; at scale 1 there is no transform. The editor lays out at that same column, then zooms to its pane.
+  const layoutW = viewId || editable ? fit.layoutW : 0;
+  const layoutH = layoutW ? (viewId ? Math.round(layoutW / t.aspect) : layoutW / t.aspect) : 0;
+  const scaled = !!layoutW && (editable ? Math.abs(fit.scale - 1) > 0.0005 : fit.scale < 0.9995);
   const capW = viewId ? undefined : cappedWidth(t);
   // scrollIntoView centers in the scrollport, which includes the space covered by sticky controls. Extend the target's
   // scroll area above it by their measured height so a whole page (or a picked card) lands in the usable room below them.
   const scrollStyle = editable ? {} : { scrollMarginTop: 'var(--device-scroll-top, 0px)', scrollMarginBottom: 8 };
   const canvas = (
-    <div ref={ref} data-testid={viewId ? 'device-canvas-view' : 'device-canvas'} data-view={viewId} data-photo={photo ? '1' : undefined} data-focused={focused ? '1' : undefined} data-layout-scale={viewId ? (scaled ? String(fit.scale) : '1') : undefined}
+    <div ref={ref} data-testid={viewId ? 'device-canvas-view' : 'device-canvas'} data-view={viewId} data-photo={photo ? '1' : undefined} data-focused={focused ? '1' : undefined} data-layout-scale={viewId || editable ? (scaled ? String(fit.scale) : '1') : undefined}
       className={`relative select-none overflow-hidden rounded-lg border border-edge/70 ${layoutW ? '' : 'w-full'} ${photo ? '' : t.image ? 'bg-black/30' : 'bg-[length:24px_24px] bg-[linear-gradient(rgba(79,216,255,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(79,216,255,.06)_1px,transparent_1px)]'} ${editable ? 'cursor-crosshair' : ''}`}
       style={{ ...scrollStyle, ...(layoutW
         ? { width: layoutW, height: layoutH, aspectRatio: String(t.aspect), ...(photo ? { backgroundImage: PHOTO_BG } : {}) }
-        : { aspectRatio: String(t.aspect), minWidth, ...(capW ? { maxWidth: capW, minWidth: Math.min(minWidth, capW), marginInline: 'auto' } : {}), ...(editable && !viewId && shownWidth.get(widthKey(t)) ? { width: shownWidth.get(widthKey(t)), minWidth: 0 } : {}), ...(photo ? { backgroundImage: PHOTO_BG } : {}) }) }}
+        : { aspectRatio: String(t.aspect), minWidth, ...(capW ? { maxWidth: capW, minWidth: Math.min(minWidth, capW), marginInline: 'auto' } : {}), ...(photo ? { backgroundImage: PHOTO_BG } : {}) }) }}
       onClick={(e) => {
         if (!editable || !onCanvasClick) return;
         if (e.target === e.currentTarget || (e.target as Element).getAttribute?.('data-bg') === '1') onCanvasClick(at(e));
@@ -358,7 +389,7 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
   );
   if (!layoutW) return canvas;
   // The canvas is out of flow either way, so its layout width cannot widen the column: the frame's width is the column.
-  // scale 1 draws at that width with no transform. scale < 1 shrinks the layout width down to the column.
+  // Devices only shrinks to its column; the editor can also enlarge the unchanged layout to fill its pane.
   return (
     <div ref={frameRef} data-testid="device-canvas-frame" className="relative w-full min-w-0 overflow-hidden" style={{ height: scaled ? fit.frameH : layoutH }}>
       {scaled ? (

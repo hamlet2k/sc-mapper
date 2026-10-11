@@ -237,7 +237,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
         {!device.pad && <span className="text-mod">Connect the device for press-to-place and live highlight.</span>}
       </div>
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 overflow-auto p-4 scrollbar-thin">
+        <div data-testid="tpl-canvas-pane" className="min-w-0 flex-1 overflow-auto p-4 scrollbar-thin">
           <div role="tablist" aria-label="Pages" data-testid="tpl-views" className="mb-2 flex flex-wrap items-center gap-1">
             {pages.map((v, i) => (renaming === v.id ? (
               <input key={v.id} autoFocus defaultValue={pageLabel(v, i)} maxLength={40} aria-label="Page name" data-testid="tpl-page-rename"

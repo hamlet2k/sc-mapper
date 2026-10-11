@@ -2019,13 +2019,14 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   await rp.mouse.move(5, 500);
   await rp.evaluate(() => document.activeElement?.blur());
 
-  // ---- URSA MINOR Combat: the editor draws the picture exactly like the Devices view (same size, same label layout)
+  // ---- URSA MINOR Combat: the editor zooms the same layout as the Devices view.
   await rp.evaluate(() => document.getElementById('main').scrollTo(0, 0));
   await rp.waitForTimeout(300);
   const boxesIn = (sel) => rp.evaluate((sel) => {
     const v = document.querySelector(sel).querySelector('[data-testid=device-canvas-view]');
     const vr = v.getBoundingClientRect();
-    return { w: vr.width, h: vr.height, view: v.dataset.view, boxes: Object.fromEntries([...v.querySelectorAll('[data-callout]')].map((c) => { const r = c.getBoundingClientRect(); return [c.dataset.callout, [r.left - vr.left, r.top - vr.top, r.width, r.height]]; })) };
+    const sx = v.offsetWidth / vr.width, sy = v.offsetHeight / vr.height;
+    return { w: v.offsetWidth, h: v.offsetHeight, view: v.dataset.view, boxes: Object.fromEntries([...v.querySelectorAll('[data-callout]')].map((c) => { const r = c.getBoundingClientRect(); return [c.dataset.callout, [(r.left - vr.left) * sx, (r.top - vr.top) * sy, r.width * sx, r.height * sy]]; })) };
   }, sel);
   const inView = await boxesIn('[data-testid=device-view]');
   // base-view callout (Keys): still fully inside the picture. Lever detents moved to the grips view in Federico's layout update.
@@ -2047,7 +2048,7 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   const inEd = await boxesIn('[data-testid=template-editor]');
   const diffs = Object.entries(inView.boxes).map(([id, b]) => { const e = inEd.boxes[id]; return e ? Math.max(...b.map((v, k) => Math.abs(v - e[k]))) : 99; });
   check(inEd.view === inView.view && Math.abs(inEd.w - inView.w) < 0.5 && Math.abs(inEd.h - inView.h) < 0.5 && Math.max(...diffs) < 0.75,
-    `editor draws the "${inView.view}" view at the same size (${Math.round(inEd.w)}×${Math.round(inEd.h)} vs ${Math.round(inView.w)}×${Math.round(inView.h)}) with every label box in the same place (max Δ ${Math.max(...diffs).toFixed(2)}px over ${diffs.length})`);
+    `editor lays out the "${inView.view}" view at the same size (${inEd.w}×${inEd.h}) with every label box in the same place before zoom (max Δ ${Math.max(...diffs).toFixed(2)}px over ${diffs.length})`);
   check(inEd.boxes.keys && inEd.boxes.keys[1] >= 1, `Keys box not cut off in the editor (top ${inEd.boxes.keys?.[1].toFixed(1)}px)`);
   await rp.locator('[data-testid=template-editor] [data-testid=device-canvas-view]').first().screenshot({ path: '/tmp/ursa-editor.png' });
   const sbs = await rc.newPage();
@@ -2541,10 +2542,9 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   check(JSON.stringify(await dims()) === '[334,674]', 'back to Auto');
   await p7.getByTestId('photo-prep-use').click();
   await p7.waitForTimeout(300);
-  // a prepared portrait picture on a single-page template: drawn like the built-in photos (label columns, at most 720 px tall),
-  // not stretched to the column width
-  const ev = await ed.getByTestId('device-canvas-view').evaluate((el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, photo: el.dataset.photo, col: el.closest('[data-testid=device-canvas]').getBoundingClientRect().width }; });
-  check(ev.photo === '1' && ev.h <= 722 && Math.abs(ev.w / ev.h - Math.round(334 + 2 * 0.3 * 674) / 674) < 0.01 && ev.w < ev.col - 100, `editor: prepared portrait picture capped like the built-in photos (${Math.round(ev.w)}×${Math.round(ev.h)} in a ${Math.round(ev.col)} px column, label columns)`);
+  // A formatted portrait keeps the built-in photo layout (label columns, at most 720 px tall), then zooms uniformly.
+  const ev = await ed.getByTestId('device-canvas-view').evaluate((el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, layoutH: el.offsetHeight, photo: el.dataset.photo }; });
+  check(ev.photo === '1' && ev.layoutH <= 722 && Math.abs(ev.w / ev.h - Math.round(334 + 2 * 0.3 * 674) / 674) < 0.01, `editor: formatted portrait keeps the capped photo layout and aspect (${ev.layoutH} px layout height, ${Math.round(ev.w)}×${Math.round(ev.h)} rendered)`);
 
   // input picker: the template is linked to the connected Gladiator (32 buttons, POV hat on axis 9, 8 axes)
   const pv = ed.getByTestId('device-canvas-view');
@@ -2620,7 +2620,8 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   const boxesOf = (root) => p7.evaluate((root) => {
     const r0 = document.querySelector(root), v = r0.querySelector('[data-testid=device-canvas-view]') ?? r0.querySelector('[data-testid=device-canvas]');
     const vr = v.getBoundingClientRect();
-    return { w: vr.width, h: vr.height, boxes: Object.fromEntries([...v.querySelectorAll('[data-callout]')].map((c) => { const r = c.getBoundingClientRect(); return [c.dataset.callout, [r.left - vr.left, r.top - vr.top]]; })) };
+    const sx = v.offsetWidth / vr.width, sy = v.offsetHeight / vr.height;
+    return { w: v.offsetWidth, h: v.offsetHeight, boxes: Object.fromEntries([...v.querySelectorAll('[data-callout]')].map((c) => { const r = c.getBoundingClientRect(); return [c.dataset.callout, [(r.left - vr.left) * sx, (r.top - vr.top) * sy]]; })) };
   }, root);
   await ed.getByTestId('tpl-save').click();
   await p7.waitForTimeout(800);
@@ -2632,7 +2633,7 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   const inE = await boxesOf('[data-testid=template-editor]');
   const dd = Object.entries(inV.boxes).map(([id, b]) => (inE.boxes[id] ? Math.max(Math.abs(b[0] - inE.boxes[id][0]), Math.abs(b[1] - inE.boxes[id][1])) : 99));
   check(inV.h <= 722 && Math.abs(inE.w - inV.w) < 0.5 && Math.abs(inE.h - inV.h) < 0.5 && dd.length >= 3 && Math.max(...dd) < 0.75,
-    `Devices view draws the custom portrait page capped too (${Math.round(inV.w)}×${Math.round(inV.h)}), and the editor at the same size with the label boxes in the same place (max Δ ${Math.max(...dd).toFixed(2)} px over ${dd.length})`);
+    `Devices view draws the custom portrait page capped too (${inV.w}×${inV.h}), and the editor keeps the same layout before zoom (max box Δ ${Math.max(...dd).toFixed(2)} px over ${dd.length})`);
   await ed.getByRole('button', { name: 'Cancel' }).click();
   await p7.waitForTimeout(300);
   // "Keep original" on a classic single-picture template: the canvas takes the picture's shape but is not drawn taller than 720 px
@@ -2641,8 +2642,8 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   await before.waitFor({ timeout: 5000 });
   await p7.getByTestId('photo-prep-keep').click();
   await p7.waitForTimeout(500);
-  const cv = await ed.getByTestId('device-canvas').evaluate((el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, photo: el.dataset.photo, views: el.dataset.views }; });
-  check(!cv.views && Math.abs(cv.h - 720) < 2 && Math.abs(cv.w / cv.h - 346 / 420) < 0.01, `classic canvas with a portrait upload (Keep original): ${Math.round(cv.w)}×${Math.round(cv.h)}, height capped at 720 px, shape kept`);
+  const cv = await ed.getByTestId('device-canvas').evaluate((el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, layoutW: el.offsetWidth, layoutH: el.offsetHeight, photo: el.dataset.photo, views: el.dataset.views }; });
+  check(!cv.views && Math.abs(cv.layoutH - 720) < 2 && Math.abs(cv.w / cv.h - 346 / 420) < 0.01, `classic canvas with a portrait upload (Keep original): layout height capped at 720 px, shape kept under zoom`);
   await ed.getByTestId('device-canvas').click({ position: { x: cv.w * 0.5, y: cv.h * 0.3 } });
   await p7.waitForTimeout(150);
   await ed.getByLabel('Template name').fill('Round 7 classic');
@@ -2651,8 +2652,8 @@ console.log('\nround 7: prepare-picture zoom + aspect, input picker');
   const tsel = dv7.getByTestId('template-select');
   await tsel.selectOption(await tsel.locator('option', { hasText: 'Round 7 classic' }).first().getAttribute('value'));
   await p7.waitForTimeout(500);
-  const dc = await dv7.getByTestId('device-canvas').evaluate((el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height }; });
-  check(Math.abs(dc.h - cv.h) < 1 && Math.abs(dc.w - cv.w) < 1, `Devices view draws it at the same capped size (${Math.round(dc.w)}×${Math.round(dc.h)})`);
+  const dc = await dv7.getByTestId('device-canvas').evaluate((el) => ({ w: el.offsetWidth, h: el.offsetHeight }));
+  check(Math.abs(dc.h - cv.layoutH) < 1 && Math.abs(dc.w - cv.layoutW) < 1, `Devices view uses the same capped layout (${dc.w}×${dc.h})`);
   await c7.close();
 }
 
@@ -3204,8 +3205,8 @@ console.log('\nbutton rows up to 32 inputs, Fill range');
   await c10.close();
 }
 
-// ---- Save preserves every page's rendered photo and callout layout (VIRPIL Panel / VKB MCG Pro regressions).
-console.log('\nphoto-template layout before and after Save');
+// ---- Editor zoom preserves the Devices layout, including side-by-side columns and unmeasured-page fallback.
+console.log('\nphoto-template editor zoom and layout before and after Save');
 {
   const layoutContext = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
   const lp = await layoutContext.newPage();
@@ -3287,7 +3288,13 @@ console.log('\nphoto-template layout before and after Save');
         photoRect = { x: ir.left - cr.left + (ir.width - dw) / 2, y: ir.top - cr.top + (ir.height - dh) / 2, w: dw, h: dh };
         photo = { x: photoRect.x / cr.width, y: photoRect.y / cr.height, w: dw / cr.width, h: dh / cr.height };
       }
-      return { canvas: { w: cr.width, h: cr.height, layoutW: canvas.offsetWidth, layoutH: canvas.offsetHeight }, photo, photoRect, callouts, scale, transformed };
+      const paneEl = canvas.closest('[data-testid=tpl-canvas-pane]');
+      const frame = canvas.closest('[data-testid=device-canvas-frame]');
+      const pane = paneEl && frame ? {
+        w: frame.clientWidth,
+        h: paneEl.getBoundingClientRect().bottom - frame.getBoundingClientRect().top - paneEl.scrollTop - parseFloat(getComputedStyle(paneEl).paddingBottom),
+      } : null;
+      return { canvas: { w: cr.width, h: cr.height, layoutW: canvas.offsetWidth, layoutH: canvas.offsetHeight }, pane, photo, photoRect, callouts, scale, transformed };
     };
     const snapshot = async (rootSel, viewId) => {
       const canvas = lp.locator(`${rootSel} [data-view="${viewId}"]`);
@@ -3301,6 +3308,42 @@ console.log('\nphoto-template layout before and after Save');
     };
     const closeEnough = (a, b, keys) => a && b && keys.every((k) => Math.abs(a[k] - b[k]) <= 0.005);
     const samePixels = (a, b, keys) => a && b && keys.every((k) => Math.abs(a[k] - b[k]) <= 2);
+    const unzoom = (rect, scale) => rect && Object.fromEntries(Object.entries(rect).map(([k, v]) => [k, v / scale]));
+    const checkFill = (ed, label) => {
+      const expectedScale = Math.min(ed.pane.w / ed.canvas.layoutW, Math.max(1, ed.pane.h / ed.canvas.layoutH));
+      const expectedWidth = ed.canvas.layoutW * expectedScale;
+      check(Math.abs(ed.canvas.w - expectedWidth) <= 2, `${label}: canvas fills the pane subject to visible height (${Math.round(ed.canvas.w)} / ${Math.round(ed.pane.w)} px wide)`);
+      if (Math.abs(expectedWidth - ed.pane.w) <= 2) {
+        check(Math.abs(ed.canvas.w - ed.pane.w) <= 2, `${label}: rendered canvas width is within 2 px of pane width`);
+      } else {
+        check(Math.abs(ed.canvas.h - Math.max(ed.canvas.layoutH, ed.pane.h)) <= 2, `${label}: height limits zoom, canvas fills the visible height or stays at scale 1`);
+      }
+      check(ed.scale >= 0.9995 || ed.pane.w < ed.canvas.layoutW, `${label}: zoom below 1 only when the pane is narrower than the layout`);
+    };
+    const dragAnchor = async (editor, viewId, label) => {
+      const canvas = editor.locator(`[data-view="${viewId}"]`);
+      // Pick an exposed anchor, avoiding callout cards which draw above the anchors.
+      const source = await canvas.evaluate((el) => {
+        for (const a of el.querySelectorAll('[data-anchor]')) {
+          const r = a.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+          if (document.elementFromPoint(x, y) === a) return { id: a.dataset.anchor, x, y };
+        }
+        return null;
+      });
+      check(!!source, `${label}: an exposed anchor is available for dragging`);
+      if (!source) return;
+      const r = await canvas.boundingBox();
+      const target = { x: r.x + r.width * 0.53, y: r.y + r.height * 0.43 };
+      await lp.mouse.move(source.x, source.y);
+      await lp.mouse.down();
+      await lp.mouse.move(target.x, target.y, { steps: 8 });
+      await lp.mouse.up();
+      const landed = await canvas.locator(`[data-anchor="${source.id}"]`).boundingBox();
+      check(Math.hypot(landed.x + landed.width / 2 - target.x, landed.y + landed.height / 2 - target.y) <= 1,
+        `${label}: dragged anchor lands within 1 px of the pointer under zoom`);
+      await editor.getByTestId('tpl-undo').click();
+      await lp.waitForTimeout(100);
+    };
     for (const fixtureName of ['vmax-panel', 'vkb-gunfighter-mcg-pro']) {
       await lp.setViewportSize({ width: 1920, height: 1080 });
       const fixturePath = new URL(`./fixtures/${fixtureName}.sc-template.json`, import.meta.url).pathname;
@@ -3309,44 +3352,76 @@ console.log('\nphoto-template layout before and after Save');
       await lp.getByTestId('template-select').locator(`option[value="${fixture.id}"]`).waitFor({ state: 'attached' });
       await lp.getByTestId('template-select').selectOption(fixture.id);
       await lp.locator(`[data-testid=device-view] [data-view="${fixture.views[0].id}"] [data-callout]`).first().waitFor();
-      for (const vp of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }]) {
-        await lp.setViewportSize(vp);
-        await lp.waitForTimeout(400);
-        await lp.getByTestId('template-edit').click();
-        const editor = lp.getByTestId('template-editor');
-        await editor.waitFor();
-        const before = new Map();
-        for (const view of fixture.views) {
-          await editor.locator(`[data-view-tab="${view.id}"]`).click();
-          before.set(view.id, await snapshot('[data-testid=template-editor]', view.id));
-        }
-        await editor.getByTestId('tpl-save').click();
-        await editor.waitFor({ state: 'detached' });
-        for (const view of fixture.views) {
-          const ed = before.get(view.id);
-          const dev = await snapshot('[data-testid=device-view]', view.id);
-          const label = `${fixtureName} ${vp.width}×${vp.height} ${view.label}`;
-          const expected = fixture.callouts.filter((c) => (c.view ?? fixture.views[0].id) === view.id).map((c) => c.id).sort();
-          check(!ed.error && !dev.error, `${label}: both canvases exist`);
-          check(ed.canvas.layoutW === dev.canvas.layoutW && ed.canvas.layoutH === dev.canvas.layoutH,
-            `${label}: editor reuses the Devices layout size (${ed.canvas.layoutW}×${ed.canvas.layoutH})`);
-          check(samePixels(ed.canvas, dev.canvas, ['w', 'h']), `${label}: rendered canvas size matches the editor`);
-          check(dev.canvas.layoutH >= 440 && dev.canvas.layoutH <= 720, `${label}: layout height stays within 440–720 px`);
-          check(JSON.stringify(ed.callouts.map((c) => c.id).sort()) === JSON.stringify(expected)
-            && JSON.stringify(dev.callouts.map((c) => c.id).sort()) === JSON.stringify(expected), `${label}: every callout (${expected.length}) appears before and after Save`);
-          const em = new Map(ed.callouts.map((c) => [c.id, c]));
-          for (const c of dev.callouts) {
-            const e = em.get(c.id);
-            check(!!e && closeEnough(c.box, e.box, ['x', 'y', 'w', 'h']), `${label} ${c.id}: box position and size match the editor`);
-            check(!!e && samePixels(c.rect, e.rect, ['x', 'y', 'w', 'h']), `${label} ${c.id}: rendered box rect matches the editor within 2 px`);
-            check(!!e && closeEnough(c.anchor, e.anchor, ['x', 'y']), `${label} ${c.id}: anchor matches the editor`);
-            check(!!e?.visible, `${label} ${c.id}: editor box fully visible (${e?.clips.join(',') || 'no clipping'})`);
-            check(c.visible, `${label} ${c.id}: saved box fully visible (${c.clips.join(',') || 'no clipping'})`);
+      // The tall wide viewport verifies literal width fill and side-by-side Devices views. Normal desktop heights
+      // also verify the visible-height limit, which can intentionally stop zoom before the full pane width.
+      for (const vp of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }, { width: 2560, height: 1800 }]) {
+        for (const history of ['visited Devices', 'fresh reload without measured columns']) {
+          await lp.setViewportSize(vp);
+          if (history.startsWith('fresh')) {
+            await lp.reload({ waitUntil: 'networkidle' });
+            await lp.locator('[data-view-tab=devices]').click();
+            await lp.getByTestId('sidebar-slots').locator('[data-slot-row="js1"]').click();
+            await lp.getByTestId('template-select').selectOption(fixture.id);
           }
-          check(closeEnough(ed.photo, dev.photo, ['x', 'y', 'w', 'h']), `${label}: photo framing matches the editor`);
-          check(samePixels(ed.photoRect, dev.photoRect, ['x', 'y', 'w', 'h']), `${label}: rendered photo rect matches the editor within 2 px`);
-          if (vp.width === 1920) {
-            check(!ed.transformed && !dev.transformed && ed.scale === 1 && dev.scale === 1, `${label}: wide window draws at scale 1 without a transform`);
+          await lp.waitForTimeout(400);
+          const original = new Map();
+          for (const view of fixture.views) original.set(view.id, await snapshot('[data-testid=device-view]', view.id));
+          if (vp.width === 2560) {
+            const tops = await lp.locator('[data-testid=device-view] [data-testid=device-canvas-frame]').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top));
+            check(tops.length === fixture.views.length && Math.max(...tops) - Math.min(...tops) <= 2, `${fixtureName} ${history}: Devices views are side by side`);
+          }
+          if (history.startsWith('fresh')) {
+            // Hide measurement markers while opening the editor to force its deterministic fallback. The underlying
+            // Devices canvases keep their layout and are still available for before/after comparisons.
+            await lp.locator('[data-testid=device-view] [data-testid=device-canvas-frame]').evaluateAll((els) => els.forEach((el) => { el.dataset.testid = 'unmeasured-device-frame'; }));
+          }
+          await lp.getByTestId('template-edit').click();
+          const editor = lp.getByTestId('template-editor');
+          await editor.waitFor();
+          const before = new Map();
+          for (const view of fixture.views) {
+            await editor.locator(`[data-view-tab="${view.id}"]`).click();
+            const ed = await snapshot('[data-testid=template-editor]', view.id);
+            before.set(view.id, ed);
+            const label = `${fixtureName} ${vp.width}×${vp.height} ${history} ${view.label}`;
+            checkFill(ed, label);
+            if (vp.width === 2560) {
+              check(ed.scale > 1.05 && ed.transformed, `${label}: editor enlarges the side-by-side Devices layout`);
+              check(Math.abs(ed.canvas.w - ed.pane.w) <= 2, `${label}: zoom fills pane width after ${history}`);
+              await dragAnchor(editor, view.id, label);
+            }
+          }
+          await editor.getByTestId('tpl-save').click();
+          await editor.waitFor({ state: 'detached' });
+          await lp.locator('[data-testid=device-view] [data-testid=unmeasured-device-frame]').evaluateAll((els) => els.forEach((el) => { el.dataset.testid = 'device-canvas-frame'; }));
+          for (const view of fixture.views) {
+            const ed = before.get(view.id);
+            const dev = await snapshot('[data-testid=device-view]', view.id);
+            const label = `${fixtureName} ${vp.width}×${vp.height} ${history} ${view.label}`;
+            const expected = fixture.callouts.filter((c) => (c.view ?? fixture.views[0].id) === view.id).map((c) => c.id).sort();
+            check(!ed.error && !dev.error, `${label}: both canvases exist`);
+            check(ed.canvas.layoutW === dev.canvas.layoutW && ed.canvas.layoutH === dev.canvas.layoutH,
+              `${label}: editor reuses the Devices layout size (${ed.canvas.layoutW}×${ed.canvas.layoutH})`);
+            check(samePixels(original.get(view.id).canvas, dev.canvas, ['w', 'h']), `${label}: Save preserves the Devices rendered canvas size`);
+            check(dev.canvas.layoutH >= 440 && dev.canvas.layoutH <= 720, `${label}: layout height stays within 440–720 px`);
+            check(JSON.stringify(ed.callouts.map((c) => c.id).sort()) === JSON.stringify(expected)
+              && JSON.stringify(dev.callouts.map((c) => c.id).sort()) === JSON.stringify(expected), `${label}: every callout (${expected.length}) appears before and after Save`);
+            const em = new Map(ed.callouts.map((c) => [c.id, c]));
+            for (const c of dev.callouts) {
+              const e = em.get(c.id);
+              check(!!e && closeEnough(c.box, e.box, ['x', 'y', 'w', 'h']), `${label} ${c.id}: box position and size match the editor`);
+              check(!!e && samePixels(unzoom(c.rect, dev.scale), unzoom(e.rect, ed.scale), ['x', 'y', 'w', 'h']), `${label} ${c.id}: box rect before visual zoom matches within 2 px`);
+              const prior = original.get(view.id).callouts.find((p) => p.id === c.id);
+              check(!!prior && closeEnough(c.box, prior.box, ['x', 'y', 'w', 'h']) && closeEnough(c.anchor, prior.anchor, ['x', 'y']), `${label} ${c.id}: Save preserves the Devices box and anchor geometry`);
+              check(!!e && closeEnough(c.anchor, e.anchor, ['x', 'y']), `${label} ${c.id}: anchor matches the editor`);
+              check(!!e?.visible, `${label} ${c.id}: editor box fully visible (${e?.clips.join(',') || 'no clipping'})`);
+              check(c.visible, `${label} ${c.id}: saved box fully visible (${c.clips.join(',') || 'no clipping'})`);
+            }
+            check(closeEnough(ed.photo, dev.photo, ['x', 'y', 'w', 'h']), `${label}: photo framing matches the editor`);
+            check(samePixels(unzoom(ed.photoRect, ed.scale), unzoom(dev.photoRect, dev.scale), ['x', 'y', 'w', 'h']), `${label}: photo rect before visual zoom matches within 2 px`);
+            if (vp.width === 1920) {
+              check(!dev.transformed && dev.scale === 1, `${label}: Devices wide window still draws at scale 1 without a transform`);
+            }
           }
         }
       }
