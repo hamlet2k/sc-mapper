@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 export const DEVICES = [
   'tm-warthog-stick', 'tm-warthog-throttle', 'tm-t16000m', 'tm-twcs',
   'vkb-gladiator-scg', 'vkb-gunfighter-mcg', 'vkb-stecs',
-  'virpil-alpha-prime', 'virpil-vmax-prime',
+  'virpil-vmax-prime',
   'winctrl-carrierace', 'winctrl-viperace', 'winctrl-orion', 'winctrl-ursa-combat',
   'moza-ab6', 'moza-mtp', 'moza-mtq',
   'logitech-x56-stick', 'logitech-x56-throttle',

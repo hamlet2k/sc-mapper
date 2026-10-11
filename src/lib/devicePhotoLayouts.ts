@@ -113,28 +113,6 @@ export const DEVICE_PHOTO_LAYOUTS: Record<string, DevicePhotoLayout> = {
       en1: { view: 'front', x: 0.5, y: 0.835 },
     },
   },
-  // VIRPIL Alpha Prime R: matched to the VIRPIL button map; the 'front' photo is the rear view. Lower trigger t4 estimated (hidden behind the trigger).
-  'builtin-virpil-alpha-prime': {
-    views: [{ id: 'back', label: 'Thumb side', photo: 'virpil-alpha-prime-back' }, { id: 'front', label: 'Rear', photo: 'virpil-alpha-prime-front' }],
-    anchors: {
-      mini: { view: 'back', x: 0.24, y: 0.159 },
-      minib: { view: 'back', x: 0.246, y: 0.167 },
-      b7: { view: 'back', x: 0.465, y: 0.117 },
-      h8: { view: 'back', x: 0.58, y: 0.123 },
-      h14: { view: 'back', x: 0.39, y: 0.2 },
-      b13: { view: 'back', x: 0.56, y: 0.222 },
-      r28: { view: 'back', x: 0.87, y: 0.245 },
-      l19: { view: 'back', x: 0.42, y: 0.3 },
-      t1: { view: 'back', x: 0.66, y: 0.38 },
-      t4: { view: 'back', x: 0.64, y: 0.425 },
-      brake: { view: 'back', x: 0.61, y: 0.57 },
-      braked: { view: 'back', x: 0.617, y: 0.58 },
-      twist: { view: 'back', x: 0.31, y: 0.9 },
-      xy: { view: 'front', x: 0.7, y: 0.8 },
-      h23: { view: 'front', x: 0.81, y: 0.43 },
-      b31: { view: 'front', x: 0.74, y: 0.67 },
-    },
-  },
   // WinCtrl CarrierAce (F/A-18): matched to the WinCtrl diagram; the 'front' photo looks at the rear (castle hat A facing). Rear button = dot above the collar (uncertain).
   'builtin-winctrl-carrierace': {
     views: [{ id: 'front', label: 'Rear', photo: 'winctrl-carrierace-front' }, { id: 'side', label: 'Thumb side', photo: 'winctrl-carrierace-side' }],

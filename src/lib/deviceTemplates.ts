@@ -400,26 +400,46 @@ photoTplExactViews({
 
 /* ------------------------------------------------------------------ VIRPIL */
 const VPC_NOTE = 'Default numbering from the VIRPIL diagrams (1-based: button N = jsX_buttonN). The VPC Configurator can renumber everything: if yours differs, use “Customize a copy”.';
-tpl('virpil-alpha-prime', {
+// Exact photos, view sizes and callouts from Federico's export (2026-10-10); retain the built-in metadata.
+photoTplExactViews({
   id: 'builtin-virpil-alpha-prime', category: 'stick', name: 'VIRPIL Alpha Prime (R) stick', brand: 'VIRPIL', notes: VPC_NOTE,
   match: [{ name: 'Alpha Prime' }],
 }, [
-  c('b13', 'button', b(13), 'Head button (front)', 'Grip head', { side: 'L' }),
-  c('b7', 'button', b(7), 'Head button', 'Grip head', { side: 'L' }),
-  c('mini', 'axis', ['rotx', 'roty'], 'Ministick', 'Grip head', { side: 'L' }),
-  c('minib', 'button', b(6), 'Ministick press', 'Grip head', { art: 'mini', side: 'L' }),
-  c('t1', 'switch', b(1, 2, 3), 'Trigger (flip fwd / stage 1 / stage 2)', 'Grip', { side: 'L' }),
-  c('t4', 'switch', b(4, 5), 'Lower trigger (stage 1 / 2)', 'Grip', { side: 'L' }),
-  c('brake', 'button', b(32), 'Pinky lever (click)', 'Grip', { side: 'L' }),
-  c('braked', 'axis', ['slider1'], 'Pinky lever (analog)', 'Grip', { art: 'brake', side: 'L' }),
-  c('h8', 'hat', b(9, 12, 11, 10, 8), 'Hat (4-way + push)', 'Grip head', { side: 'R' }),
-  c('h14', 'hat', b(15, 18, 17, 16, 14), 'Hat (4-way + push)', 'Grip head', { side: 'R' }),
-  c('r28', 'switch', b(29, 28, 30), 'Rocker (up / push / down)', 'Grip head', { side: 'R' }),
-  c('h23', 'hat', b(24, 27, 26, 25, 23), 'Rear hat (4-way + push)', 'Grip', { side: 'R' }),
-  c('l19', 'switch', b(21, 19, 20, 22), 'Thumb lever (up / press / 2nd stage / down)', 'Grip', { side: 'R' }),
-  c('b31', 'button', b(31), 'Rear button', 'Grip', { side: 'R' }),
-  c('twist', 'axis', ['z'], 'Twist', 'Axes', { side: 'R' }),
-  c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
+  { id: 'front', label: 'Trigger side', photo: 'virpil-alpha-prime-front', width: 1052, height: 863 },
+  { id: 'back', label: 'Thumb side', photo: 'virpil-alpha-prime-back', width: 1089, height: 944 },
+], [
+  { id: 'b13', kind: 'button', inputs: b(13), label: 'Head button (front)', group: 'Grip head', view: 'back',
+    anchor: { x: 0.5288154269972453, y: 0.222 }, box: { x: 0.885, y: 0.16456242433414042 } },
+  { id: 'b7', kind: 'button', inputs: b(7), label: 'Head button', group: 'Grip head', view: 'back',
+    anchor: { x: 0.4759326113116727, y: 0.1154166751437717 }, box: { x: 0.115, y: 0.05 } },
+  { id: 'mini', kind: 'axis', inputs: ['rotx', 'roty'], label: 'Ministick', group: 'Grip head', view: 'back',
+    anchor: { x: 0.3751331496786042, y: 0.159 }, box: { x: 0.115, y: 0.19189936440677968 } },
+  { id: 'minib', kind: 'button', inputs: b(6), label: 'Ministick press', group: 'Grip head', view: 'back',
+    anchor: { x: 0.37484957882069797, y: 0.15986111958821614 }, box: { x: 0.11780982356065733, y: 0.30986111958821616 } },
+  { id: 't1', kind: 'switch', inputs: b(1, 2, 3), label: 'Trigger (flip / stage 1 / 2)', group: 'Grip', view: 'front',
+    anchor: { x: 0.42892935715938213, y: 0.5365277608235677 }, box: { x: 0.17835988107737757, y: 0.57875001695421 } },
+  { id: 't4', kind: 'switch', inputs: b(4, 5), label: 'Lower trigger (stage 1 / 2)', group: 'Grip', view: 'front',
+    anchor: { x: 0.48177676537585423, y: 0.467638905843099 }, box: { x: 0.8562641534827021, y: 0.5443055894639757 } },
+  { id: 'brake', kind: 'button', inputs: b(32), label: 'Pinky lever (click)', group: 'Grip', view: 'front',
+    anchor: { x: 0.4535306960955296, y: 0.7009722391764323 }, box: { x: 0.1482915161410877, y: 0.8365277608235677 } },
+  { id: 'braked', kind: 'axis', inputs: ['slider1'], label: 'Pinky lever (analog)', group: 'Grip', view: 'front',
+    anchor: { x: 0.4535306960955296, y: 0.7009722391764323 }, box: { x: 0.1492027334851936, y: 0.719861094156901 } },
+  { id: 'h8', kind: 'hat', inputs: b(9, 12, 11, 10, 8), label: 'Hat (4-way + push)', group: 'Grip head', view: 'back',
+    anchor: { x: 0.5336943441636582, y: 0.12875001695421007 }, box: { x: 0.875, y: 0.06534632263922519 } },
+  { id: 'h14', kind: 'hat', inputs: b(15, 18, 17, 16, 14), label: 'Hat (4-way + push)', group: 'Grip head', view: 'back',
+    anchor: { x: 0.4471717171717172, y: 0.2 }, box: { x: 0.125, y: 0.43301483050847456 } },
+  { id: 'r28', kind: 'switch', inputs: b(29, 28, 30), label: 'Rocker (up / push / down)', group: 'Grip head', view: 'back',
+    anchor: { x: 0.6848375157472172, y: 0.2520833333333333 }, box: { x: 0.885, y: 0.2580105175544794 } },
+  { id: 'h23', kind: 'hat', inputs: b(24, 27, 26, 25, 23), label: 'Rear hat (4-way + push)', group: 'Grip', view: 'front',
+    anchor: { x: 0.660364381273135, y: 0.41986109415690104 }, box: { x: 0.845330240514664, y: 0.29541668362087675 } },
+  { id: 'l19', kind: 'switch', inputs: b(21, 19, 20, 22), label: 'Thumb lever (up / press / 2nd stage / down)', group: 'Grip', view: 'back',
+    anchor: { x: 0.46157943067033974, y: 0.3 }, box: { x: 0.7820698248063327, y: 0.5765277438693577 } },
+  { id: 'b31', kind: 'button', inputs: b(31), label: 'Rear button', group: 'Grip', view: 'front',
+    anchor: { x: 0.6175398077128417, y: 0.6798611111111111 }, box: { x: 0.8544418578267369, y: 0.7109722561306424 } },
+  { id: 'twist', kind: 'axis', inputs: ['z'], label: 'Twist', group: 'Axes', view: 'front',
+    anchor: { x: 0.6239179120248434, y: 0.9054167005750868 }, box: { x: 0.8617311794828445, y: 0.9243055555555556 } },
+  { id: 'xy', kind: 'axis', inputs: ['x', 'y'], label: 'Stick X / Y', group: 'Axes', view: 'front',
+    anchor: { x: 0.6266514250249146, y: 0.7954166836208767 }, box: { x: 0.3943051835670558, y: 0.9376388549804687 } },
 ]);
 // Supplied VIRPIL diagrams and product photos (2026-10-10). Anchors/boxes authored on the cutout.py photos.
 // Aeromax photos omit the optional throttle modules: SL/DL mark their mounting sides, not visible levers.

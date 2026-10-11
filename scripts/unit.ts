@@ -920,7 +920,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { ...layout, anchors: { ...layout.anchors, [base.callouts[2].id]: { view: 'front', x: 1.5, y: 0.5 } } })), 'coordinates outside 0..1 rejected');
     assert.ok(Array.isArray(dt.withPhotoLayout(base, { views: [], anchors: {} })), 'empty layout rejected');
   });
-  t('device templates (45 devices): own art per device, real numbering where published, unassigned spots elsewhere, links, regions, groups', () => {
+  t('device templates (45 devices): photos per device, real numbering where published, unassigned spots elsewhere, links, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
     assert.equal(DEVICE_TEMPLATES.length, 45, '43 existing + Aeromax and Flanker');
@@ -1298,9 +1298,13 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         name.endsWith('4') ? cm4.id : 'builtin-throttle', 'matching is independent of template order');
     }
   });
-  t('Oct 9 photo templates: exact exported callouts and view sizes, safe VIRPIL matching', () => {
+  t('Oct 9–10 photo templates: exact exported callouts and view sizes, safe VIRPIL matching', () => {
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
     const cases = [
+      ['builtin-virpil-alpha-prime', 'ea9172cf8c8512e36477dcadd7bae8d249d09bbbc0441e817d356ddd19c299f0', [
+        ['front', 'Trigger side', '/device-photos/virpil-alpha-prime-front.webp', 1052, 863],
+        ['back', 'Thumb side', '/device-photos/virpil-alpha-prime-back.webp', 1089, 944],
+      ]],
       ['builtin-virpil-vmax-prime', '177ea8dafe511a6abc272e17f8d01ab88e070c89534ee7b45103a933fff54358', [
         ['left', 'Front Grip', '/device-photos/virpil-vmax-prime-front.webp', 1868, 966],
         ['panel', 'Back Grip and Panel', '/device-photos/virpil-vmax-prime-panel.webp', 2092, 1182],
@@ -1325,7 +1329,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       assert.equal(d.aspect, d.views![0].width / d.views![0].height);
       // Field order independent of the source literal; pins every authored field, including positions and regions.
       const callouts = d.callouts.map((c) => [c.id, c.kind, c.inputs, c.label, c.group, c.view, c.anchor, c.box, c.region, c.inputRegions]);
-      assert.equal(createHash('sha256').update(JSON.stringify(callouts)).digest('hex'), digest, `${id}: exact Oct 9 callouts`);
+      assert.equal(createHash('sha256').update(JSON.stringify(callouts)).digest('hex'), digest, `${id}: exact exported callouts`);
     }
     const vmax = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-virpil-vmax-prime')!;
     const cm4 = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-virpil-t50cm4')!;
@@ -1342,6 +1346,25 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       assert.equal(tp.pickTemplate([d], { vendor: '4098', productId: 'B970', slot: 'js' }).how, 'fallback', `${d.id}: URSA USB id never matches`);
     }
     assert.equal(tp.pickTemplate(all, { vendor: '4098', productId: 'B970', slot: 'js' }).template.id, 'builtin-winctrl-ursa-combat');
+  });
+  t('Alpha Prime: exact exported photo bytes and bounds, original metadata and numbering', () => {
+    const alpha = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-virpil-alpha-prime')!;
+    assert.equal(alpha.name, 'VIRPIL Alpha Prime (R) stick');
+    assert.equal(alpha.brand, 'VIRPIL'); assert.equal(alpha.category, 'stick');
+    assert.deepEqual(alpha.match, [{ name: 'Alpha Prime' }]);
+    assert.equal(alpha.notes, 'Default numbering from the VIRPIL diagrams (1-based: button N = jsX_buttonN). The VPC Configurator can renumber everything: if yours differs, use “Customize a copy”.');
+    assert.equal(alpha.callouts.length, 16);
+    assert.ok(!alpha.loadImage && alpha.callouts.every((c) => !c.region && !c.inputRegions), 'no generated art');
+    assert.ok(alpha.callouts.every((c) => c.label === c.label?.trim()), 'trimmed labels');
+    assert.deepEqual(alpha.callouts.find((c) => c.id === 't1')!.inputs, ['button1', 'button2', 'button3']);
+    assert.deepEqual(alpha.callouts.find((c) => c.id === 'braked')!.inputs, ['slider1']);
+    for (const [photo, hash, size] of [
+      ['virpil-alpha-prime-front', '4e78fbe1fef231f3e9bfb8b560232ecc6e99215bbe91a548ed08362b356dae64', [534, 863, 0.03558, 0.02317, 0.92697, 0.95365]],
+      ['virpil-alpha-prime-back', '8c90eeb666afe194a4a3385fc74498cb974abb5b541cef1b6a26278e4fa05021', [523, 944, 0.04015, 0.02225, 0.91778, 0.95551]],
+    ] as const) {
+      assert.equal(createHash('sha256').update(readFileSync(new URL(`../public/device-photos/${photo}.webp`, import.meta.url))).digest('hex'), hash, `${photo}: exact exported WebP bytes`);
+      assert.deepEqual(DEVICE_PHOTO_SIZES[photo], size, `${photo}: photo size and alpha bounds`);
+    }
   });
     t('Oct 9 ICP, LEGEND and Rotor collectives: photos, categories, diagram numbering and base variants', () => {
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
@@ -1641,6 +1664,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const d = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion')!;
     assert.ok(!d.loadImage && d.views!.length === 2 && d.views!.every((v) => v.image!.startsWith('/device-photos/')), 'Orion uses its two exported photo views');
     assert.deepEqual(DEVICE_TEMPLATES.filter((x) => !x.views?.length).map((x) => x.id), [], 'every device template has a photo layout');
+    assert.equal(DEVICE_TEMPLATES.filter((x) => x.views?.length).length, 45, 'Alpha conversion retains all 45 photo templates');
+    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 83, 'Alpha conversion retains both views: 83 photo views total');
     let calls = 0;
     const lazy = { ...d, id: 'test-lazy-picture', views: undefined, loadImage: async () => { calls++; return 'data:image/svg+xml,<svg/>'; } };
     const r = await tp.resolveTemplateImage(lazy);
