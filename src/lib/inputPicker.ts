@@ -1,7 +1,7 @@
 /* Template editor: the inputs of the device a template is linked to, for picking a callout's input from a list (with which
  * callout already uses each one). Pure (unit-tested). */
 import { GP_AXES, GP_BUTTONS, JS_AXES, isHatRest } from './capture';
-import { HAT_DIRS, calloutTitle, editorMaxInputs, matchScore, type Callout, type DeviceIdentity, type DeviceTemplate } from './templates';
+import { HAT_DIRS, calloutTitle, coveredInputs, editorMaxInputs, matchScore, type Callout, type DeviceIdentity, type DeviceTemplate } from './templates';
 
 /** what is known about the device: from the connected device (Gamepad API: buttons, axes, hats from the axes' rest values)
  * or only the button count of a link rule (device not connected) */
@@ -21,6 +21,21 @@ export function padLayout(axes: readonly number[]): { axes: string[]; hats: numb
   let hats = 0;
   axes.forEach((v, i) => { if (isHatRest(v)) hats++; else if (JS_AXES[i]) names.push(JS_AXES[i]); });
   return { axes: names, hats };
+}
+
+/** Inputs actually reported by a connected pad, in button / POV / axis order. Axis names and POV detection follow capture
+ * and padLayout; unnamed browser axes have no distinct SC id. Gamepad trigger axes are alternatives to buttons 6/7,
+ * not extra browser axes. Extra gamepad buttons use the same buttonN fallback as liveInputs. */
+export function unusedInputs(d: { slot: 'js' | 'gp'; buttons: number; axesRest: readonly number[] }, callouts: readonly Pick<Callout, 'inputs'>[]): string[] {
+  const used = new Set(callouts.flatMap(coveredInputs));
+  if (d.slot === 'gp') {
+    if (used.has('triggerl')) used.add('triggerl_btn');
+    if (used.has('triggerr')) used.add('triggerr_btn');
+  }
+  const buttons = Array.from({ length: d.buttons }, (_, i) => d.slot === 'gp' ? GP_BUTTONS[i] ?? `button${i + 1}` : `button${i + 1}`);
+  const layout = d.slot === 'gp' ? { axes: GP_AXES.slice(0, d.axesRest.length), hats: 0 } : padLayout(d.axesRest);
+  const hats = Array.from({ length: layout.hats }, (_, h) => HAT_DIRS.map((dir) => `hat${h + 1}_${dir}`)).flat();
+  return [...buttons, ...hats, ...layout.axes].filter((i) => !used.has(i));
 }
 
 /** the device inputs for the picker, or null (free typing only): the template must be linked to the device (its rules match

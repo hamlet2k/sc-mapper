@@ -2679,6 +2679,44 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.deepEqual(ip.multiPickRange({ kind: 'buttons', inputs: ['button1', 'button2'] }, 'js'), { min: 2, max: 32 }, 'button rows: up to MAX_CALLOUT_INPUTS');
     assert.equal(ip.multiPickRange({ kind: 'button', inputs: ['button1'] }, 'js'), null);
   });
+  t('unassigned inputs: count empty slots for every callout kind, without inventing optional slots', () => {
+    const cases = [
+      { kind: 'button', inputs: [''], missing: 1 },
+      { kind: 'hat', inputs: ['button1', '', '', 'button4', ''], missing: 3 },
+      { kind: 'switch', inputs: ['', 'button2', ''], missing: 2 },
+      { kind: 'buttons', inputs: ['button1', '', '', 'button4'], missing: 2 },
+      { kind: 'encoder', inputs: ['', 'button2'], missing: 1 },
+      { kind: 'axis', inputs: ['', ''], missing: 2 },
+      { kind: 'axis', inputs: ['x', 'y'], missing: 0 },
+      { kind: 'hat', inputs: tp.hatInputs(1), missing: 0 },
+      { kind: 'button', inputs: ['button1'], missing: 0 },
+      { kind: 'buttons', inputs: [], missing: 0 },
+    ];
+    for (const c of cases) assert.equal(tp.unassignedCount(c), c.missing, `${c.kind}: ${c.inputs.join(',')}`);
+  });
+  t('unused inputs: device counts, exact ids, all callouts and POV directions', () => {
+    const d = { slot: 'js' as const, buttons: 5, axesRest: [0, 0, 0, 0, 0, 0, 0, 0, 9 / 7] };
+    const cs = [{ inputs: ['button2', '', 'button2', 'hat1_up', 'x'] }, { inputs: ['button4', 'y', 'button99'] }];
+    assert.deepEqual(ip.unusedInputs(d, cs), [
+      'button1', 'button3', 'button5', 'hat1_right', 'hat1_down', 'hat1_left', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2',
+    ], 'buttons first in numeric order, then remaining POV directions and axes');
+    assert.deepEqual(ip.unusedInputs({ slot: 'js', buttons: 2, axesRest: [0] }, []), ['button1', 'button2', 'x'], 'do not add absent axes or hats');
+    assert.deepEqual(ip.unusedInputs({ slot: 'js', buttons: 0, axesRest: [] }, cs), []);
+    assert.deepEqual(ip.unusedInputs({ slot: 'js', buttons: 2, axesRest: [0] }, [{ inputs: ['button1', 'button2', 'x'] }]), []);
+    assert.equal(ip.unusedInputs({ slot: 'js', buttons: 133, axesRest: [] }, []).at(-1), 'button133', 'do not impose Chromium button limits');
+    assert.deepEqual(ip.unusedInputs({ slot: 'js', buttons: 0, axesRest: [9 / 7, 0, 3.2857] }, [{ inputs: ['hat1_right'] }]), [
+      'hat1_up', 'hat1_down', 'hat1_left', ...tp.hatInputs(2), 'y',
+    ], 'multiple POVs keep sequential hat ids and other axes keep their browser index');
+    assert.deepEqual(cs, [{ inputs: ['button2', '', 'button2', 'hat1_up', 'x'] }, { inputs: ['button4', 'y', 'button99'] }], 'helper does not mutate inputs');
+  });
+  t('unused inputs: standard gamepad counts, D-pad buttons and analog trigger alternatives', () => {
+    const d = { slot: 'gp' as const, buttons: 17, axesRest: [0, 0, 0, 0] };
+    assert.deepEqual(ip.unusedInputs(d, []), [...cap.GP_BUTTONS, 'button17', ...cap.GP_AXES]);
+    assert.deepEqual(ip.unusedInputs({ ...d, buttons: 2, axesRest: [0, 0] }, [{ inputs: ['a', 'thumblx'] }]), ['b', 'thumbly']);
+    const remaining = ip.unusedInputs(d, [{ inputs: ['triggerl', 'triggerr_btn', ...tp.HAT_DIRS.map((dir) => `dpad_${dir}`)] }]);
+    assert.ok(!remaining.some((i) => /trigger|dpad/.test(i)), 'trigger axes and buttons represent the same physical input; D-pad uses buttons');
+    assert.ok(remaining.includes('thumblx') && !remaining.includes('triggerl'), 'no synthetic trigger axes');
+  });
 }
 
 console.log('\npress to bind (Devices, Edit mode)');

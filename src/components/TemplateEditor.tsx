@@ -1,11 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { GP_AXES, GP_BUTTONS, JS_AXES } from '../lib/capture';
+import { GP_AXES, GP_BUTTONS, JS_AXES, isHatRest } from '../lib/capture';
 import { getPads, padLabel, type PadInfo, type PadLike } from '../lib/devices';
-import { deviceInputs, multiPickRange, pickEntries, usage, type DeviceInputs, type PickEntry } from '../lib/inputPicker';
+import { deviceInputs, multiPickRange, pickEntries, unusedInputs, usage, type DeviceInputs, type PickEntry } from '../lib/inputPicker';
+import { keyLabel } from '../lib/inputs';
 import { usePadHits, type PressHit } from '../lib/listen';
 import {
   BLANK_ASPECT, CALLOUT_KINDS, HAT_DIRS, editorMaxInputs, parseButtonRange, calloutFor, calloutTitle, coveredInputs, freeBoxSpot, hatInputs, inputRole, inputsForKind, isAxisInput, isButtonInput,
-  calloutView, loadImageFile, matchFor, matchScore, shortInput, templateViews, uid, usedInputs, viewTemplate, type Callout, type CalloutKind, type DeviceIdentity, type DeviceTemplate, type Pt,
+  calloutView, loadImageFile, matchFor, matchScore, shortInput, templateViews, uid, unassignedCount, usedInputs, viewTemplate, type Callout, type CalloutKind, type DeviceIdentity, type DeviceTemplate, type Pt,
 } from '../lib/templates';
 import { MAX_PAGES, addPage, deletePage, movePage, pageCallouts, pageLabel, renamePage, setPageImage } from '../lib/templatePages';
 import { CalloutBody, DeviceCanvas, useLiveInputs, type CalloutState, type Entry } from './DeviceCanvas';
@@ -34,6 +35,31 @@ const INPUT_RE = /^[a-z][a-z0-9_]{0,24}$/;
 const numIn = (v: string) => { const t = v.trim().toLowerCase(); return /^\d{1,3}$/.test(t) && Number(t) > 0 ? `button${Number(t)}` : t; };
 const field = 'min-w-0 rounded border border-edge bg-panel2 px-1.5 py-0.5 text-xs text-slate-200';
 
+/** Keep reported counts and POV classification current, including hats first seen while held. Retain each axis's resting
+ * report until disconnect so moving a POV does not turn its directions into a normal axis in the inventory. */
+function usePadInventory(pad?: PadInfo) {
+  const index = pad?.index, deviceId = pad?.id;
+  type Inventory = { index: number; buttons: number; axesRest: number[] };
+  const [inventory, setInventory] = useState<Inventory | null>(null);
+  useEffect(() => {
+    if (index === undefined) return;
+    let previous: Inventory | null = null;
+    const tick = () => {
+      const g = getPads().find((p) => p.index === index);
+      if (!g) { previous = null; setInventory(null); return; }
+      const axesRest = g.axes.map((v, i) => isHatRest(v) ? v : previous?.axesRest[i] ?? v);
+      if (previous && previous.buttons === g.buttons.length && previous.axesRest.length === axesRest.length &&
+          axesRest.every((v, i) => isHatRest(v) === isHatRest(previous!.axesRest[i]))) return;
+      previous = { index: g.index, buttons: g.buttons.length, axesRest };
+      setInventory(previous);
+    };
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [index, deviceId]);
+  return inventory?.index === index ? inventory : null;
+}
+
 /** create / edit a device template: image, callouts (click or press to place, drag anchor and label), device link, export */
 export function TemplateEditor({ initial, describe, device, slotInstance, entriesFor, renderLabel, onSave, onCancel, onDelete, notify }: Props) {
   const [t, setT] = useState<DeviceTemplate>(initial);
@@ -53,6 +79,7 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   const tRef = useRef(t);
   useEffect(() => { tRef.current = t; }, [t]);
   const live = useLiveInputs(device.pad);
+  const inventory = usePadInventory(device.pad);
   // multi-view templates: the view shown (tabs); new callouts go on it. Single-view templates have no tabs.
   const multi = !!t.views?.length;
   const [viewSel, setViewSel] = useState<string>(() => templateViews(initial)[0].id);
@@ -183,9 +210,15 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
   const canSave = t.name.trim().length > 0;
   const linked = matchScore(t, device.ident) > 0;
   // the linked device's inputs for the callout input pickers (axes / POV hats from the connected device's axis rest values)
-  const [axesRest] = useState(() => (device.pad ? getPads().find((g) => g.index === device.pad!.index)?.axes : undefined));
-  const devIn = deviceInputs(t, device.ident, device.pad && { buttons: device.pad.buttons, axesRest, name: padLabel(device.pad) });
+  const devIn = deviceInputs(t, device.ident, device.pad && inventory ? { ...inventory, name: padLabel(device.pad) } : undefined);
   const devName = device.pad ? padLabel(device.pad) : device.ident.name;
+  const unused = inventory && device.pad?.kind === t.slot ? unusedInputs({ ...inventory, slot: t.slot }, t.callouts) : null;
+  const unnamedAxes = inventory?.axesRest.filter((v, i) => t.slot === 'gp' ? !GP_AXES[i] : !isHatRest(v) && !JS_AXES[i]).length ?? 0;
+  const incomplete = t.callouts.filter((c) => unassignedCount(c) > 0);
+  const selectNextUnassigned = () => {
+    const idx = incomplete.findIndex((c) => c.id === sel);
+    setSel(incomplete[(idx + 1) % incomplete.length].id);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-void/95 backdrop-blur" data-testid="template-editor"
@@ -303,6 +336,29 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
           {!t.callouts.length && <p className="mt-2 text-xs text-slate-500">No callouts yet: click on the picture, or use “Press to place” and press each control of your device.</p>}
         </div>
         <aside className="w-80 shrink-0 space-y-3 overflow-y-auto border-l border-edge bg-panel/60 p-3 text-xs scrollbar-thin">
+          {incomplete.length > 0 && <div data-testid="tpl-unassigned-summary" className="flex items-center gap-2 rounded border border-mod/30 bg-mod/5 p-2 text-[11px] text-mod">
+            <span className="flex-1">{incomplete.length} callout{incomplete.length === 1 ? ' has' : 's have'} unassigned inputs</span>
+            <button type="button" onClick={selectNextUnassigned} aria-label="Select next callout with unassigned inputs" className="shrink-0 rounded border border-mod/40 px-1.5 py-0.5 hover:bg-mod/10">Next</button>
+          </div>}
+          {unused !== null && <section data-testid="tpl-unused-inputs" className="space-y-1.5 rounded border border-edge/60 bg-black/20 p-2.5">
+            <h4 className="font-display text-xs font-bold uppercase tracking-wider text-slate-400">Not on any callout <span className="font-mono tracking-normal">({unused.length})</span></h4>
+            <p className="text-[10px] text-slate-500">Click to add a callout, then drag it into place.</p>
+            {unused.length ? <div className="grid max-h-44 grid-cols-3 gap-1 overflow-y-auto scrollbar-thin">
+              {unused.map((input) => <button key={input} type="button" data-input={input} data-active={live.active.has(input) ? '1' : undefined}
+                title={`${input} · Add a callout`} aria-label={`Add callout for ${keyLabel(input, t.slot)}`}
+                onClick={() => {
+                  setPressTarget(null); setPressPlace(false);
+                  const n = tRef.current.callouts.length;
+                  // Add only this input, so a partially covered hat / stick never duplicates its other directions / axes.
+                  const axis = (tRef.current.slot === 'gp' ? GP_AXES : JS_AXES).includes(input);
+                  addCallout(axis ? 'axis' : 'button', [input], { x: 0.42 + (n % 5) * 0.04, y: 0.42 + (Math.floor(n / 5) % 5) * 0.04 });
+                }}
+                className={`truncate rounded border px-1.5 py-1 text-[10px] transition-colors ${live.active.has(input) ? 'border-hud bg-hud/20 text-hud2' : 'border-edge text-slate-400 hover:border-hud/60 hover:text-slate-200'}`}>
+                {keyLabel(input, t.slot)}
+              </button>)}
+            </div> : <p className="text-[11px] text-ok">All named inputs are on a callout.</p>}
+            {unnamedAxes > 0 && <p className="text-[10px] text-slate-500">{unnamedAxes} browser {unnamedAxes === 1 ? 'axis has' : 'axes have'} no standard SC input ID{t.slot === 'js' ? '; use Press to place to choose the game axis.' : '.'}</p>}
+          </section>}
           {selC ? (
             <section className="space-y-2 rounded border border-mod/40 bg-black/30 p-2.5" data-testid="callout-props">
               <div className="flex items-center gap-2">
@@ -359,10 +415,11 @@ export function TemplateEditor({ initial, describe, device, slotInstance, entrie
             <h4 className="font-display text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Callouts ({t.callouts.length})</h4>
             <ul className="mt-1 max-h-72 space-y-0.5 overflow-y-auto scrollbar-thin" data-testid="tpl-callouts">
               {t.callouts.map((c) => (
-                <li key={c.id}>
+                <li key={c.id} data-callout-id={c.id}>
                   <button type="button" onClick={() => setSel(c.id)} className={`flex w-full items-center gap-2 rounded px-1.5 py-0.5 text-left ${sel === c.id ? 'bg-mod/15 text-mod' : 'hover:bg-white/5'}`}>
                     <span className="font-mono">{calloutTitle(c)}</span>
                     <span className="truncate text-[10px] text-slate-500">{c.kind}{c.group ? ` · ${c.group}` : ''} · {c.inputs.map(shortInput).join(' ')}</span>
+                    {unassignedCount(c) > 0 && <span className="ml-auto shrink-0 rounded border border-mod/30 bg-mod/10 px-1 text-[9px] text-mod">{unassignedCount(c)} unassigned</span>}
                   </button>
                 </li>
               ))}

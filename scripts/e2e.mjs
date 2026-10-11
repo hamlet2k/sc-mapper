@@ -3565,6 +3565,144 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
   }
 }
 
+// Template editor: incomplete callouts and the connected device's unused inputs (isolated storage).
+{
+  const qualityContext = await browser.newContext({ viewport: { width: 1680, height: 1000 } });
+  const qp = await qualityContext.newPage();
+  qp.on('pageerror', (e) => errors.push(String(e)));
+  await qp.addInitScript(() => {
+    const buttons = (n) => Array.from({ length: n }, () => ({ pressed: false, touched: false, value: 0 }));
+    const pads = [
+      { index: 0, id: 'VKBsim Gladiator EVO R (Vendor: 231d Product: 0200)', mapping: '', connected: true,
+        buttons: buttons(8), axes: [0, 0, 0, 0, 0, 0, 0, 0, 9 / 7], timestamp: 1 },
+      { index: 1, id: 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)', mapping: 'standard', connected: true,
+        buttons: buttons(17), axes: [0, 0, 0, 0], timestamp: 1 },
+    ];
+    let revealed = false;
+    window.__btn = (i, b, on) => { pads[i].buttons[b] = { pressed: on, touched: on, value: on ? 1 : 0 }; pads[i].timestamp++; if (on) revealed = true; };
+    window.__axis = (i, a, v) => { pads[i].axes[a] = v; pads[i].timestamp++; };
+    window.__hide = () => { revealed = false; };
+    navigator.getGamepads = () => revealed ? pads.map((p) => ({ ...p, buttons: p.buttons.map((b) => ({ ...b })), axes: [...p.axes] })) : [];
+  });
+  try {
+    await qp.goto(url, { waitUntil: 'networkidle' });
+    await qp.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+    await qp.evaluate(() => window.__btn(0, 7, true));
+    await qp.waitForTimeout(500);
+    await qp.evaluate(() => window.__btn(0, 7, false));
+    await qp.locator('[data-view-tab=devices]').click();
+    await qp.getByTestId('sidebar-slots').locator('[data-slot-row="js1"]').click();
+    const specs = [
+      ['assigned', 'button', ['button1'], 'front', 0],
+      ['blank-button', 'button', [''], 'front', 1],
+      ['partial-switch', 'switch', ['button2', ''], 'front', 1],
+      ['partial-row', 'buttons', ['', 'button5', ''], 'front', 2],
+      ['partial-encoder', 'encoder', ['', 'button6'], 'front', 1],
+      ['partial-hat', 'hat', ['button3', '', '', 'button4'], 'back', 2],
+      ['partial-axis', 'axis', ['x', ''], 'back', 1],
+    ];
+    const fixture = { version: 1, id: 'editor-quality-test', name: 'Editor quality test', slot: 'js', aspect: 1.6,
+      match: [{ vendor: '231d', product: '0200' }],
+      views: ['front', 'back'].map((id) => ({ id, label: id, width: 1600, height: 1000 })),
+      callouts: specs.map(([id, kind, inputs, view], i) => ({ id, kind, inputs, view, label: id,
+        anchor: { x: 0.45, y: 0.15 + (i % 5) * 0.15 }, box: { x: 0.12, y: 0.15 + (i % 5) * 0.15 } })) };
+    await qp.getByTestId('template-import-file').setInputFiles({ name: 'editor-quality.sc-template.json', mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify({ version: 1, templates: [fixture] })) });
+    const qv = qp.getByTestId('device-view');
+    await qv.getByTestId('template-select').selectOption(fixture.id);
+    check(await qv.locator('[data-callout][data-unassigned-count]').count() === 0, 'Devices canvas has no editor-only incomplete markers');
+    await qv.getByTestId('template-edit').click();
+    const qe = qp.getByTestId('template-editor');
+    const unused = qe.getByTestId('tpl-unused-inputs');
+    await unused.waitFor();
+    check(/not on any callout/i.test(await unused.innerText()), 'connected editor shows the unused-input section');
+    const ids = await unused.locator('[data-input]').evaluateAll((els) => els.map((el) => el.dataset.input));
+    check(ids.join() === ['button7', 'button8', 'hat1_up', 'hat1_right', 'hat1_down', 'hat1_left', 'y', 'z', 'rotx', 'roty', 'rotz', 'slider1', 'slider2'].join(),
+      'unused inputs use reported counts, exclude inputs on every page, and sort buttons / POV / axes');
+    check(/6 callouts have unassigned inputs/i.test(await qe.getByTestId('tpl-unassigned-summary').innerText()), 'summary counts incomplete callouts across pages');
+    for (const [id, , , , missing] of specs) {
+      const row = qe.getByTestId('tpl-callouts').locator(`[data-callout-id="${id}"]`);
+      check(missing ? new RegExp(`${missing} unassigned`, 'i').test(await row.innerText()) : !/unassigned/i.test(await row.innerText()), `${id}: list badge counts empty slots`);
+    }
+    for (const view of ['front', 'back']) {
+      await qe.locator(`[data-view-tab="${view}"]`).click();
+      for (const [id, , , pageId, missing] of specs.filter((s) => s[3] === view)) {
+        const card = qe.locator(`[data-callout="${id}"]`);
+        check(await card.getAttribute('data-unassigned-count') === (missing ? String(missing) : null), `${pageId} ${id}: canvas marker matches empty-slot count`);
+        if (missing) check(await card.locator('[aria-label*="unassigned input"]').count() === 1 && await card.locator('.outline-dashed').count() === 1, `${id}: amber dashed outline and accessible marker`);
+      }
+    }
+    await qp.waitForTimeout(350); // axis baseline settles before testing movement
+    await qp.evaluate(() => { window.__btn(0, 6, true); window.__axis(0, 1, 0.8); window.__axis(0, 8, -3 / 7); });
+    for (const input of ['button7', 'y', 'hat1_right']) {
+      await unused.locator(`[data-input="${input}"][data-active="1"]`).waitFor();
+      check(true, `unused ${input} lights live`);
+    }
+    await qp.evaluate(() => { window.__btn(0, 6, false); window.__axis(0, 1, 0); window.__axis(0, 8, 9 / 7); });
+    await qp.waitForFunction(() => !document.querySelector('[data-testid=tpl-unused-inputs] [data-active="1"]'));
+    await unused.locator('[data-input="button7"]').click();
+    check(await qe.getByTestId('tpl-callouts').locator('li').count() === 8 && await qe.getByLabel('Input input').inputValue() === 'button7', 'chip adds and selects a new callout on the active page');
+    check(await unused.locator('[data-input="button7"]').count() === 0, 'added input immediately leaves the unused list');
+    await qe.getByTestId('tpl-undo').click();
+    check(await qe.getByTestId('tpl-callouts').locator('li').count() === 7 && await unused.locator('[data-input="button7"]').count() === 1, 'Undo restores unused input');
+    await unused.locator('[data-input="y"]').click();
+    check(await qe.getByLabel('Axis 1').inputValue() === 'y' && await qe.getByLabel('Axis 2').count() === 0 && await unused.locator('[data-input="y"]').count() === 0,
+      'axis chip adds only that axis, without duplicating the already assigned X axis');
+    await qe.getByTestId('tpl-undo').click();
+    await unused.locator('[data-input="hat1_right"]').click();
+    check(await qe.getByLabel('Input input').inputValue() === 'hat1_right' && await unused.locator('[data-input^="hat1_"]').count() === 3,
+      'POV chip adds only the chosen direction');
+    await qe.getByTestId('tpl-undo').click();
+    for (const [id, , , view] of specs.filter((s) => s[4])) {
+      await qe.getByRole('button', { name: /select next callout with unassigned inputs/i }).click();
+      check(await qe.locator(`[data-callout="${id}"]`).getAttribute('data-selected') === '1' && await qe.locator(`[data-view="${view}"]`).isVisible(), `Next selects ${id} and its page`);
+    }
+    await qe.getByRole('button', { name: /select next callout with unassigned inputs/i }).click();
+    check(await qe.locator('[data-callout="blank-button"]').getAttribute('data-selected') === '1', 'Next wraps to first incomplete callout');
+    await qe.getByLabel('Input input').fill('7');
+    await qe.getByLabel('Input input').press('Enter');
+    check(await qe.locator('[data-callout="blank-button"]').getAttribute('data-unassigned-count') === null && /5 callouts have unassigned inputs/i.test(await qe.getByTestId('tpl-unassigned-summary').innerText()), 'assigning the last empty slot clears marker and updates summary');
+    check(!/unassigned/i.test(await qe.getByTestId('tpl-callouts').locator('[data-callout-id="blank-button"]').innerText()) && await unused.locator('[data-input="button7"]').count() === 0, 'assignment updates list badge and unused chips');
+    await qe.getByTestId('tpl-undo').click();
+    check(await qe.locator('[data-callout="blank-button"]').getAttribute('data-unassigned-count') === '1', 'Undo restores incomplete marker');
+    await qe.getByTestId('tpl-save').click();
+    await qe.waitFor({ state: 'detached' });
+    check(await qv.locator('[data-callout][data-unassigned-count]').count() === 0, 'saved incomplete template keeps Devices canvas appearance');
+    await qv.getByTestId('template-edit').click();
+    await qe.getByTestId('tpl-unused-inputs').waitFor();
+    await qp.evaluate(() => window.__hide());
+    await qe.getByTestId('tpl-unused-inputs').waitFor({ state: 'detached' });
+    check(true, 'disconnect hides the unused-input section');
+    await qe.getByRole('button', { name: /^cancel$/i }).click();
+    await qv.getByTestId('template-edit').click();
+    check(await qe.getByTestId('tpl-unused-inputs').count() === 0, 'offline editor has no unused-input section');
+    await qe.getByRole('button', { name: /^cancel$/i }).click();
+    await qp.evaluate(() => window.__btn(1, 0, true));
+    await qp.waitForTimeout(500);
+    await qp.evaluate(() => window.__btn(1, 0, false));
+    await qp.getByTestId('sidebar-slots').locator('[data-slot-row="gp1"]').click();
+    await qv.getByTestId('template-new').click();
+    await unused.waitFor();
+    check(await unused.locator('[data-input]').count() === 21 && await unused.locator('[data-input="dpad_up"]').count() === 1 && await unused.locator('[data-input="button17"]').count() === 1,
+      'gamepad inventory uses named buttons, D-pad, actual axis count and live extra-button fallback');
+    await unused.locator('[data-input="x"]').click();
+    check(await qe.getByLabel('Callout type', { exact: true }).inputValue() === 'button' && await qe.getByLabel('Input input').inputValue() === 'x',
+      'gamepad X is a button, not the joystick X axis');
+    await qe.getByTestId('tpl-undo').click();
+    await qp.waitForTimeout(350);
+    await qp.evaluate(() => { window.__btn(1, 12, true); window.__axis(1, 3, 0.8); });
+    await unused.locator('[data-input="dpad_up"][data-active="1"]').waitFor();
+    await unused.locator('[data-input="thumbry"][data-active="1"]').waitFor();
+    check(true, 'gamepad D-pad and axes light live with SC ids');
+    await qp.evaluate(() => { window.__btn(1, 12, false); window.__axis(1, 3, 0); });
+    await unused.locator('[data-input="dpad_up"]').click();
+    check(await unused.locator('[data-input^="dpad_"]').count() === 3 && await qe.getByLabel('Input input').inputValue() === 'dpad_up', 'D-pad chip adds only that direction, leaving the other three unused');
+    await qe.getByRole('button', { name: /^cancel$/i }).click();
+  } finally {
+    await qualityContext.close();
+  }
+}
+
 // persistence
 await page.reload({ waitUntil: 'networkidle' });
 log('profile after reload:', await page.locator('#profile option:checked').innerText());

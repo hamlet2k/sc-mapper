@@ -3,7 +3,7 @@ import { isHatRest, snapshot } from '../lib/capture';
 import { getPads, type PadInfo } from '../lib/devices';
 import { firingRows, liveFirst } from '../lib/liveRows';
 import { chooseLayoutWidth, layoutCallouts, type LayoutBox } from '../lib/calloutLayout';
-import { BUILTIN_PHOTO_RE, calloutTitle, coveredInputs, imageSrc, inputRole, liveInputs, shortInput, splitCombo, viewTemplate, type Callout, type DeviceTemplate, type Pt } from '../lib/templates';
+import { BUILTIN_PHOTO_RE, calloutTitle, coveredInputs, imageSrc, inputRole, liveInputs, shortInput, splitCombo, unassignedCount, viewTemplate, type Callout, type DeviceTemplate, type Pt } from '../lib/templates';
 import type { Binding, Row } from '../lib/types';
 import { Ico } from './icons';
 
@@ -374,13 +374,16 @@ function ViewCanvas({ template: t, stateOf, renderLabel, selected, onSelect, edi
       ))}
       {t.callouts.map((c) => {
         const s = stateOf(c);
+        const missing = editable ? unassignedCount(c) : 0;
         return (
-          <div key={c.id} data-callout={c.id} data-active={s.active ? '1' : undefined} data-dim={s.dim ? '1' : undefined} data-tone={s.tone} data-selected={selected === c.id ? '1' : undefined}
+          <div key={c.id} data-callout={c.id} data-unassigned-count={missing || undefined} data-active={s.active ? '1' : undefined} data-dim={s.dim ? '1' : undefined} data-tone={s.tone} data-selected={selected === c.id ? '1' : undefined}
             onPointerDown={start(c.id, 'box')} onClick={(e) => e.stopPropagation()}
             className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 ${editable ? 'cursor-move' : 'cursor-pointer'} ${s.dim ? 'opacity-30' : ''}`}
             style={{ ...scrollStyle, left: `${bx(c) * 100}%`, top: `${by(c) * 100}%` }}>
-            <div className={`rounded-md border bg-panel/95 px-1.5 py-1 text-[10px] leading-tight shadow-lg transition ${TONE_CLS[s.tone]} ${s.active ? '!border-hud bg-[#0d3550] shadow-[0_0_14px_rgba(79,216,255,.55)]' : ''} ${selected === c.id ? 'ring-2 ring-mod/70' : ''}`}>
+            <div className={`rounded-md border bg-panel/95 px-1.5 py-1 text-[10px] leading-tight shadow-lg transition ${TONE_CLS[s.tone]} ${s.active ? '!border-hud bg-[#0d3550] shadow-[0_0_14px_rgba(79,216,255,.55)]' : ''} ${selected === c.id ? 'ring-2 ring-mod/70' : ''} ${missing ? 'outline-1 outline-dashed outline-offset-2 outline-mod/80' : ''}`}>
               {renderLabel(c, s)}
+              {missing > 0 && <span title={`${missing} unassigned input${missing === 1 ? '' : 's'}`} aria-label={`${missing} unassigned input${missing === 1 ? '' : 's'}`}
+                className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-mod/70 bg-panel text-[10px] font-bold text-mod">!</span>}
             </div>
           </div>
         );
@@ -468,12 +471,12 @@ export function CalloutBody({ c, s, entriesFor, live, keyMods }: { c: Callout; s
     return (
       <div className="min-w-[120px]">
         {head}
-        {c.inputs.slice(0, 2).map((i) => {
+        {c.inputs.slice(0, 2).map((i, k) => {
           const v = live.values[i];
           const es = [...entriesFor(i), ...coveredInputs({ inputs: [i] }).slice(1).flatMap(entriesFor)];
           const rows = liveFirst(es, (e) => firing.has(e), 2);
           return (
-            <div key={i} className="mt-0.5">
+            <div key={k} className="mt-0.5">
               <div className="flex items-center gap-1">
                 {c.inputs.length > 1 && <span className="w-5 font-mono text-[9px] text-slate-500">{shortInput(i)}</span>}
                 <span className="relative h-1.5 w-24 rounded bg-black/60" data-axis-live={i} data-value={v === undefined ? undefined : v.toFixed(2)}>
