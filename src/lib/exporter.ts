@@ -8,7 +8,7 @@ import type { DefaultsData, Group, Profile, Rebind } from './types';
 
 export type ExportFormat = 'layout' | 'actionmaps';
 /** devices to declare besides the ones the bindings use (game slots, slots.ts): joysticks / gamepads, and extra keyboards / mice (instance 2+) */
-export interface ExportDevice { type: 'joystick' | 'gamepad' | 'keyboard' | 'mouse'; instance: number; product?: string }
+export interface ExportDevice { type: 'joystick' | 'gamepad' | 'keyboard' | 'mouse'; instance: number; product?: string; unknown?: boolean }
 export interface ExportOptions { format: ExportFormat; name: string; devices?: ExportDevice[] }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -30,12 +30,12 @@ function rebindLine(r: Rebind): string {
 /** Which joystick / gamepad instances the rebinds reference */
 export function usedInstances(p: Profile) {
   const js = new Set<number>();
-  let gp = false;
+  const gpInstances = new Set<number>();
   for (const acts of Object.values(p.rebinds)) for (const list of Object.values(acts)) for (const r of list) {
     if (r.slot === 'js' && r.input) js.add(r.instance);
-    if (r.slot === 'gp') gp = true;
+    if (r.slot === 'gp') gpInstances.add(r.instance);
   }
-  return { js: [...js].sort((a, b) => a - b), gp };
+  return { js: [...js].sort((a, b) => a - b), gp: gpInstances.size > 0, gpInstances: [...gpInstances].sort((a, b) => a - b) };
 }
 
 export function buildExport(defaults: DefaultsData, profile: Profile, o: ExportOptions): string {
@@ -68,8 +68,13 @@ export function buildExport(defaults: DefaultsData, profile: Profile, o: ExportO
   // ---- devices referenced
   const used = usedInstances(profile);
   const extra = o.devices ?? [];
-  const jsInst = [...new Set([...used.js, ...extra.filter((d) => d.type === 'joystick').map((d) => d.instance)])].sort((a, b) => a - b);
-  const hasGp = used.gp || extra.some((d) => d.type === 'gamepad') || profile.devices.some((d) => d.slot === 'gp');
+  const jsInst = [...new Set([...used.js, ...extra.filter((d) => d.type === 'joystick').map((d) => d.instance), ...profile.devices.filter((d) => d.slot === 'js' && d.unknown).map((d) => d.instance)])].sort((a, b) => a - b);
+  const gpInst = [...new Set([...used.gpInstances, ...extra.filter((d) => d.type === 'gamepad').map((d) => d.instance), ...profile.devices.filter((d) => d.slot === 'gp').map((d) => d.instance)])].sort((a, b) => a - b);
+  const unnamed = new Set([
+    ...profile.devices.filter((d) => d.unknown).map((d) => `${d.slot === 'js' ? 'joystick' : 'gamepad'}:${d.instance}`),
+    ...extra.filter((d) => d.unknown).map((d) => `${d.type}:${d.instance}`),
+  ]);
+  const isUnknown = (type: string, inst: number) => unnamed.has(`${type}:${inst}`);
   const extraKm = extra.filter((d) => (d.type === 'keyboard' || d.type === 'mouse') && d.instance > 1)
     .sort((a, b) => a.type.localeCompare(b.type) || a.instance - b.instance);
 
@@ -80,7 +85,7 @@ export function buildExport(defaults: DefaultsData, profile: Profile, o: ExportO
     L.push('   <keyboard instance="1"/>');
     L.push('   <mouse instance="1"/>');
     for (const d of extraKm) L.push(`   <${d.type} instance="${d.instance}"/>`);
-    if (hasGp) L.push('   <gamepad instance="1"/>');
+    for (const i of gpInst) L.push(`   <gamepad instance="${i}"/>`);
     for (const i of jsInst) L.push(`   <joystick instance="${i}"/>`);
     L.push('  </devices>');
     const cats: string[] = [];
@@ -98,18 +103,19 @@ export function buildExport(defaults: DefaultsData, profile: Profile, o: ExportO
 
   // ---- device settings: imported blocks are kept as they were (edited values updated), missing devices are added
   const settings = settingsOf(profile);
-  const optBlocks = settings.blocks.filter((b): b is OptionsBlock => b.tag === 'options');
+  const optBlocks = settings.blocks.filter((b): b is OptionsBlock => b.tag === 'options' && !isUnknown(blockType(b), blockInstance(b)));
   const has = (type: string, inst: number) => optBlocks.some((b) => blockType(b) === type && blockInstance(b) === inst);
   for (const b of settings.blocks) if (b.tag === 'deviceoptions') L.push(...serializeBlock(b, base));
   if (!has('keyboard', 1)) L.push(`${base}<options type="keyboard" instance="1" Product="${esc(KEYBOARD_PRODUCT)}"/>`);
   for (const d of extraKm) if (!has(d.type, d.instance)) L.push(`${base}<options type="${d.type}" instance="${d.instance}"${d.product ? ` Product="${esc(d.product)}"` : ''}/>`);
   for (const b of optBlocks) L.push(...serializeBlock(b, base));
-  if (hasGp && !has('gamepad', 1)) {
-    const p = extra.find((d) => d.type === 'gamepad')?.product;
-    L.push(`${base}<options type="gamepad" instance="1"${p ? ` Product="${esc(p)}"` : ''}/>`);
+  for (const i of gpInst) {
+    if (has('gamepad', i) || isUnknown('gamepad', i)) continue;
+    const p = extra.find((d) => d.type === 'gamepad' && d.instance === i)?.product;
+    L.push(`${base}<options type="gamepad" instance="${i}"${p ? ` Product="${esc(p)}"` : ''}/>`);
   }
   for (const i of jsInst) {
-    if (has('joystick', i)) continue;
+    if (has('joystick', i) || isUnknown('joystick', i)) continue;
     const p = extra.find((d) => d.type === 'joystick' && d.instance === i)?.product;
     L.push(`${base}<options type="joystick" instance="${i}"${p ? ` Product="${esc(p)}"` : ''}/>`);
   }

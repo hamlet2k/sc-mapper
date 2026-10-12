@@ -21,7 +21,7 @@ function containerOf(text: string): Element {
   const profiles = Array.from(doc.getElementsByTagName('ActionProfiles'));
   return profiles.find((p) => p.getAttribute('profileName') === 'default') ?? profiles[0] ?? doc.documentElement;
 }
-/** the device list (<options type=… instance=… Product=…>) in file order */
+/** named devices in file order, then binding instances the game hasn't named (including explicit clears) */
 function devicesOf(container: Element): ProfileDevice[] {
   const devices: ProfileDevice[] = [];
   for (const o of Array.from(container.children).filter((c) => c.tagName === 'options')) {
@@ -30,9 +30,21 @@ function devicesOf(container: Element): ProfileDevice[] {
     const raw = o.getAttribute('Product') ?? '';
     if (slot && product) devices.push({ slot, instance: Number(o.getAttribute('instance')) || 1, product, ...(raw.trim() !== product ? { rawProduct: raw } : {}) });
   }
+  const seen = new Set(devices.map((d) => `${d.slot}${d.instance}`));
+  for (const am of Array.from(container.getElementsByTagName('actionmap'))) {
+    for (const rb of Array.from(am.getElementsByTagName('*'))) {
+      if (rb.tagName !== 'rebind' && rb.tagName !== 'addbind') continue;
+      const p = parseRebindInput(rb.getAttribute('input') ?? '');
+      if (!p || (p.slot !== 'js' && p.slot !== 'gp') || !Number.isSafeInteger(p.instance) || p.instance < 1) continue;
+      const key = `${p.slot}${p.instance}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      devices.push({ slot: p.slot, instance: p.instance, product: '', unknown: true });
+    }
+  }
   return devices;
 }
-/** "Refresh game state": only the game's device list (instance -> product) of an actionmaps.xml / layout export; bindings are ignored */
+/** "Refresh game state": read device identities, using binding prefixes to discover unnamed devices; bindings aren't imported */
 export function parseDeviceList(text: string): ProfileDevice[] {
   return devicesOf(containerOf(text));
 }

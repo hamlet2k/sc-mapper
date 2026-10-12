@@ -76,6 +76,28 @@ for (const q of ['quantum', 'mining', 'lalt+n', 'key:f', 'mouse2', 'qntm']) {
 }
 await search.fill('');
 
+// Binding instances above the game's eight named joystick options must be visible immediately (isolated storage).
+{
+  const unknownContext = await browser.newContext({ viewport: { width: 1680, height: 1000 } });
+  const up = await unknownContext.newPage();
+  up.on('pageerror', (e) => errors.push(String(e)));
+  try {
+    await up.goto(url, { waitUntil: 'networkidle' });
+    await up.locator('input[type=file]').first().setInputFiles('scripts/fixtures/actionmaps-js9-plus.xml');
+    const deviceList = up.getByTestId('sidebar-slots');
+    await deviceList.locator('[data-slot-row="js9"]').waitFor();
+    check(/js9/i.test(await deviceList.innerText()), 'imported js9 bindings appear in the left device list');
+    check(/unidentified device/i.test(await deviceList.locator('[data-slot-row="js9"]').innerText()), 'js9 has a clear unidentified device label');
+    await deviceList.locator('[data-slot-row="js9"]').click();
+    await up.getByTestId('device-unidentified').waitFor();
+    await up.getByTestId('assign-unidentified-device').click();
+    const row = up.getByTestId('controllers-panel').locator('[data-testid="slot-row"][data-slot="js9"]');
+    check(await row.getByTestId('slot-hw').isVisible(), 'unidentified device opens the existing assignment dialog at js9');
+  } finally {
+    await unknownContext.close();
+  }
+}
+
 // Import via the real file input (same path as the Import XML button)
 await page.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
 await page.waitForTimeout(500);

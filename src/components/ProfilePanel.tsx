@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { isController, slotDeviceName, slotId, type GameSlot } from '../lib/slots';
+import { UNKNOWN_DEVICE_HINT, isController, slotDeviceName, slotId, type GameSlot } from '../lib/slots';
 import type { Profile } from '../lib/types';
 import { DROP_HINT, GamePathHint } from './GameState';
 import { Tip } from './Tooltip';
@@ -86,6 +86,7 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
         )}
         {slots.length ? <SlotList slots={slots} connected={connected} picker={picker} />
           : <p className="mt-1 text-[11px] text-slate-500">{profile ? 'No game slots yet.' : 'Import a profile to fill these in, or add them by hand.'}</p>}
+        {slots.some((s) => s.unknown) && <p className="mt-2 text-[10px] text-mod" data-testid="unknown-device-hint">{UNKNOWN_DEVICE_HINT}</p>}
         <button type="button" onClick={onOpenSlots} data-testid="open-slots" title="Which device is kb1, js1, js2, gp1… in the game, the hardware for each and its template"
           className="mt-2.5 flex w-full items-center justify-center gap-2 rounded border border-hud/50 bg-hud/10 px-2.5 py-1.5 font-display text-xs font-semibold uppercase tracking-wider text-hud2 transition hover:bg-hud/20 hover:shadow-[0_0_14px_-6px_var(--color-hud)]">
           <Ico name="slots" /> Game slots &amp; controllers
@@ -96,7 +97,7 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
 }
 
 const VIEW_OF = (gs: GameSlot) => (isController(gs) ? 'Devices' : 'Keyboard');
-const slotName = (gs: GameSlot) => slotDeviceName(gs) ?? (gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'no device');
+const slotName = (gs: GameSlot) => slotDeviceName(gs) ?? (gs.unknown ? 'unidentified device' : gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'no device');
 
 /** the profile's game slots; with a picker, the rows the current view can show are selectable (click, ↑ / ↓, Home / End) */
 function SlotList({ slots, connected, picker }: { slots: GameSlot[]; connected: (gs: GameSlot) => boolean; picker?: SlotPicker }) {
@@ -156,7 +157,7 @@ function SlotList({ slots, connected, picker }: { slots: GameSlot[]; connected: 
               ${dim ? 'opacity-45 hover:opacity-80' : ''}`}>
             <span className={`w-7 ${sel ? 'font-bold text-hud2' : 'text-hud/80'}`}>{id.toUpperCase()}</span>
             <span className={`min-w-0 flex-1 truncate ${gs.gameMissing ? 'text-slate-500 line-through decoration-slate-600' : sel ? 'text-slate-100' : 'text-slate-300'}`}
-              title={gs.gameMissing ? 'Not in the latest game state: its mappings are kept' : undefined}>{slotName(gs)}</span>
+              title={gs.unknown ? UNKNOWN_DEVICE_HINT : gs.gameMissing ? 'Not in the latest game state: its mappings are kept' : undefined}>{slotName(gs)}</span>
             {locked && <span className="shrink-0 text-[9px] text-mod/70" data-testid="slot-axis-locked" title={`No axis / curve tuning: Star Citizen keeps axis settings for js1–js${picker!.axisLimit.js} and gp1 only`}>no curves</span>}
             {(gs.slot === 'js' || gs.slot === 'gp') && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${connected(gs) ? 'bg-ok shadow-[0_0_6px_var(--color-ok)]' : 'bg-slate-600'}`} title={connected(gs) ? 'connected' : 'not connected'} />}
           </li>

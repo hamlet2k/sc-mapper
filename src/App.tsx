@@ -567,12 +567,12 @@ export default function App() {
     });
   }, [pads, updateSlots]);
   /** slots as the capture dialog's device list labels them */
-  const slotDevices = useMemo(() => slotMap.slots.filter(isController).map((s) => ({ slot: s.slot, instance: s.instance, product: slotDeviceName(s) ?? '' })), [slotMap]);
+  const slotDevices = useMemo(() => slotMap.slots.filter(isController).map((s) => ({ slot: s.slot, instance: s.instance, product: slotDeviceName(s) ?? '', ...(s.unknown ? { unknown: true } : {}) })), [slotMap]);
   /** the joystick / gamepad slots the main page shows (what the export will contain), with the controller filling each */
   const deviceSlots: SlotOption[] = useMemo(() => slotMap.slots.map((gs) => ({ gs, ...(gs.hw ? { pad: pads.find((p) => p.key === gs.hw!.key) } : {}) })), [slotMap, pads]);
   const exportDevices: ExportDevice[] = useMemo(() => slotMap.slots
     .filter((s) => isController(s) || s.instance > 1)
-    .map((s) => ({ type: EXPORT_TYPE[s.slot], instance: s.instance, product: slotProduct(s, s.hw ? pads.find((p) => p.key === s.hw!.key) : undefined) })), [slotMap, pads]);
+    .map((s) => ({ type: EXPORT_TYPE[s.slot], instance: s.instance, product: slotProduct(s, s.hw ? pads.find((p) => p.key === s.hw!.key) : undefined), ...(s.unknown ? { unknown: true } : {}) })), [slotMap, pads]);
   const exportSlots: ExportSlot[] = useMemo(() => slotMap.slots.map((s) => ({ id: slotId(s), name: slotDeviceName(s) })), [slotMap]);
   const onPickSlotTemplate = useCallback((gs: GameSlot, id: string | null) => updateSlots((m) => setSlotTemplate(m, gs, id)), [updateSlots]);
 
@@ -1080,6 +1080,7 @@ export default function App() {
       {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} devices={exportDevices} slots={exportSlots} onClose={() => setExportOpen(false)} />}
       {devicesOpen && (
         <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(false)}
+          initialSlot={view === 'devices' ? devSel.replace(/^slot:/, '') : undefined}
           onRefresh={() => refreshRef.current?.click()} banner={rematchBanner} />
       )}
       {deleting && profile && (

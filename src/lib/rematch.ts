@@ -11,7 +11,7 @@ const KINDS: Slot[] = ['kb', 'mo', 'js', 'gp'];
 export const SLOT_TYPE: Record<Slot, string> = { kb: 'keyboard', mo: 'mouse', js: 'joystick', gp: 'gamepad' };
 
 /** a device the profile knows at a number: from its device list, or a slot (named by the game file or by its hardware) */
-export interface KnownDevice { slot: Slot; instance: number; name?: string; rawProduct?: string }
+export interface KnownDevice { slot: Slot; instance: number; name?: string; rawProduct?: string; unknown?: boolean }
 export interface RematchMove { slot: Slot; from: number; to: number; name: string; guessed?: boolean }
 export interface Rematch {
   /** per kind: old number -> new number (a bijection over every number involved); kinds without a change are absent */
@@ -43,14 +43,14 @@ export function knownDevices(devices: readonly ProfileDevice[], map: SlotMap): K
     const k = `${d.slot}${d.instance}`;
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push({ slot: d.slot, instance: d.instance, name: d.product, ...(d.rawProduct ? { rawProduct: d.rawProduct } : {}) });
+    out.push({ slot: d.slot, instance: d.instance, name: d.product, ...(d.rawProduct ? { rawProduct: d.rawProduct } : {}), ...(d.unknown ? { unknown: true } : {}) });
   }
   for (const s of map.slots) {
     const k = `${s.slot}${s.instance}`;
     if (seen.has(k)) continue;
     seen.add(k);
     const name = s.gameProduct ?? s.hw?.name;
-    out.push({ slot: s.slot, instance: s.instance, ...(name ? { name } : {}), ...(s.gameRawProduct ? { rawProduct: s.gameRawProduct } : {}) });
+    out.push({ slot: s.slot, instance: s.instance, ...(name ? { name } : {}), ...(s.gameRawProduct ? { rawProduct: s.gameRawProduct } : {}), ...(s.unknown ? { unknown: true } : {}) });
   }
   return out;
 }
@@ -78,9 +78,20 @@ export function computeRematch(stored: readonly KnownDevice[], game: readonly Pr
     const G = game.filter((d) => d.slot === slot).sort(byInst);
     if (!S.length && !G.length) continue;
     const pairs: { s: KnownDevice; g: ProfileDevice; guessed: boolean }[] = [];
+    // Without a game-supplied identity there is no evidence for a renumbering. Keep these mappings and manual
+    // hardware/template picks at their number, even when another named device would otherwise land there.
+    const anchored = new Set(S.filter((s) => s.unknown || G.some((g) => g.unknown && g.instance === s.instance)));
+    const reserved = new Set([...anchored].map((s) => s.instance));
+    for (const s of anchored) {
+      const g = G.find((d) => d.instance === s.instance);
+      if (g) {
+        pairs.push({ s, g, guessed: false });
+        if (!!s.unknown !== !!g.unknown) r.unchanged = false;
+      }
+    }
     const keys = [...new Set([...S.map((d) => deviceKey(d.name)), ...G.map((d) => deviceKey(d.product))])].filter(Boolean);
     for (const key of keys) {
-      const s = S.filter((d) => deviceKey(d.name) === key), g = G.filter((d) => deviceKey(d.product) === key);
+      const s = S.filter((d) => !anchored.has(d) && deviceKey(d.name) === key), g = G.filter((d) => !reserved.has(d.instance) && !d.unknown && deviceKey(d.product) === key);
       if (!s.length || !g.length) continue;
       if (s.length === 1 && g.length === 1) { pairs.push({ s: s[0], g: g[0], guessed: false }); continue; }
       const rs = s.map((d) => rawKey(d.rawProduct)), rg = g.map((d) => rawKey(d.rawProduct));
@@ -98,8 +109,9 @@ export function computeRematch(stored: readonly KnownDevice[], game: readonly Pr
     const added = G.filter((d) => !pairedG.has(d));
     r.added.push(...added);
     const partial = new Map<number, number>(pairs.map((p) => [p.s.instance, p.g.instance]));
+    for (const s of anchored) partial.set(s.instance, s.instance);
     const used = new Set<number>([...partial.values(), ...added.map((d) => d.instance)]);
-    const loose = S.filter((d) => !pairedS.has(d));
+    const loose = S.filter((d) => !pairedS.has(d) && !anchored.has(d));
     // a device the game doesn't list (or a slot without a name) keeps its number when nothing else lands there
     const rest: KnownDevice[] = [];
     for (const d of loose) {
@@ -119,7 +131,7 @@ export function computeRematch(stored: readonly KnownDevice[], game: readonly Pr
     const perm = completePerm(partial);
     if (perm.size) r.perms[slot] = perm;
   }
-  r.unchanged = !Object.keys(r.perms).length && !r.added.length && !r.missing.length;
+  r.unchanged = r.unchanged && !Object.keys(r.perms).length && !r.added.length && !r.missing.length;
   return r;
 }
 
@@ -134,7 +146,7 @@ function permuteAll(rebinds: RebindMap, settings: DeviceSettings, r: Rematch, id
     for (const t of b.touched) touched.set(`${t.map}/${t.action}`, t);
     settings = permuteOptionInstances(settings, SLOT_TYPE[slot], perm);
   }
-  for (const d of r.game) settings = setOptionsProduct(settings, SLOT_TYPE[d.slot], d.instance, d.rawProduct ?? d.product);
+  for (const d of r.game) if (!d.unknown) settings = setOptionsProduct(settings, SLOT_TYPE[d.slot], d.instance, d.rawProduct ?? d.product);
   return { rebinds, settings, touched: [...touched.values()], moved };
 }
 
@@ -149,11 +161,11 @@ export function applyRematch(state: { rebinds: RebindMap; settings: DeviceSettin
   for (const [slot, perm] of Object.entries(r.perms) as [Slot, Map<number, number>][]) slots = permuteSlots(slots, slot, perm);
   const list: GameSlot[] = slots.slots.map((s) => ({ ...s }));
   for (const d of r.game) {
-    const named = { gameProduct: d.product, ...(d.rawProduct ? { gameRawProduct: d.rawProduct } : {}) };
+    const named = { gameProduct: d.product, ...(d.rawProduct ? { gameRawProduct: d.rawProduct } : {}), ...(d.unknown ? { unknown: true } : {}) };
     const i = list.findIndex((s) => s.slot === d.slot && s.instance === d.instance);
     if (i >= 0) {
-      const { gameMissing: _m, gameRawProduct: _r, ...rest } = list[i];
-      void _m; void _r;
+      const { gameMissing: _m, gameRawProduct: _r, unknown: _u, ...rest } = list[i];
+      void _m; void _r; void _u;
       list[i] = { ...rest, ...named };
     } else list.push({ slot: d.slot, instance: d.instance, ...named });
   }
@@ -175,14 +187,15 @@ export function shiftToOrder<P extends { rebinds: RebindMap; settings?: DeviceSe
     const d = p.devices.find((e) => e.slot === m.slot && e.instance === m.from)!;
     return { ...d, instance: m.to };
   });
-  return { ...p, rebinds: x.rebinds, settings: x.settings, devices: [...r.game.map((d) => ({ ...d })), ...missing] };
+  const unnamed = p.devices.filter((d) => d.unknown && !r.game.some((g) => g.slot === d.slot && g.instance === d.instance));
+  return { ...p, rebinds: x.rebinds, settings: x.settings, devices: [...r.game.map((d) => ({ ...d })), ...missing, ...unnamed] };
 }
 
 /** one-line summary: "Orion Pedals js3 → js5 · CarrierAce MFD L js5 → js3 · new: … · not in the game: …" */
 export function rematchParts(r: Rematch): string[] {
   return [
     ...r.moves.map((m) => `${m.name} ${m.slot}${m.from} → ${m.slot}${m.to}${m.guessed ? ' (?)' : ''}`),
-    ...r.added.map((d) => `new: ${shortProduct(d.product)} ${d.slot}${d.instance}`),
+    ...r.added.map((d) => `new: ${shortProduct(d.product) || (d.unknown ? 'unidentified device' : 'unnamed device')} ${d.slot}${d.instance}`),
     ...r.missing.map((m) => `not in the game: ${m.name} (${m.slot}${m.from}${m.to !== m.from ? `, mappings kept on ${m.slot}${m.to}` : ', mappings kept'})`),
   ];
 }

@@ -29,6 +29,8 @@ export interface GameSlot {
   /** device name from the imported file's <options Product="…"> */
   gameProduct?: string;
   gameRawProduct?: string;
+  /** the game file references this slot in bindings but doesn't name its device */
+  unknown?: boolean;
   hw?: SlotHardware;
   /** hardware picked by the user: auto-matching never replaces it */
   hwPinned?: boolean;
@@ -86,6 +88,7 @@ export function seedSlots(profile: Pick<Profile, 'devices' | 'rebinds'> | null):
     let s = slots.find((x) => x.slot === d.slot && x.instance === d.instance);
     if (!s) { s = { slot: d.slot, instance: d.instance }; slots.push(s); }
     if (d.product) { s.gameProduct = d.product; if (d.rawProduct) s.gameRawProduct = d.rawProduct; }
+    if (d.unknown) s.unknown = true;
   }
   for (const u of usedSlots(profile.rebinds)) if (!slots.some((x) => x.slot === u.slot && x.instance === u.instance)) slots.push({ ...u });
   return { version: 1, slots: sortSlots(slots), hwTemplates: {}, pendingMatch: slots.some(isController) };
@@ -216,6 +219,7 @@ export function slotDeviceName(s: GameSlot): string | undefined {
   if (s.gameProduct) return parseProfileProduct(s.gameRawProduct ?? s.gameProduct).name || s.gameProduct;
   return undefined;
 }
+export const UNKNOWN_DEVICE_HINT = 'Star Citizen’s game file doesn’t name joystick devices above js8. This slot is referenced by bindings, but has no device name. Assign its hardware or template in Game slots & controllers; the choice is saved with this profile.';
 /** identity used to match a template: the hardware (live pad info when connected), else the game file's product */
 export function slotIdentity(s: GameSlot, pad?: PadIdentity): DeviceIdentity {
   const slot = s.slot === 'gp' ? 'gp' : 'js';
@@ -404,11 +408,12 @@ export function cleanSlotMap(v: unknown): SlotMap | null {
   if (!isObj(v) || !Array.isArray(v.slots)) return null;
   const slots: GameSlot[] = [];
   for (const s of v.slots) {
-    if (!isObj(s) || !SLOT_ORDER.includes(s.slot as Slot) || !Number.isInteger(s.instance) || (s.instance as number) < 1 || (s.instance as number) > 16) continue;
+    if (!isObj(s) || !SLOT_ORDER.includes(s.slot as Slot) || !Number.isSafeInteger(s.instance) || (s.instance as number) < 1) continue;
     if (slots.some((x) => x.slot === s.slot && x.instance === s.instance)) continue;
     const g: GameSlot = { slot: s.slot as Slot, instance: s.instance as number };
     if (typeof s.gameProduct === 'string') g.gameProduct = s.gameProduct;
     if (typeof s.gameRawProduct === 'string') g.gameRawProduct = s.gameRawProduct;
+    if (s.unknown === true) g.unknown = true;
     if (isObj(s.hw) && typeof s.hw.key === 'string' && typeof s.hw.name === 'string') g.hw = s.hw as unknown as SlotHardware;
     if (s.hwPinned === true) g.hwPinned = true;
     if (s.hwMatch === 'usb' || s.hwMatch === 'name' || s.hwMatch === 'legacy') g.hwMatch = s.hwMatch;

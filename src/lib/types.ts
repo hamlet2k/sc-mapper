@@ -37,6 +37,8 @@ export interface Rebind {
 export type RebindMap = Record<string, Record<string, Rebind[]>>;
 export interface ProfileDevice {
   slot: Slot; instance: number; product: string;
+  /** bindings reference this device, but the game file has no named <options> entry for it */
+  unknown?: boolean;
   /** Product attribute as written by the game, including the DirectInput GUID with the USB vendor/product ids */
   rawProduct?: string;
 }

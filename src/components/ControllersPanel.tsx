@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AssignSource, PadInfo, PadKind, PadLike } from '../lib/devices';
 import { getPads, padLabel, parseProfileProduct } from '../lib/devices';
 import {
-  SLOT_KIND_LABEL, hardwareOf, isController, isFixed, manualHardware, neighbourSlot, nextInstance, slotDeviceName, slotId,
+  SLOT_KIND_LABEL, UNKNOWN_DEVICE_HINT, hardwareOf, isController, isFixed, manualHardware, neighbourSlot, nextInstance, slotDeviceName, slotId,
   type CopyPlan, type GameSlot, type SlotHardware, type SlotMap,
 } from '../lib/slots';
 import { AUTO_TEMPLATE, autoSlotTemplate, resolveSlotTemplate } from '../lib/slotTemplates';
@@ -23,7 +23,7 @@ const SOURCE: Record<AssignSource, { text: string; cls: string }> = {
   'profile-name': { text: 'matched to profile (name)', cls: 'border-ok/50 text-ok' },
   auto: { text: 'browser order (guess)', cls: 'border-edge text-slate-400' },
 };
-const devName = (pd: ProfileDevice) => parseProfileProduct(pd.product).name || pd.product.trim();
+const devName = (pd: ProfileDevice) => parseProfileProduct(pd.product).name || pd.product.trim() || (pd.unknown ? 'unidentified device' : '');
 
 /** Browser-detected controllers with their joystick/gamepad role and game instance (js1, js2..., gp1) */
 export function DeviceList({ pads, group, activity, onAssign, onReset, profileDevices = [], compact }: {
@@ -107,8 +107,10 @@ type Tab = 'slots' | 'tester';
 
 /** Game slots & controllers: game slots (kb1, mo1, js1…, gp1…) <> the hardware filling each <> its template; live tester.
  *  (Axis settings & curves open per slot from the Devices view.) */
-export function ControllersPanel({ profile, pads, describe, slots, onClose, onRefresh, banner, initialTab = 'slots' }: {
+export function ControllersPanel({ profile, pads, describe, slots, onClose, onRefresh, banner, initialTab = 'slots', initialSlot }: {
   profile: Profile | null; pads: PadInfo[]; describe: (l: readonly PadLike[]) => PadInfo[]; slots: SlotActions; onClose: () => void; initialTab?: Tab;
+  /** bring the device being identified into view in the existing assignment dialog */
+  initialSlot?: string;
   /** opens the file picker for a fresh export (only its device list is read) */ onRefresh: () => void; /** the pending rematch, if any */ banner?: ReactNode;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -132,7 +134,7 @@ export function ControllersPanel({ profile, pads, describe, slots, onClose, onRe
         <div className="space-y-4 p-5">
           {banner}
           <ChromiumBanner detected={pads.length} compact />
-          {tab === 'slots' && <SlotsTab profile={profile} pads={pads} describe={describe} slots={slots} onRefresh={onRefresh} />}
+          {tab === 'slots' && <SlotsTab profile={profile} pads={pads} describe={describe} slots={slots} onRefresh={onRefresh} initialSlot={initialSlot} />}
           {tab === 'tester' && (
             <section>
               <p className="mb-2 text-[11px] text-slate-500">Everything the browser reports, live. &quot;last&quot; shows the Star Citizen input a press or move would be captured as. If a device or button doesn&apos;t show up here, the browser can&apos;t see it.</p>
@@ -183,8 +185,15 @@ function usePressToPick(armed: boolean, describe: (l: readonly PadLike[]) => Pad
   }, [armed]);
 }
 
-function SlotsTab({ profile, pads, describe, slots, onRefresh }: { profile: Profile | null; pads: PadInfo[]; describe: (l: readonly PadLike[]) => PadInfo[]; slots: SlotActions; onRefresh: () => void }) {
+function SlotsTab({ profile, pads, describe, slots, onRefresh, initialSlot }: { profile: Profile | null; pads: PadInfo[]; describe: (l: readonly PadLike[]) => PadInfo[]; slots: SlotActions; onRefresh: () => void; initialSlot?: string }) {
   const T = useTemplates();
+  const tabRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!initialSlot) return;
+    const row = tabRef.current?.querySelector<HTMLElement>(`[data-slot="${CSS.escape(initialSlot)}"]`);
+    row?.scrollIntoView({ block: 'center' });
+    row?.querySelector<HTMLSelectElement>('select[aria-label^="Hardware"]')?.focus({ preventScroll: true });
+  }, [initialSlot]);
   const { map } = slots;
   const [removing, setRemoving] = useState<GameSlot | null>(null);
   const [copying, setCopying] = useState<{ from: GameSlot; thenRemove: boolean } | null>(null);
@@ -204,7 +213,7 @@ function SlotsTab({ profile, pads, describe, slots, onRefresh }: { profile: Prof
   const kinds: Slot[] = ['kb', 'mo', 'js', 'gp'];
 
   return (
-    <div className="space-y-4" data-testid="slots-tab">
+    <div ref={tabRef} className="space-y-4" data-testid="slots-tab">
       {/* the game's current device order: refresh from a fresh export (picker or drop), and where the game saves it */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded border border-edge/70 bg-black/25 px-3 py-2 text-xs" data-testid="game-state-strip">
         <RefreshGameButton onClick={onRefresh} disabled={!profile} />
@@ -219,6 +228,7 @@ function SlotsTab({ profile, pads, describe, slots, onRefresh }: { profile: Prof
         Each row is one slot: the device the game file names, the controller this browser sees for it, and the template that draws it. Only these slots are shown on the main page and written to the export.
         {' '}Hardware is matched automatically only when you import a profile; a template whenever you assign hardware. Anything you change by hand sticks to this profile.
       </div>
+      {map.slots.some((s) => s.unknown) && <p className="rounded border border-mod/40 bg-mod/5 px-3 py-2 text-[11px] text-slate-300">{UNKNOWN_DEVICE_HINT}</p>}
       {!map.slots.length ? (
         <div className="rounded border border-edge/70 bg-black/20 px-4 py-6 text-center text-sm text-slate-400" data-testid="slots-empty">
           {profile ? 'This profile has no game slots yet.' : 'No profile imported: no game slots yet.'} Add the devices you play with below{profile ? '' : ', or import your actionmaps.xml to have them filled in'}.
@@ -346,7 +356,8 @@ function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, onArm, onRemove, o
       </div>
       <div className="min-w-0">
         <div className="text-[10px] uppercase tracking-widest text-slate-500">In the game file</div>
-        <div className="truncate text-slate-200" title={gs.gameRawProduct ?? gs.gameProduct}>{game || <span className="text-slate-500">{gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'not named (added here)'}</span>}</div>
+        <div className="truncate text-slate-200" title={gs.gameRawProduct ?? gs.gameProduct}>{game || <span className="text-slate-500">{gs.unknown ? 'unidentified device' : gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'not named (added here)'}</span>}</div>
+        {gs.unknown && <p className="mt-1 text-[10px] text-mod" data-testid="slot-unidentified" title={UNKNOWN_DEVICE_HINT}>Referenced in bindings · name absent</p>}
         {gs.gameMissing && <div className="mt-0.5 inline-block rounded border border-mod/50 bg-mod/10 px-1.5 text-[10px] text-mod" data-testid="slot-game-missing"
           title="The last refreshed game state doesn't list this device (unplugged?). Its mappings stay here; plug it in and refresh again, or remove the slot.">not in the latest game state · mappings kept</div>}
       </div>

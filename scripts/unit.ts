@@ -2298,7 +2298,7 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.deepEqual(sl.seedSlots(back).slots.map((s) => `${sl.slotId(s)}:${s.gameProduct ?? ''}`), ['kb1:Keyboard', 'mo1:', 'js3:VKBsim Gladiator EVO R']);
   });
   t('slots: stored maps are sanitized', () => {
-    const m = sl.cleanSlotMap({ slots: [{ slot: 'js', instance: 1, hw: { key: 'k', name: 'n' }, hwPinned: true }, { slot: 'js', instance: 1 }, { slot: 'xx', instance: 2 }, { slot: 'gp', instance: 99 }, { slot: 'kb', instance: 1 }], hwTemplates: { k: 'builtin-stick', z: 5 } });
+    const m = sl.cleanSlotMap({ slots: [{ slot: 'js', instance: 1, hw: { key: 'k', name: 'n' }, hwPinned: true }, { slot: 'js', instance: 1 }, { slot: 'xx', instance: 2 }, { slot: 'gp', instance: Number.MAX_SAFE_INTEGER + 1 }, { slot: 'kb', instance: 1 }], hwTemplates: { k: 'builtin-stick', z: 5 } });
     assert.deepEqual(m!.slots.map(sl.slotId), ['kb1', 'js1']);
     assert.deepEqual(m!.hwTemplates, { k: 'builtin-stick' });
     assert.equal(sl.cleanSlotMap('nope'), null);
@@ -2391,6 +2391,115 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.deepEqual(dvo.swapOptionInstances(w, 'joystick', 2, 3), s, 'its own inverse');
   });
 }
+// ---------------------------------------------------------------- binding instances without named <options> devices
+{
+  const imp = await import('../src/lib/importer');
+  const rm = await import('../src/lib/rematch');
+  const sl = await import('../src/lib/slots');
+  const src = readFileSync(new URL('./fixtures/actionmaps-js9-plus.xml', import.meta.url), 'utf8');
+  const profile = imp.parseActionMaps(src, 'actionmaps.xml');
+  const unknownIds = ['js9', 'js10', 'js11', 'js12', 'js13', 'js14', 'js15', 'js16', 'js18'];
+  const ids = (devices: typeof profile.devices) => devices.filter((d) => d.unknown).sort((a, b) => a.instance - b.instance).map(sl.slotId);
+  const highBindings = (rebinds: typeof profile.rebinds) => Object.entries(rebinds).flatMap(([map, acts]) => Object.entries(acts).flatMap(([action, list]) =>
+    list.filter((r) => r.slot === 'js' && r.instance > 8).map((r) => ({ map, action, ...r }))));
+  t('unnamed devices: real file declares js1–8 but exposes every binding instance through js18, including clears', () => {
+    assert.deepEqual(profile.devices.filter((d) => d.slot === 'js' && !d.unknown).map((d) => d.instance), [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert.deepEqual(ids(profile.devices), unknownIds);
+    assert.ok(profile.devices.filter((d) => d.unknown).every((d) => d.product === '' && d.rawProduct === undefined));
+    const slots = sl.seedSlots(profile);
+    assert.deepEqual(slots.slots.filter((s) => s.unknown).map(sl.slotId), unknownIds);
+    const rows = buildRows(defaults, profile);
+    for (const instance of [9, 11, 15, 16, 18]) {
+      assert.ok(rows.some((r) => r.bindings.some((b) => b.slot === 'js' && b.instance === instance)), `js${instance} mappings are visible`);
+    }
+  });
+  t('unnamed devices: refresh discovers the same instances without importing their bindings', () => {
+    assert.deepEqual(imp.parseDeviceList(src), profile.devices);
+    const xml = '<ActionMaps><actionmap name="m"><action name="a"><rebind input="gp12_a"/><addbind input="js20_button1"/><rebind input="gp12_b"/><rebind input="js21_ "/></action></actionmap></ActionMaps>';
+    assert.deepEqual(imp.parseDeviceList(xml), [
+      { slot: 'gp', instance: 12, product: '', unknown: true },
+      { slot: 'js', instance: 20, product: '', unknown: true },
+      { slot: 'js', instance: 21, product: '', unknown: true },
+    ]);
+    assert.deepEqual(imp.parseActionMaps(xml, 'test.xml').devices, imp.parseDeviceList(xml));
+  });
+  t('unnamed devices: assignment and template persist beyond js16; repeated refresh keeps every mapping and pick', () => {
+    const target = { slot: 'js' as const, instance: 18 };
+    let slots = sl.assignHardware(sl.seedSlots(profile), target, { key: 'panel', name: 'My connected panel', product: 'My connected panel {1234}' });
+    slots = sl.setSlotTemplate(slots, target, 'builtin-stick');
+    slots = sl.setSlotTemplate(slots, { slot: 'js', instance: 9 }, 'builtin-throttle');
+    const storage = new Map<string, string>();
+    const prev = (globalThis as any).localStorage;
+    (globalThis as any).localStorage = { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => void storage.set(k, v) };
+    try {
+      sl.saveSlotStore({ [profile.id]: slots });
+      slots = sl.loadSlotStore()[profile.id];
+      assert.ok(slots, 'the per-profile map reloads from existing localStorage persistence');
+    } finally { (globalThis as any).localStorage = prev; }
+    assert.equal(slots.slots.find((s) => sl.slotId(s) === 'js18')!.unknown, true);
+    assert.equal(slots.slots.find((s) => sl.slotId(s) === 'js18')!.hw!.key, 'panel');
+    const game = imp.parseDeviceList(src);
+    const r = rm.computeRematch(rm.knownDevices(profile.devices, slots), game);
+    assert.equal(r.unchanged, true);
+    assert.deepEqual(r.perms, {}); assert.deepEqual(r.missing, []); assert.deepEqual(r.added, []);
+    const applied = rm.applyRematch({ rebinds: profile.rebinds, settings: dvo.settingsOf(profile), slots }, r, idx);
+    assert.deepEqual(applied.rebinds, profile.rebinds);
+    assert.deepEqual(applied.slots.slots.filter((s) => s.unknown).map(sl.slotId), unknownIds);
+    assert.ok(applied.slots.slots.filter((s) => s.unknown).every((s) => !s.gameMissing));
+    assert.equal(applied.slots.slots.find((s) => sl.slotId(s) === 'js18')!.hw!.key, 'panel');
+    assert.equal(applied.slots.hwTemplates.panel, 'builtin-stick');
+    assert.equal(applied.slots.slots.find((s) => sl.slotId(s) === 'js9')!.template, 'builtin-throttle');
+    assert.equal(rm.computeRematch(rm.knownDevices(applied.devices, applied.slots), game).unchanged, true);
+    const fallback = rm.computeRematch(rm.knownDevices([], slots), game);
+    assert.deepEqual(fallback.perms, {}); assert.deepEqual(fallback.missing, [], 'assigned unnamed slots are safe even without profile device entries');
+  });
+  t('unnamed devices: named devices can rematch while higher bindings stay at their original instances', () => {
+    const game = imp.parseDeviceList(src).map((d) => d.slot === 'js' && (d.instance === 2 || d.instance === 3) ? { ...d, instance: 5 - d.instance } : d);
+    const slots = sl.seedSlots(profile);
+    const r = rm.computeRematch(rm.knownDevices(profile.devices, slots), game);
+    assert.deepEqual(Object.fromEntries(r.perms.js!), { 2: 3, 3: 2 });
+    const applied = rm.applyRematch({ rebinds: profile.rebinds, settings: dvo.settingsOf(profile), slots }, r, idx);
+    assert.deepEqual(highBindings(applied.rebinds), highBindings(profile.rebinds));
+    assert.deepEqual(r.missing, []);
+    const shifted = rm.shiftToOrder(profile, r, idx);
+    assert.deepEqual(highBindings(shifted.rebinds), highBindings(profile.rebinds));
+    assert.deepEqual(ids(shifted.devices), unknownIds);
+  });
+  t('unnamed devices: refresh pins named-to-unnamed slots and prevents a named device from displacing unknown mappings', () => {
+    const unknown = { slot: 'js' as const, instance: 9, product: '', unknown: true };
+    const stored = [{ slot: 'js' as const, instance: 1, product: 'A' }, unknown];
+    const r = rm.computeRematch(rm.knownDevices(stored, sl.seedSlots({ devices: stored, rebinds: {} })), [{ slot: 'js', instance: 9, product: 'A' }]);
+    assert.ok(!r.perms.js?.has(9), 'unknown js9 stays put');
+    assert.ok(![...(r.perms.js?.values() ?? [])].includes(9), 'no other mappings land on js9');
+    const becameUnknown = rm.computeRematch([{ slot: 'js', instance: 9, name: 'Assigned panel' }], [unknown]);
+    assert.deepEqual(becameUnknown.missing, []); assert.deepEqual(becameUnknown.perms, {});
+    assert.equal(becameUnknown.unchanged, false, 'refresh updates the identity metadata');
+    const absent = rm.computeRematch(rm.knownDevices([unknown], sl.emptySlotMap()), []);
+    assert.deepEqual(absent.missing, []); assert.deepEqual(absent.perms, {});
+    const shifted = rm.shiftToOrder({ ...profile, devices: [unknown] }, absent, idx);
+    assert.deepEqual(shifted.devices, [unknown], 'import rematch keeps unnamed devices absent from the current file');
+  });
+  t('unnamed devices: both exports preserve bindings but write no synthetic options, even with assigned hardware', () => {
+    const devices = profile.devices.filter((d) => d.unknown).map((d) => ({ type: 'joystick' as const, instance: d.instance, product: 'Assigned panel', unknown: true }));
+    for (const format of ['layout', 'actionmaps'] as const) for (const extra of [undefined, devices]) {
+      const xml = buildExport(defaults, profile, { format, name: profile.name, devices: extra });
+      const opts = Array.from(parseXml(xml).getElementsByTagName('options'));
+      assert.deepEqual(opts.filter((o) => o.getAttribute('type') === 'joystick').map((o) => Number(o.getAttribute('instance'))), [1, 2, 3, 4, 5, 6, 7, 8]);
+      const back = imp.parseActionMaps(xml, 'export.xml');
+      assert.deepEqual(back.rebinds, profile.rebinds);
+      assert.deepEqual(ids(back.devices), unknownIds);
+    }
+    const gp = imp.parseActionMaps('<ActionMaps><actionmap name="m"><action name="a"><rebind input="gp12_a"/></action></actionmap></ActionMaps>', 'gamepad.xml');
+    const xml = buildExport(defaults, gp, { format: 'layout', name: 'gp' });
+    assert.ok(xml.includes('<gamepad instance="12"/>'));
+    assert.ok(!xml.includes('<options type="gamepad"'));
+    assert.deepEqual(imp.parseActionMaps(xml, 'gp.xml').rebinds, gp.rebinds);
+    const fakeSettings = dvo.setGroup(dvo.settingsOf(profile), 'joystick', 9, 'flight_move_pitch', { exponent: 2 }, 'Assigned panel');
+    const edited = buildExport(defaults, { ...profile, settings: fakeSettings }, { format: 'actionmaps', name: 'edited', devices });
+    assert.ok(!Array.from(parseXml(edited).getElementsByTagName('options')).some((o) => o.getAttribute('type') === 'joystick' && Number(o.getAttribute('instance')) > 8), 'settings cannot accidentally reintroduce synthetic unknown-device options');
+  });
+}
+
 // ---------------------------------------------------------------- refresh game state: rematch to the game's device order
 {
   const rm = await import('../src/lib/rematch');

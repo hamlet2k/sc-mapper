@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { ChromiumBanner, ChromiumButtonNotice } from './ChromiumBanner';
 import { createPortal } from 'react-dom';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
-import { isController, slotDeviceName, slotId, type GameSlot, type SlotMap } from '../lib/slots';
+import { UNKNOWN_DEVICE_HINT, isController, slotDeviceName, slotId, type GameSlot, type SlotMap } from '../lib/slots';
 import { AUTO_TEMPLATE, autoSlotTemplate, resolveSlotTemplate } from '../lib/slotTemplates';
 import { TemplateCombobox } from './TemplateCombobox';
 import { formatInput, searchSpec } from '../lib/inputs';
@@ -120,7 +120,7 @@ export function DeviceView(props: Props) {
   // The slot is picked in the profile card's Game slots list (round 9); narrow layouts get a dropdown in the line instead.
   const options = useMemo(() => slots.filter(({ gs }) => isController(gs)).map(({ gs, pad }): DevOption => {
     const name = pad ? padLabel(pad) : slotDeviceName(gs);
-    return { key: deviceSlotKey(gs), slot: gs.slot, instance: gs.instance, gs, pad, name, label: `${slotId(gs).toUpperCase()} · ${name ?? 'no device assigned'}` };
+    return { key: deviceSlotKey(gs), slot: gs.slot, instance: gs.instance, gs, pad, name, label: `${slotId(gs).toUpperCase()} · ${name ?? (gs.unknown ? 'unidentified device' : 'no device assigned')}` };
   }), [slots]);
   // find by pressing on this view: the pressed device's slot comes up (and the control gets selected below)
   useEffect(() => {
@@ -466,6 +466,12 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
           </Tip>
           </span>
         </div>
+        {opt.gs.unknown && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-mod/40 bg-mod/5 px-3 py-1.5 text-[11px] text-slate-300" data-testid="device-unidentified">
+            <span className="min-w-0 flex-1">{UNKNOWN_DEVICE_HINT}</span>
+            <button type="button" onClick={onOpenControllers} data-testid="assign-unidentified-device" className="rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20">Assign device / template · {slot}{instance}</button>
+          </div>
+        )}
         {axisLocked && (
           <div id="axis-locked-msg" className="mt-2 flex flex-wrap items-center gap-2 rounded border border-mod/40 bg-mod/5 px-3 py-1.5 text-[11px] text-slate-300" data-testid="axis-locked">
             <Ico name="info" className="text-mod" />
