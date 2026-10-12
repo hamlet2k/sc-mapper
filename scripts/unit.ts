@@ -1040,7 +1040,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     });
     assert.equal(by('winctrl-32-rmp').callouts.find((c) => c.id === 'load')!.label, 'LOAD');
     expectMap('winctrl-32-tcas', {
-      row1: [1, 2, 3], row2: [4, 5, 6], row3: [7, 8, 9], ident: [10], xpdr: [11, 12, 13],
+      row1: numbers(1, 8), row3: [9], ident: [10], xpdr: [11, 12, 13],
       system: [14, 15], 'alt-rptg': [16, 17], traffic: [18, 19, 20, 21], 'tcas-mode': [22, 23, 24],
     });
     expectMap('winctrl-pfp-3n', {
@@ -1069,7 +1069,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     }
     for (const template of [fcu, pfp, mpd]) assert.match(template.notes!, /Firefox/);
   });
-  t('Panels 7: USB variants and name matching, hosted photos, mapped anchors and clear gutter columns', () => {
+  t('Panels 7: USB variants and name matching, hosted photos, mapped anchors and authored label positions', () => {
     const panels = [
       ['winctrl-32-fcu-efis-l', ['BC1D'], 'FCU'], ['winctrl-32-rmp', ['BB85', 'BB83', 'BB84'], 'RMP'],
       ['winctrl-32-tcas', ['BB81'], 'TCAS'], ['winctrl-pfp-3n', ['BB35', 'BB39', 'BB3D'], 'PFP'],
@@ -1092,9 +1092,13 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         for (const c of template.callouts.filter((c) => c.view === view.id)) {
           const photoX = (c.anchor.x * view.width - gutter) / pw;
           assert.ok(photoX >= px && photoX <= px + productW && c.anchor.y >= py && c.anchor.y <= py + productH, `${id}/${c.id}: anchor on product rect`);
-          assert.ok(c.box.x * view.width < gutter || c.box.x * view.width > view.width - gutter, `${id}/${c.id}: box in side gutter`);
-          for (const o of template.callouts.filter((o) => o.view === view.id && o.id !== c.id && o.box.x === c.box.x))
-            assert.ok(Math.abs(c.box.y - o.box.y) * ph > 100, `${id}: separated column labels`);
+          assert.ok(c.box.x >= 0 && c.box.x <= 1 && c.box.y >= 0 && c.box.y <= 1, `${id}/${c.id}: label on canvas`);
+          // Oct 12 exports place labels freely; RMP and PFP retain automatic side columns.
+          if (id === 'winctrl-32-rmp' || id === 'winctrl-pfp-3n') {
+            assert.ok(c.box.x * view.width < gutter || c.box.x * view.width > view.width - gutter, `${id}/${c.id}: box in side gutter`);
+            for (const o of template.callouts.filter((o) => o.view === view.id && o.id !== c.id && o.box.x === c.box.x))
+              assert.ok(Math.abs(c.box.y - o.box.y) * ph > 100, `${id}: separated column labels`);
+          }
         }
       }
       const back = tp.parseTemplates(tp.exportTemplates([template]))[0];
@@ -1108,6 +1112,18 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       assert.equal(tp.pickTemplate(all, { name, slot: 'js' }).template.id, ufc.id, name);
     for (const name of ['UFC', 'WINCTRL UFC', 'F/A-18 UFC', 'A-10C UFCExtra', 'Buddy-FoxExtra'])
       assert.equal(tp.matchScore(ufc, { name, slot: 'js' }), 0, name);
+  });
+  t('Oct 12 panel exports: exact views, callouts, original metadata and photo bytes', () => {
+    const exports = JSON.parse(readFileSync(new URL('./fixtures/oct12-panels.json', import.meta.url), 'utf8'));
+    for (const expected of exports) {
+      const actual = DEVICE_TEMPLATES.find((t) => t.id === expected.id)!;
+      for (const key of ['id', 'name', 'brand', 'category', 'match', 'notes', 'aspect', 'views', 'callouts'] as const)
+        assert.deepEqual(actual[key], expected[key], `${expected.id}: ${key}`);
+      assert.equal(actual.variantOf, undefined, `${expected.id}: no variant added`);
+      for (const [photo, hash] of Object.entries(expected.photoHashes))
+        assert.equal(createHash('sha256').update(readFileSync(new URL(`../public${photo}`, import.meta.url))).digest('hex'), hash, `${expected.id}: exported photo bytes`);
+    }
+    assert.deepEqual(DEVICE_PHOTO_SIZES['tc-apache-mpd-main'], [1600, 1368, 0.06938, 0.02266, 0.86187, 0.95833], 'Apache: exported dimensions and alpha bounds');
   });
   t('device templates (54 devices): photos per device, real numbering where published, unassigned spots elsewhere, links, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
@@ -1167,6 +1183,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         for (const o of d.callouts) if (o !== c && tp.calloutView(d, o) === tp.calloutView(d, c)
           // Authored layouts keep their exact label positions, pinned by the export fixture tests.
           && !oct11Ids.has(d.id)
+          && !['builtin-tc-apache-mpd', 'builtin-winctrl-32-fcu-efis-l', 'builtin-winctrl-32-tcas', 'builtin-bfs-a10c-ufc'].includes(d.id)
           && !['builtin-honeycomb-bravo', 'builtin-moza-mtp', 'builtin-logitech-x56-throttle', 'builtin-tm-twcs', 'builtin-winctrl-orion'].includes(d.id)
           && !(d.id === 'builtin-virpil-t50cm4' && [c.id, o.id].sort().join(',') === 'mini,minib')
           && !(d.id === 'builtin-vkb-stecs' && [c.id, o.id].sort().join(',') === 'f0g3o0no,tvc1hgok')
