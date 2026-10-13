@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { AssignSource, PadInfo, PadKind, PadLike } from '../lib/devices';
 import { getPads, padLabel, parseProfileProduct } from '../lib/devices';
 import {
@@ -188,11 +188,17 @@ function usePressToPick(armed: boolean, describe: (l: readonly PadLike[]) => Pad
 function SlotsTab({ profile, pads, describe, slots, onRefresh, initialSlot }: { profile: Profile | null; pads: PadInfo[]; describe: (l: readonly PadLike[]) => PadInfo[]; slots: SlotActions; onRefresh: () => void; initialSlot?: string }) {
   const T = useTemplates();
   const tabRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
+  const [highlighted, setHighlighted] = useState(initialSlot);
+  useLayoutEffect(() => {
     if (!initialSlot) return;
+    setHighlighted(initialSlot);
     const row = tabRef.current?.querySelector<HTMLElement>(`[data-slot="${CSS.escape(initialSlot)}"]`);
     row?.scrollIntoView({ block: 'center' });
-    row?.querySelector<HTMLSelectElement>('select[aria-label^="Hardware"]')?.focus({ preventScroll: true });
+    const field = row?.querySelector<HTMLElement>('[data-testid="slot-hw"]')
+      ?? row?.querySelector<HTMLElement>('input, select, button:not(:disabled)');
+    field?.focus({ preventScroll: true });
+    const timer = window.setTimeout(() => setHighlighted(undefined), 2000);
+    return () => window.clearTimeout(timer);
   }, [initialSlot]);
   const { map } = slots;
   const [removing, setRemoving] = useState<GameSlot | null>(null);
@@ -250,6 +256,7 @@ function SlotsTab({ profile, pads, describe, slots, onRefresh, initialSlot }: { 
                 <div className="space-y-1.5">
                   {rows.map((gs) => (
                     <SlotRow key={slotId(gs)} gs={gs} pad={padOf(gs)} pads={pads} slots={slots} T={T} slotOfPad={slotOfPad}
+                      highlighted={highlighted === slotId(gs)}
                       armed={armed === slotId(gs)} onArm={(on) => setArmed(on ? slotId(gs) : null)}
                       onRemove={() => setRemoving(gs)} onCopy={() => setCopying({ from: gs, thenRemove: false })} />
                   ))}
@@ -313,9 +320,9 @@ function hwValue(gs: GameSlot, pad?: PadInfo) {
   return gs.hw.manual ? `manual:${gs.hw.key}` : `known:${gs.hw.key}`;
 }
 
-function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, onArm, onRemove, onCopy }: {
+function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, highlighted, onArm, onRemove, onCopy }: {
   gs: GameSlot; pad?: PadInfo; pads: PadInfo[]; slots: SlotActions; T: ReturnType<typeof useTemplates>;
-  slotOfPad: (p: PadInfo) => GameSlot | undefined; armed: boolean; onArm: (on: boolean) => void; onRemove: () => void; onCopy: () => void;
+  slotOfPad: (p: PadInfo) => GameSlot | undefined; armed: boolean; highlighted: boolean; onArm: (on: boolean) => void; onRemove: () => void; onCopy: () => void;
 }) {
   const [typing, setTyping] = useState(false);
   const [name, setName] = useState('');
@@ -338,7 +345,7 @@ function SlotRow({ gs, pad, pads, slots, T, slotOfPad, armed, onArm, onRemove, o
   const down = ctl ? neighbourSlot(slots.map, gs, 1) : undefined;
   const ARROW = 'flex h-5 w-5 items-center justify-center rounded border border-edge text-slate-400 hover:border-hud/60 hover:text-hud2 disabled:pointer-events-none disabled:opacity-25';
   return (
-    <div data-testid="slot-row" data-slot={slotId(gs)} data-armed={armed ? '1' : undefined} className={`grid items-center gap-x-3 gap-y-1.5 rounded border px-3 py-2 text-xs md:grid-cols-[4.5rem_minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_17rem] ${armed ? 'border-mod bg-mod/[0.07] shadow-[0_0_18px_-6px_var(--color-mod)]' : pad ? 'border-hud/40 bg-hud/[0.04]' : 'border-edge/70 bg-black/20'}`}>
+    <div data-testid="slot-row" data-slot={slotId(gs)} data-armed={armed ? '1' : undefined} className={`${highlighted ? 'slot-row-highlight ' : ''}grid items-center gap-x-3 gap-y-1.5 rounded border px-3 py-2 text-xs md:grid-cols-[4.5rem_minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1.2fr)_17rem] ${armed ? 'border-mod bg-mod/[0.07] shadow-[0_0_18px_-6px_var(--color-mod)]' : pad ? 'border-hud/40 bg-hud/[0.04]' : 'border-edge/70 bg-black/20'}`}>
       <div className="flex items-center gap-1.5">
         <span className="font-mono text-sm font-bold text-hud2">{slotId(gs)}</span>
         {ctl && (

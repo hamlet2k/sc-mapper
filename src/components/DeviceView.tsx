@@ -24,6 +24,7 @@ import { CalloutBody, DeviceCanvas, LIVE_ROW, MULTI_VIEW_MIN_W, PAGE_HEADING_H, 
 import { DROP_HINT, GamePathHint } from './GameState';
 import { Ico } from './icons';
 import { Tip } from './Tooltip';
+import { AssignedMarker } from './AssignedMarker';
 import { TemplateEditor } from './TemplateEditor';
 import { useFocusPressedView } from './useFocusPressedView';
 import { useSwapViews } from './useSwapViews';
@@ -48,7 +49,7 @@ interface Props {
   compact?: boolean;
   /** remember a template for a slot (null = automatic) */
   onPickTemplate: (slot: GameSlot, templateId: string | null) => void;
-  onOpenControllers: () => void;
+  onOpenControllers: (gs?: GameSlot) => void;
   /** Settings → Highlight on press / Scroll to it */
   highlight: boolean;
   scroll: boolean;
@@ -128,7 +129,7 @@ export function DeviceView(props: Props) {
     const o = options.find((x) => x.slot === chip.slot && x.instance === chip.instance);
     if (o) onSelect(o.key);
   }, [chip]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!options.length) return <NoSlots onOpenControllers={onOpenControllers} onImportShared={props.onImportShared} hasKm={slots.length > 0} />;
+  if (!options.length) return <NoSlots onOpenControllers={() => onOpenControllers()} onImportShared={props.onImportShared} hasKm={slots.length > 0} />;
   const shown = shownDeviceSlot(slots, selKey)!;
   const opt = options.find((o) => o.key === deviceSlotKey(shown.gs))!;
   const chosen = resolveSlotTemplate(T.templates, props.slotMap, opt.gs, opt.pad, T.picks);
@@ -166,7 +167,7 @@ function NoSlots({ onOpenControllers, onImportShared, hasKm }: { onOpenControlle
 }
 
 type Chosen = ReturnType<typeof resolveSlotTemplate>;
-function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, onRefresh, highlight, scroll, query, chip, editMode, onEdit, onRemove, onBind, onShowInList, notify, onShare, onImportShared, onSharedText }:
+function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, onRefresh, slotMap, highlight, scroll, query, chip, editMode, onEdit, onRemove, onBind, onShowInList, notify, onShare, onImportShared, onSharedText }:
   Props & { opt: DevOption; chosen: Chosen; T: ReturnType<typeof useTemplates>; strip: ReactNode }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
@@ -407,6 +408,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
         style={{ top: stick.bar, background: STICKY_BAR_BG }}>
         <div ref={lineRef} className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" data-testid="device-slot-line">
           {strip}
+          <AssignedMarker gs={opt.gs} map={slotMap} />
           <span className="flex min-w-0 items-center gap-1.5 text-slate-400" data-testid="device-hardware">
             <span className={LABEL}>Hardware</span>
             {opt.gs.hw ? <span className="max-w-[16rem] truncate text-slate-200" title={opt.pad ? padLabel(opt.pad) : opt.gs.hw.name}>{opt.pad ? padLabel(opt.pad) : opt.gs.hw.name}</span> : <span className="text-slate-500">none assigned</span>}
@@ -457,19 +459,19 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
             </button>
             </Tip>
           )}
-          <Tip label={axisLocked ? `Not available for ${slot}${instance}: Star Citizen only keeps axis settings for js1–js${axisLimit.js} / gp1 (see below)` : `Invert, exponent, custom response curves${slot === 'js' ? ' and deadzone / saturation' : ''} for ${slot}${instance} only`}>
-          <button type="button" onClick={() => !axisLocked && onOpenAxis(opt.gs)} aria-disabled={axisLocked || undefined} disabled={axisLocked} data-testid="slot-axis-settings"
-            aria-label={`Axis settings & curves for ${slot}${instance}`} aria-describedby={axisLocked ? 'axis-locked-msg' : undefined}
-            className="flex items-center gap-1.5 rounded border border-hud/50 bg-hud/10 px-2.5 py-1 font-display text-[11px] font-semibold uppercase tracking-wider text-hud2 transition hover:bg-hud/20 disabled:cursor-not-allowed disabled:border-edge disabled:bg-transparent disabled:text-slate-500">
+          {!axisLocked && <Tip label={`Invert, exponent, custom response curves${slot === 'js' ? ' and deadzone / saturation' : ''} for ${slot}${instance} only`}>
+          <button type="button" onClick={() => onOpenAxis(opt.gs)} data-testid="slot-axis-settings"
+            aria-label={`Axis settings & curves for ${slot}${instance}`}
+            className="flex items-center gap-1.5 rounded border border-hud/50 bg-hud/10 px-2.5 py-1 font-display text-[11px] font-semibold uppercase tracking-wider text-hud2 transition hover:bg-hud/20">
             <Ico name="curve" className="h-3.5 w-3.5" /> Axis settings &amp; curves <span className="font-mono normal-case">· {slot}{instance}</span>
           </button>
-          </Tip>
+          </Tip>}
           </span>
         </div>
         {opt.gs.unknown && (
           <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-mod/40 bg-mod/5 px-3 py-1.5 text-[11px] text-slate-300" data-testid="device-unidentified">
             <span className="min-w-0 flex-1">{UNKNOWN_DEVICE_HINT}</span>
-            <button type="button" onClick={onOpenControllers} data-testid="assign-unidentified-device" className="rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20">Assign device / template · {slot}{instance}</button>
+            <button type="button" onClick={() => onOpenControllers(opt.gs)} data-testid="assign-unidentified-device" className="rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20">Assign device / template · {slot}{instance}</button>
           </div>
         )}
         {axisLocked && (
@@ -479,9 +481,9 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
               ? <>The game lists this device as {slot}{instance}; Star Citizen only allows axis, inversion and curve tuning on js1–js{axisLimit.js}. The order comes from the game and Windows USB order, not this app. To tune it, change which devices connect first, then refresh game state here.</>
               : <>The game lists this device as {slot}{instance}; Star Citizen only allows gamepad axis, inversion and curve tuning on gp1. The order comes from the game and Windows USB order, not this app. To tune it, change which devices connect first, then refresh game state here.</>}</span>
             <span className="ml-auto flex shrink-0 gap-1.5">
-              <button type="button" onClick={onRefresh} data-testid="axis-refresh" className="flex items-center gap-1 rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20"><Ico name="refresh" className="h-3 w-3" /> Refresh game state</button>
+              <button type="button" onClick={() => { onOpenControllers(opt.gs); onRefresh(); }} data-testid="axis-refresh" className="flex items-center gap-1 rounded border border-mod/60 px-2 py-0.5 font-semibold text-mod hover:bg-mod/20"><Ico name="refresh" className="h-3 w-3" /> Refresh game state</button>
               <span className="self-center text-[10px] text-slate-500" data-testid="axis-drop-hint">{DROP_HINT}</span>
-              <button type="button" onClick={onOpenControllers} data-testid="axis-reorder" className="flex items-center gap-1 rounded border border-edge px-2 py-0.5 text-slate-300 hover:border-mod/60 hover:text-mod"><Ico name="slots" className="h-3 w-3" /> Game slots &amp; controllers</button>
+              <button type="button" onClick={() => onOpenControllers(opt.gs)} data-testid="axis-reorder" className="flex items-center gap-1 rounded border border-edge px-2 py-0.5 text-slate-300 hover:border-mod/60 hover:text-mod"><Ico name="slots" className="h-3 w-3" /> Game slots &amp; controllers</button>
             </span>
             <span className="flex basis-full items-center gap-1.5 text-[10px] text-slate-500" data-testid="axis-path">Fresh export from <GamePathHint /></span>
           </div>

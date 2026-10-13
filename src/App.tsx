@@ -35,6 +35,8 @@ import { comboFrom, scMouseButton, scWheel } from './lib/capture';
 import { ChromiumBanner } from './components/ChromiumBanner';
 import { Ico, type IconName } from './components/icons';
 import { DeleteProfileDialog, ProfilePanel } from './components/ProfilePanel';
+import { ImportNameDialog } from './components/ProfileName';
+import { renameProfile } from './lib/profileNames';
 import { useEscape } from './components/useEscape';
 import { effectiveGroup, indexDefaults, newProfile, setAction, setGroup, withRebinds, type CaptureConflict } from './lib/edit';
 import { bindKey, comboLabel, groupOfDevice, groupOfSlot, searchSpec } from './lib/inputs';
@@ -143,7 +145,18 @@ export default function App() {
   const [capture, setCapture] = useState<CaptureRequest | null>(null);
   const [editorId, setEditorId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [devicesOpen, setDevicesOpen] = useState<false | 'slots'>(false);
+  const [devicesOpen, setDevicesOpen] = useState<{ target?: string } | null>(null);
+  const openSlots = (gs?: GameSlot) => setDevicesOpen({ target: gs ? slotId(gs) : undefined });
+  const [nameRequests, setNameRequests] = useState<{ id: number; initial: string; file: string; resolve: (name: string | null) => void }[]>([]);
+  const nameRequestId = useRef(0);
+  const askImportName = useCallback((initial: string, file: string) => new Promise<string | null>((resolve) => {
+    const request = { id: ++nameRequestId.current, initial, file, resolve };
+    setNameRequests((q) => [...q, request]);
+  }), []);
+  const finishImportName = (name: string | null) => {
+    nameRequests[0]?.resolve(name);
+    setNameRequests((q) => q.slice(1));
+  };
   const [deleting, setDeleting] = useState(false);
   // which keyboard / mouse slot (kb1, kb2… / mo1, mo2…) the Keyboard view shows and captures go to, when there are several
   const [kbInst, setKbInst] = useState(1);
@@ -273,11 +286,14 @@ export default function App() {
   }, [rows, conflicts]);
 
   // ---- import ---------------------------------------------------------------
-  const addImported = useCallback((p: Profile, note = '') => {
+  const addImported = useCallback(async (candidate: Profile, note = '') => {
+    const name = await askImportName(candidate.name, candidate.fileName);
+    if (name === null) return;
+    const p = { ...candidate, name };
     setStore((s) => ({ profiles: [...s.profiles, p], activeId: p.id }));
     setSlotStore((s) => ({ ...s, [p.id]: seedSlots(p) })); // fresh import: hardware is auto-matched once controllers show
     setToast({ kind: 'ok', text: `Imported “${p.name}” · ${p.rebindCount} bindings${p.devices.length ? ` · ${p.devices.length} devices` : ''}${note}` });
-  }, []);
+  }, [askImportName]);
   const importFiles = useCallback(async (files: FileList | File[]) => {
     const list = Array.from(files);
     for (const f of list) {
@@ -290,19 +306,19 @@ export default function App() {
           const r = computeRematch(knownDevices(p.devices, emptySlotMap()), cur.devices);
           if (r.moves.length) { setPendingImport({ p, r }); continue; }
         }
-        addImported(p);
+        await addImported(p);
       } catch (e) {
         setToast({ kind: 'err', text: `${f.name}: ${(e as Error).message}` });
       }
     }
   }, [addImported]);
-  const shiftImport = (shift: boolean) => {
+  const shiftImport = async (shift: boolean) => {
     if (!pendingImport) return;
     const { p, r } = pendingImport;
     setPendingImport(null);
-    if (!shift) { addImported(p); return; }
+    if (!shift) { await addImported(p); return; }
     const x = shiftToOrder(p, r, IDX);
-    addImported({ ...withRebinds(x, x.rebinds), importedAt: p.importedAt, original: JSON.parse(JSON.stringify(x.rebinds)) }, ' · mappings shifted to the current game order');
+    await addImported({ ...withRebinds(x, x.rebinds), importedAt: p.importedAt, original: JSON.parse(JSON.stringify(x.rebinds)) }, ' · mappings shifted to the current game order');
   };
   const loadSample = async () => {
     const res = await fetch(`${import.meta.env.BASE_URL}samples/actionmaps.xml`);
@@ -312,13 +328,13 @@ export default function App() {
 
   // ---- editing --------------------------------------------------------------
   /** Apply a change to the active profile's rebinds (creating a profile from the defaults if needed) and record undo */
-  const applyEdit = useCallback((label: string, touched: { map: string; action: string }[], fn: (r: RebindMap) => RebindMap, extra?: Pick<UndoEntry, 'meta'>) => {
+  const applyEdit = useCallback((label: string, touched: { map: string; action: string }[], fn: (r: RebindMap) => RebindMap, extra?: Pick<UndoEntry, 'meta'>, importedName?: string) => {
     const s = storeRef.current;
     let prof = s.profiles.find((p) => p.id === s.activeId) ?? null;
     let profiles = s.profiles;
     const created = !prof;
     if (!prof) {
-      prof = newProfile(uniqueName(s.profiles.map((p) => p.name), 'My layout'));
+      prof = newProfile(importedName ?? uniqueName(s.profiles.map((p) => p.name), 'My layout'));
       profiles = [...profiles, prof];
     }
     const seen = new Set<string>();
@@ -748,8 +764,15 @@ export default function App() {
   }, [shareIn, T.user, T.templates.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const confirmShared = async (t: SlotRef & { isNew?: boolean }, mode: ImportMode) => {
     if (!shareIn) return;
-    const { pack } = shareIn;
+    const incoming = shareIn;
+    const { pack } = incoming;
     setShareIn(null);
+    let importedName: string | undefined;
+    if (!curProfile()) {
+      const name = await askImportName(uniqueName(storeRef.current.profiles.map((p) => p.name), 'My layout'), incoming.file);
+      if (name === null) { setShareIn(incoming); return; }
+      importedName = name;
+    }
     // 1. the template: a built-in is referenced; a custom one joins the user's templates (an identical one already there is reused)
     let tplId: string | undefined, tplNote = '';
     try {
@@ -770,7 +793,7 @@ export default function App() {
     const plan = planImport(prof?.rebinds ?? {}, IDX, pack.bindings, t, mode);
     const sid = `${t.slot}${t.instance}`;
     const what = pack.title ?? pack.device.name ?? pack.template.name;
-    applyEdit(`Import “${what}” into ${sid} (${mode})`, plan.touched, () => plan.rebinds, { meta });
+    applyEdit(`Import “${what}” into ${sid} (${mode})`, plan.touched, () => plan.rebinds, { meta }, importedName);
     const existing = map0.slots.find((s) => s.slot === t.slot && s.instance === t.instance);
     const takeName = !existing || (!existing.hw && !existing.gameProduct);
     const d = pack.device;
@@ -836,7 +859,11 @@ export default function App() {
   // row in the Keyboard view (switching to that view when another one is open)
   const shownDev = shownDeviceSlot(deviceSlots, devSel);
   const pickSlot = (gs: GameSlot) => {
-    if (isController(gs)) { selectDevice(deviceSlotKey(gs)); setView('devices'); return; }
+    if (isController(gs)) {
+      selectDevice(deviceSlotKey(gs)); setView('devices');
+      if (gs.unknown && !gs.hw) openSlots(gs);
+      return;
+    }
     if (gs.slot === 'kb') setKbInst(gs.instance); else setMoInst(gs.instance);
     setView('keyboard');
   };
@@ -848,11 +875,12 @@ export default function App() {
   };
   const kmSlots = { kb: slotMap.slots.filter((s) => s.slot === 'kb').map((s) => s.instance), mo: slotMap.slots.filter((s) => s.slot === 'mo').map((s) => s.instance) };
   const profilePanel = (
-    <ProfilePanel profiles={store.profiles} profile={profile} versionLabel={versionLabel} slots={slotMap.slots}
+    <ProfilePanel key={profile?.id ?? 'defaults'} profiles={store.profiles} profile={profile} versionLabel={versionLabel} slots={slotMap.slots} slotMap={slotMap}
       connected={(gs) => !!gs.hw && pads.some((p) => p.key === gs.hw!.key)}
+      onRename={(id, name) => setStore((s) => renameProfile(s, id, name))}
       onSelect={(id) => setStore((s) => ({ ...s, activeId: id }))} onImport={() => fileRef.current?.click()} onExport={() => setExportOpen(true)}
       onDelete={() => setDeleting(true)} onNew={() => createLayout(false)} onDuplicate={() => createLayout(true)} onRevert={profile?.original ? revertImported : undefined}
-      onResetAll={resetAll} onOpenSlots={() => setDevicesOpen('slots')} onRefresh={() => refreshRef.current?.click()} picker={slotPicker} />
+      onResetAll={resetAll} onOpenSlots={(gs) => openSlots(gs ?? (view === 'devices' ? shownDev?.gs : undefined))} onRefresh={() => refreshRef.current?.click()} picker={slotPicker} />
   );
 
   return (
@@ -1000,7 +1028,7 @@ export default function App() {
               <span className="flex items-center gap-1.5 font-display text-sm font-bold uppercase tracking-[0.2em] text-mod"><Ico name="target" className="h-4 w-4" /> Find by pressing</span>
               <span className="text-slate-300">
                 Press a <b>controller button</b>, push a <b>hat</b>, move an <b>axis</b>, or press a <b>key</b>: {PRESS_HINT[view]}
-                {' '}(device number included, using your <button type="button" onClick={() => setDevicesOpen('slots')} className="text-hud underline-offset-2 hover:underline">game slots</button>). <b>Esc</b> cancels.
+                {' '}(device number included, using your <button type="button" onClick={() => openSlots(chip ? slotMap.slots.find((gs) => gs.slot === chip.slot && gs.instance === chip.instance) : undefined)} className="text-hud underline-offset-2 hover:underline">game slots</button>). <b>Esc</b> cancels.
                 {!pads.length && <span className="text-mod"> No controller visible yet: the first press wakes it up and already counts.</span>}
               </span>
               <span data-testid="press-mouse-pad" role="button" tabIndex={-1}
@@ -1038,7 +1066,7 @@ export default function App() {
             editMode={editMode} onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onCapture={onCaptureCell} onShowInList={pickInput}
             flash={flash && (flash.hit.slot === 'kb' || flash.hit.slot === 'mo') ? { combo: flash.hit.inputs[0], at: flash.at } : null} />}
           {view === 'devices' && <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads}
-            slots={deviceSlots} slotMap={slotMap} selKey={devSel} onSelect={selectDevice} compact={!wide} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => setDevicesOpen('slots')} highlight={highlightOn} scroll={highlightOn && scrollOn}
+            slots={deviceSlots} slotMap={slotMap} selKey={devSel} onSelect={selectDevice} compact={!wide} onPickTemplate={onPickSlotTemplate} onOpenControllers={openSlots} highlight={highlightOn} scroll={highlightOn && scrollOn}
             query={dq} chip={chip} onOpenAxis={(gs) => setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance })} axisLimit={AXIS_LIMIT} onRefresh={() => refreshRef.current?.click()}
             editMode={editMode} onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })}
             templates={T} onShare={openShare} onImportShared={() => shareFileRef.current?.click()} onSharedText={openSharedText} />}
@@ -1048,6 +1076,8 @@ export default function App() {
         </div>
       </div>
 
+      {nameRequests[0] && <ImportNameDialog key={nameRequests[0].id} initial={nameRequests[0].initial} file={nameRequests[0].file}
+        onSave={(name) => finishImportName(name)} onCancel={() => finishImportName(null)} />}
       {dragging && <DropOverlay withRefresh={!!profile} zone={dropZone} />}
       {pendingImport && <ImportShiftDialog file={pendingImport.p.fileName} r={pendingImport.r} onShift={() => shiftImport(true)} onAsIs={() => shiftImport(false)} onCancel={() => setPendingImport(null)} />}
       {flash && (
@@ -1079,8 +1109,8 @@ export default function App() {
       )}
       {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} devices={exportDevices} slots={exportSlots} onClose={() => setExportOpen(false)} />}
       {devicesOpen && (
-        <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(false)}
-          initialSlot={view === 'devices' ? devSel.replace(/^slot:/, '') : undefined}
+        <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(null)}
+          initialSlot={devicesOpen.target}
           onRefresh={() => refreshRef.current?.click()} banner={rematchBanner} />
       )}
       {deleting && profile && (

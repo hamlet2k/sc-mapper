@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { UNKNOWN_DEVICE_HINT, isController, slotDeviceName, slotId, type GameSlot } from '../lib/slots';
+import { UNKNOWN_DEVICE_HINT, isController, slotDeviceName, slotId, type GameSlot, type SlotMap } from '../lib/slots';
 import type { Profile } from '../lib/types';
 import { DROP_HINT, GamePathHint } from './GameState';
 import { Tip } from './Tooltip';
 import { Ico, type IconName } from './icons';
 import { useEscape } from './useEscape';
+import { ProfileNameInput } from './ProfileName';
+import { AssignedMarker } from './AssignedMarker';
 
 /**
  * The profile, in one place: which profile is active, its file actions (import / export / delete, plus new, duplicate,
@@ -25,13 +27,15 @@ export interface SlotPicker {
   axisLimit: Record<'js' | 'gp', number>;
 }
 
-export function ProfilePanel({ profiles, profile, versionLabel, slots, connected, onSelect, onImport, onExport, onDelete, onNew, onDuplicate, onRevert, onResetAll, onOpenSlots, onRefresh, picker }: {
-  profiles: Profile[]; profile: Profile | null; versionLabel: string; slots: GameSlot[]; connected: (gs: GameSlot) => boolean;
+export function ProfilePanel({ profiles, profile, versionLabel, slots, slotMap, connected, onSelect, onRename, onImport, onExport, onDelete, onNew, onDuplicate, onRevert, onResetAll, onOpenSlots, onRefresh, picker }: {
+  profiles: Profile[]; profile: Profile | null; versionLabel: string; slots: GameSlot[]; slotMap: SlotMap; connected: (gs: GameSlot) => boolean;
+  onRename: (id: string, name: string) => void;
   onSelect: (id: string | null) => void; onImport: () => void; onExport: () => void; onDelete: () => void;
-  onNew: () => void; onDuplicate: () => void; onRevert?: () => void; onResetAll: () => void; onOpenSlots: () => void; onRefresh: () => void;
+  onNew: () => void; onDuplicate: () => void; onRevert?: () => void; onResetAll: () => void; onOpenSlots: (gs?: GameSlot) => void; onRefresh: () => void;
   picker?: SlotPicker;
 }) {
   const [menu, setMenu] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
   useEscape(() => setMenu(false), menu);
   return (
     <section className="rounded border border-edge/70 bg-black/25 p-3 text-xs text-slate-400" data-testid="profile-panel">
@@ -45,17 +49,25 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
         <option value="">Game defaults ({versionLabel})</option>
         {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
+      {profile && (renaming === profile.id
+        ? <ProfileNameInput key={profile.id} initial={profile.name} testId="profile-name-input" saveOnBlur
+          onSave={(name) => { onRename(profile.id, name); setRenaming(null); }} onCancel={() => setRenaming(null)} />
+        : <button type="button" onClick={() => setRenaming(profile.id)} data-testid="profile-name" title="Rename profile"
+          className="mt-1 flex w-full items-center gap-1.5 text-left text-xs text-slate-300 hover:text-hud2">
+          <span className="truncate">{profile.name}</span><Ico name="edit" className="h-3 w-3 shrink-0 text-slate-500" />
+        </button>)}
       {profile && <div className="mt-1 truncate font-mono text-[10px] text-slate-500" title={profile.fileName}>{profile.fileName} · {new Date(profile.importedAt).toLocaleDateString()}</div>}
       <div className="relative mt-2 flex items-center gap-1.5">
         <IconBtn icon="import" label="Import a profile (actionmaps.xml or an exported layout)" onClick={onImport} testid="profile-import" tone="hud" />
         <IconBtn icon="export" label={profile ? 'Export a file Star Citizen can load' : 'Import or edit bindings first'} onClick={onExport} disabled={!profile} testid="profile-export" tone="ok" />
         <IconBtn icon="trash" label={profile ? `Delete “${profile.name}”` : "The game defaults can't be deleted"} onClick={onDelete} disabled={!profile} testid="profile-delete" tone="alert" />
-        <IconBtn icon="more" label="More: new, duplicate, revert, reset" onClick={() => setMenu((v) => !v)} testid="profile-more" pressed={menu} />
+        <IconBtn icon="more" label="More: rename, new, duplicate, revert, reset" onClick={() => setMenu((v) => !v)} testid="profile-more" pressed={menu} />
         {menu && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMenu(false)} />
             <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-md border border-edge bg-panel p-1 shadow-xl" role="menu" data-testid="profile-menu">
               <MenuItem icon="filePlus" label="New profile from the game defaults" onClick={() => { setMenu(false); onNew(); }} />
+              {profile && <MenuItem icon="edit" label="Rename" onClick={() => { setMenu(false); setRenaming(profile.id); }} />}
               {profile && <MenuItem icon="duplicate" label="Duplicate this profile" onClick={() => { setMenu(false); onDuplicate(); }} />}
               {profile && <MenuItem icon="refresh" label="Refresh game state (device order)…" hint={DROP_HINT} onClick={() => { setMenu(false); onRefresh(); }} />}
               {profile && onRevert && <MenuItem icon="undo" label="Revert to the imported file" onClick={() => { setMenu(false); onRevert(); }} />}
@@ -84,10 +96,12 @@ export function ProfilePanel({ profiles, profile, versionLabel, slots, connected
               : 'Click a slot to open it in the Devices or Keyboard view.'}
           </p>
         )}
-        {slots.length ? <SlotList slots={slots} connected={connected} picker={picker} />
+        {slots.length ? <SlotList slots={slots} slotMap={slotMap} connected={connected} picker={picker} />
           : <p className="mt-1 text-[11px] text-slate-500">{profile ? 'No game slots yet.' : 'Import a profile to fill these in, or add them by hand.'}</p>}
-        {slots.some((s) => s.unknown) && <p className="mt-2 text-[10px] text-mod" data-testid="unknown-device-hint">{UNKNOWN_DEVICE_HINT}</p>}
-        <button type="button" onClick={onOpenSlots} data-testid="open-slots" title="Which device is kb1, js1, js2, gp1… in the game, the hardware for each and its template"
+        {slots.some((s) => s.unknown) && <p className="mt-2 text-[10px] text-mod" data-testid="unknown-device-hint">{UNKNOWN_DEVICE_HINT}
+          {' '}<button type="button" onClick={() => onOpenSlots(slots.find((s) => s.unknown))} data-testid="assign-unknown-slot" className="underline underline-offset-2 hover:text-hud2">Assign device / template</button>
+        </p>}
+        <button type="button" onClick={() => onOpenSlots()} data-testid="open-slots" title="Which device is kb1, js1, js2, gp1… in the game, the hardware for each and its template"
           className="mt-2.5 flex w-full items-center justify-center gap-2 rounded border border-hud/50 bg-hud/10 px-2.5 py-1.5 font-display text-xs font-semibold uppercase tracking-wider text-hud2 transition hover:bg-hud/20 hover:shadow-[0_0_14px_-6px_var(--color-hud)]">
           <Ico name="slots" /> Game slots &amp; controllers
         </button>
@@ -100,7 +114,7 @@ const VIEW_OF = (gs: GameSlot) => (isController(gs) ? 'Devices' : 'Keyboard');
 const slotName = (gs: GameSlot) => slotDeviceName(gs) ?? (gs.unknown ? 'unidentified device' : gs.slot === 'kb' ? 'Keyboard' : gs.slot === 'mo' ? 'Mouse' : 'no device');
 
 /** the profile's game slots; with a picker, the rows the current view can show are selectable (click, ↑ / ↓, Home / End) */
-function SlotList({ slots, connected, picker }: { slots: GameSlot[]; connected: (gs: GameSlot) => boolean; picker?: SlotPicker }) {
+function SlotList({ slots, slotMap, connected, picker }: { slots: GameSlot[]; slotMap: SlotMap; connected: (gs: GameSlot) => boolean; picker?: SlotPicker }) {
   const listRef = useRef<HTMLUListElement>(null);
   const mode = picker?.mode;
   const pickable = (gs: GameSlot) => (mode === 'devices' ? isController(gs) : mode === 'keyboard' ? !isController(gs) : !!mode);
@@ -158,6 +172,7 @@ function SlotList({ slots, connected, picker }: { slots: GameSlot[]; connected: 
             <span className={`w-7 ${sel ? 'font-bold text-hud2' : 'text-hud/80'}`}>{id.toUpperCase()}</span>
             <span className={`min-w-0 flex-1 truncate ${gs.gameMissing ? 'text-slate-500 line-through decoration-slate-600' : sel ? 'text-slate-100' : 'text-slate-300'}`}
               title={gs.unknown ? UNKNOWN_DEVICE_HINT : gs.gameMissing ? 'Not in the latest game state: its mappings are kept' : undefined}>{slotName(gs)}</span>
+            <AssignedMarker gs={gs} map={slotMap} />
             {locked && <span className="shrink-0 text-[9px] text-mod/70" data-testid="slot-axis-locked" title={`No axis / curve tuning: Star Citizen keeps axis settings for js1–js${picker!.axisLimit.js} and gp1 only`}>no curves</span>}
             {(gs.slot === 'js' || gs.slot === 'gp') && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${connected(gs) ? 'bg-ok shadow-[0_0_6px_var(--color-ok)]' : 'bg-slate-600'}`} title={connected(gs) ? 'connected' : 'not connected'} />}
           </li>

@@ -1,5 +1,6 @@
 import { parseSettings } from './devopts';
 import { parseRebindInput } from './inputs';
+import { defaultImportName } from './profileNames';
 import type { Profile, ProfileDevice, Rebind, Slot } from './types';
 
 /** Decode a file that may be UTF-8 or UTF-16 (with BOM) */
@@ -86,11 +87,9 @@ export function parseActionMaps(text: string, fileName: string): Profile {
   }
   if (!count) throw new Error('No <actionmap>/<rebind> entries found. Is this a Star Citizen actionmaps.xml or layout export?');
 
-  const base = fileName.replace(/\.xml$/i, '');
-  const nice = profileName && profileName !== 'default' ? profileName : /^actionmaps$/i.test(base) ? 'My bindings (actionmaps.xml)' : base;
   return {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-    name: nice,
+    name: defaultImportName(fileName, profileName),
     fileName,
     importedAt: new Date().toISOString(),
     devices,

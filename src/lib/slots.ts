@@ -179,6 +179,12 @@ export function pinnedTemplate(map: SlotMap, s: GameSlot): string | undefined {
   return s.hw ? map.hwTemplates[s.hw.key] : s.template;
 }
 
+/** Manual hardware and template choices are distinct from automatic file matches. */
+export function assignedByUser(map: SlotMap, s: GameSlot): boolean {
+  const template = pinnedTemplate(map, s);
+  return isController(s) && ((!!s.hw && (!!s.hwPinned || s.hwMatch === 'legacy')) || (!!template && template !== 'auto'));
+}
+
 export function nextInstance(map: SlotMap, slot: Slot): number {
   let n = 1;
   while (map.slots.some((s) => s.slot === slot && s.instance === n)) n++;

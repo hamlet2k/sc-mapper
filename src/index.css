@@ -92,6 +92,16 @@ body {
 /* conflict group cards (they have their own background): a glowing rim instead of a tint */
 @keyframes flash-card { 0%, 60% { box-shadow: 0 0 0 2px var(--color-mod), 0 0 26px -6px var(--color-mod); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .flash-card { animation: flash-card 2s ease-out; }
+/* A dialog opened for a particular game slot keeps its target visible for two seconds. */
+@keyframes slot-row-pulse {
+  0%, 45% { box-shadow: 0 0 0 2px var(--color-hud), 0 0 18px -4px var(--color-hud); }
+  25%, 70% { box-shadow: 0 0 0 1px rgba(79, 216, 255, .35); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.slot-row-highlight { animation: slot-row-pulse 2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .slot-row-highlight { animation: none; outline: 2px solid var(--color-hud); outline-offset: 2px; }
+}
 /* device photos: the view a press just brought into sight gets a short cyan rim pulse */
 @keyframes view-pulse { 0% { box-shadow: inset 0 0 0 2px rgba(139, 233, 255, 0.95), 0 0 0 1px rgba(79, 216, 255, 0.9), 0 0 28px 4px rgba(79, 216, 255, 0.45); } 100% { box-shadow: inset 0 0 0 1px transparent, 0 0 0 0 transparent, 0 0 0 0 transparent; } }
 .view-pulse { animation: view-pulse 1.2s ease-out forwards; }

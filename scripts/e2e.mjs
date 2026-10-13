@@ -1,7 +1,9 @@
 // End-to-end test + screenshots. Usage: node scripts/e2e.mjs [url]
+// Set SHOTS_DIR to also save the four ux12-*.png screenshots in that directory.
 // Controllers are simulated by replacing navigator.getGamepads() (a headless browser has no real HID devices).
 import { chromium, firefox } from 'playwright';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 const url = process.argv[2] ?? 'http://localhost:4173/';
 const shots = new URL('../screenshots/', import.meta.url).pathname;
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
@@ -13,6 +15,30 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 const log = (...a) => console.log('•', ...a);
 const check = (ok, msg) => { console.log(ok ? '  ✓' : '  ✗', msg); if (!ok) failures.push(msg); };
+/** Accept the selected derived name in import flows that don't customize it. */
+const acceptImportName = async (pg) => {
+  const input = pg.getByTestId('import-profile-name');
+  await input.waitFor();
+  await input.press('Enter');
+  await pg.getByTestId('import-name-dialog').waitFor({ state: 'detached' });
+};
+const ux12Shot = async (pg, name) => {
+  if (!process.env.SHOTS_DIR) return;
+  mkdirSync(process.env.SHOTS_DIR, { recursive: true });
+  await pg.screenshot({ path: join(process.env.SHOTS_DIR, name) });
+};
+const checkSlotTarget = async (pg, id) => {
+  const row = pg.getByTestId('controllers-panel').locator(`[data-testid="slot-row"][data-slot="${id}"]`);
+  await row.waitFor();
+  const target = await row.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { highlighted: el.classList.contains('slot-row-highlight'), visible: r.top >= 0 && r.bottom <= innerHeight,
+      focused: document.activeElement === el.querySelector('[data-testid="slot-hw"]') };
+  });
+  check(target.highlighted && target.visible && target.focused, `${id}: target row highlighted, centered in viewport, and hardware field focused`);
+  return row;
+};
+
 /** the picture preparation's output is rendered for the current framing (no model / render in progress) */
 const prepSettled = (pg) => pg.waitForFunction(() => { const a = document.querySelector('[data-testid=photo-prep-after]'); return a && a.dataset.stale !== '1' && !document.querySelector('[data-testid=photo-prep-progress]') && !document.querySelector('[data-testid=photo-prep-rendering]'); }, null, { timeout: 90000 }).then(() => pg.waitForTimeout(100));
 
@@ -76,7 +102,7 @@ for (const q of ['quantum', 'mining', 'lalt+n', 'key:f', 'mouse2', 'qntm']) {
 }
 await search.fill('');
 
-// Binding instances above the game's eight named joystick options must be visible immediately (isolated storage).
+// UX12: profile names, unnamed device assignment, targeted dialog opening and unavailable curves (isolated storage).
 {
   const unknownContext = await browser.newContext({ viewport: { width: 1680, height: 1000 } });
   const up = await unknownContext.newPage();
@@ -84,15 +110,72 @@ await search.fill('');
   try {
     await up.goto(url, { waitUntil: 'networkidle' });
     await up.locator('input[type=file]').first().setInputFiles('scripts/fixtures/actionmaps-js9-plus.xml');
+    const importName = up.getByTestId('import-profile-name');
+    await importName.waitFor();
+    check(/^actionmaps-js9-plus$/i.test(await importName.inputValue()), 'import name is prefilled from the filename');
+    check(await importName.evaluate((el) => document.activeElement === el && el.selectionStart === 0 && el.selectionEnd === el.value.length), 'import name is autofocused and selected');
+    await importName.fill('UX12 custom import');
+    await ux12Shot(up, 'ux12-import-name.png');
+    await importName.press('Enter');
     const deviceList = up.getByTestId('sidebar-slots');
-    await deviceList.locator('[data-slot-row="js9"]').waitFor();
-    check(/js9/i.test(await deviceList.innerText()), 'imported js9 bindings appear in the left device list');
-    check(/unidentified device/i.test(await deviceList.locator('[data-slot-row="js9"]').innerText()), 'js9 has a clear unidentified device label');
-    await deviceList.locator('[data-slot-row="js9"]').click();
+    const js9 = deviceList.locator('[data-slot-row="js9"]');
+    await js9.waitFor();
+    check(/^ux12 custom import$/i.test(await up.locator('#profile option:checked').innerText()), 'import accepts the custom profile name');
+    check(/unidentified device/i.test(await js9.innerText()), 'js9 has a clear unidentified device label');
+    check(await js9.getByTestId('assigned-marker').count() === 0, 'unassigned js9 has no assigned marker');
+
+    await up.getByTestId('profile-more').click();
+    await up.getByRole('menuitem', { name: /^rename$/i }).click();
+    const rename = up.getByTestId('profile-name-input');
+    await rename.fill('UX12 renamed profile');
+    await ux12Shot(up, 'ux12-profile-rename.png');
+    await rename.press('Enter');
+    await rename.waitFor({ state: 'detached' });
+    await up.reload({ waitUntil: 'networkidle' });
+    check(/^ux12 renamed profile$/i.test(await up.locator('#profile option:checked').innerText()), 'renamed profile persists after reload');
+    await up.getByTestId('profile-name').click();
+    await rename.fill('Canceled name');
+    await rename.press('Escape');
+    check(/^ux12 renamed profile$/i.test(await up.locator('#profile option:checked').innerText()), 'Escape cancels an inline rename');
+    await up.getByTestId('profile-name').click();
+    await rename.fill('  ');
+    await rename.press('Enter');
+    check(await rename.getAttribute('aria-invalid') === 'true', 'empty inline rename is rejected');
+    await rename.fill(' UX12 renamed profile ');
+    await rename.blur();
+    await rename.waitFor({ state: 'detached' });
+    check(/^ux12 renamed profile$/i.test(await up.locator('#profile option:checked').innerText()), 'blur saves a trimmed name');
+
+    await js9.click();
+    await checkSlotTarget(up, 'js9');
+    await up.getByTestId('controllers-close').click();
     await up.getByTestId('device-unidentified').waitFor();
     await up.getByTestId('assign-unidentified-device').click();
-    const row = up.getByTestId('controllers-panel').locator('[data-testid="slot-row"][data-slot="js9"]');
-    check(await row.getByTestId('slot-hw').isVisible(), 'unidentified device opens the existing assignment dialog at js9');
+    const row = await checkSlotTarget(up, 'js9');
+    await ux12Shot(up, 'ux12-slots-highlight.png');
+    await up.waitForFunction(() => !document.querySelector('[data-testid="slot-row"][data-slot="js9"]').classList.contains('slot-row-highlight'));
+    check(true, 'target highlight is removed after its brief flash');
+    await up.getByTestId('controllers-close').click();
+    await up.getByTestId('assign-unknown-slot').click();
+    await checkSlotTarget(up, 'js9');
+    await up.getByTestId('controllers-close').click();
+    await up.getByTestId('axis-reorder').click();
+    await checkSlotTarget(up, 'js9');
+    await row.getByTestId('slot-hw').selectOption('__type');
+    await row.getByTestId('manual-hw').fill('UX12 joystick');
+    await row.getByTestId('manual-hw').press('Enter');
+    await up.getByTestId('controllers-close').click();
+    const header = up.getByTestId('device-slot-bar');
+    await js9.getByTestId('assigned-marker').waitFor();
+    check(await js9.getByTestId('assigned-marker').isVisible() && await header.getByTestId('assigned-marker').isVisible(), 'manually assigned js9 has an assigned-marker in the device list and header');
+    check(/^assigned by you; the game file doesn't name this device$/i.test(await header.getByTestId('assigned-marker').getAttribute('title')), 'assigned marker explains that the file has no device name');
+    check(await up.getByTestId('device-view').getByRole('button', { name: /axis settings.*curves/i }).count() === 0 && await up.getByTestId('slot-axis-settings').count() === 0, 'js9 device page has no axis / curves button');
+    check(await js9.getByTestId('slot-axis-locked').isVisible() && await header.getByTestId('axis-locked').isVisible(), 'js9 keeps its no-curves tag and explanatory text');
+    await ux12Shot(up, 'ux12-assigned-marker.png');
+    await up.reload({ waitUntil: 'networkidle' });
+    await up.locator('[data-view-tab=devices]').click();
+    await js9.click();
+    check(await js9.getByTestId('assigned-marker').isVisible() && await header.getByTestId('assigned-marker').isVisible(), 'manual assignment markers persist after reload');
   } finally {
     await unknownContext.close();
   }
@@ -100,6 +183,7 @@ await search.fill('');
 
 // Import via the real file input (same path as the Import XML button)
 await page.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+await acceptImportName(page);
 await page.waitForTimeout(500);
 log('toast:', await page.locator('.fixed.bottom-5').innerText().catch(() => 'none'));
 log('stats after import:', await page.getByTestId('list-stats').innerText());
@@ -644,6 +728,7 @@ await page.keyboard.press('Escape');
 await page.locator('[data-testid=export-dialog]').click({ position: { x: 5, y: 5 } }).catch(() => {});
 await page.waitForTimeout(200);
 await page.locator('input[type=file]').first().setInputFiles(file);
+await acceptImportName(page);
 await page.waitForTimeout(500);
 const after = await page.locator('#profile option:checked').innerText();
 log('re-imported:', after, '| edited:', before);
@@ -1942,9 +2027,9 @@ console.log('\nslot order & axis settings limit (Firefox, 10 joysticks)');
   await fchipSel('js9');
   const fbar = fp.getByTestId('device-slot-bar');
   const lockTxt = await fbar.getByTestId('axis-locked').innerText();
-  check(await fbar.getByTestId('slot-axis-settings').isDisabled() && /The game lists this device as js9; Star Citizen only allows axis, inversion and curve tuning on js1–js8\. The order comes from the game and Windows USB order, not this app\. To tune it, change which devices connect first, then refresh game state here\./.test(lockTxt)
+  check(await fbar.getByTestId('slot-axis-settings').count() === 0 && /The game lists this device as js9; Star Citizen only allows axis, inversion and curve tuning on js1–js8\. The order comes from the game and Windows USB order, not this app\. To tune it, change which devices connect first, then refresh game state here\./.test(lockTxt)
     && !/reorder/i.test(lockTxt) && await fbar.getByTestId('axis-refresh').isVisible(),
-    `js9: Axis settings CTA disabled; the note says the order comes from the game / USB order, not the app (${lockTxt.slice(0, 70)}…)`);
+    `js9: Axis settings CTA hidden; the note says the order comes from the game / USB order, not the app (${lockTxt.slice(0, 70)}…)`);
   await fp.screenshot({ path: shots + '113-js9-note.png' });
   const fside = fp.getByTestId('sidebar-slots');
   check(await fside.locator('[data-slot-row="js9"] [data-testid=slot-axis-locked]').count() === 1 && await fside.locator('[data-slot-row="js8"] [data-testid=slot-axis-locked]').count() === 0 && (await fside.locator('[data-slot-row="js9"]').getAttribute('data-selected')) === '1',
@@ -2022,6 +2107,7 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   const zoned = await dragIn('round4-tuned.xml', tuned, 'refresh');
   check(!zoned && await rp.getByTestId('drop-overlay').isVisible() && await rp.locator('[data-drop-zone=import]').count() === 1, 'no profile: the drop overlay only imports');
   await dropOn('import');
+  await acceptImportName(rp);
   await rp.waitForTimeout(400);
   check(/Imported “round4-tuned/.test(await rtoast()) && await rp.getByTestId('drop-overlay').count() === 0, 'dropped file imported as a profile');
   check(await rp.getByTestId('profile-refresh').isVisible() && await rp.getByTestId('game-path').first().isVisible(), 'profile card: Refresh entry and the usual folder path with a copy button');
@@ -2071,6 +2157,7 @@ console.log('\nrefresh game state (drop a reshuffled export)');
   check(await ask.isVisible() && /Orion Pedals js3 → js5/.test(await ask.innerText()), 'importing an older file over a profile with another device order asks first');
   await rp.screenshot({ path: shots + '113-import-shift-ask.png' });
   await ask.getByTestId('import-shift-apply').click();
+  await acceptImportName(rp);
   await rp.waitForTimeout(400);
   check(/shifted to the current game order/.test(await rtoast()) && await rp.locator('#profile option').count() === 3, 'shifted import adds the profile');
   await rp.getByTestId('open-slots').click();
@@ -2871,6 +2958,7 @@ console.log('\nround 8: paths from Settings, copy buttons, export modal wrapping
   p8.on('pageerror', (e) => errors.push('[r8] ' + String(e)));
   await p8.goto(url, { waitUntil: 'networkidle' });
   await p8.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+  await acceptImportName(p8);
   await p8.waitForTimeout(800);
   const txt = async (id, root = p8) => (await root.getByTestId(id).innerText()).replace(/\s+/g, '').trim();
   const L = 'C:\\Program Files\\Roberts Space Industries\\StarCitizen\\LIVE';
@@ -2961,6 +3049,7 @@ console.log('\nround 9: slot picker in the sidebar, narrow fallback');
   p9.on('pageerror', (e) => errors.push('[r9] ' + String(e)));
   await p9.goto(url, { waitUntil: 'networkidle' });
   await p9.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+  await acceptImportName(p9);
   await p9.waitForTimeout(800);
   const side = p9.getByTestId('sidebar-slots'), row = (id) => side.locator(`[data-slot-row="${id}"]`);
   const shownSlot = () => p9.getByTestId('device-slot-view').getAttribute('data-slot');
@@ -3036,6 +3125,7 @@ console.log('\nheader links (Chrome)');
   await lp.evaluate(() => localStorage.clear());
   await lp.reload({ waitUntil: 'networkidle' });
   await lp.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+  await acceptImportName(lp);
   await lp.waitForTimeout(600);
   const wide = await headerLinkInfo(lp);
   check(headerLinksOk(wide) && !wide.rowOverflow, `wide: Feedback, GitHub and Support links in the title row with the right hrefs, target=_blank, rel=noopener (${Object.values(wide.links).map((l) => l.href).join(' · ')})`);
@@ -3114,6 +3204,7 @@ console.log('\ndrop overlay in Firefox (Gecko)');
       return { enterCancelled, overCancelled, overlay, textTarget: target.nodeType === 3, types: [...dt.types] };
     }, { name, text, zone, textNode, drop });
     const r1 = await gdrag('round4-tuned.xml', tunedX, 'import');
+    await acceptImportName(gp);
     await gp.waitForTimeout(500);
     check(r1.types.includes('Files') && r1.enterCancelled && r1.overCancelled && r1.overlay && (await gp.locator('#profile option').count()) === 2,
       `Firefox: file drag shows the overlay (types ${r1.types.join('/')}, dragenter + dragover cancelled) and the drop imports`);
@@ -3123,8 +3214,9 @@ console.log('\ndrop overlay in Firefox (Gecko)');
     await gp.getByTestId('rematch-dismiss').click();
     const r3 = await gdrag('round4-tuned.xml', tunedX, 'import', { textNode: true });
     await gp.waitForTimeout(500);
-    check(r3.textTarget && (await gp.getByTestId('import-shift').isVisible() || (await gp.locator('#profile option').count()) === 3), 'Firefox: a text node inside "Import as profile" still counts as that zone');
+    check(r3.textTarget && (await gp.getByTestId('import-shift').isVisible() || await gp.getByTestId('import-name-dialog').isVisible()), 'Firefox: a text node inside "Import as profile" still counts as that zone');
     if (await gp.getByTestId('import-shift').isVisible()) await gp.getByTestId('import-as-is').click();
+    await acceptImportName(gp);
     await gdrag('round4-tuned.xml', tunedX, 'refresh', { drop: false }); // the drag leaves the window without a final dragleave
     await gp.waitForTimeout(1600);
     check(await gp.getByTestId('drop-overlay').count() === 0, 'Firefox: the overlay hides by itself when no dragover arrives any more (no stuck overlay)');
@@ -3169,7 +3261,7 @@ console.log('\nshare controller (Warthog: export js1, import into a friend\'s js
   await sp.evaluate(() => window.__btn(0, 0, true));
   await sp.waitForTimeout(300);
   await sp.evaluate(() => window.__btn(0, 0, false));
-  const asIs = async () => { await sp.waitForTimeout(700); if (await sp.getByTestId('import-shift').isVisible().catch(() => false)) { await sp.getByTestId('import-as-is').click(); await sp.waitForTimeout(500); } };
+  const asIs = async () => { await sp.waitForTimeout(700); if (await sp.getByTestId('import-shift').isVisible().catch(() => false)) { await sp.getByTestId('import-as-is').click(); await sp.waitForTimeout(500); } await acceptImportName(sp); };
   await sp.locator('input[type=file]').first().setInputFiles('scripts/fixtures/share-warthog.xml');
   await asIs();
   await sp.locator('[data-view-tab=devices]').click();
@@ -3420,6 +3512,7 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
   try {
     await lp.goto(url, { waitUntil: 'networkidle' });
     await lp.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+    await acceptImportName(lp);
     await lp.locator('[data-view-tab=devices]').click();
     await lp.getByTestId('sidebar-slots').locator('[data-slot-row="js1"]').click();
     const layoutOf = ({ rootSel, viewId }) => {
@@ -3657,6 +3750,7 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
       .replaceAll('VKBsim Gladiator EVO L', 'WinCtrl URSA MINOR').replaceAll('3201231D', 'B9704098')
       .replace('<modifiers />', '<options type="joystick" instance="3" Product="Experimental Rudder Pedals {0002FFFF-0000-0000-0000-504944564944}"/><modifiers />');
     await hp.locator('input[type=file]').first().setInputFiles({ name: 'name-hints.xml', mimeType: 'text/xml', buffer: Buffer.from(sample) });
+    await acceptImportName(hp);
     await hp.waitForTimeout(400);
     await hp.locator('[data-view-tab=devices]').click();
     const hv = hp.getByTestId('device-view'), picker = hv.getByTestId('template-select');
@@ -3748,6 +3842,7 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
   try {
     await qp.goto(url, { waitUntil: 'networkidle' });
     await qp.locator('input[type=file]').first().setInputFiles('public/samples/actionmaps.xml');
+    await acceptImportName(qp);
     await qp.evaluate(() => window.__btn(0, 7, true));
     await qp.waitForTimeout(500);
     await qp.evaluate(() => window.__btn(0, 7, false));

@@ -23,6 +23,8 @@ const listen = await import('../src/lib/listen');
 const { browserName } = await import('../src/lib/browser');
 const defaults = JSON.parse(readFileSync('src/data/defaults.json', 'utf8'));
 const idx = ed.indexDefaults(defaults);
+const names = await import('../src/lib/profileNames');
+const profileStorage = await import('../src/lib/storage');
 
 // Retain original export fixtures and compare the intended merge without changing authored positions.
 function mergeExpectedPress(callouts: DeviceTemplate['callouts'], axis: string, press: string, button: string): DeviceTemplate['callouts'] {
@@ -33,6 +35,44 @@ let passed = 0;
 const t = (name: string, fn: () => void) => {
   try { fn(); passed++; console.log('  ✓', name); } catch (e) { console.error('  ✗', name); throw e; }
 };
+
+t('profile names: import defaults use the XML label, filename, or actionmaps fallback and trim whitespace', () => {
+  assert.equal(names.defaultImportName('actionmaps.xml', 'default'), 'My bindings (actionmaps.xml)');
+  assert.equal(names.defaultImportName(' ACTIONMAPS.XML ', ' Default '), 'My bindings (actionmaps.xml)');
+  assert.equal(names.defaultImportName(' layout-hosas.XML '), 'layout-hosas');
+  assert.equal(names.defaultImportName('actionmaps.xml', '  My HOTAS  '), 'My HOTAS');
+  assert.equal(names.defaultImportName('  .xml  ', ' '), 'My bindings');
+  assert.equal(names.trimProfileName('  Pilot layout  '), 'Pilot layout');
+  assert.equal(names.trimProfileName(' \t\n '), null);
+  const xml = '<ActionMaps profileName="  My HOTAS  "><actionmap name="m"><action name="a"><rebind input="js9_button1"/></action></actionmap></ActionMaps>';
+  assert.equal(parseActionMaps(xml, 'actionmaps.xml').name, 'My HOTAS');
+  assert.equal(parseActionMaps(xml.replace('  My HOTAS  ', 'default'), 'actionmaps.xml').name, 'My bindings (actionmaps.xml)');
+});
+t('profile names: rename persists through existing storage without changing ids, bindings, or other profiles', () => {
+  const a = ed.newProfile('Old name'), b = ed.newProfile('Other profile');
+  const before = { profiles: [a, b], activeId: a.id };
+  const renamed = names.renameProfile(before, a.id, '  Squadron layout  ');
+  assert.equal(renamed.profiles[0].name, 'Squadron layout');
+  assert.equal(before.profiles[0].name, 'Old name', 'the original store is unchanged');
+  assert.equal(renamed.activeId, before.activeId);
+  assert.equal(renamed.profiles[0].id, a.id);
+  assert.equal(renamed.profiles[0].rebinds, a.rebinds);
+  assert.equal(renamed.profiles[1], b);
+  assert.equal(names.renameProfile(before, a.id, ' \n\t '), before, 'empty names rejected');
+  assert.equal(names.renameProfile(before, 'missing', 'New name'), before);
+  assert.equal(names.renameProfile(before, a.id, ' Old name '), before);
+  const storage = new Map<string, string>();
+  const previous = (globalThis as any).localStorage;
+  (globalThis as any).localStorage = { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => void storage.set(k, v) };
+  try {
+    profileStorage.save(renamed);
+    assert.deepEqual(profileStorage.load(), renamed);
+    const imported = parseActionMaps(readFileSync('scripts/fixtures/actionmaps-js9-plus.xml', 'utf8'), 'actionmaps-js9-plus.xml');
+    const custom = names.renameProfile({ profiles: [imported], activeId: imported.id }, imported.id, '  Custom imported layout  ');
+    profileStorage.save(custom);
+    assert.equal(profileStorage.load().profiles[0].name, 'Custom imported layout');
+  } finally { (globalThis as any).localStorage = previous; }
+});
 
 t('default data: 4.10.2 LIVE client origin and build', () => {
   assert.equal(defaults.meta.branch, 'sc-alpha-4.10.2');
@@ -2402,6 +2442,24 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
   const ids = (devices: typeof profile.devices) => devices.filter((d) => d.unknown).sort((a, b) => a.instance - b.instance).map(sl.slotId);
   const highBindings = (rebinds: typeof profile.rebinds) => Object.entries(rebinds).flatMap(([map, acts]) => Object.entries(acts).flatMap(([action, list]) =>
     list.filter((r) => r.slot === 'js' && r.instance > 8).map((r) => ({ map, action, ...r }))));
+  t('assigned marker: manual hardware/template choices differ from file matches, including unnamed and added slots', () => {
+    let map = sl.seedSlots(profile);
+    const target = map.slots.find((s) => sl.slotId(s) === 'js9')!;
+    assert.equal(sl.assignedByUser(map, target), false);
+    map = sl.assignHardware(map, target, sl.manualHardware('My stick'));
+    assert.equal(sl.assignedByUser(map, map.slots.find((s) => sl.slotId(s) === 'js9')!), true);
+    map = sl.assignHardware(map, target, null);
+    assert.equal(sl.assignedByUser(map, map.slots.find((s) => sl.slotId(s) === 'js9')!), false);
+    map = sl.setSlotTemplate(map, target, 'builtin-stick');
+    assert.equal(sl.assignedByUser(map, map.slots.find((s) => sl.slotId(s) === 'js9')!), true);
+    map = sl.setSlotTemplate(map, target, 'auto');
+    assert.equal(sl.assignedByUser(map, map.slots.find((s) => sl.slotId(s) === 'js9')!), false);
+    const hw = sl.manualHardware('Named stick');
+    assert.equal(sl.assignedByUser(map, { slot: 'js', instance: 1, gameProduct: 'Named stick', hw, hwMatch: 'usb' }), false);
+    assert.equal(sl.assignedByUser(map, { slot: 'js', instance: 1, gameProduct: 'Named stick', hw, hwPinned: true }), true);
+    assert.equal(sl.assignedByUser(map, { slot: 'gp', instance: 2, hw, hwPinned: true }), true);
+    assert.equal(sl.assignedByUser(map, { slot: 'js', instance: 1, hw, hwMatch: 'legacy' }), true);
+  });
   t('unnamed devices: real file declares js1–8 but exposes every binding instance through js18, including clears', () => {
     assert.deepEqual(profile.devices.filter((d) => d.slot === 'js' && !d.unknown).map((d) => d.instance), [1, 2, 3, 4, 5, 6, 7, 8]);
     assert.deepEqual(ids(profile.devices), unknownIds);
