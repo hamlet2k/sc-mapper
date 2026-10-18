@@ -57,13 +57,13 @@ export function ActionList({ rows, grouped, devices, conflictsOf, onBindingClick
 
   return (
     <div className="hud-panel rounded-lg">
-      <div className="sticky top-0 z-20 grid gap-3 border-b border-edge bg-panel/95 px-4 py-2 font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-hud/70 backdrop-blur" style={{ gridTemplateColumns: template }}>
+      <div className="sticky -top-4 z-20 grid gap-3 border-b border-edge bg-panel/95 px-4 py-2 font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-hud/70 backdrop-blur" style={{ gridTemplateColumns: template }}>
         <div>Action</div>
         {cols.map((c) => <div key={c.device}>{c.label}</div>)}
       </div>
       {sections.map((s, si) => (
         <section key={`${s.key}#${si}`}>
-          <div className="sticky top-[33px] z-10 flex items-baseline gap-3 border-b border-edge/60 bg-gradient-to-r from-panel2 via-panel/95 to-panel/80 px-4 py-1.5 backdrop-blur">
+          <div className="sticky top-[17px] z-10 flex items-baseline gap-3 border-b border-edge/60 bg-gradient-to-r from-panel2 via-panel/95 to-panel/80 px-4 py-1.5 backdrop-blur">
             <h3 className="font-display text-base font-bold uppercase tracking-wider text-hud2">{s.title}</h3>
             {s.sub && <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500">{s.sub}</span>}
             <span className="ml-auto font-mono text-[10px] text-slate-500">{s.rows.length}</span>
