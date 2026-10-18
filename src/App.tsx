@@ -33,6 +33,7 @@ import { parseTemplates, uid, useTemplates, type DeviceTemplate } from './lib/te
 import { hitKeys, hitLabel, hitSpecs, useKeyHits, usePadHits, type PressHit } from './lib/listen';
 import { comboFrom, scMouseButton, scWheel } from './lib/capture';
 import { ChromiumBanner } from './components/ChromiumBanner';
+import { StaleBuildBanner } from './components/StaleBuildBanner';
 import { Ico, type IconName } from './components/icons';
 import { DeleteProfileDialog, ProfilePanel } from './components/ProfilePanel';
 import { ImportNameDialog } from './components/ProfileName';
@@ -1040,6 +1041,7 @@ export default function App() {
               <div className="w-full"><ChromiumBanner detected={pads.length} compact /></div>
             </div>
           )}
+        <StaleBuildBanner />
         <main className="min-w-0 flex-1 overflow-y-auto p-4 scrollbar-thin" id="main">
           {rematchBanner && !devicesOpen && <div className="mb-3">{rematchBanner}</div>}
           {!profile && !filtered.hasQuery && view === 'list' && (

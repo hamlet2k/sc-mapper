@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { GP_AXES, GP_BUTTONS, JS_AXES } from './capture';
 import { BUILTIN_TEMPLATES } from './builtinTemplates';
+import { flagStaleBuild } from './staleBuild';
 
 export type CalloutKind = 'button' | 'hat' | 'axis' | 'encoder' | 'switch' | 'buttons';
 export const CALLOUT_KINDS: { kind: CalloutKind; label: string; hint: string }[] = [
@@ -582,15 +583,23 @@ export function useTemplateImage(t: DeviceTemplate): DeviceTemplate {
 }
 
 /** device-specific built-in templates: a separate chunk (metadata and callout layout only; each picture loads on demand) */
-let deviceTemplates: Promise<DeviceTemplate[]> | null = null;
-export const loadDeviceTemplates = () => (deviceTemplates ??= import('./deviceTemplates').then((m) => m.DEVICE_TEMPLATES, () => []));
+export function createDeviceTemplatesLoader(importer: () => Promise<{ DEVICE_TEMPLATES: DeviceTemplate[] }>, { retryDelayMs = 250 } = {}) {
+  let cached: Promise<DeviceTemplate[]> | null = null;
+  return () => (cached ??= (async () => {
+    try { return (await importer()).DEVICE_TEMPLATES; } catch {
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      return (await importer()).DEVICE_TEMPLATES;
+    }
+  })().catch((error: unknown) => { cached = null; flagStaleBuild(); throw error; }));
+}
+export const loadDeviceTemplates = createDeviceTemplatesLoader(() => import('./deviceTemplates'));
 
 /** user templates (IndexedDB, localStorage fallback) plus the built-ins, and the user's template pick per device */
 export function useTemplates() {
   const [user, setUser] = useState<DeviceTemplate[]>([]);
   const [devices, setDevices] = useState<DeviceTemplate[]>([]);
   const [loaded, setLoaded] = useState(false);
-  useEffect(() => { let on = true; void loadDeviceTemplates().then((l) => { if (on) setDevices(l); }); return () => { on = false; }; }, []);
+  useEffect(() => { let on = true; void loadDeviceTemplates().then((l) => { if (on) setDevices(l); }, () => {}); return () => { on = false; }; }, []);
   const [picks, setPicks] = useState<Record<string, string>>(() => loadPicks());
   useEffect(() => { let on = true; dbAll().then((l) => { if (on) { setUser(l.sort((a, b) => a.name.localeCompare(b.name))); setLoaded(true); } }); return () => { on = false; }; }, []);
   const save = useCallback(async (t: DeviceTemplate) => {

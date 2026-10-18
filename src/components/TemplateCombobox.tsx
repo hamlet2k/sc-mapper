@@ -31,19 +31,18 @@ export function TemplateCombobox({ templates, automatic, deviceName, slot, value
   }
   const automaticLabel = `Automatic (${automatic.name})`;
   const showAuto = matchesTemplate(automatic, query, 'Automatic');
-  // A suggested custom template also appears in My templates; each occurrence needs its own ARIA id.
-  const rowKey = (group: string, value: string) => `${group}:${value}`;
-  const options = [...(showAuto ? [{ key: 'automatic', value: '' }] : []), ...filtered.flatMap((g) => g.templates.map((t) => ({ key: rowKey(g.label, t.id), value: t.id })))];
+  // Suggested templates also appear in their normal group; navigate each occurrence by its own key.
+  const rowKey = (group: TemplatePickerGroup, value: string) => JSON.stringify([group.label, group.brand ?? '', value]);
+  const options = [...(showAuto ? [{ key: 'automatic', value: '' }] : []), ...filtered.flatMap((g) => g.templates.map((t) => ({ key: rowKey(g, t.id), value: t.id })))];
   const current = value ? templates.find((t) => t.id === value) : undefined;
   const closedLabel = value ? current ? templateOptionLabel(current, slot) : value : automaticLabel;
   const highlighted = options.find((o) => o.key === active)?.key ?? options[0]?.key;
-  const selectedKey = options.find((o) => o.value === value)?.key;
   const optionId = (key: string) => `${id}-option-${encodeURIComponent(key)}`;
   const choose = (v: string) => { onChange(v); setOpen(false); setQuery(''); input.current?.focus(); };
   const expand = () => { if (!open) {
     setQuery('');
     const selectedGroup = groups.find((g) => g.templates.some((t) => t.id === value));
-    setActive(value && selectedGroup ? rowKey(selectedGroup.label, value) : 'automatic');
+    setActive(value && selectedGroup ? rowKey(selectedGroup, value) : 'automatic');
     setOpen(true);
   } };
 
@@ -75,7 +74,7 @@ export function TemplateCombobox({ templates, automatic, deviceName, slot, value
     if (open && highlighted !== undefined) document.getElementById(optionId(highlighted))?.scrollIntoView({ block: 'nearest' });
   }, [open, highlighted, id]);
 
-  const option = (key: string, v: string, text: string, variant = false, brand?: string, details?: string, custom = false, copyOf?: string, direct = false) => <div key={key} id={optionId(key)} role="option" aria-selected={selectedKey === key}
+  const option = (key: string, v: string, text: string, variant = false, brand?: string, details?: string, custom = false, copyOf?: string, direct = false) => <div key={key} id={optionId(key)} role="option" aria-selected={value === v}
     data-value={v} data-custom={custom || undefined} data-direct={direct || undefined} data-variant={variant || undefined} data-branded={!!brand || undefined}
     onPointerDown={(e) => e.preventDefault()} onClick={() => choose(v)} onPointerMove={() => setActive(key)}
     className={`template-picker-option cursor-pointer text-xs ${highlighted === key ? 'bg-hud/20 text-hud2' : 'text-slate-200 hover:bg-hud/10'}`}>
@@ -101,6 +100,9 @@ export function TemplateCombobox({ templates, automatic, deviceName, slot, value
           if (!open) { expand(); return; }
           const index = options.findIndex((o) => o.key === highlighted);
           setActive(options[(index + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length]?.key ?? null);
+        } else if (open && (e.key === 'Home' || e.key === 'End')) {
+          e.preventDefault();
+          setActive((e.key === 'Home' ? options[0] : options.at(-1))?.key ?? null);
         } else if (e.key === 'Enter') {
           e.preventDefault(); e.stopPropagation();
           if (!open) expand(); else if (highlighted !== undefined) choose(options.find((o) => o.key === highlighted)!.value);
@@ -117,7 +119,7 @@ export function TemplateCombobox({ templates, automatic, deviceName, slot, value
           {g.brand && <div id={`${id}-brand-${i}-${j}`} role="presentation" data-brand-header className="template-picker-brand">{g.brand}</div>}
           {g.templates.map((t) => {
             const direct = !g.brand && section.label !== 'Suggested for this device' && section.label !== 'My templates';
-            return option(rowKey(g.label, t.id), t.id, templateOptionName(t, query.trim() ? undefined : g.brand),
+            return option(rowKey(g, t.id), t.id, templateOptionName(t, query.trim() ? undefined : g.brand),
               !!t.builtin && !!t.variantOf && !direct, g.brand, templateOptionDetails(t, slot),
               !t.builtin, templateCopyOf(t, templates), direct);
           })}

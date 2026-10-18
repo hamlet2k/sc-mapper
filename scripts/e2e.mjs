@@ -58,6 +58,34 @@ const selectTemplate = async (picker, choice) => {
 };
 const templateValue = (picker) => picker.getAttribute('data-value');
 
+// Failed lazy chunks and Vite preload errors share a persistent, manual reload prompt (isolated storage/cache).
+{
+  const staleContext = await browser.newContext();
+  const sp = await staleContext.newPage();
+  let blocked = 0, navigations = 0;
+  sp.on('framenavigated', (frame) => { if (frame === sp.mainFrame()) navigations++; });
+  await staleContext.route('**/assets/deviceTemplates-*.js', (route) => { blocked++; return route.abort(); });
+  try {
+    await sp.goto(url, { waitUntil: 'networkidle' });
+    const banner = sp.getByTestId('stale-build-banner'), reload = sp.getByTestId('stale-build-reload');
+    await banner.waitFor();
+    check(blocked > 0 && await reload.isVisible() && /Device templates couldn't load\. The site was updated — Reload/.test(await banner.innerText()),
+      'missing deviceTemplates chunk shows the stale-build banner and Reload button');
+    await sp.waitForTimeout(600);
+    check(await banner.isVisible() && navigations === 1, 'stale-build prompt persists without automatically reloading');
+    await staleContext.unroute('**/assets/deviceTemplates-*.js');
+    await Promise.all([sp.waitForNavigation({ waitUntil: 'networkidle' }), reload.click()]);
+    check(await banner.count() === 0, 'Reload loads the current build and clears the stale-build prompt');
+    const prevented = await sp.evaluate(() => {
+      const event = new Event('vite:preloadError', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    await banner.waitFor();
+    check(prevented && await reload.isVisible() && navigations === 2, 'Vite preload errors are prevented and show the same manual reload prompt');
+  } finally { await staleContext.close(); }
+}
+
 // ---- Gamepad API mock, modelled on Chrome's real behaviour:
 //  * navigator.getGamepads() returns [null, null, null, null] until a button is pressed on some controller (user gesture);
 //    gamepadconnected is NOT dispatched, so the app must poll;
@@ -927,7 +955,11 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
   const picker = dv.getByTestId('template-select');
   const list = await templateList(picker);
   const ids = await list.getByRole('option').evaluateAll((els) => els.map((e) => e.dataset.value));
-  check(new Set(ids).size === ids.length, 'template suggestions and lower groups contain no duplicate picks');
+  const occurrences = await list.getByRole('option').evaluateAll((els) => els.map((e) => ({ id: e.id, value: e.dataset.value, suggested: e.closest('[data-group]')?.dataset.group === 'suggestions', brand: e.closest('[data-brand]')?.dataset.brand })));
+  check(new Set(occurrences.map((o) => o.id)).size === occurrences.length, 'every template option occurrence has a unique ARIA id');
+  check(occurrences.filter((o) => o.value.startsWith('builtin-')).every((o) => occurrences.filter((v) => v.value === o.value).length <= 2)
+    && occurrences.filter((o) => o.suggested && o.value.startsWith('builtin-')).every((o) => occurrences.some((v) => v.value === o.value && !v.suggested && v.brand)),
+    'built-ins appear at most twice and suggested built-ins also remain in their brand groups');
   const sticks = list.locator('[data-group="Sticks"]');
   const generic = sticks.getByRole('option').first();
   check(await generic.getAttribute('data-value') === 'builtin-stick'
@@ -939,15 +971,15 @@ check(/Autoland/.test(await dv.locator('[data-callout="hat1"] [data-dir="button1
   const family = await list.locator('[data-brand=MOZA] [role=option]').evaluateAll((els) => els.map((e) => e.dataset.value));
   const base = family.indexOf('builtin-moza-ab6');
   check(base >= 0 && family.slice(base + 1, base + 4).every((id) => id.startsWith('builtin-moza-ab6-')), 'grip variants sit directly below their base');
-  const ab6 = list.locator('[data-value="builtin-moza-ab6"]');
-  const grip = list.locator('[data-value="builtin-moza-ab6-mh16"]');
+  const ab6 = sticks.locator('[data-value="builtin-moza-ab6"]');
+  const grip = sticks.locator('[data-value="builtin-moza-ab6-mh16"]');
   check(/^AB6\/9 base \+ MHG grip$/i.test(await ab6.locator('[data-template-name]').innerText()) && /^62 buttons$/i.test(await ab6.locator('[data-template-details]').innerText()), 'brand rows show model names with separate button counts');
   check(/↳/.test(await grip.innerText()) && /^AB6\/9 base \+ MH16 grip$/i.test(await grip.locator('[data-template-name]').innerText()), 'grip rows keep the arrow and model name');
   const styling = await list.evaluate((el) => {
     const type = el.querySelector('[data-group="Sticks"] [data-type-header]');
     const brand = el.querySelector('[data-group="Sticks"] [data-brand="MOZA"] [data-brand-header]');
-    const base = el.querySelector('[data-value="builtin-moza-ab6"]');
-    const grip = el.querySelector('[data-value="builtin-moza-ab6-mh16"]');
+    const base = el.querySelector('[data-group="Sticks"] [data-value="builtin-moza-ab6"]');
+    const grip = el.querySelector('[data-group="Sticks"] [data-value="builtin-moza-ab6-mh16"]');
     const detail = base.querySelector('[data-template-details]');
     const name = base.querySelector('[data-template-name]');
     return {
@@ -3762,6 +3794,31 @@ console.log('\nphoto-template editor zoom and layout before and after Save');
     check((await pedalGroup.getByRole('option', { name: /pedal|rudder|crosswind|falcon|legend/i }).count()) === 9, 'unmatched pedal hardware offers all nine pedal built-ins (R1-LEGEND added)');
     await selectTemplate(picker, { value: 'builtin-vkb-t-rudder' });
     check((await templateValue(picker)) === 'builtin-vkb-t-rudder', 'choosing a pedal suggestion applies it with one selection');
+    await picker.click();
+    const selectedList = hp.locator(`[id="${await picker.getAttribute('aria-controls')}"]`);
+    const selected = selectedList.locator('[data-value="builtin-vkb-t-rudder"]');
+    check(await selected.count() === 2 && (await selected.evaluateAll((els) => els.every((el) => el.getAttribute('aria-selected') === 'true' && el.textContent.includes('✓'))))
+      && await picker.getAttribute('aria-activedescendant') === await selected.first().getAttribute('id'),
+      'both suggested and brand occurrences are selected; opening activates the first occurrence');
+    const optionIds = await selectedList.getByRole('option').evaluateAll((els) => els.map((el) => el.id));
+    await picker.press('Home');
+    const walked = [];
+    for (let i = 0; i < optionIds.length; i++) {
+      walked.push(await picker.getAttribute('aria-activedescendant'));
+      await picker.press('ArrowDown');
+    }
+    check(new Set(walked).size === optionIds.length && walked.every((id, i) => id === optionIds[i]) && await picker.getAttribute('aria-activedescendant') === optionIds[0],
+      'ArrowDown walks every occurrence past Suggested and wraps without skipping duplicates');
+    await picker.press('ArrowUp');
+    check(await picker.getAttribute('aria-activedescendant') === optionIds.at(-1), 'ArrowUp wraps to the last option');
+    await picker.press('Home');
+    await picker.press('End');
+    check(await picker.getAttribute('aria-activedescendant') === optionIds.at(-1), 'Home and End navigate to the first and last options');
+    await picker.press('Home');
+    const brandId = await selected.last().getAttribute('id');
+    for (let i = 0; i < optionIds.indexOf(brandId); i++) await picker.press('ArrowDown');
+    await picker.press('Enter');
+    check(await templateValue(picker) === 'builtin-vkb-t-rudder' && await picker.getAttribute('aria-expanded') === 'false', 'Enter on the brand occurrence selects the same template');
     await selectSlot('js1');
     await hp.waitForTimeout(300);
     check(/Thrustmaster Pendular Rudder/.test(await hv.getByTestId('device-status').innerText()), 'T-Pendular-Rudder still matches its existing built-in automatically');

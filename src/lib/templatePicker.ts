@@ -34,7 +34,7 @@ export function templatePickerGroups(templates: readonly DeviceTemplate[], auto?
     return /^generic$/i.test(brand) ? '' : brand;
   };
   const suggested = templates.filter((t) => suggestedIds.has(t.id) && (!t.builtin || brandOf(t)));
-  const remaining = templates.filter((t) => t.builtin && !suggested.some((s) => s.id === t.id));
+  const remaining = templates.filter((t) => t.builtin);
   const users = templates.filter((t) => !t.builtin).sort((a, b) => alphabetical(a.name, b.name));
   const family = (t: DeviceTemplate) => {
     const base = t.variantOf ? templates.find((b) => b.id === t.variantOf) : undefined;

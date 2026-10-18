@@ -32,9 +32,55 @@ function mergeExpectedPress(callouts: DeviceTemplate['callouts'], axis: string, 
 }
 
 let passed = 0;
-const t = (name: string, fn: () => void) => {
-  try { fn(); passed++; console.log('  ✓', name); } catch (e) { console.error('  ✗', name); throw e; }
+const t = (name: string, fn: () => void | Promise<void>) => {
+  const ok = () => { passed++; console.log('  ✓', name); };
+  const fail = (e: unknown) => { console.error('  ✗', name); throw e; };
+  try { const result = fn(); if (result) return result.then(ok, fail); ok(); } catch (e) { fail(e); }
 };
+
+{
+  const { createDeviceTemplatesLoader, newTemplate } = await import('../src/lib/templates');
+  const stale = await import('../src/lib/staleBuild');
+  const templates = [newTemplate('js', 'Test device')];
+  await t('device templates: a failed import retries once and resolves templates', async () => {
+    let calls = 0;
+    const load = createDeviceTemplatesLoader(async () => { if (++calls === 1) throw new Error('chunk missing'); return { DEVICE_TEMPLATES: templates }; }, { retryDelayMs: 0 });
+    const first = load();
+    assert.equal(load(), first, 'concurrent callers share the retry');
+    assert.equal(await first, templates);
+    assert.equal(calls, 2);
+    assert.equal(stale.getStaleBuild(), false);
+  });
+  await t('device templates: successful imports are cached', async () => {
+    let calls = 0;
+    const load = createDeviceTemplatesLoader(async () => { calls++; return { DEVICE_TEMPLATES: templates }; }, { retryDelayMs: 0 });
+    assert.equal(await load(), templates);
+    assert.equal(await load(), templates);
+    assert.equal(calls, 1);
+  });
+  await t('device templates: final failure flags the stale-build store and notifies subscribers', async () => {
+    let calls = 0, notifications = 0;
+    const unsubscribe = stale.subscribeStaleBuild(() => { notifications++; });
+    const load = createDeviceTemplatesLoader(async () => { calls++; throw new Error('chunk missing'); }, { retryDelayMs: 0 });
+    try {
+      assert.equal(stale.getStaleBuild(), false);
+      const pending = load();
+      assert.equal(stale.getStaleBuild(), false, 'wait for the final failure');
+      await assert.rejects(pending, /chunk missing/);
+      assert.equal(calls, 2);
+      assert.equal(stale.getStaleBuild(), true);
+      assert.equal(notifications, 1);
+    } finally { unsubscribe(); }
+  });
+  await t('device templates: two failures reject and a later call retries instead of caching failure', async () => {
+    let calls = 0;
+    const load = createDeviceTemplatesLoader(async () => { if (++calls <= 2) throw new Error('chunk missing'); return { DEVICE_TEMPLATES: templates }; }, { retryDelayMs: 0 });
+    await assert.rejects(load(), /chunk missing/);
+    assert.equal(calls, 2);
+    assert.equal(await load(), templates);
+    assert.equal(calls, 3);
+  });
+}
 
 t('profile names: import defaults use the XML label, filename, or actionmaps fallback and trim whitespace', () => {
   assert.equal(names.defaultImportName('actionmaps.xml', 'default'), 'My bindings (actionmaps.xml)');
@@ -3885,19 +3931,32 @@ console.log('\nshared controller files');
     assert.ok(picker.matchesTemplate(copy, 'wInCtRl vIpErAcE', 'My templates'));
     assert.ok(picker.matchesTemplate(blank, 'my templates', 'My templates'));
   });
-  t('template combobox: pinned automatic, name suggestions and grips are unique; live search covers names, brands and types', () => {
+  t('template combobox: suggestions and grips stay in their brand groups; live search covers names, brands and types', () => {
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
     const auto = all.find((t) => t.id === 'builtin-moza-ab6')!;
     const groups = picker.templatePickerGroups(all, auto, 'rudder pedals');
     assert.equal(groups[0].label, 'Suggested for this device');
     for (const t of [auto, ...tp.templateVariants(all, auto), ...sg.suggestedTemplates('rudder pedals', all)]) assert.ok(groups[0].templates.some((v) => v.id === t.id), t.id);
-    const ids = groups.flatMap((g) => g.templates.map((t) => t.id));
-    assert.equal(new Set(ids).size, ids.length); assert.equal(ids.length, all.length);
+    const regular = groups.slice(1).flatMap((g) => g.templates.map((t) => t.id));
+    assert.equal(regular.length, all.length);
+    for (const template of all) {
+      assert.equal(regular.filter((id) => id === template.id).length, 1, template.id);
+      if (groups[0].templates.some((t) => t.id === template.id)) {
+        assert.equal(groups[0].templates.filter((t) => t.id === template.id).length, 1, template.id);
+        assert.ok(groups.slice(1).some((g) => g.brand === template.brand && g.templates.some((t) => t.id === template.id)), template.id);
+      }
+    }
     assert.ok(picker.matchesTemplate(auto, 'mOzA'));
     assert.ok(picker.matchesTemplate(auto, 'STICK', 'Sticks'));
     assert.ok(picker.matchesTemplate(auto, 'AB6'));
     assert.ok(!picker.matchesTemplate(auto, 'nonexistent'));
     assert.ok(picker.matchesTemplate(auto, 'moza stick', 'Sticks'));
+  });
+  t('template combobox: a suggested built-in appears in Suggested for this device and its brand group', () => {
+    const template = all.find((t) => t.id === 'builtin-moza-ab6')!;
+    const groups = picker.templatePickerGroups(all, template);
+    assert.deepEqual(groups.filter((g) => g.templates.some((t) => t.id === template.id)).map((g) => [g.label, g.brand]),
+      [['Suggested for this device', undefined], ['Sticks', 'MOZA']]);
   });
   t('suggestions use a single category field on built-ins; never users or generic templates', () => {
     assert.ok(all.every((x) => x.category));
