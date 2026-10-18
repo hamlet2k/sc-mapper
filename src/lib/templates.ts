@@ -93,9 +93,9 @@ export interface DeviceTemplate {
   /** short note shown with the template, e.g. how the device numbers its buttons */
   notes?: string;
   /**
-   * built-in device templates only: the id of the template this one is a variant of (e.g. a MOZA AB6/9 base fitted with another
-   * grip, which reports the same USB id and button count as the plain base, so it can't be told apart). A variant has no match
-   * rules (never linked automatically); the pickers list it under its base whenever that base is the slot's automatic template.
+   * built-in device templates only: the family base's id. Grip variants sharing the base's USB identity have no match rules;
+   * model variants (e.g. VKB STECS) keep their own USB/name rules. Matching uses those rules regardless of variantOf.
+   * The pickers group the base and its variants and suggest the whole family for any member's automatic match.
    * Not stored or exported (a user copy is a template of its own).
    */
   variantOf?: string;
@@ -546,7 +546,7 @@ export function templateGroups(list: DeviceTemplate[]): { label: string; templat
 }
 
 /**
- * grip variants for the template pickers: when `t` (usually the slot's automatic template) is a built-in with variants, or is a
+ * family variants for the template pickers: when `t` (usually the slot's automatic template) is a built-in with variants, or is a
  * variant itself, the base first and then its variants (built-ins only, A-Z); otherwise none
  */
 /** picker group of a base's grip variants (see templateVariants) */
@@ -631,7 +631,7 @@ export const newTemplateForDevice = (d: DeviceIdentity): DeviceTemplate => ({
 });
 /** an editable copy of a template (built-ins are read-only); keeps its source's match rules, never the selected device's */
 export const cloneTemplate = (t: DeviceTemplate, name = `${t.name} (copy)`): DeviceTemplate => {
-  const { variantOf: _variant, ...rest } = t; // a copy is a template of its own, not a grip variant of a built-in
+  const { variantOf: _variant, ...rest } = t; // a copy is a template of its own, outside the built-in family
   return { ...structuredClone({ ...rest, builtin: undefined, loadImage: undefined }), id: uid(), name, builtin: undefined, loadImage: undefined };
 };
 // (a copy keeps `brand`, `author` and `notes`: user templates are always listed under “Your templates”)

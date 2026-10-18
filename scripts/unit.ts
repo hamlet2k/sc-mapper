@@ -1,7 +1,7 @@
 // Unit tests: input-name mapping, editing, export structure and import -> export -> import round-trips.
 // Usage: npm run test:unit -- [game-exported layout files...]   (or SC_TEST_LAYOUTS=a.xml,b.xml)
 import assert from 'node:assert/strict';
-import type { DeviceTemplate } from '../src/lib/templates';
+import type { DeviceIdentity, DeviceTemplate } from '../src/lib/templates';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
@@ -25,6 +25,17 @@ const defaults = JSON.parse(readFileSync('src/data/defaults.json', 'utf8'));
 const idx = ed.indexDefaults(defaults);
 const names = await import('../src/lib/profileNames');
 const profileStorage = await import('../src/lib/storage');
+
+// Only these model variants retain automatic matching: distinct STECS USB models, plus Standard's existing name-only rule.
+// Grip variants (MOZA AB6, Virpil Rotor TCS, etc.) must still have no match rules.
+const STECS_MODEL_VARIANTS: Readonly<Record<string, string>> = {
+  'builtin-vkb-stecs-mini-plus': 'builtin-vkb-stecs-mini',
+  'builtin-vkb-stecs-max': 'builtin-vkb-stecs-mini',
+  'builtin-vkb-stecs-space-mini-plus': 'builtin-vkb-stecs-space-mini',
+  'builtin-vkb-stecs-space': 'builtin-vkb-stecs-space-mini',
+  'builtin-vkb-stecs-space-max': 'builtin-vkb-stecs-space-mini',
+  'builtin-vkb-stecs': 'builtin-vkb-stecs-mini',
+};
 
 // Retain original export fixtures and compare the intended merge without changing authored positions.
 function mergeExpectedPress(callouts: DeviceTemplate['callouts'], axis: string, press: string, button: string): DeviceTemplate['callouts'] {
@@ -1229,7 +1240,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     for (const d of DEVICE_TEMPLATES) {
       assert.ok(d.builtin && d.brand && d.id.startsWith('builtin-') && !d.image && (d.views?.length ? !d.loadImage && d.views.every((v) => tp.BUILTIN_PHOTO_RE.test(v.image ?? '')) : typeof d.loadImage === 'function') && d.notes, `${d.id}: picture loaded on demand (art) or built-in photos (photo template)`);
       ASPECTS.add(d.aspect);
-      if (d.variantOf) assert.deepEqual(d.match, [], `${d.id}: a grip variant has no match rules (picked by hand)`);
+      if (d.variantOf && !Object.hasOwn(STECS_MODEL_VARIANTS, d.id)) assert.deepEqual(d.match, [], `${d.id}: a grip variant has no match rules (picked by hand)`);
       else assert.ok(d.match.some((m) => m.name), `${d.id}: name pattern`);
       assert.equal(d.match.some((m) => m.vendor && m.product), USB.has(d.id), `${d.id}: USB id only where confident`);
       // Authored duplicates: AB6 + ViperAce shares S1; the Oct 9 MFD bottom banks repeat the right banks;
@@ -2055,6 +2066,71 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     }
     assert.equal(tp.matchScore(by('builtin-vkb-stecs-max'), { name: 'S-TECS SPACE-L THROTTLE MAX', slot: 'js' }), 0);
   });
+  await t('VKB STECS families: variantOf added without changing automatic matching', async () => {
+    const picker = await import('../src/lib/templatePicker');
+    const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+    const by = (id: string) => all.find((d) => d.id === id)!;
+    // Recorded with pickTemplate BEFORE adding variantOf; preserve even the bare Standard name's fallback.
+    const baseline: [DeviceIdentity, string, 'matched' | 'fallback'][] = [
+      [{ vendor: '231D', productId: '012B' }, 'builtin-vkb-stecs-mini', 'matched'],
+      [{ vendor: '231D', productId: '012C' }, 'builtin-vkb-stecs-mini-plus', 'matched'],
+      [{ vendor: '231D', productId: '012E' }, 'builtin-vkb-stecs-max', 'matched'],
+      [{ vendor: '231D', productId: '0136' }, 'builtin-vkb-stecs-space-mini', 'matched'],
+      [{ vendor: '231D', productId: '0137' }, 'builtin-vkb-stecs-space-mini-plus', 'matched'],
+      [{ vendor: '231D', productId: '0138' }, 'builtin-vkb-stecs-space', 'matched'],
+      [{ vendor: '231D', productId: '0139' }, 'builtin-vkb-stecs-space-max', 'matched'],
+      [{ name: 'VKB-Sim STECS Mk.II Standard', vendor: '231D', productId: '012D' }, 'builtin-vkb-stecs', 'matched'],
+      [{ name: 'STECS Mini' }, 'builtin-vkb-stecs-mini', 'matched'],
+      [{ name: 'STECS Mini Plus' }, 'builtin-vkb-stecs-mini-plus', 'matched'],
+      [{ name: 'STECS Max' }, 'builtin-vkb-stecs-max', 'matched'],
+      [{ name: 'VKBsim STECS Mk.II Standard' }, 'builtin-vkb-stecs', 'matched'],
+      [{ name: 'MODERN THROTTLE MINI' }, 'builtin-vkb-stecs-mini', 'matched'],
+      [{ name: 'MODERN THROTTLE MINI PLUS' }, 'builtin-vkb-stecs-mini-plus', 'matched'],
+      [{ name: 'MODERN THROTTLE MAX STEM' }, 'builtin-vkb-stecs-max', 'matched'],
+      [{ name: 'MODERN THROTTLE STANDARD STEM' }, 'builtin-throttle', 'fallback'],
+      [{ name: 'SPACE-L THROTTLE MINI' }, 'builtin-vkb-stecs-space-mini', 'matched'],
+      [{ name: 'SPACE-L THROTTLE MINI PLUS' }, 'builtin-vkb-stecs-space-mini-plus', 'matched'],
+      [{ name: 'SPACE-L THROTTLE STANDARD STEM' }, 'builtin-vkb-stecs-space', 'matched'],
+      [{ name: 'SPACE-L THROTTLE MAX STEM' }, 'builtin-vkb-stecs-space-max', 'matched'],
+    ];
+    for (const [identity, id, how] of baseline) {
+      const device = { ...identity, slot: 'js' as const };
+      const actual = tp.pickTemplate(all, device);
+      assert.deepEqual([actual.template.id, actual.how], [id, how], JSON.stringify(device));
+      for (const n of [1, 2]) {
+        const duplicate = tp.pickTemplate(all, { ...device, dup: { n, of: 2 } });
+        assert.deepEqual([duplicate.template.id, duplicate.how], [id, how], 'STECS never uses the MOZA dual-device guess');
+      }
+    }
+    for (const [id, baseId] of Object.entries(STECS_MODEL_VARIANTS)) {
+      const d = by(id), base = by(baseId);
+      assert.equal(d.variantOf, baseId, id);
+      if (id === 'builtin-vkb-stecs') assert.deepEqual(d.match, [{ name: 'STECS' }], 'Standard keeps its name-only catch-all');
+      else {
+        const usb = d.match.filter((m) => m.vendor && m.product);
+        assert.equal(usb.length, 1, `${id}: its own USB identity`);
+        assert.ok(!base.match.some((m) => m.vendor === usb[0].vendor && m.product === usb[0].product), `${id}: USB differs from base`);
+      }
+    }
+    const throttles = picker.templatePickerGroups(all).find((g) => g.label === 'Throttles' && g.brand === 'VKB')!;
+    for (const baseId of ['builtin-vkb-stecs-mini', 'builtin-vkb-stecs-space-mini']) {
+      const base = by(baseId);
+      assert.equal(base.variantOf, undefined, `${baseId}: family base`);
+      const variants = Object.keys(STECS_MODEL_VARIANTS).filter((id) => STECS_MODEL_VARIANTS[id] === baseId).sort();
+      const first = throttles.templates.findIndex((d) => d.id === baseId);
+      assert.ok(first >= 0, `${baseId}: under VKB Throttles`);
+      assert.deepEqual(throttles.templates.slice(first + 1, first + 4).map((d) => d.id).sort(), variants, 'all three variants immediately follow the base');
+      for (const id of [baseId, ...variants]) {
+        const d = by(id);
+        const family = tp.templateVariants(all, d).map((t) => t.id);
+        assert.equal(family[0], baseId, `${id}: family starts with base`);
+        assert.deepEqual(family.slice(1).sort(), variants, `${id}: all three alternatives`);
+        const suggested = picker.templatePickerGroups(all, d).find((g) => g.label === 'Suggested for this device')!;
+        assert.deepEqual(suggested.templates.map((t) => t.id), family, `${id}: automatic match suggests the whole family`);
+        assert.doesNotMatch(d.notes!, /Never picked automatically|Grips for this base|MOZA/, `${id}: no grip-only advice`);
+      }
+    }
+  });
   t('STECS: user-verified map, directional order and exact front/back photo layout', () => {
     const stecs = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-stecs')!;
     const b = (...n: number[]) => n.map((i) => `button${i}`);
@@ -2761,6 +2837,23 @@ console.log('\nphoto views: swappable views (interchangeable grips)');
     assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[1], undefined, { [legacyKey]: 'builtin-stick' }).legacy, true, 'old per-device picks still apply');
     m = sl.setSlotTemplate(m, S('js', 2), st.AUTO_TEMPLATE);
     assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[1], undefined, { [legacyKey]: 'builtin-stick' }).template.id, 'builtin-moza-mtq', 'Automatic beats an old pick');
+  });
+  t('STECS model variants: slot Automatic keeps the model and manual family picks follow the hardware', () => {
+    for (const [pid, automatic, base] of [
+      ['012E', 'builtin-vkb-stecs-max', 'builtin-vkb-stecs-mini'],
+      ['0139', 'builtin-vkb-stecs-space-max', 'builtin-vkb-stecs-space-mini'],
+    ]) {
+      const device = pad(`stecs-${pid}`, 'VKB STECS throttle', '231D', pid, 71);
+      let m = sl.assignHardware(sl.addSlot(sl.addSlot(sl.emptySlotMap(), 'js'), 'js'), S('js', 1), sl.hardwareOf(device));
+      const resolved = st.resolveSlotTemplate(ALL, m, m.slots[0], device);
+      assert.deepEqual([resolved.template.id, resolved.how], [automatic, 'matched']);
+      m = sl.setSlotTemplate(m, S('js', 1), base);
+      assert.equal(st.resolveSlotTemplate(ALL, m, m.slots[0], device).template.id, base);
+      assert.equal(st.autoSlotTemplate(ALL, m.slots[0], device).id, automatic, 'Automatic stays the detected Max model');
+      m = sl.assignHardware(m, S('js', 2), sl.hardwareOf(device));
+      const moved = st.resolveSlotTemplate(ALL, m, m.slots[1], device);
+      assert.deepEqual([moved.template.id, moved.how], [base, 'chosen'], 'family pick follows the hardware');
+    }
   });
   t('MOZA AB6 grip variants (MH16 / CarrierAce / ViperAce EX): never picked automatically, listed under the AB6, real DI numbers per grip', () => {
     const ids = ['builtin-moza-ab6-mh16', 'builtin-moza-ab6-carrierace', 'builtin-moza-ab6-viperace'];
@@ -3979,7 +4072,7 @@ console.log('\nshared controller files');
   t('editor creation: blank templates have no defaults; copies preserve their source USB rules, new templates link their own device', () => {
     const unrelated = { slot: 'js' as const, name: 'WinCtrl URSA Minor', vendor: '4098', productId: 'B970' };
     assert.deepEqual(tp.newTemplate('js').match, []);
-    for (const id of ['builtin-honeycomb-bravo', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-logitech-x56-throttle', 'builtin-virpil-vmax-prime']) {
+    for (const id of ['builtin-honeycomb-bravo', 'builtin-tm-twcs', 'builtin-moza-ab6', 'builtin-logitech-x56-throttle', 'builtin-virpil-vmax-prime', 'builtin-vkb-stecs-max', 'builtin-vkb-stecs-space-max']) {
       const source = all.find((x) => x.id === id)!;
       const copy = tp.cloneTemplate(source);
       assert.deepEqual(copy.match, source.match, `${id}: source matching survives copy and export`);
@@ -3987,12 +4080,15 @@ console.log('\nshared controller files');
       assert.ok(!copy.match.some((m) => m.vendor === unrelated.vendor && m.product === unrelated.productId));
       assert.notEqual(copy.match, source.match);
       assert.notEqual(copy.id, source.id);
+      assert.equal(copy.variantOf, undefined, `${id}: copies leave the built-in family`);
+      assert.ok(!('variantOf' in JSON.parse(tp.exportTemplates([copy])).templates[0]), `${id}: copy exports no family metadata`);
+      assert.equal(tp.parseTemplates(tp.exportTemplates([source]))[0].variantOf, undefined, `${id}: imported templates leave the built-in family`);
     }
     const device = { slot: 'js' as const, name: 'Bravo', vendor: '294b', productId: '1901' };
     assert.deepEqual(tp.newTemplateForDevice(device).match, [{ vendor: '294B', product: '1901' }]);
     assert.deepEqual(tp.newTemplateForDevice({ slot: 'js', name: 'My pedals' }).match, [{ name: 'My pedals' }]);
     assert.deepEqual(tp.newTemplateForDevice({ slot: 'gp' }).match, []);
-    assert.deepEqual(tp.cloneTemplate(all.find((x) => x.variantOf)!).match, [], 'grip variants and generic copies remain manually picked');
+    assert.deepEqual(tp.cloneTemplate(all.find((x) => x.variantOf === 'builtin-moza-ab6')!).match, [], 'grip variant copies remain manually picked');
   });
 }
 
@@ -4036,8 +4132,21 @@ console.log('\ntemplate feed');
       assert.equal(e.category, src.category); assert.equal(f.category, src.category);
     }
     assert.deepEqual(a.index.templates.filter((e) => e.variantOf).map((e) => e.id), ['builtin-moza-ab6-mh16', 'builtin-moza-ab6-carrierace', 'builtin-moza-ab6-viperace',
+      ...Object.keys(STECS_MODEL_VARIANTS),
       'builtin-virpil-rotor-tcs-dual', 'builtin-virpil-rotor-tcs-sharka50', 'builtin-virpil-rotor-tcs-hawk60']);
-    assert.ok(a.index.templates.filter((e) => e.variantOf).every((e) => !e.match.length), 'grip variants have no match rules');
+    for (const e of a.index.templates.filter((e) => e.variantOf && !Object.hasOwn(STECS_MODEL_VARIANTS, e.id)))
+      assert.deepEqual(e.match, [], `${e.id}: grip variants still have no match rules`);
+    for (const id of ['builtin-vkb-stecs-mini', 'builtin-vkb-stecs-space-mini', ...Object.keys(STECS_MODEL_VARIANTS)]) {
+      const e = a.index.templates.find((e) => e.id === id)!;
+      const f = read(e.file);
+      const baseId = STECS_MODEL_VARIANTS[id];
+      assert.equal(e.variantOf, baseId, `${id}: index family`);
+      assert.equal(f.variantOf, baseId, `${id}: per-template family`);
+      assert.equal(Object.hasOwn(e, 'variantOf'), !!baseId, `${id}: base omits variantOf in index`);
+      assert.equal(Object.hasOwn(f, 'variantOf'), !!baseId, `${id}: base omits variantOf in file`);
+      assert.deepEqual(e.match, builtins.find((t) => t.id === id)!.match, `${id}: index retains automatic matching`);
+      assert.deepEqual(f.match, e.match, `${id}: file retains automatic matching`);
+    }
     const idx = read('/templates/index.json');
     assert.equal(idx.format, 'sc-mapper-template-feed'); assert.equal(idx.formatVersion, 1); assert.equal(idx.inputNaming, 'star-citizen');
     assert.equal(idx.generatedAt, '2026-01-01T00:00:00.000Z'); assert.equal(idx.commit, 'abc123'); assert.ok(idx.appVersion);

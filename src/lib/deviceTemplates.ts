@@ -1406,7 +1406,7 @@ photoTplExactViews({
 // The forward trigger paddles (fwdr/fwdl) are partly occluded; anchors estimate their ends below the grip.
 // The rear trigger bars (aftr/aftl) are partly hidden under the levers; anchors estimate the two bars separately.
 photoTplExactViews({
-  id: "builtin-vkb-stecs-mini-plus", category: 'throttle', name: "VKB STECS Mini Plus", brand: 'VKB',
+  id: "builtin-vkb-stecs-mini-plus", category: 'throttle', name: "VKB STECS Mini Plus", brand: 'VKB', variantOf: 'builtin-vkb-stecs-mini',
   // VKB Mk.II Mini Plus defaults: MobiFlight s_tecs_modern_throttle_mini_plus (231D:012C), EDCD 231D012C cross-check.
   notes: "VKB default for the STECS Mk.II Mini Plus (USB 231D:012C), from MobiFlight's s_tecs_modern_throttle_mini_plus map and EDCD map 231D012C. ATEM is buttons 8-20 and shifts the grip by 13. MB1 and RADIO directions are blank: the stock map only has their pushes (34, 35), so press-test them. OTS press is not mapped. DirectInput button N = buttonN. Buttons above 32 need Firefox to capture them.",
   match: [{"vendor": "231D", "product": "012C"}, {"name": "MODERN THROTTLE MINI PLUS"}, {"name": "STECS Mini Plus"}],
@@ -1472,7 +1472,7 @@ photoTplExactViews({
 // The forward trigger paddles (fwdr/fwdl) are partly occluded; anchors estimate their ends below the grip.
 // The rear trigger bars (aftr/aftl) are partly hidden under the levers; anchors estimate the two bars separately.
 photoTplExactViews({
-  id: "builtin-vkb-stecs-max", category: 'throttle', name: "VKB STECS Max", brand: 'VKB',
+  id: "builtin-vkb-stecs-max", category: 'throttle', name: "VKB STECS Max", brand: 'VKB', variantOf: 'builtin-vkb-stecs-mini',
   // VKB Mk.II Max defaults: MobiFlight s_tecs_modern_throttle_max_stem (231D:012E); verified Standard grip/STEM labels.
   notes: "VKB firmware default for the STECS Mk.II Max (USB 231D:012E), from MobiFlight's s_tecs_modern_throttle_max_stem map. ATEM is buttons 8-20 and shifts the grip by 13; STEM 48-71 follows the grip. Grip and STEM labels follow the verified Standard template. OTS press is not mapped. DirectInput button N = buttonN. Buttons above 32 need Firefox to capture them.",
   match: [{"vendor": "231D", "product": "012E"}, {"name": "MODERN THROTTLE MAX"}, {"name": "STECS Max"}],
@@ -1603,7 +1603,7 @@ photoTplExactViews({
 // Main trigger is hidden by the space-brake paddle in these angles; anchor estimates its underside/front location.
 // Laser power is the narrow ribbed wheel visible along the outboard end face in the back view.
 photoTplExactViews({
-  id: "builtin-vkb-stecs-space-mini-plus", category: 'throttle', name: "VKB STECS Space Mini Plus (left-hand)", brand: 'VKB',
+  id: "builtin-vkb-stecs-space-mini-plus", category: 'throttle', name: "VKB STECS Space Mini Plus (left-hand)", brand: 'VKB', variantOf: 'builtin-vkb-stecs-space-mini',
   // Left-hand Space Mini Plus: EDCD EliteCustomButtonNames 231D0137; base 1-7, ATEM 8-20, grip 21-42.
   notes: "Left-hand Space grip. Numbering from EDCD EliteCustomButtonNames map 231D0137: base 1-7, ATEM 8-20, grip 21-42. Axes: X/Y gimbal, Z throttle, RX space brake, RY laser power. DirectInput button N = buttonN. Right-hand (USB 013A-013C) not covered: pointer hat and HAT1 left/right swap. Buttons above 32 need Firefox to capture them.",
   match: [{"vendor": "231D", "product": "0137"}, {"name": "SPACE-L THROTTLE MINI PLUS"}],
@@ -1657,7 +1657,7 @@ photoTplExactViews({
 // Main trigger is hidden by the space-brake paddle in these angles; anchor estimates its underside/front location.
 // Laser power is the narrow ribbed wheel visible along the outboard end face in the back view.
 photoTplExactViews({
-  id: "builtin-vkb-stecs-space", category: 'throttle', name: "VKB STECS Space Standard (left-hand)", brand: 'VKB',
+  id: "builtin-vkb-stecs-space", category: 'throttle', name: "VKB STECS Space Standard (left-hand)", brand: 'VKB', variantOf: 'builtin-vkb-stecs-space-mini',
   // Left-hand Space Standard: EDCD EliteCustomButtonNames 231D0138; base 1-7, grip 8-29, STEM 30-53.
   notes: "Left-hand Space grip. Numbering from EDCD EliteCustomButtonNames map 231D0138: base 1-7, grip 8-29, STEM 30-53. Axes: X/Y gimbal, Z throttle, RX space brake, RY laser power. DirectInput button N = buttonN. Right-hand (USB 013A-013C) not covered: pointer hat and HAT1 left/right swap. Buttons above 32 need Firefox to capture them.",
   match: [{"vendor": "231D", "product": "0138"}, {"name": "SPACE-L THROTTLE STANDARD"}],
@@ -1721,7 +1721,7 @@ photoTplExactViews({
 // Main trigger is hidden by the space-brake paddle in these angles; anchor estimates its underside/front location.
 // Laser power is the narrow ribbed wheel visible along the outboard end face in the back view.
 photoTplExactViews({
-  id: "builtin-vkb-stecs-space-max", category: 'throttle', name: "VKB STECS Space Max (left-hand)", brand: 'VKB',
+  id: "builtin-vkb-stecs-space-max", category: 'throttle', name: "VKB STECS Space Max (left-hand)", brand: 'VKB', variantOf: 'builtin-vkb-stecs-space-mini',
   // Left-hand Space Max: EDCD EliteCustomButtonNames 231D0139; base 1-7, ATEM 8-20, grip 21-42, STEM 43-66.
   notes: "Left-hand Space grip. Numbering from EDCD EliteCustomButtonNames map 231D0139: base 1-7, ATEM 8-20, grip 21-42, STEM 43-66. Axes: X/Y gimbal, Z throttle, RX space brake, RY laser power. DirectInput button N = buttonN. Right-hand (USB 013A-013C) not covered: pointer hat and HAT1 left/right swap. Buttons above 32 need Firefox to capture them.",
   match: [{"vendor": "231D", "product": "0139"}, {"name": "SPACE-L THROTTLE MAX"}],
@@ -1795,7 +1795,7 @@ photoTplExactViews({
 // Layout and numbering from Federico's export on 2026-10-10.
 // Correct the exported duplicate inputs: ENT BUTTON = button18; A2 = button36.
 photoTplExactViews({
-  id: 'builtin-vkb-stecs', category: 'throttle', name: 'VKB STECS Mk.II + STEM module', brand: 'VKB',
+  id: 'builtin-vkb-stecs', category: 'throttle', name: 'VKB STECS Mk.II + STEM module', brand: 'VKB', variantOf: 'builtin-vkb-stecs-mini',
   notes: 'Numbering from the user’s verified mapping in Federico’s export (2026-10-10; DirectInput button N = buttonN). Buttons above 32 need Firefox to capture them.',
   match: [{ name: 'STECS' }],
 }, [

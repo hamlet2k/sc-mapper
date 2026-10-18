@@ -51,7 +51,7 @@ Cache headers on Vercel (`vercel.json`): `index.json` uses `public, max-age=60, 
       "brand": "MOZA",                                 // absent for the generic templates
       "slot": "js",                                    // js = joystick / HOTAS, gp = gamepad
       "builtin": true,
-      "variantOf": "builtin-moza-ab6",                 // grip variants only (see below)
+      "variantOf": "builtin-moza-ab6",                 // family base, for grip or model variants (see below)
       "match": [],                                     // USB / name rules (see below)
       "file": "/templates/builtin-moza-ab6-mh16.json",
       "hash": "eed99442…",                             // sha256 (hex) of the exact bytes of `file`
@@ -77,9 +77,11 @@ have no edit date, so compare `hash` instead.
 
 - **`builtin`** is always `true` in the feed: these are SC Keymap's built-in templates. When the app imports a file, it makes a user
   template with a new id, as for any template file.
-- **`variantOf`** marks a grip variant: a base fitted with another grip (e.g. MOZA AB6/9 + MH16) that reports the same USB id and button
-  count as the plain base, so it can't be told apart automatically. A variant has **no match rules**. Offer it as an alternative
-  whenever its base (`variantOf`) is the device's automatic match (SC Keymap lists it under "Grips for this base").
+- **`variantOf`** identifies a variant's family base. A **grip variant** (e.g. MOZA AB6/9 + MH16) reports the same USB id and button
+  count as its base, has **no match rules**, and is picked by hand. A **model variant** has its own USB identity and keeps its match
+  rules (e.g. VKB STECS Mini Plus / Standard / Max under STECS Mini; Standard currently matches by name only).
+  Consumers should match on `match` rules regardless of `variantOf`, using `variantOf` only to group templates and offer alternatives.
+  SC Keymap lists the base and its variants under "Suggested for this device" whenever any family member is the automatic match.
 - **`category`** is an optional hardware family in both index entries and per-template files: `stick`, `throttle`,
   `pedals`, `collective`, `panel`, `gamepad`, or a future category. Every current built-in supplies it. Consumers should tolerate
   missing or unfamiliar values. It is an additive field in version 1. SC Keymap uses it to offer device-name suggestions only
@@ -90,7 +92,7 @@ have no edit date, so compare `hash` instead.
   punctuation and spaces). `buttons` is an exact button count, used to tell apart devices sharing a USB id. SC Keymap scores a USB id
   as 10, a name as 5 and a button count as 3, and the best total wins. Optional `excludeName` (same comparison as `name`) makes the
   rule skip devices whose name contains it, e.g. Constellation Alpha uses `excludeName: "Alpha Prime"` so it never matches an Alpha Prime. An empty list means the template is never matched
-  automatically (the generic templates and the variants).
+  automatically (the generic templates and the grip variants).
 
 ## /templates/&lt;id&gt;.json
 
