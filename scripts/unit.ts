@@ -1165,10 +1165,10 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     }
     assert.deepEqual(DEVICE_PHOTO_SIZES['tc-apache-mpd-main'], [1600, 1368, 0.06938, 0.02266, 0.86187, 0.95833], 'Apache: exported dimensions and alpha bounds');
   });
-  t('device templates (54 devices): photos per device, real numbering where published, unassigned spots elsewhere, links, groups', () => {
+  t('device templates (61 devices): photos per device, real numbering where published, unassigned spots elsewhere, links, groups', () => {
     const jsName = /^(button\d{1,3}|hat[1-4]_(up|down|left|right)|x|y|z|rotx|roty|rotz|slider[12])$/;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    assert.equal(DEVICE_TEMPLATES.length, 54, '48 existing + six Panels 7 templates');
+    assert.equal(DEVICE_TEMPLATES.length, 61, '54 existing + seven STECS variants');
     assert.equal(new Set(all.map((x) => x.id)).size, all.length, 'unique ids');
     // devices without published numbers: callout spots only (stick X / Y where obvious)
     const OPEN = new Set(['builtin-vkb-gladiator-scg', 'builtin-logitech-x56-stick', 'builtin-logitech-x56-throttle', 'builtin-bfs-a10c-ufc']);
@@ -1176,7 +1176,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       'builtin-winctrl-orion-pedals', 'builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad', 'builtin-honeycomb-bravo',
       'builtin-honeycomb-charlie', 'builtin-logitech-flight-rudder', 'builtin-mfg-crosswind', 'builtin-tm-tfrp', 'builtin-tm-tpr', 'builtin-vkb-t-rudder', 'builtin-winctrl-viperace-icp',
       'builtin-vkb-gunfighter-mcg', 'builtin-virpil-mt50cm', 'builtin-tm-cougar-mfd',
-      'builtin-winctrl-32-fcu-efis-l', 'builtin-winctrl-32-rmp', 'builtin-winctrl-32-tcas', 'builtin-winctrl-pfp-3n']);
+      'builtin-winctrl-32-fcu-efis-l', 'builtin-winctrl-32-rmp', 'builtin-winctrl-32-tcas', 'builtin-winctrl-pfp-3n',
+      "builtin-vkb-stecs-mini", "builtin-vkb-stecs-mini-plus", "builtin-vkb-stecs-max", "builtin-vkb-stecs-space-mini", "builtin-vkb-stecs-space-mini-plus", "builtin-vkb-stecs-space", "builtin-vkb-stecs-space-max"]);
     const PHOTO_ONLY = new Set(['builtin-azeron-keypad']);
     const ASPECTS = new Set<number>();
     for (const d of DEVICE_TEMPLATES) {
@@ -1201,6 +1202,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         assert.ok(d.callouts.some((c) => c.inputs.includes('button33')), 'X56 export adds known numbers');
       } else if (d.id === 'builtin-vkb-gunfighter-mcg' || d.id === 'builtin-virpil-mt50cm') {
         assert.equal(open, d.id === 'builtin-vkb-gunfighter-mcg' ? 1 : 2, `${d.id}: exported unassigned inputs preserved`);
+      } else if (['builtin-vkb-stecs-mini', 'builtin-vkb-stecs-mini-plus'].includes(d.id)) {
+        assert.equal(open, 6, `${d.id}: four MB1 and two RADIO directions await a press test`);
       } else if (d.id === 'builtin-vkb-stecs') {
         assert.equal(open, 0, 'STECS: user-verified layout has every input assigned');
       } else if (d.id === 'builtin-virpil-cdt-aeromax') {
@@ -1513,6 +1516,498 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.equal(tp.pickTemplate([...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES], ident).template.id, delta.id);
     assert.equal(tp.matchScore(alpha, ident), 0); assert.equal(tp.matchScore(prime, ident), 0);
     assert.equal(tp.matchScore(alpha, { name: 'VPC Constellation Alphabet', slot: 'js' }), 0);
+  });
+  t('STECS variants: sourced numbering, photos, matching', () => {
+    const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
+    const by = (id: string) => DEVICE_TEMPLATES.find((x) => x.id === id)!;
+    const pick = (id: string) => {
+      const q = cap.parsePadId(id);
+      return tp.pickTemplate(all, { name: q.name, vendor: q.vendor, productId: q.product, slot: 'js' }).template.id;
+    };
+    // Literal source expectations: independent of the built-ins, including intentional blank directions.
+    const expected: Record<string, Record<string, [string, string[]]>> = {
+      "builtin-vkb-stecs-mini": {
+        "mtgl": ["axis", ["x"]],
+        "mtgr": ["axis", ["y"]],
+        "radio": ["switch", ["", "button22", ""]],
+        "brk": ["hat", ["button25", "button27", "button26", "button28", "button20"]],
+        "opex": ["button", ["button24"]],
+        "ots": ["axis", ["rotx", "roty"]],
+        "senc": ["switch", ["button14", "button15"]],
+        "rew": ["button", ["button10"]],
+        "fwdr": ["button", ["button9"]],
+        "aftr": ["button", ["button16"]],
+        "mb1": ["hat", ["", "", "", "", "button21"]],
+        "renc": ["switch", ["button13", "button12"]],
+        "fwdl": ["button", ["button17"]],
+        "aftl": ["button", ["button8"]],
+        "4vhboel2": ["axis", ["z"]],
+        "tvc1hgok": ["button", ["button11"]],
+        "f0g3o0no": ["button", ["button18"]],
+        "o5h8aopw": ["button", ["button23"]],
+        "mode": ["switch", ["button3", "button4", "button5", "button6", "button7"]],
+        "start": ["button", ["button2"]],
+        "sys": ["button", ["button1"]],
+      },
+      "builtin-vkb-stecs-mini-plus": {
+        "mtgl": ["axis", ["x"]],
+        "mtgr": ["axis", ["y"]],
+        "radio": ["switch", ["", "button35", ""]],
+        "brk": ["hat", ["button38", "button40", "button39", "button41", "button33"]],
+        "opex": ["button", ["button37"]],
+        "ots": ["axis", ["rotx", "roty"]],
+        "senc": ["switch", ["button27", "button28"]],
+        "rew": ["button", ["button23"]],
+        "fwdr": ["button", ["button22"]],
+        "aftr": ["button", ["button29"]],
+        "mb1": ["hat", ["", "", "", "", "button34"]],
+        "renc": ["switch", ["button26", "button25"]],
+        "fwdl": ["button", ["button30"]],
+        "aftl": ["button", ["button21"]],
+        "4vhboel2": ["axis", ["z"]],
+        "tvc1hgok": ["button", ["button24"]],
+        "f0g3o0no": ["button", ["button31"]],
+        "o5h8aopw": ["button", ["button36"]],
+        "mode": ["switch", ["button3", "button4", "button5", "button6", "button7"]],
+        "start": ["button", ["button2"]],
+        "sys": ["button", ["button1"]],
+        "atem-mse": ["hat", ["button16", "button18", "button17", "button19", "button20"]],
+        "atem-rot": ["encoder", ["button9", "button8"]],
+        "atem-num": ["buttons", ["button11", "button12", "button13", "button14"]],
+        "atem-armed": ["button", ["button15"]],
+        "atem-safe": ["button", ["button10"]],
+      },
+      "builtin-vkb-stecs-max": {
+        "mtgl": ["axis", ["x"]],
+        "mtgr": ["axis", ["y"]],
+        "radio": ["switch", ["button47", "button35", "button46"]],
+        "brk": ["hat", ["button38", "button40", "button39", "button41", "button33"]],
+        "opex": ["button", ["button37"]],
+        "ots": ["axis", ["rotx", "roty"]],
+        "senc": ["switch", ["button27", "button28"]],
+        "rew": ["button", ["button23"]],
+        "fwdr": ["button", ["button22"]],
+        "aftr": ["button", ["button29"]],
+        "mb1": ["hat", ["button45", "button43", "button44", "button42", "button34"]],
+        "renc": ["switch", ["button26", "button25"]],
+        "fwdl": ["button", ["button30"]],
+        "aftl": ["button", ["button21"]],
+        "4vhboel2": ["axis", ["z"]],
+        "tvc1hgok": ["button", ["button24"]],
+        "f0g3o0no": ["button", ["button31"]],
+        "o5h8aopw": ["button", ["button36"]],
+        "mode": ["switch", ["button3", "button4", "button5", "button6", "button7"]],
+        "start": ["button", ["button2"]],
+        "sys": ["button", ["button1"]],
+        "atem-mse": ["hat", ["button16", "button18", "button17", "button19", "button20"]],
+        "atem-rot": ["encoder", ["button9", "button8"]],
+        "atem-num": ["buttons", ["button11", "button12", "button13", "button14"]],
+        "atem-armed": ["button", ["button15"]],
+        "atem-safe": ["button", ["button10"]],
+        "a12": ["button", ["button48"]],
+        "ooy4nuzr": ["button", ["button49"]],
+        "c1": ["button", ["button50"]],
+        "b15": ["buttons", ["button51", "button52", "button53", "button54", "button55"]],
+        "sw1": ["switch", ["button56", "button57", "button58"]],
+        "sw2": ["switch", ["button59", "button60", "button61"]],
+        "tgl": ["switch", ["button62", "button63"]],
+        "en1": ["encoder", ["button65", "button64", "button68"]],
+        "en2": ["encoder", ["button67", "button66", "button69"]],
+        "mlev": ["switch", ["button70", "button71"]],
+      },
+      "builtin-vkb-stecs-space-mini": {
+        "xy": ["axis", ["x", "y"]],
+        "thr": ["axis", ["z"]],
+        "brake": ["axis", ["rotx"]],
+        "laser": ["axis", ["roty"]],
+        "trig": ["button", ["button9"]],
+        "b1": ["button", ["button8"]],
+        "b2": ["button", ["button10"]],
+        "speed": ["encoder", ["button12", "button13", "button11"]],
+        "phat": ["hat", ["button16", "button19", "button17", "button18", "button14"]],
+        "hat1": ["hat", ["button23", "button21", "button22", "button20", "button15"]],
+        "h1": ["switch", ["button25", "button26", "button24"]],
+        "h2": ["switch", ["button27", "button29", "button28"]],
+        "mode": ["switch", ["button3", "button4", "button5", "button6", "button7"]],
+        "start": ["button", ["button2"]],
+        "sys": ["button", ["button1"]],
+      },
+      "builtin-vkb-stecs-space-mini-plus": {
+        "xy": ["axis", ["x", "y"]],
+        "thr": ["axis", ["z"]],
+        "brake": ["axis", ["rotx"]],
+        "laser": ["axis", ["roty"]],
+        "trig": ["button", ["button22"]],
+        "b1": ["button", ["button21"]],
+        "b2": ["button", ["button23"]],
+        "speed": ["encoder", ["button25", "button26", "button24"]],
+        "phat": ["hat", ["button29", "button32", "button30", "button31", "button27"]],
+        "hat1": ["hat", ["button36", "button34", "button35", "button33", "button28"]],
+        "h1": ["switch", ["button38", "button39", "button37"]],
+        "h2": ["switch", ["button40", "button42", "button41"]],
+        "mode": ["switch", ["button3", "button4", "button5", "button6", "button7"]],
+        "start": ["button", ["button2"]],
+        "sys": ["button", ["button1"]],
+        "atem-mse": ["hat", ["button16", "button18", "button17", "button19", "button20"]],
+        "atem-rot": ["encoder", ["button9", "button8"]],
+        "atem-num": ["buttons", ["button11", "button12", "button13", "button14"]],
+        "atem-armed": ["button", ["button15"]],
+        "atem-safe": ["button", ["button10"]],
+      },
+      "builtin-vkb-stecs-space": {
+        "xy": ["axis", ["x", "y"]],
+        "thr": ["axis", ["z"]],
+        "brake": ["axis", ["rotx"]],
+        "laser": ["axis", ["roty"]],
+        "trig": ["button", ["button9"]],
+        "b1": ["button", ["button8"]],
+        "b2": ["button", ["button10"]],
+        "speed": ["encoder", ["button12", "button13", "button11"]],
+        "phat": ["hat", ["button16", "button19", "button17", "button18", "button14"]],
+        "hat1": ["hat", ["button23", "button21", "button22", "button20", "button15"]],
+        "h1": ["switch", ["button25", "button26", "button24"]],
+        "h2": ["switch", ["button27", "button29", "button28"]],
+        "mode": ["switch", ["button3", "button4", "button5", "button6", "button7"]],
+        "start": ["button", ["button2"]],
+        "sys": ["button", ["button1"]],
+        "a12": ["button", ["button30"]],
+        "ooy4nuzr": ["button", ["button31"]],
+        "c1": ["button", ["button32"]],
+        "b15": ["buttons", ["button33", "button34", "button35", "button36", "button37"]],
+        "sw1": ["switch", ["button38", "button39", "button40"]],
+        "sw2": ["switch", ["button41", "button42", "button43"]],
+        "tgl": ["switch", ["button44", "button45"]],
+        "en1": ["encoder", ["button47", "button46", "button50"]],
+        "en2": ["encoder", ["button49", "button48", "button51"]],
+        "mlev": ["switch", ["button52", "button53"]],
+      },
+      "builtin-vkb-stecs-space-max": {
+        "xy": ["axis", ["x", "y"]],
+        "thr": ["axis", ["z"]],
+        "brake": ["axis", ["rotx"]],
+        "laser": ["axis", ["roty"]],
+        "trig": ["button", ["button22"]],
+        "b1": ["button", ["button21"]],
+        "b2": ["button", ["button23"]],
+        "speed": ["encoder", ["button25", "button26", "button24"]],
+        "phat": ["hat", ["button29", "button32", "button30", "button31", "button27"]],
+        "hat1": ["hat", ["button36", "button34", "button35", "button33", "button28"]],
+        "h1": ["switch", ["button38", "button39", "button37"]],
+        "h2": ["switch", ["button40", "button42", "button41"]],
+        "mode": ["switch", ["button3", "button4", "button5", "button6", "button7"]],
+        "start": ["button", ["button2"]],
+        "sys": ["button", ["button1"]],
+        "atem-mse": ["hat", ["button16", "button18", "button17", "button19", "button20"]],
+        "atem-rot": ["encoder", ["button9", "button8"]],
+        "atem-num": ["buttons", ["button11", "button12", "button13", "button14"]],
+        "atem-armed": ["button", ["button15"]],
+        "atem-safe": ["button", ["button10"]],
+        "a12": ["button", ["button43"]],
+        "ooy4nuzr": ["button", ["button44"]],
+        "c1": ["button", ["button45"]],
+        "b15": ["buttons", ["button46", "button47", "button48", "button49", "button50"]],
+        "sw1": ["switch", ["button51", "button52", "button53"]],
+        "sw2": ["switch", ["button54", "button55", "button56"]],
+        "tgl": ["switch", ["button57", "button58"]],
+        "en1": ["encoder", ["button60", "button59", "button63"]],
+        "en2": ["encoder", ["button62", "button61", "button64"]],
+        "mlev": ["switch", ["button65", "button66"]],
+      },
+    };
+    const labels: Record<string, [string, string | null][]> = {
+      "builtin-vkb-stecs-mini": [
+        ["Left lever (MTG-L)", "Levers"],
+        ["Right lever (MTG-R)", "Levers"],
+        ["RADIO (up/push/dn)", "Right grip"],
+        ["BRK", "Right grip"],
+        ["OP EXEC", "Right grip"],
+        ["OTS", "Right grip"],
+        ["Roller (forward / backward)", "Right grip"],
+        ["WPN SEL", "Right grip"],
+        ["F-L TRIG", "Right grip"],
+        ["F-R TRIG", "Right grip"],
+        ["MB1", "Left grip"],
+        ["Roller (forward / backward)", "Left grip"],
+        ["F-R TRIG", "Left grip"],
+        ["B-L TRIG", "Left grip"],
+        ["Wheel", null],
+        ["RST BUTTON", "Right grip"],
+        ["ENT BUTTON", "Right grip"],
+        ["MB2", "Left grip"],
+        ["Base buttons 1-5", "Base"],
+        ["RED START", "Base"],
+        ["DOT", "Base"],
+      ],
+      "builtin-vkb-stecs-mini-plus": [
+        ["Left lever (MTG-L)", "Levers"],
+        ["Right lever (MTG-R)", "Levers"],
+        ["RADIO (up/push/dn)", "Right grip"],
+        ["BRK", "Right grip"],
+        ["OP EXEC", "Right grip"],
+        ["OTS", "Right grip"],
+        ["Roller (forward / backward)", "Right grip"],
+        ["WPN SEL", "Right grip"],
+        ["F-L TRIG", "Right grip"],
+        ["F-R TRIG", "Right grip"],
+        ["MB1", "Left grip"],
+        ["Roller (forward / backward)", "Left grip"],
+        ["F-R TRIG", "Left grip"],
+        ["B-L TRIG", "Left grip"],
+        ["Wheel", null],
+        ["RST BUTTON", "Right grip"],
+        ["ENT BUTTON", "Right grip"],
+        ["MB2", "Left grip"],
+        ["Base buttons 1-5", "Base"],
+        ["RED START", "Base"],
+        ["DOT", "Base"],
+        ["ATEM multi-stick (4-way + push)", "ATEM"],
+        ["ATEM rotary (CW / CCW)", "ATEM"],
+        ["ATEM 1-4", "ATEM"],
+        ["ATEM ARMED (lid)", "ATEM"],
+        ["ATEM SAFE (lid)", "ATEM"],
+      ],
+      "builtin-vkb-stecs-max": [
+        ["Left lever (MTG-L)", "Levers"],
+        ["Right lever (MTG-R)", "Levers"],
+        ["RADIO (up/push/dn)", "Right grip"],
+        ["BRK", "Right grip"],
+        ["OP EXEC", "Right grip"],
+        ["OTS", "Right grip"],
+        ["Roller (forward / backward)", "Right grip"],
+        ["WPN SEL", "Right grip"],
+        ["F-L TRIG", "Right grip"],
+        ["F-R TRIG", "Right grip"],
+        ["MB1", "Left grip"],
+        ["Roller (forward / backward)", "Left grip"],
+        ["F-R TRIG", "Left grip"],
+        ["B-L TRIG", "Left grip"],
+        ["Wheel", null],
+        ["RST BUTTON", "Right grip"],
+        ["ENT BUTTON", "Right grip"],
+        ["MB2", "Left grip"],
+        ["Base buttons 1-5", "Base"],
+        ["RED START", "Base"],
+        ["DOT", "Base"],
+        ["ATEM multi-stick (4-way + push)", "ATEM"],
+        ["ATEM rotary (CW / CCW)", "ATEM"],
+        ["ATEM 1-4", "ATEM"],
+        ["ATEM ARMED (lid)", "ATEM"],
+        ["ATEM SAFE (lid)", "ATEM"],
+        ["A1", "STEM"],
+        ["A2", "STEM"],
+        ["C1", "STEM"],
+        ["B1-B5", "STEM"],
+        ["SW1 (up / center / down)", "STEM"],
+        ["SW2 (up / center / down)", "STEM"],
+        ["TGL (UP / DN)", "STEM"],
+        ["EN1 (CW / CCW / depress)", "STEM"],
+        ["EN2 (CW / CCW / depress)", "STEM"],
+        ["Slider (UP / DN)", "STEM"],
+      ],
+      "builtin-vkb-stecs-space-mini": [
+        ["Grip gimbal X / Y", "Axes"],
+        ["Throttle", "Axes"],
+        ["Space brake", "Grip"],
+        ["Laser power", "Grip"],
+        ["Main trigger", "Grip"],
+        ["B1", "Grip"],
+        ["B2", "Grip"],
+        ["SPEED LIM wheel (up / down / push)", "Grip"],
+        ["Pointer hat", "Grip"],
+        ["HAT1", "Grip"],
+        ["H1 (up / push / down)", "Grip"],
+        ["H2 (left / push / right)", "Grip"],
+        ["Base buttons 1-5", "Base"],
+        ["RED START", "Base"],
+        ["DOT", "Base"],
+      ],
+      "builtin-vkb-stecs-space-mini-plus": [
+        ["Grip gimbal X / Y", "Axes"],
+        ["Throttle", "Axes"],
+        ["Space brake", "Grip"],
+        ["Laser power", "Grip"],
+        ["Main trigger", "Grip"],
+        ["B1", "Grip"],
+        ["B2", "Grip"],
+        ["SPEED LIM wheel (up / down / push)", "Grip"],
+        ["Pointer hat", "Grip"],
+        ["HAT1", "Grip"],
+        ["H1 (up / push / down)", "Grip"],
+        ["H2 (left / push / right)", "Grip"],
+        ["Base buttons 1-5", "Base"],
+        ["RED START", "Base"],
+        ["DOT", "Base"],
+        ["ATEM multi-stick (4-way + push)", "ATEM"],
+        ["ATEM rotary (CW / CCW)", "ATEM"],
+        ["ATEM 1-4", "ATEM"],
+        ["ATEM ARMED (lid)", "ATEM"],
+        ["ATEM SAFE (lid)", "ATEM"],
+      ],
+      "builtin-vkb-stecs-space": [
+        ["Grip gimbal X / Y", "Axes"],
+        ["Throttle", "Axes"],
+        ["Space brake", "Grip"],
+        ["Laser power", "Grip"],
+        ["Main trigger", "Grip"],
+        ["B1", "Grip"],
+        ["B2", "Grip"],
+        ["SPEED LIM wheel (up / down / push)", "Grip"],
+        ["Pointer hat", "Grip"],
+        ["HAT1", "Grip"],
+        ["H1 (up / push / down)", "Grip"],
+        ["H2 (left / push / right)", "Grip"],
+        ["Base buttons 1-5", "Base"],
+        ["RED START", "Base"],
+        ["DOT", "Base"],
+        ["A1", "STEM"],
+        ["A2", "STEM"],
+        ["C1", "STEM"],
+        ["B1-B5", "STEM"],
+        ["SW1 (up / center / down)", "STEM"],
+        ["SW2 (up / center / down)", "STEM"],
+        ["TGL (UP / DN)", "STEM"],
+        ["EN1 (CW / CCW / depress)", "STEM"],
+        ["EN2 (CW / CCW / depress)", "STEM"],
+        ["Slider (UP / DN)", "STEM"],
+      ],
+      "builtin-vkb-stecs-space-max": [
+        ["Grip gimbal X / Y", "Axes"],
+        ["Throttle", "Axes"],
+        ["Space brake", "Grip"],
+        ["Laser power", "Grip"],
+        ["Main trigger", "Grip"],
+        ["B1", "Grip"],
+        ["B2", "Grip"],
+        ["SPEED LIM wheel (up / down / push)", "Grip"],
+        ["Pointer hat", "Grip"],
+        ["HAT1", "Grip"],
+        ["H1 (up / push / down)", "Grip"],
+        ["H2 (left / push / right)", "Grip"],
+        ["Base buttons 1-5", "Base"],
+        ["RED START", "Base"],
+        ["DOT", "Base"],
+        ["ATEM multi-stick (4-way + push)", "ATEM"],
+        ["ATEM rotary (CW / CCW)", "ATEM"],
+        ["ATEM 1-4", "ATEM"],
+        ["ATEM ARMED (lid)", "ATEM"],
+        ["ATEM SAFE (lid)", "ATEM"],
+        ["A1", "STEM"],
+        ["A2", "STEM"],
+        ["C1", "STEM"],
+        ["B1-B5", "STEM"],
+        ["SW1 (up / center / down)", "STEM"],
+        ["SW2 (up / center / down)", "STEM"],
+        ["TGL (UP / DN)", "STEM"],
+        ["EN1 (CW / CCW / depress)", "STEM"],
+        ["EN2 (CW / CCW / depress)", "STEM"],
+        ["Slider (UP / DN)", "STEM"],
+      ],
+    };
+    const metadata: [string, string, string, [string, string, string, number, number][], DeviceTemplate['match'], number, number[]][] = [
+      ["builtin-vkb-stecs-mini", "VKB STECS Mini", "012B", [
+        ["front", "Thumb side", "vkb-stecs-mini-front", 1294, 779],
+        ["back", "Grip front + base", "vkb-stecs-mini-back", 1246, 843],
+      ], [{"vendor": "231D", "product": "012B"}, {"name": "MODERN THROTTLE MINI", "excludeName": "MINI PLUS"}, {"name": "STECS Mini", "excludeName": "Mini Plus"}], 28, [19]],
+      ["builtin-vkb-stecs-mini-plus", "VKB STECS Mini Plus", "012C", [
+        ["front", "Thumb side + ATEM", "vkb-stecs-mini-plus-front", 1467, 800],
+        ["back", "Grip front + base", "vkb-stecs-mini-plus-back", 1343, 855],
+      ], [{"vendor": "231D", "product": "012C"}, {"name": "MODERN THROTTLE MINI PLUS"}, {"name": "STECS Mini Plus"}], 41, [32]],
+      ["builtin-vkb-stecs-max", "VKB STECS Max", "012E", [
+        ["front", "Thumb side + ATEM", "vkb-stecs-max-front", 1488, 600],
+        ["back", "Grip front + base", "vkb-stecs-max-back", 1488, 752],
+        ["stem", "STEM", "vkb-stecs-max-stem", 1503, 612],
+      ], [{"vendor": "231D", "product": "012E"}, {"name": "MODERN THROTTLE MAX"}, {"name": "STECS Max"}], 71, [32]],
+      ["builtin-vkb-stecs-space-mini", "VKB STECS Space Mini (left-hand)", "0136", [
+        ["front", "Grip face", "vkb-stecs-space-mini-front", 1283, 810],
+        ["back", "Grip end + base", "vkb-stecs-space-mini-back", 1232, 855],
+      ], [{"vendor": "231D", "product": "0136"}, {"name": "SPACE-L THROTTLE MINI", "excludeName": "MINI PLUS"}], 29, []],
+      ["builtin-vkb-stecs-space-mini-plus", "VKB STECS Space Mini Plus (left-hand)", "0137", [
+        ["front", "Grip face + ATEM", "vkb-stecs-space-mini-plus-front", 1452, 845],
+        ["back", "Grip end + base", "vkb-stecs-space-mini-plus-back", 1326, 858],
+      ], [{"vendor": "231D", "product": "0137"}, {"name": "SPACE-L THROTTLE MINI PLUS"}], 42, []],
+      ["builtin-vkb-stecs-space", "VKB STECS Space Standard (left-hand)", "0138", [
+        ["front", "Grip face + STEM", "vkb-stecs-space-front", 1419, 732],
+        ["back", "Grip end + base", "vkb-stecs-space-back", 1415, 807],
+      ], [{"vendor": "231D", "product": "0138"}, {"name": "SPACE-L THROTTLE STANDARD"}], 53, []],
+      ["builtin-vkb-stecs-space-max", "VKB STECS Space Max (left-hand)", "0139", [
+        ["front", "Grip face + ATEM", "vkb-stecs-space-max-front", 1474, 661],
+        ["back", "Grip end + base", "vkb-stecs-space-max-back", 1477, 728],
+        ["stem", "STEM (top)", "vkb-stecs-space-max-stem", 1526, 477],
+      ], [{"vendor": "231D", "product": "0139"}, {"name": "SPACE-L THROTTLE MAX"}], 66, []],
+    ];
+    for (const [id, name, pid, views, match, highest, missing] of metadata) {
+      const d = by(id);
+      assert.deepEqual(Object.fromEntries(d.callouts.map((c) => [c.id, [c.kind, c.inputs]])), expected[id], `${id}: exact sourced inputs and kinds`);
+      assert.deepEqual(d.callouts.map((c) => c.id), Object.keys(expected[id]), `${id}: source array order`);
+      assert.deepEqual(d.callouts.map((c) => [c.label, c.group ?? null]), labels[id], `${id}: source labels and groups`);
+      assert.equal(d.name, name); assert.equal(d.brand, 'VKB'); assert.equal(d.category, 'throttle');
+      assert.deepEqual(d.match, match);
+      assert.deepEqual(d.views!.map((v) => [v.id, v.label, v.image, v.width, v.height]),
+        views.map(([v, label, photo, w, h]) => [v, label, `/device-photos/${photo}.webp`, w, h]));
+      assert.equal(d.aspect, views[0][3] / views[0][4]);
+      assert.equal(DEVICE_PHOTO_LAYOUTS[id], undefined, 'exact anchors bypass automatic layout');
+      assert.match(d.notes!, /DirectInput button N = buttonN/);
+      if (highest > 32) assert.match(d.notes!, /Firefox/);
+      if (id.includes('space')) {
+        assert.match(d.notes!, new RegExp(`EDCD EliteCustomButtonNames map 231D${pid}`));
+        assert.match(d.notes!, /Left-hand Space grip/);
+        assert.match(d.notes!, /X\/Y gimbal, Z throttle, RX space brake, RY laser power/);
+        if (id.endsWith('space-mini')) assert.match(d.notes!, /Right-hand Space throttles \(USB 013A-013C\) are not covered: their pointer hat and HAT1 left\/right are swapped/);
+        else assert.match(d.notes!, /Right-hand \(USB 013A-013C\) not covered: pointer hat and HAT1 left\/right swap/);
+        if (id.endsWith('max')) assert.match(d.notes!, /STEM 43-66/);
+        if (id === 'builtin-vkb-stecs-space') assert.match(d.notes!, /STEM 30-53/);
+      } else {
+        assert.match(d.notes!, /VKB (firmware )?default for the STECS Mk\.II/);
+        assert.match(d.notes!, new RegExp(`USB 231D:${pid}`));
+        assert.match(d.notes!, /from MobiFlight's s_tecs_modern_throttle_/);
+        if (id.endsWith('mini-plus')) assert.match(d.notes!, /and EDCD map 231D012C/);
+        else assert.match(d.notes!, /labels follow the verified Standard template/);
+        assert.match(d.notes!, /OTS press is not mapped/);
+        if (id.endsWith('mini')) assert.match(d.notes!, /Grip module swaps or VKBDevCfg remaps change the numbers/);
+        if (id.endsWith('max')) assert.match(d.notes!, /STEM 48-71/);
+        else assert.match(d.notes!, /MB1 and RADIO directions are blank:.*so press-test them/);
+        if (!id.endsWith('mini')) assert.match(d.notes!, /ATEM is buttons 8-20 and shifts the grip by 13/);
+      }
+      const buttons = d.callouts.flatMap((c) => c.inputs).filter((i) => /^button/.test(i)).map((i) => Number(i.slice(6))).sort((a, b) => a - b);
+      assert.deepEqual(buttons, Array.from({ length: highest }, (_, i) => i + 1).filter((n) => !missing.includes(n)), `${id}: complete button set, once each`);
+      for (const c of d.callouts) {
+        assert.ok(c.box.x >= 0.03 && c.box.x <= 0.97 && c.box.y >= 0.03 && c.box.y <= 0.97, `${id}/${c.id}: label inside canvas`);
+        for (const o of d.callouts) if (c !== o && c.view === o.view) {
+          assert.ok(Math.abs(c.box.x - o.box.x) > 0.12 || Math.abs(c.box.y - o.box.y) > 0.03, `${id}: distinct label centres`);
+          const height = d.views!.find((v) => v.id === c.view)!.height;
+          if (Math.abs(c.box.x - o.box.x) < 0.01) assert.ok(Math.abs(c.box.y - o.box.y) >= (height <= 680 ? 0.09 : 0.075), `${id}: readable column spacing`);
+        }
+      }
+      assert.equal(pick(`VKB device (Vendor: 231d Product: ${pid.toLowerCase()})`), id, `${id}: USB alone`);
+      assert.ok(DEVICE_TEMPLATES.indexOf(d) < DEVICE_TEMPLATES.indexOf(by('builtin-vkb-stecs')), 'variant precedes Standard catch-all');
+    }
+    const names: [string, string][] = [
+      ['S-TECS MODERN THROTTLE MINI', 'builtin-vkb-stecs-mini'],
+      ['S-TECS MODERN THROTTLE MINI PLUS', 'builtin-vkb-stecs-mini-plus'],
+      ['S-TECS MODERN THROTTLE MAX STEM', 'builtin-vkb-stecs-max'],
+      ['S-TECS MODERN THROTTLE STANDARD STEM', 'builtin-vkb-stecs'],
+      ['VKBsim STECS Mk.II Standard', 'builtin-vkb-stecs'],
+      ['VKBsim STECS Mini Plus', 'builtin-vkb-stecs-mini-plus'],
+      ['VKBsim STECS Mini', 'builtin-vkb-stecs-mini'],
+      ['VKBsim STECS Max', 'builtin-vkb-stecs-max'],
+      ['S-TECS SPACE-L THROTTLE STANDARD  STEM', 'builtin-vkb-stecs-space'],
+      ['S-TECS SPACE-L THROTTLE MINI', 'builtin-vkb-stecs-space-mini'],
+      ['S-TECS SPACE-L THROTTLE MINI PLUS', 'builtin-vkb-stecs-space-mini-plus'],
+      ['S-TECS SPACE-L THROTTLE MAX STEM', 'builtin-vkb-stecs-space-max'],
+    ];
+    for (const [name, id] of names) {
+      assert.equal(pick(name), id, name);
+      for (const [other] of metadata) if (other !== id) assert.equal(tp.matchScore(by(other), { name, slot: 'js' }), 0, `${other}: never matches ${name}`);
+    }
+    // Standard retains its existing name-only catch-all, including when its PID is present.
+    assert.equal(pick('S-TECS MODERN THROTTLE STANDARD STEM (Vendor: 231d Product: 012d)'), 'builtin-vkb-stecs');
+    const rightHand = 'S-TECS SPACE-R THROTTLE MINI (Vendor: 231d Product: 013a)';
+    assert.ok(!pick(rightHand).startsWith('builtin-vkb-stecs-space'));
+    for (const [id] of metadata.filter(([id]) => id.includes('space'))) {
+      const q = cap.parsePadId(rightHand);
+      assert.equal(tp.matchScore(by(id), { name: q.name, vendor: q.vendor, productId: q.product, slot: 'js' }), 0);
+    }
+    assert.equal(tp.matchScore(by('builtin-vkb-stecs-max'), { name: 'S-TECS SPACE-L THROTTLE MAX', slot: 'js' }), 0);
   });
   t('STECS: user-verified map, directional order and exact front/back photo layout', () => {
     const stecs = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-vkb-stecs')!;
@@ -2022,16 +2517,16 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const d = DEVICE_TEMPLATES.find((x) => x.id === 'builtin-winctrl-orion')!;
     assert.ok(!d.loadImage && d.views!.length === 2 && d.views!.every((v) => v.image!.startsWith('/device-photos/')), 'Orion uses its two exported photo views');
     assert.deepEqual(DEVICE_TEMPLATES.filter((x) => !x.views?.length).map((x) => x.id), [], 'every device template has a photo layout');
-    assert.equal(DEVICE_TEMPLATES.filter((x) => x.views?.length).length, 54, 'all 54 device templates have photo views');
-    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 91, '84 existing + seven Panels 7 photo views');
+    assert.equal(DEVICE_TEMPLATES.filter((x) => x.views?.length).length, 61, 'all 61 device templates have photo views');
+    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 107, '91 existing + sixteen STECS variant photo views');
     let calls = 0;
     const lazy = { ...d, id: 'test-lazy-picture', views: undefined, loadImage: async () => { calls++; return 'data:image/svg+xml,<svg/>'; } };
     const r = await tp.resolveTemplateImage(lazy);
     assert.ok(r.image === 'data:image/svg+xml,<svg/>' && !(lazy as { image?: string }).image, 'picture resolves, template untouched');
     assert.equal((await tp.resolveTemplateImage(lazy)).image, r.image, 'cached'); assert.equal(calls, 1);
     const imgs = await Promise.all(DEVICE_TEMPLATES.map((x) => tp.resolveTemplateImage(x).then((y) => y.image ?? y.views!.map((v) => v.image).join()))); // (photo templates: their views' photos)
-    assert.equal(new Set(imgs).size, 54, 'one distinct set of pictures per device');
-    passed++; console.log('  ✓ device template pictures: all 54 photo templates (distinct), lazy pictures cached');
+    assert.equal(new Set(imgs).size, 61, 'one distinct set of pictures per device');
+    passed++; console.log('  ✓ device template pictures: all 61 photo templates (distinct), lazy pictures cached');
   }
   t('saved picks of the removed classic templates move to the default stick / throttle (and are saved back)', () => {
     const js = { name: 'VKBsim Gladiator EVO R', vendor: '231D', productId: '0200', buttons: 32, slot: 'js' as const };
@@ -3407,7 +3902,7 @@ console.log('\nshared controller files');
   t('suggestions use a single category field on built-ins; never users or generic templates', () => {
     assert.ok(all.every((x) => x.category));
     assert.equal(all.filter((x) => x.category === 'pedals').length, 9);
-    assert.equal(all.filter((x) => x.builtin && x.brand && x.category === 'throttle').length, 12);
+    assert.equal(all.filter((x) => x.builtin && x.brand && x.category === 'throttle').length, 19);
     assert.deepEqual(sg.suggestedTemplates('pedals', all), all.filter((x) => x.category === 'pedals'));
     const collective = { ...tp.newTemplate('js', 'Future collective'), builtin: true, brand: 'Maker', category: 'collective' };
     assert.equal(all.filter((x) => x.category === 'collective').length, 5);

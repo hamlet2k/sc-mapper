@@ -92,7 +92,7 @@ gamepad (modern dual-stick layout).
 | --- | --- |
 | Thrustmaster | HOTAS Warthog stick · HOTAS Warthog throttle · T.16000M FCS stick · TWCS throttle · T.Flight Rudder Pedals (TFRP) · Pendular Rudder (TPR) |
 | VIRPIL | Alpha Prime (R) stick · VMAX Prime throttle · R1-FALCON Rudder Pedals |
-| VKB | Gladiator NXT EVO (Space Combat Grip) · Gunfighter + MCG Ultimate · STECS Mk.II + STEM module · T-Rudder Mk.V |
+| VKB | Gladiator NXT EVO (Space Combat Grip) · Gunfighter + MCG Ultimate · STECS Mini · STECS Mini Plus · STECS Mk.II + STEM module · STECS Max · STECS Space Mini / Mini Plus / Standard / Max (left-hand) · T-Rudder Mk.V |
 | WinCtrl | CarrierAce stick · ViperAce stick · Orion throttle (F-15EX grips, F/A-18 panel) · URSA MINOR throttle (Combat grip) · Orion Combat Rudder Pedals · CarrierAce MFD · CarrierAce PTO 2 · CarrierAce UFC + HUD |
 | MOZA | AB6 base + MHG grip, with grip variants for MH16, WinCtrl CarrierAce and WinCtrl ViperAce EX · MTP throttle · MTQ throttle quadrant (Combat, Airbus and Boeing grips) |
 | Logitech | G X56 stick · G X56 throttle · G Flight Rudder Pedals (Saitek Pro Flight) |
