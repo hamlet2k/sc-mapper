@@ -1559,10 +1559,10 @@ photoTplExactViews({
 // Main trigger is hidden by the space-brake paddle in these angles; anchor estimates its underside/front location.
 // Laser power is the narrow ribbed wheel visible along the outboard end face in the back view.
 photoTplExactViews({
-  id: "builtin-vkb-stecs-space-mini", category: 'throttle', name: "VKB STECS Space Mini (left-hand)", brand: 'VKB',
-  // Left-hand Space Mini: EDCD EliteCustomButtonNames 231D0136; base 1-7, grip 8-29.
-  notes: "Left-hand Space grip. Numbering from EDCD EliteCustomButtonNames map 231D0136: base 1-7, grip 8-29. Axes: X/Y gimbal, Z throttle, RX space brake, RY laser power. DirectInput button N = buttonN. Right-hand Space throttles (USB 013A-013C) are not covered: their pointer hat and HAT1 left/right are swapped.",
-  match: [{"vendor": "231D", "product": "0136"}, {"name": "SPACE-L THROTTLE MINI", "excludeName": "MINI PLUS"}],
+  id: "builtin-vkb-stecs-space-mini", category: 'throttle', name: "VKB STECS Space Mini", brand: 'VKB',
+  // Space (left/right-hand) Mini: EDCD EliteCustomButtonNames 231D0136 / 231D013A; photos show the left-hand grip.
+  notes: "Left- and right-hand Space throttle (EDCD maps 231D0136 L / 231D013A R): base 1-7, grip 8-29. Axes X/Y gimbal, Z throttle, RX brake, RY laser. Button N = buttonN. Right-hand units swap Pointer hat left/right (button18/19) and HAT1 left/right (button20/21): those callouts read mirrored.",
+  match: [{"vendor": "231D", "product": "0136"}, {"vendor": "231D", "product": "013A"}, {"name": "SPACE-L THROTTLE MINI", "excludeName": "MINI PLUS"}],
 }, [
   {"id": "front", "label": "Grip face", "photo": "vkb-stecs-space-mini-front", "width": 1283, "height": 810},
   {"id": "back", "label": "Grip end + base", "photo": "vkb-stecs-space-mini-back", "width": 1232, "height": 855},
@@ -1603,10 +1603,10 @@ photoTplExactViews({
 // Main trigger is hidden by the space-brake paddle in these angles; anchor estimates its underside/front location.
 // Laser power is the narrow ribbed wheel visible along the outboard end face in the back view.
 photoTplExactViews({
-  id: "builtin-vkb-stecs-space-mini-plus", category: 'throttle', name: "VKB STECS Space Mini Plus (left-hand)", brand: 'VKB', variantOf: 'builtin-vkb-stecs-space-mini',
-  // Left-hand Space Mini Plus: EDCD EliteCustomButtonNames 231D0137; base 1-7, ATEM 8-20, grip 21-42.
-  notes: "Left-hand Space grip. Numbering from EDCD EliteCustomButtonNames map 231D0137: base 1-7, ATEM 8-20, grip 21-42. Axes: X/Y gimbal, Z throttle, RX space brake, RY laser power. DirectInput button N = buttonN. Right-hand (USB 013A-013C) not covered: pointer hat and HAT1 left/right swap. Buttons above 32 need Firefox to capture them.",
-  match: [{"vendor": "231D", "product": "0137"}, {"name": "SPACE-L THROTTLE MINI PLUS"}],
+  id: "builtin-vkb-stecs-space-mini-plus", category: 'throttle', name: "VKB STECS Space Mini Plus", brand: 'VKB', variantOf: 'builtin-vkb-stecs-space-mini',
+  // Space (left/right-hand) Mini Plus: EDCD EliteCustomButtonNames 231D0137 / 231D013B; photos show the left-hand grip.
+  notes: "Left- and right-hand Space throttle (EDCD maps 231D0137 L / 231D013B R): base 1-7, ATEM 8-20, grip 21-42. Axes X/Y gimbal, Z throttle, RX brake, RY laser. Button N = buttonN. Right-hand units swap Pointer hat left/right (button31/32) and HAT1 left/right (button33/34): those callouts read mirrored. Buttons >32 need Firefox.",
+  match: [{"vendor": "231D", "product": "0137"}, {"vendor": "231D", "product": "013B"}, {"name": "SPACE-L THROTTLE MINI PLUS"}],
 }, [
   {"id": "front", "label": "Grip face + ATEM", "photo": "vkb-stecs-space-mini-plus-front", "width": 1452, "height": 845},
   {"id": "back", "label": "Grip end + base", "photo": "vkb-stecs-space-mini-plus-back", "width": 1326, "height": 858},
@@ -1657,10 +1657,10 @@ photoTplExactViews({
 // Main trigger is hidden by the space-brake paddle in these angles; anchor estimates its underside/front location.
 // Laser power is the narrow ribbed wheel visible along the outboard end face in the back view.
 photoTplExactViews({
-  id: "builtin-vkb-stecs-space", category: 'throttle', name: "VKB STECS Space Standard (left-hand)", brand: 'VKB', variantOf: 'builtin-vkb-stecs-space-mini',
-  // Left-hand Space Standard: EDCD EliteCustomButtonNames 231D0138; base 1-7, grip 8-29, STEM 30-53.
-  notes: "Left-hand Space grip. Numbering from EDCD EliteCustomButtonNames map 231D0138: base 1-7, grip 8-29, STEM 30-53. Axes: X/Y gimbal, Z throttle, RX space brake, RY laser power. DirectInput button N = buttonN. Right-hand (USB 013A-013C) not covered: pointer hat and HAT1 left/right swap. Buttons above 32 need Firefox to capture them.",
-  match: [{"vendor": "231D", "product": "0138"}, {"name": "SPACE-L THROTTLE STANDARD"}],
+  id: "builtin-vkb-stecs-space", category: 'throttle', name: "VKB STECS Space Standard", brand: 'VKB', variantOf: 'builtin-vkb-stecs-space-mini',
+  // Space (left/right-hand) Standard: EDCD EliteCustomButtonNames 231D0138 / 231D013C; photos show the left-hand grip.
+  notes: "Left- and right-hand Space throttle (EDCD maps 231D0138 L / 231D013C R): base 1-7, grip 8-29, STEM 30-53. Axes X/Y gimbal, Z throttle, RX brake, RY laser. Button N = buttonN. Right-hand: only Pointer hat left/right (button18/19) swaps per 013C; callouts read mirrored. HAT1 button20/21 unswapped in map; hardware unconfirmed, press-test. Buttons >32 need Firefox.",
+  match: [{"vendor": "231D", "product": "0138"}, {"vendor": "231D", "product": "013C"}, {"name": "SPACE-L THROTTLE STANDARD"}],
 }, [
   {"id": "front", "label": "Grip face + STEM", "photo": "vkb-stecs-space-front", "width": 1419, "height": 732},
   {"id": "back", "label": "Grip end + base", "photo": "vkb-stecs-space-back", "width": 1415, "height": 807},
@@ -1721,9 +1721,9 @@ photoTplExactViews({
 // Main trigger is hidden by the space-brake paddle in these angles; anchor estimates its underside/front location.
 // Laser power is the narrow ribbed wheel visible along the outboard end face in the back view.
 photoTplExactViews({
-  id: "builtin-vkb-stecs-space-max", category: 'throttle', name: "VKB STECS Space Max (left-hand)", brand: 'VKB', variantOf: 'builtin-vkb-stecs-space-mini',
-  // Left-hand Space Max: EDCD EliteCustomButtonNames 231D0139; base 1-7, ATEM 8-20, grip 21-42, STEM 43-66.
-  notes: "Left-hand Space grip. Numbering from EDCD EliteCustomButtonNames map 231D0139: base 1-7, ATEM 8-20, grip 21-42, STEM 43-66. Axes: X/Y gimbal, Z throttle, RX space brake, RY laser power. DirectInput button N = buttonN. Right-hand (USB 013A-013C) not covered: pointer hat and HAT1 left/right swap. Buttons above 32 need Firefox to capture them.",
+  id: "builtin-vkb-stecs-space-max", category: 'throttle', name: "VKB STECS Space Max", brand: 'VKB', variantOf: 'builtin-vkb-stecs-space-mini',
+  // Space (left/right-hand) Max: EDCD EliteCustomButtonNames 231D0139 (left only); photos show the left-hand grip.
+  notes: "Left- and right-hand Space throttle (EDCD map 231D0139 L; R map/USB id unconfirmed; not auto-matched, pick by hand): base 1-7, ATEM 8-20, grip 21-42, STEM 43-66. Axes X/Y gimbal, Z throttle, RX brake, RY laser. Button N = buttonN. R Pointer hat button31/32, HAT1 button33/34 left/right swaps expected by Mini Plus analogy; unconfirmed, press-test. Callouts read mirrored. Buttons >32 need Firefox.",
   match: [{"vendor": "231D", "product": "0139"}, {"name": "SPACE-L THROTTLE MAX"}],
 }, [
   {"id": "front", "label": "Grip face + ATEM", "photo": "vkb-stecs-space-max-front", "width": 1474, "height": 661},

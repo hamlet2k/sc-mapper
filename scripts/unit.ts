@@ -910,6 +910,11 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.deepEqual(back.callouts.find((c) => c.id === 'dpad')!.inputRegions, dp.inputRegions, 'D-pad outlines survive export/import');
   });
   const { DEVICE_TEMPLATES } = await import('../src/lib/deviceTemplates');
+  t('every built-in template notes fits the 400-character limit', () => {
+    for (const d of [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES]) {
+      assert.ok((d.notes?.length ?? 0) <= 400, `${d.id}: notes must be at most 400 characters`);
+    }
+  });
   const oct11 = JSON.parse(readFileSync(new URL('./fixtures/oct11-layouts.json', import.meta.url), 'utf8')) as (Pick<DeviceTemplate, 'id' | 'aspect' | 'views' | 'callouts'> & { photoSha256: Record<string, string> })[];
   const oct11Ids = new Set(oct11.map((t) => t.id));
   t('Oct 11 Federico exports: exact views, callouts, labels, press inputs and reused photo bytes', () => {
@@ -1974,19 +1979,19 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         ["back", "Grip front + base", "vkb-stecs-max-back", 1488, 752],
         ["stem", "STEM", "vkb-stecs-max-stem", 1503, 612],
       ], [{"vendor": "231D", "product": "012E"}, {"name": "MODERN THROTTLE MAX"}, {"name": "STECS Max"}], 71, [32]],
-      ["builtin-vkb-stecs-space-mini", "VKB STECS Space Mini (left-hand)", "0136", [
+      ["builtin-vkb-stecs-space-mini", "VKB STECS Space Mini", "0136", [
         ["front", "Grip face", "vkb-stecs-space-mini-front", 1283, 810],
         ["back", "Grip end + base", "vkb-stecs-space-mini-back", 1232, 855],
-      ], [{"vendor": "231D", "product": "0136"}, {"name": "SPACE-L THROTTLE MINI", "excludeName": "MINI PLUS"}], 29, []],
-      ["builtin-vkb-stecs-space-mini-plus", "VKB STECS Space Mini Plus (left-hand)", "0137", [
+      ], [{"vendor": "231D", "product": "0136"}, {"vendor": "231D", "product": "013A"}, {"name": "SPACE-L THROTTLE MINI", "excludeName": "MINI PLUS"}], 29, []],
+      ["builtin-vkb-stecs-space-mini-plus", "VKB STECS Space Mini Plus", "0137", [
         ["front", "Grip face + ATEM", "vkb-stecs-space-mini-plus-front", 1452, 845],
         ["back", "Grip end + base", "vkb-stecs-space-mini-plus-back", 1326, 858],
-      ], [{"vendor": "231D", "product": "0137"}, {"name": "SPACE-L THROTTLE MINI PLUS"}], 42, []],
-      ["builtin-vkb-stecs-space", "VKB STECS Space Standard (left-hand)", "0138", [
+      ], [{"vendor": "231D", "product": "0137"}, {"vendor": "231D", "product": "013B"}, {"name": "SPACE-L THROTTLE MINI PLUS"}], 42, []],
+      ["builtin-vkb-stecs-space", "VKB STECS Space Standard", "0138", [
         ["front", "Grip face + STEM", "vkb-stecs-space-front", 1419, 732],
         ["back", "Grip end + base", "vkb-stecs-space-back", 1415, 807],
-      ], [{"vendor": "231D", "product": "0138"}, {"name": "SPACE-L THROTTLE STANDARD"}], 53, []],
-      ["builtin-vkb-stecs-space-max", "VKB STECS Space Max (left-hand)", "0139", [
+      ], [{"vendor": "231D", "product": "0138"}, {"vendor": "231D", "product": "013C"}, {"name": "SPACE-L THROTTLE STANDARD"}], 53, []],
+      ["builtin-vkb-stecs-space-max", "VKB STECS Space Max", "0139", [
         ["front", "Grip face + ATEM", "vkb-stecs-space-max-front", 1474, 661],
         ["back", "Grip end + base", "vkb-stecs-space-max-back", 1477, 728],
         ["stem", "STEM (top)", "vkb-stecs-space-max-stem", 1526, 477],
@@ -2003,16 +2008,32 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         views.map(([v, label, photo, w, h]) => [v, label, `/device-photos/${photo}.webp`, w, h]));
       assert.equal(d.aspect, views[0][3] / views[0][4]);
       assert.equal(DEVICE_PHOTO_LAYOUTS[id], undefined, 'exact anchors bypass automatic layout');
-      assert.match(d.notes!, /DirectInput button N = buttonN/);
+      assert.match(d.notes!, /[Bb]utton N = buttonN/);
       if (highest > 32) assert.match(d.notes!, /Firefox/);
       if (id.includes('space')) {
-        assert.match(d.notes!, new RegExp(`EDCD EliteCustomButtonNames map 231D${pid}`));
-        assert.match(d.notes!, /Left-hand Space grip/);
-        assert.match(d.notes!, /X\/Y gimbal, Z throttle, RX space brake, RY laser power/);
-        if (id.endsWith('space-mini')) assert.match(d.notes!, /Right-hand Space throttles \(USB 013A-013C\) are not covered: their pointer hat and HAT1 left\/right are swapped/);
-        else assert.match(d.notes!, /Right-hand \(USB 013A-013C\) not covered: pointer hat and HAT1 left\/right swap/);
-        if (id.endsWith('max')) assert.match(d.notes!, /STEM 43-66/);
-        if (id === 'builtin-vkb-stecs-space') assert.match(d.notes!, /STEM 30-53/);
+        assert.match(d.notes!, new RegExp(`EDCD maps? 231D${pid} L`));
+        assert.match(d.notes!, /Left- and right-hand Space throttle/);
+        assert.match(d.notes!, /Axes X\/Y gimbal, Z throttle, RX brake, RY laser/);
+        assert.match(d.notes!, /[Cc]allouts read mirrored/);
+        assert.doesNotMatch(d.notes!, /not covered/i);
+        if (id.endsWith('space-mini')) {
+          assert.match(d.notes!, /231D0136 L \/ 231D013A R/);
+          assert.match(d.notes!, /base 1-7, grip 8-29/);
+          assert.match(d.notes!, /Right-hand units swap Pointer hat left\/right \(button18\/19\) and HAT1 left\/right \(button20\/21\)/);
+        } else if (id.endsWith('mini-plus')) {
+          assert.match(d.notes!, /231D0137 L \/ 231D013B R/);
+          assert.match(d.notes!, /base 1-7, ATEM 8-20, grip 21-42/);
+          assert.match(d.notes!, /Right-hand units swap Pointer hat left\/right \(button31\/32\) and HAT1 left\/right \(button33\/34\)/);
+        } else if (id === 'builtin-vkb-stecs-space') {
+          assert.match(d.notes!, /231D0138 L \/ 231D013C R/);
+          assert.match(d.notes!, /Right-hand: only Pointer hat left\/right \(button18\/19\) swaps per 013C/);
+          assert.match(d.notes!, /HAT1 button20\/21 unswapped in map; hardware unconfirmed, press-test/);
+          assert.match(d.notes!, /base 1-7, grip 8-29, STEM 30-53/);
+        } else {
+          assert.match(d.notes!, /R map\/USB id unconfirmed; not auto-matched, pick by hand/);
+          assert.match(d.notes!, /R Pointer hat button31\/32, HAT1 button33\/34 left\/right swaps expected by Mini Plus analogy; unconfirmed, press-test/);
+          assert.match(d.notes!, /base 1-7, ATEM 8-20, grip 21-42, STEM 43-66/);
+        }
       } else {
         assert.match(d.notes!, /VKB (firmware )?default for the STECS Mk\.II/);
         assert.match(d.notes!, new RegExp(`USB 231D:${pid}`));
@@ -2058,10 +2079,25 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     }
     // Standard retains its existing name-only catch-all, including when its PID is present.
     assert.equal(pick('S-TECS MODERN THROTTLE STANDARD STEM (Vendor: 231d Product: 012d)'), 'builtin-vkb-stecs');
-    const rightHand = 'S-TECS SPACE-R THROTTLE MINI (Vendor: 231d Product: 013a)';
-    assert.ok(!pick(rightHand).startsWith('builtin-vkb-stecs-space'));
+    const rightHand: [string, string][] = [
+      ['S-TECS SPACE-R THROTTLE MINI (Vendor: 231d Product: 013a)', 'builtin-vkb-stecs-space-mini'],
+      ['S-TECS SPACE-R THROTTLE MINI PLUS (Vendor: 231d Product: 013b)', 'builtin-vkb-stecs-space-mini-plus'],
+      ['S-TECS SPACE-R THROTTLE STANDARD STEM (Vendor: 231d Product: 013c)', 'builtin-vkb-stecs-space'],
+    ];
+    for (const [name, expected] of rightHand) {
+      assert.equal(pick(name), expected, name);
+      const q = cap.parsePadId(name);
+      for (const [id] of metadata.filter(([id]) => id.includes('space'))) {
+        const score = tp.matchScore(by(id), { name: q.name, vendor: q.vendor, productId: q.product, slot: 'js' });
+        if (id === expected) assert.ok(score > 0, `${id}: confirmed right-hand USB identity`);
+        else assert.equal(score, 0, `${id}: never matches ${name}`);
+      }
+      assert.ok(!pick(q.name!).startsWith('builtin-vkb-stecs-space'), 'unconfirmed right-hand HID names have no name-only match');
+    }
+    const unconfirmedMax = 'S-TECS SPACE-R THROTTLE MAX STEM (Vendor: 231d Product: 013d)';
+    assert.ok(!pick(unconfirmedMax).startsWith('builtin-vkb-stecs-space'));
+    const q = cap.parsePadId(unconfirmedMax);
     for (const [id] of metadata.filter(([id]) => id.includes('space'))) {
-      const q = cap.parsePadId(rightHand);
       assert.equal(tp.matchScore(by(id), { name: q.name, vendor: q.vendor, productId: q.product, slot: 'js' }), 0);
     }
     assert.equal(tp.matchScore(by('builtin-vkb-stecs-max'), { name: 'S-TECS SPACE-L THROTTLE MAX', slot: 'js' }), 0);
@@ -2070,7 +2106,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     const picker = await import('../src/lib/templatePicker');
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
     const by = (id: string) => all.find((d) => d.id === id)!;
-    // Recorded with pickTemplate BEFORE adding variantOf; preserve even the bare Standard name's fallback.
+    // Recorded before adding variantOf, extended with confirmed right-hand Space USB IDs; preserve the bare Standard name's fallback.
     const baseline: [DeviceIdentity, string, 'matched' | 'fallback'][] = [
       [{ vendor: '231D', productId: '012B' }, 'builtin-vkb-stecs-mini', 'matched'],
       [{ vendor: '231D', productId: '012C' }, 'builtin-vkb-stecs-mini-plus', 'matched'],
@@ -2079,6 +2115,9 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       [{ vendor: '231D', productId: '0137' }, 'builtin-vkb-stecs-space-mini-plus', 'matched'],
       [{ vendor: '231D', productId: '0138' }, 'builtin-vkb-stecs-space', 'matched'],
       [{ vendor: '231D', productId: '0139' }, 'builtin-vkb-stecs-space-max', 'matched'],
+      [{ vendor: '231D', productId: '013A' }, 'builtin-vkb-stecs-space-mini', 'matched'],
+      [{ vendor: '231D', productId: '013B' }, 'builtin-vkb-stecs-space-mini-plus', 'matched'],
+      [{ vendor: '231D', productId: '013C' }, 'builtin-vkb-stecs-space', 'matched'],
       [{ name: 'VKB-Sim STECS Mk.II Standard', vendor: '231D', productId: '012D' }, 'builtin-vkb-stecs', 'matched'],
       [{ name: 'STECS Mini' }, 'builtin-vkb-stecs-mini', 'matched'],
       [{ name: 'STECS Mini Plus' }, 'builtin-vkb-stecs-mini-plus', 'matched'],
@@ -2093,6 +2132,14 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       [{ name: 'SPACE-L THROTTLE STANDARD STEM' }, 'builtin-vkb-stecs-space', 'matched'],
       [{ name: 'SPACE-L THROTTLE MAX STEM' }, 'builtin-vkb-stecs-space-max', 'matched'],
     ];
+    for (const [name, product, id] of [
+      ['MINI', '013a', 'builtin-vkb-stecs-space-mini'],
+      ['MINI PLUS', '013b', 'builtin-vkb-stecs-space-mini-plus'],
+      ['STANDARD STEM', '013c', 'builtin-vkb-stecs-space'],
+    ]) {
+      const q = cap.parsePadId(`S-TECS SPACE-R THROTTLE ${name} (Vendor: 231d Product: ${product})`);
+      baseline.push([{ name: q.name, vendor: q.vendor, productId: q.product }, id, 'matched']);
+    }
     for (const [identity, id, how] of baseline) {
       const device = { ...identity, slot: 'js' as const };
       const actual = tp.pickTemplate(all, device);
@@ -2108,8 +2155,9 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       if (id === 'builtin-vkb-stecs') assert.deepEqual(d.match, [{ name: 'STECS' }], 'Standard keeps its name-only catch-all');
       else {
         const usb = d.match.filter((m) => m.vendor && m.product);
-        assert.equal(usb.length, 1, `${id}: its own USB identity`);
-        assert.ok(!base.match.some((m) => m.vendor === usb[0].vendor && m.product === usb[0].product), `${id}: USB differs from base`);
+        const rightHandSpace = id === 'builtin-vkb-stecs-space-mini-plus' || id === 'builtin-vkb-stecs-space';
+        assert.equal(usb.length, rightHandSpace ? 2 : 1, `${id}: confirmed USB identities`);
+        for (const rule of usb) assert.ok(!base.match.some((m) => m.vendor === rule.vendor && m.product === rule.product), `${id}: USB differs from base`);
       }
     }
     const throttles = picker.templatePickerGroups(all).find((g) => g.label === 'Throttles' && g.brand === 'VKB')!;
