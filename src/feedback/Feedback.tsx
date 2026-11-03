@@ -196,7 +196,7 @@ export function Feedback() {
         <button type="button" className={button} disabled={!anno.past.length || busy} data-testid="feedback-undo" onClick={() => dispatch({ type: 'undo' })}>Undo</button>
       </div>
       <section ref={panel} data-feedback-ui data-testid="feedback-panel" style={panelPosition ? { left: panelPosition.x, top: panelPosition.y, bottom: 'auto', right: 'auto' } : undefined}
-        className="absolute bottom-3 right-3 max-h-[calc(100dvh-88px)] w-[360px] max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-edge bg-panel/85 p-4 shadow-2xl backdrop-blur-md hover:bg-panel/95 focus-within:bg-panel/95">
+        className="absolute bottom-3 right-3 max-h-[calc(100dvh-88px)] w-[360px] max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-edge bg-panel/55 p-4 shadow-2xl backdrop-blur-[2px] transition-colors hover:bg-panel/80 focus-within:bg-panel/80">
         <div data-testid="feedback-panel-handle" className={`mb-3 flex touch-none select-none items-center justify-between ${panelDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           onPointerDown={(e) => {
             if (e.button !== 0 || (e.target as Element).closest('button,input,textarea,select,a')) return;
