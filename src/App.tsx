@@ -7,6 +7,7 @@ import { ConflictsView } from './components/ConflictsView';
 import { ControllersPanel, type SlotActions } from './components/ControllersPanel';
 import { ExportDialog, type ExportSlot } from './components/ExportDialog';
 import { HeaderLinks } from './components/HeaderLinks';
+import { Feedback } from './feedback/Feedback';
 import { SettingsModal, loadAppSettings, saveAppSettings, type AppSettings } from './components/SettingsModal';
 import { KeyboardView } from './components/KeyboardView';
 import { DEVICE_SEL_KEY, DeviceView, deviceSlotKey, shownDeviceSlot, type SlotOption } from './components/DeviceView';
@@ -898,6 +899,7 @@ export default function App() {
           <h1 className="glow-text shrink-0 whitespace-nowrap font-display text-lg font-bold uppercase leading-none tracking-[0.12em] text-hud2 sm:text-xl sm:tracking-[0.25em]" data-testid="app-title">SC Keymap</h1>
           <span className="hidden min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500 sm:block" data-testid="app-subtitle" title={`Star Citizen binding console · ${versionLabel}`}>Star Citizen binding console · {versionLabel}</span>
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+            <Feedback />
             <HeaderLinks />
             <span className="mx-0.5 h-5 w-px bg-edge sm:mx-1" aria-hidden="true" />
             <button type="button" onClick={() => setSettingsOpen(true)} data-testid="open-settings" title="Settings" aria-label="Settings"

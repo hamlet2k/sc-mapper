@@ -16,11 +16,12 @@
     "pretest": "node scripts/ensure-data.mjs",
     "test": "tsx scripts/unit.ts && tsx scripts/selftest.ts public/samples/actionmaps.xml",
     "pretest:unit": "node scripts/ensure-data.mjs",
-    "test:unit": "node --import tsx scripts/unit.ts && node --import tsx scripts/bg-removal.ts",
+    "test:unit": "node --import tsx scripts/unit.ts && node --import tsx scripts/bg-removal.ts && node --import tsx scripts/feedback-unit.ts",
     "test:e2e": "node scripts/e2e.mjs",
     "test:fixtures": "node scripts/fetch-fixtures.mjs && tsx scripts/unit.ts"
   },
   "dependencies": {
+    "modern-screenshot": "4.7.0",
     "onnxruntime-web": "1.30.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"

@@ -775,3 +775,12 @@ press-tested numbering). A toast tells the user to drag the download into the is
 are listed compactly (a missing half is `*`); long combined name-match text is capped at 400 characters, with full rules in the file.
 Maintainer review turns accepted submissions into built-ins with WebP photos under `/device-photos/`. Screenshots: `205-template-author-submit.png`,
 and the generated sample issue text in `206-issue-preview.md`.
+
+## In-app feedback (Nov 2, 2026)
+
+Feedback capture lives beside the existing header links and opens with Ctrl/Cmd+Shift+F, including while typing. It is hidden
+until the API confirms email delivery is configured; `VITE_FEEDBACK_CAPTURE=0` disables it. Capture starts before the layer opens,
+so the screenshot shows the app. A full-viewport manual popover keeps annotations above existing dialogs; Escape closes only feedback.
+Pins, drawing and opaque redaction boxes share a capped annotation undo history. Screenshot inclusion defaults on and is remembered.
+Send errors preserve the draft and offer retry; success shows thanks. Optional browser speech inserts at the cursor, with tap-to-toggle
+and hold-to-talk. Reports are sent only on Submit, with an optional screenshot and a small browser/click context. See [feedback.md](feedback.md).

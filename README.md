@@ -12,9 +12,9 @@
 
 </div>
 
-SC Keymap is a client-only web app. It ships with the game's own default bindings, lays your exported keybinds on top,
+SC Keymap runs its keybinding tools in your browser. It ships with the game's own default bindings, lays your exported keybinds on top,
 lets you rebind anything by pressing it on your keyboard, mouse, gamepad or joystick, and exports a file that Star Citizen
-loads. Everything runs in your browser: your files are never uploaded.
+loads. Your keybinding files are never uploaded. Optional in-app feedback sends only the report you submit, its browser context and an optional screenshot.
 
 ![Devices view: a VKB Gladiator photo template with a callout per control and the actions bound to it](docs/images/devices-view.webp)
 
@@ -158,10 +158,14 @@ npm run data:fetch     # download mirror game files and rebuild the defaults
 [docs/technical-notes.md](docs/technical-notes.md#data-source)). The UX decisions behind the app are in
 [docs/ux-decisions.md](docs/ux-decisions.md).
 
+Optional Vercel feedback delivery uses `RESEND_API_KEY` and `FEEDBACK_TO`; `FEEDBACK_FROM` and Turnstile keys are optional.
+Set `VITE_FEEDBACK_CAPTURE=0` to disable in-app capture. See [docs/feedback.md](docs/feedback.md) for all environment variables,
+the Resend test-sender restriction and local API testing. Vite preview serves the frontend only.
+
 ## Contributing and feedback
 
 Bug reports, missing devices and ideas are welcome: [open an issue](https://github.com/hamlet2k/sc-mapper/issues/new).
-The app also has a **Feedback** button in its header. Pull requests are welcome too; please run `npm run build` and
+When delivery is configured, the app also has a **Feedback** button (Ctrl/Cmd+Shift+F) for reports with optional annotated screenshots. Pull requests are welcome too; please run `npm run build` and
 `npm test` first.
 
 ## Support

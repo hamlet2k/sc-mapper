@@ -50,9 +50,12 @@ function templateFeed(): Plugin {
   }
 }
 
-export default defineConfig({
-  define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version) },
-  plugins: [react(), tailwindcss(), templateFeed()],
-  // the licences of the npm packages bundled into dist/ (React, onnxruntime-web, …), served as /third-party-licenses.md
-  build: { license: { fileName: 'third-party-licenses.md' } },
+export default defineConfig(async () => {
+  const { buildCommit } = await tsImport('./scripts/template-feed.ts', import.meta.url) as { buildCommit: () => string | undefined }
+  return {
+    define: { __BUILD_COMMIT__: JSON.stringify(buildCommit() ?? null), __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version) },
+    plugins: [react(), tailwindcss(), templateFeed()],
+    // the licences of the npm packages bundled into dist/ (React, onnxruntime-web, …), served as /third-party-licenses.md
+    build: { license: { fileName: 'third-party-licenses.md' } },
+  }
 })

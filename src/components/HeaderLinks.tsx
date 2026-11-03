@@ -2,6 +2,7 @@
 // tab. Icon + short label on wide screens; icon-only below lg, where the aria-label and the Tip bubble carry the name.
 import { Ico, type IconName } from './icons';
 import { Tip } from './Tooltip';
+import { useFeedbackConfigured } from '../feedback/useConfigured';
 
 export const SUPPORT_URL = 'https://ko-fi.com/hamlet2k';
 export const REPO_URL = 'https://github.com/hamlet2k/sc-mapper';
@@ -15,9 +16,10 @@ const LINKS: LinkDef[] = [
 ];
 
 export function HeaderLinks() {
+  const inAppFeedback = useFeedbackConfigured();
   return (
     <nav className="flex items-center gap-1 sm:gap-1.5" aria-label="Support and feedback" data-testid="header-links">
-      {LINKS.map((l) => (
+      {LINKS.filter((l) => l.id !== 'feedback' || !inAppFeedback).map((l) => (
         <Tip key={l.id} label={<>{l.tip} <span className="text-slate-400">(opens in a new tab)</span></>} testid={`tip-${l.id}`}>
           <a href={l.href} target="_blank" rel="noopener noreferrer" data-testid={`link-${l.id}`} aria-label={`${l.tip} (opens in a new tab)`}
             className={`flex h-8 min-w-8 items-center justify-center gap-1.5 rounded border px-1.5 text-slate-300 sm:px-2 transition hover:text-hud2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-hud ${l.label ? 'lg:px-2.5' : ''} ${l.accent ? 'border-hud/40 bg-hud/5 hover:border-hud hover:bg-hud/10 hover:shadow-[0_0_12px_-3px_rgba(79,216,255,.7)]' : 'border-edge hover:border-hud/60'}`}>

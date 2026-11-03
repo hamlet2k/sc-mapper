@@ -58,6 +58,107 @@ const selectTemplate = async (picker, choice) => {
 };
 const templateValue = (picker) => picker.getAttribute('data-value');
 
+// ---- in-app feedback: configured override, top layer, annotations and multipart delivery (no real API).
+{
+  const fc = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1 });
+  const fp = await fc.newPage();
+  fp.on('pageerror', (e) => errors.push('[feedback] ' + String(e)));
+  let getCount = 0, postCount = 0;
+  const reports = [];
+  await fc.route('**/api/feedback', async (route) => {
+    const req = route.request();
+    if (req.method() === 'GET') { getCount++; return route.fulfill({ json: { configured: true } }); }
+    postCount++;
+    const parsed = await new Request(req.url(), { method: 'POST', headers: req.headers(), body: req.postDataBuffer() }).formData();
+    const image = parsed.get('image');
+    reports.push({ payload: JSON.parse(parsed.get('payload')), image: image ? { type: image.type, size: image.size, bytes: new Uint8Array(await image.arrayBuffer()) } : null });
+    return route.fulfill({ status: postCount === 1 ? 502 : 200, json: postCount === 1 ? { ok: false, error: 'Test delivery failed' } : { ok: true, id: 'test' } });
+  });
+  const stroke = async () => {
+    await fp.getByTestId('feedback-mode-draw').click();
+    await fp.mouse.move(500, 330); await fp.mouse.down(); await fp.mouse.move(690, 410, { steps: 12 }); await fp.mouse.up();
+  };
+  const redact = async () => {
+    await fp.getByTestId('feedback-mode-redact').click();
+    await fp.mouse.move(300, 460); await fp.mouse.down(); await fp.mouse.move(480, 520, { steps: 8 }); await fp.mouse.up();
+  };
+  try {
+    await fp.goto(url + (url.includes('?') ? '&' : '?') + 'token=private&tab=feedback', { waitUntil: 'networkidle' });
+    await fp.getByTestId('feedback-open').waitFor();
+    check(getCount === 1, 'feedback configuration is requested once, including React StrictMode');
+    await fp.getByTestId('feedback-open').click();
+    const layer = fp.getByTestId('feedback-layer');
+    await layer.waitFor();
+    check(await layer.evaluate((el) => el.matches(':popover-open')), 'feedback opens in the browser top layer');
+    mkdirSync('/workspace/sc-feedback-shots', { recursive: true });
+    await fp.mouse.click(450, 230);
+    check(await fp.getByTestId('feedback-pin').count() === 1, 'feedback drops a numbered pin');
+    await fp.mouse.move(450, 230); await fp.mouse.down(); await fp.mouse.move(470, 250, { steps: 4 }); await fp.mouse.up();
+    check(await fp.getByTestId('feedback-pin').evaluate((el) => el.style.left === '470px'), 'feedback pin can be dragged');
+    await fp.screenshot({ path: '/workspace/sc-feedback-shots/pin.png' });
+    await stroke();
+    check(await fp.getByTestId('feedback-stroke').count() === 1, 'feedback draws an SVG stroke');
+    await fp.screenshot({ path: '/workspace/sc-feedback-shots/stroke.png' });
+    await redact();
+    check(await fp.getByTestId('feedback-redaction').count() === 1, 'feedback adds an opaque redaction');
+    await fp.screenshot({ path: '/workspace/sc-feedback-shots/redaction.png' });
+    await fp.getByTestId('feedback-undo').click();
+    check(await fp.getByTestId('feedback-redaction').count() === 0, 'feedback Undo removes the last redaction');
+    await fp.keyboard.press('Control+z');
+    check(await fp.getByTestId('feedback-stroke').count() === 0, 'feedback Ctrl+Z undoes annotations');
+    await stroke(); await redact();
+    await fp.getByTestId('feedback-body').fill('The device label overlaps its controls.');
+    await fp.getByTestId('feedback-email').fill('reply@example.com');
+    await fp.getByTestId('feedback-send').click();
+    await fp.getByTestId('feedback-error').waitFor();
+    check(await fp.getByTestId('feedback-body').inputValue() === 'The device label overlaps its controls.', 'feedback delivery error keeps draft and annotations for retry');
+    await fp.getByTestId('feedback-send').click();
+    await fp.getByTestId('feedback-done').waitFor();
+    const report = reports.at(-1);
+    check(postCount === 2 && report.payload.body.includes('device label') && report.payload.kind === 'bug' && report.payload.email === 'reply@example.com' && report.payload.pins.length === 1,
+      'feedback multipart POST contains message, kind, reply-to and pins');
+    check(report.payload.pins[0].element && !['html', 'body'].includes(report.payload.pins[0].element.tag) && !report.payload.pins[0].element.selector.includes('feedback'), 'feedback pins identify the underlying app, excluding capture UI');
+    check(report.payload.context.appVersion && report.payload.context.capturedAt && !report.payload.context.url.includes('private') && report.payload.context.trail.every((e) => !e.path.includes('private')),
+      'feedback includes build/browser context and sanitizes sensitive query parameters in URL and trail');
+    check(report.image && report.image.size > 0 && report.image.size <= 3.5 * 1024 * 1024 && /image\/(webp|png)/.test(report.image.type), 'feedback includes a bounded flattened screenshot');
+    const pixel = await fp.evaluate(async ({ bytes, type }) => {
+      const bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type }));
+      const c = document.createElement('canvas'); c.width = bitmap.width; c.height = bitmap.height;
+      const ctx = c.getContext('2d'); ctx.drawImage(bitmap, 0, 0);
+      return [...ctx.getImageData(390, 490, 1, 1).data];
+    }, { bytes: [...report.image.bytes], type: report.image.type });
+    check(pixel[0] < 10 && pixel[1] < 10 && pixel[2] < 10 && pixel[3] === 255, 'feedback upload contains opaque black redacted pixels');
+    check(/Thanks!/.test(await fp.getByTestId('feedback-done').innerText()), 'feedback thanks message appears after delivery');
+    await fp.keyboard.press('Escape'); await layer.waitFor({ state: 'detached' });
+    await fp.getByTestId('search').fill('typed before feedback');
+    await fp.getByTestId('search').press('Control+Shift+F');
+    await layer.waitFor();
+    check(await layer.isVisible(), 'feedback shortcut opens while typing in an input');
+    await fp.getByTestId('feedback-include').uncheck();
+    await fp.keyboard.press('Escape'); await layer.waitFor({ state: 'detached' });
+    await fp.keyboard.press('Meta+Shift+F'); await layer.waitFor();
+    check(!(await fp.getByTestId('feedback-include').isChecked()), 'feedback screenshot preference persists across opens, including Cmd shortcut');
+    await fp.getByTestId('feedback-body').fill('Text only question');
+    await fp.getByRole('button', { name: 'Question', exact: true }).click();
+    await fp.getByTestId('feedback-send').click(); await fp.getByTestId('feedback-done').waitFor();
+    check(reports.at(-1).image === null && reports.at(-1).payload.pins.length === 0 && reports.at(-1).payload.kind === 'question', 'feedback supports text-only delivery without screenshot or pins');
+    await fp.keyboard.press('Escape');
+    await fp.reload({ waitUntil: 'networkidle' });
+    check(getCount === 1, 'feedback configuration is cached in sessionStorage across reload');
+    await fp.setViewportSize({ width: 360, height: 800 });
+    check(await fp.evaluate(() => { const row = document.querySelector('header').firstElementChild; return row.scrollWidth <= row.clientWidth + 1; }), 'configured feedback fits the narrow header');
+  } finally { await fc.close(); }
+  for (const scenario of ['unconfigured', 'failed']) {
+    const hidden = await browser.newContext(); const hp = await hidden.newPage();
+    await hidden.route('**/api/feedback', (r) => scenario === 'failed' ? r.abort() : r.fulfill({ json: { configured: false } }));
+    await hp.goto(url, { waitUntil: 'networkidle' });
+    check(await hp.getByTestId('feedback-open').count() === 0, `feedback stays hidden when configuration is ${scenario}`);
+    await hp.getByTestId('search').press('Control+Shift+F');
+    check(await hp.getByTestId('feedback-layer').count() === 0, `feedback shortcut stays disabled when configuration is ${scenario}`);
+    await hidden.close();
+  }
+}
+
 // Failed lazy chunks and Vite preload errors share a persistent, manual reload prompt (isolated storage/cache).
 {
   const staleContext = await browser.newContext();
