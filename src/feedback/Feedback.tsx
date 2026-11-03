@@ -13,7 +13,7 @@ type Phase = 'idle' | 'capturing' | 'open' | 'sending' | 'done' | 'error';
 type Mode = 'pin' | 'draw' | 'redact';
 const PREF = 'scm.feedback.includeScreenshot';
 const PANEL_POSITION = 'scm.feedback.panelPosition';
-const button = 'rounded border border-edge bg-panel px-3 py-1.5 text-sm text-slate-200 hover:border-hud hover:text-hud2 disabled:opacity-50';
+const button = 'rounded border border-edge bg-panel px-2 py-1.5 text-sm text-slate-200 hover:border-hud hover:text-hud2 disabled:opacity-50';
 const path = (points: [number, number][]) => points.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ');
 
 type Snapshot = { canvas: HTMLCanvasElement; w: number; h: number; capturedAt: string; failed: boolean };
@@ -191,10 +191,6 @@ export function Feedback() {
             onKeyDown={(e) => { if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); dispatch({ type: 'deletePin', n: p.n }); } else if (e.key.startsWith('Arrow')) { e.preventDefault(); const x = Math.max(0, Math.min(snapshot!.w, p.x + (e.key === 'ArrowRight' ? 5 : e.key === 'ArrowLeft' ? -5 : 0))), y = Math.max(0, Math.min(snapshot!.h, p.y + (e.key === 'ArrowDown' ? 5 : e.key === 'ArrowUp' ? -5 : 0))); dispatch({ type: 'movePin', n: p.n, x, y, element: elementAt(x, y) }); } }}>{p.n}</button>)}
         </>}
       </div>
-      <div className="absolute left-3 top-3 flex max-w-[calc(100%-24px)] flex-wrap gap-1 rounded-lg border border-edge bg-panel p-2 shadow-xl" role="toolbar" aria-label="Annotation tools">
-        {(['pin', 'draw', 'redact'] as const).map((m) => <button type="button" key={m} className={`${button} ${mode === m ? 'border-hud text-hud2' : ''}`} disabled={busy || phase === 'done' || !include} aria-pressed={mode === m} data-testid={`feedback-mode-${m}`} onClick={() => setMode(m)}>{m[0].toUpperCase() + m.slice(1)}</button>)}
-        <button type="button" className={button} disabled={!anno.past.length || busy} data-testid="feedback-undo" onClick={() => dispatch({ type: 'undo' })}>Undo</button>
-      </div>
       <section ref={panel} data-feedback-ui data-testid="feedback-panel" style={panelPosition ? { left: panelPosition.x, top: panelPosition.y, bottom: 'auto', right: 'auto' } : undefined}
         className="absolute bottom-3 right-3 max-h-[calc(100dvh-88px)] w-[360px] max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-edge bg-panel/55 p-4 shadow-2xl backdrop-blur-[2px] transition-colors hover:bg-panel/80 focus-within:bg-panel/80">
         <div data-testid="feedback-panel-handle" className={`mb-3 flex touch-none select-none items-center justify-between ${panelDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
@@ -209,6 +205,10 @@ export function Feedback() {
           <fieldset disabled={busy} className="space-y-3">
             <legend className="sr-only">Feedback details</legend>
             <div className="flex gap-1" role="group" aria-label="Feedback kind">{(['bug', 'enhancement', 'question'] as const).map((k) => <button key={k} type="button" aria-pressed={kind === k} className={`${button} flex-1 px-1 ${kind === k ? 'border-hud text-hud2' : ''}`} onClick={() => setKind(k)}>{k[0].toUpperCase() + k.slice(1)}</button>)}</div>
+          {include && <div className="grid grid-cols-4 gap-1" role="toolbar" aria-label="Annotation tools">
+        {(['pin', 'draw', 'redact'] as const).map((m) => <button type="button" key={m} className={`${button} ${mode === m ? 'border-hud text-hud2' : ''}`} disabled={busy} aria-pressed={mode === m} data-testid={`feedback-mode-${m}`} onClick={() => setMode(m)}>{m === 'pin' ? '📍 Pin' : m === 'draw' ? '✏️ Draw' : '⬛ Redact'}</button>)}
+        <button type="button" className={button} disabled={!anno.past.length || busy} data-testid="feedback-undo" onClick={() => dispatch({ type: 'undo' })}>↶ Undo</button>
+          </div>}
             <label className="block text-sm">Message<textarea ref={field} required maxLength={8000} rows={4} value={body} onChange={(e) => setBody(e.target.value)} data-testid="feedback-body" className="mt-1 block w-full resize-y rounded border border-edge bg-black/30 p-2 text-sm" placeholder="What happened, or what would help?" /></label>
             <Dictation field={field} value={body} onChange={setBody} disabled={busy} />
             <label className="block text-sm">Reply-to email (optional)<input type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} data-testid="feedback-email" className="mt-1 block w-full rounded border border-edge bg-black/30 p-2" /></label>
