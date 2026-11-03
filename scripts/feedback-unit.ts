@@ -3,11 +3,11 @@ import { annoReducer as reduce, EMPTY_ANNO, rectFrom, simplify } from '../src/fe
 import { micDown, micUp } from '../src/feedback/mic-gesture';
 import { insertAtCursor } from '../src/feedback/insert-text';
 import { safeUrl, TrailBuffer } from '../src/feedback/context';
-import { allowedOrigin, FeedbackError, imageType, validatePayload, validEmail, MAX_IMAGE } from '../api/_lib/validation';
-import { createRateLimiter } from '../api/_lib/rate-limit';
-import { buildEmail, escapeHtml } from '../api/_lib/email';
-import { createHandlers } from '../api/_lib/handler';
-import { GET, POST } from '../api/feedback';
+import { allowedOrigin, FeedbackError, imageType, validatePayload, validEmail, MAX_IMAGE } from '../api/_lib/validation.js';
+import { createRateLimiter } from '../api/_lib/rate-limit.js';
+import { buildEmail, escapeHtml } from '../api/_lib/email.js';
+import { createHandlers } from '../api/_lib/handler.js';
+import { GET, POST } from '../api/feedback.js';
 
 let passed = 0;
 const t = async (name: string, fn: () => void | Promise<void>) => { await fn(); passed++; console.log('  ✓ feedback:', name); };

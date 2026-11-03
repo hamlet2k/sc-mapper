@@ -1,4 +1,4 @@
-import type { Payload } from './validation';
+import type { Payload } from './validation.js';
 export const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const show = (value: unknown): string => typeof value === 'string' ? value : JSON.stringify(value) ?? '';
 export function buildEmail(p: Payload) {

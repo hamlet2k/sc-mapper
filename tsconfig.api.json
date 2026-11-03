@@ -1,11 +1,12 @@
 {
   "compilerOptions": {
     "tsBuildInfoFile": "./.tmp/tsconfig.api.tsbuildinfo",
-    "target": "es2023",
-    "lib": ["ES2023", "DOM"],
+    "target": "ES2022",
+    "lib": ["ES2022"],
     "types": ["node"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,

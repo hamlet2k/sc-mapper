@@ -1,6 +1,6 @@
-import { buildEmail } from './email';
-import { createRateLimiter } from './rate-limit';
-import { allowedOrigin, FeedbackError, imageType, MAX_IMAGE, validatePayload } from './validation';
+import { buildEmail } from './email.js';
+import { createRateLimiter } from './rate-limit.js';
+import { allowedOrigin, FeedbackError, imageType, MAX_IMAGE, validatePayload } from './validation.js';
 
 type Env = Record<string, string | undefined>;
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });

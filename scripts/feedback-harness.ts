@@ -1,5 +1,5 @@
 // Local-only handler exercise. No credentials or real network required: node --import tsx scripts/feedback-harness.ts
-import { GET, POST } from '../api/feedback';
+import { GET, POST } from '../api/feedback.js';
 const originalFetch = globalThis.fetch;
 const saved = { RESEND_API_KEY: process.env.RESEND_API_KEY, FEEDBACK_TO: process.env.FEEDBACK_TO, TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY };
 try {
