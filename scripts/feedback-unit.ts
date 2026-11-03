@@ -3,6 +3,7 @@ import { annoReducer as reduce, EMPTY_ANNO, rectFrom, simplify } from '../src/fe
 import { micDown, micUp } from '../src/feedback/mic-gesture';
 import { insertAtCursor } from '../src/feedback/insert-text';
 import { safeUrl, TrailBuffer } from '../src/feedback/context';
+import { withTimeout } from '../src/feedback/snapshot';
 import { allowedOrigin, FeedbackError, imageType, validatePayload, validEmail, MAX_IMAGE } from '../api/_lib/validation.js';
 import { createRateLimiter } from '../api/_lib/rate-limit.js';
 import { buildEmail, escapeHtml } from '../api/_lib/email.js';
@@ -19,6 +20,14 @@ const request = (p: unknown = payload(), image?: Blob, origin: string | null = '
   return new Request('https://sc-mapper.vercel.app/api/feedback', { method: 'POST', headers: { ...(origin ? { Origin: origin } : {}), 'x-forwarded-for': ip }, body: form });
 };
 const statusError = (status: number) => (error: unknown) => error instanceof FeedbackError && error.status === status;
+
+await t('capture timeout falls back when capture never settles and preserves success/errors', async () => {
+  const fallback = await withTimeout(new Promise<never>(() => {}), 10).catch(() => 'blank snapshot');
+  assert.equal(fallback, 'blank snapshot');
+  assert.equal(await withTimeout(Promise.resolve('screenshot'), 1000), 'screenshot');
+  const failure = new Error('capture failed');
+  await assert.rejects(withTimeout(Promise.reject(failure), 1000), (error) => error === failure);
+});
 
 await t('reducer renumbers pins, moves and deletes, restores undo immutably', () => {
   let s = reduce(EMPTY_ANNO, { type: 'addPin', x: 10, y: 20, element: null }); const first = s;

@@ -4,7 +4,7 @@ import { Ico } from '../components/icons';
 import { annoReducer, EMPTY_ANNO, rectFrom, simplify } from './annotations';
 import { collectContext, elementAt } from './context';
 import { useFeedbackConfigured } from './useConfigured';
-import { blankSnapshot, captureViewport, flatten, preloadSnapshot } from './snapshot';
+import { blankSnapshot, captureViewport, flatten, preloadSnapshot, withTimeout } from './snapshot';
 import { Dictation } from './Dictation';
 import { Turnstile } from './Turnstile';
 import type { FeedbackKind } from './types';
@@ -12,11 +12,16 @@ import type { FeedbackKind } from './types';
 type Phase = 'idle' | 'capturing' | 'open' | 'sending' | 'done' | 'error';
 type Mode = 'pin' | 'draw' | 'redact';
 const PREF = 'scm.feedback.includeScreenshot';
+const PANEL_POSITION = 'scm.feedback.panelPosition';
 const button = 'rounded border border-edge bg-panel px-3 py-1.5 text-sm text-slate-200 hover:border-hud hover:text-hud2 disabled:opacity-50';
 const path = (points: [number, number][]) => points.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ');
 
 type Snapshot = { canvas: HTMLCanvasElement; w: number; h: number; capturedAt: string; failed: boolean };
 type Drag = { start: [number, number]; points: [number, number][]; pin?: number; redact?: number; offset?: [number, number] };
+type PanelPosition = { x: number; y: number };
+const rememberPanel = (position: PanelPosition | null) => {
+  try { if (position) sessionStorage.setItem(PANEL_POSITION, JSON.stringify(position)); else sessionStorage.removeItem(PANEL_POSITION); } catch { /* storage disabled */ }
+};
 
 export function Feedback() {
   const configured = useFeedbackConfigured();
@@ -30,6 +35,11 @@ export function Feedback() {
   const layer = useRef<HTMLDivElement>(null), background = useRef<HTMLDivElement>(null), field = useRef<HTMLTextAreaElement>(null);
   const launch = useRef<HTMLButtonElement>(null), phaseRef = useRef<Phase>('idle'), generation = useRef(0), sending = useRef<AbortController | null>(null);
   const drag = useRef<Drag | null>(null);
+  const panel = useRef<HTMLElement>(null), panelDrag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const [panelPosition, setPanelPosition] = useState<PanelPosition | null>(() => {
+    try { const p = JSON.parse(sessionStorage.getItem(PANEL_POSITION) ?? 'null'); return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null; } catch { return null; }
+  });
+  const [panelDragging, setPanelDragging] = useState(false);
   phaseRef.current = phase;
   const opened = !['idle', 'capturing'].includes(phase);
   useEffect(() => {
@@ -42,8 +52,8 @@ export function Feedback() {
     if (!configured || phaseRef.current !== 'idle') return;
     const id = ++generation.current;
     const w = innerWidth, h = innerHeight, capturedAt = new Date().toISOString();
-    // Start snapshot work before changing any React state or showing capture UI.
-    const pending = captureViewport();
+    // Arm the overall deadline before starting capture, including import and geometry work.
+    const pending = withTimeout(Promise.resolve().then(captureViewport));
     phaseRef.current = 'capturing'; setPhase('capturing');
     let canvas: HTMLCanvasElement, failed = false;
     try { canvas = await pending; } catch { canvas = blankSnapshot(w, h); failed = true; }
@@ -51,7 +61,7 @@ export function Feedback() {
     dispatch({ type: 'reset' }); setDraftPoints([]); setError(''); setToken(''); setMode('pin');
     setSnapshot({ canvas, w, h, capturedAt, failed }); setPhase('open');
   }, [configured]);
-  const close = useCallback(() => { generation.current++; sending.current?.abort(); drag.current = null; setDraftPoints([]); setPhase('idle'); }, []);
+  const close = useCallback(() => { generation.current++; sending.current?.abort(); drag.current = null; panelDrag.current = null; setPanelDragging(false); setDraftPoints([]); phaseRef.current = 'idle'; setPhase('idle'); }, []);
   useEffect(() => {
     if (!configured) return;
     const key = (e: KeyboardEvent) => {
@@ -77,6 +87,27 @@ export function Feedback() {
     background.current.replaceChildren(c);
   }, [opened, snapshot]);
   useEffect(() => () => { generation.current++; sending.current?.abort(); }, []);
+  useEffect(() => {
+    if (!opened) return;
+    const resetOutside = () => {
+      const r = panel.current?.getBoundingClientRect();
+      if (r && (r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight)) {
+        panelDrag.current = null; setPanelDragging(false); setPanelPosition(null); rememberPanel(null);
+      }
+    };
+    resetOutside();
+    const observer = new ResizeObserver(resetOutside);
+    if (panel.current) observer.observe(panel.current);
+    window.addEventListener('resize', resetOutside);
+    return () => { observer.disconnect(); window.removeEventListener('resize', resetOutside); };
+  }, [opened]);
+  const movePanel = (e: ReactPointerEvent) => {
+    const d = panelDrag.current, r = panel.current?.getBoundingClientRect();
+    if (!d || !r) return;
+    const position = { x: Math.max(0, Math.min(innerWidth - r.width, d.left + e.clientX - d.x)),
+      y: Math.max(0, Math.min(innerHeight - r.height, d.top + e.clientY - d.y)) };
+    setPanelPosition(position); rememberPanel(position);
+  };
   const bounded = (e: ReactPointerEvent): [number, number] => [Math.max(0, Math.min(snapshot!.w, e.clientX)), Math.max(0, Math.min(snapshot!.h, e.clientY))];
   const start = (e: ReactPointerEvent, pin?: number, redact?: number) => {
     if (phase === 'sending' || phase === 'done' || e.button !== 0 || !include) return;
@@ -138,7 +169,7 @@ export function Feedback() {
   return <>
     <button ref={launch} data-feedback-ui data-testid="feedback-open" type="button" onClick={() => void open()} disabled={phase === 'capturing'} aria-label="Send feedback" title="Send feedback (Ctrl/Cmd+Shift+F)"
       className="flex h-8 min-w-8 items-center justify-center gap-1.5 rounded border border-edge px-1.5 text-slate-300 hover:border-hud/60 hover:text-hud2 sm:px-2">
-      <Ico name="feedback" className="h-4 w-4" /><span className="hidden font-display text-xs font-semibold uppercase tracking-wider lg:inline">{phase === 'capturing' ? 'Capturing…' : 'Feedback'}</span>
+      <Ico name="feedback" className="h-4 w-4" /><span className={`${phase === 'capturing' ? '' : 'hidden lg:inline'} font-display text-xs font-semibold uppercase tracking-wider`}>{phase === 'capturing' ? 'Capturing…' : 'Feedback'}</span>
     </button>
     {opened && createPortal(<div ref={layer} popover="manual" data-feedback-ui data-testid="feedback-layer" data-phase={phase} role="dialog" aria-modal="true" aria-label="Send feedback"
       className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-[#08111e] p-0 text-slate-200"
@@ -164,8 +195,16 @@ export function Feedback() {
         {(['pin', 'draw', 'redact'] as const).map((m) => <button type="button" key={m} className={`${button} ${mode === m ? 'border-hud text-hud2' : ''}`} disabled={busy || phase === 'done' || !include} aria-pressed={mode === m} data-testid={`feedback-mode-${m}`} onClick={() => setMode(m)}>{m[0].toUpperCase() + m.slice(1)}</button>)}
         <button type="button" className={button} disabled={!anno.past.length || busy} data-testid="feedback-undo" onClick={() => dispatch({ type: 'undo' })}>Undo</button>
       </div>
-      <section className="absolute bottom-3 right-3 max-h-[calc(100dvh-88px)] w-[360px] max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-edge bg-panel p-4 shadow-2xl">
-        <div className="mb-3 flex items-center justify-between"><h2 className="font-display text-lg text-hud2">Send feedback</h2><button type="button" className={button} onClick={close} aria-label="Close feedback">Close</button></div>
+      <section ref={panel} data-feedback-ui data-testid="feedback-panel" style={panelPosition ? { left: panelPosition.x, top: panelPosition.y, bottom: 'auto', right: 'auto' } : undefined}
+        className="absolute bottom-3 right-3 max-h-[calc(100dvh-88px)] w-[360px] max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-edge bg-panel/85 p-4 shadow-2xl backdrop-blur-md hover:bg-panel/95 focus-within:bg-panel/95">
+        <div data-testid="feedback-panel-handle" className={`mb-3 flex touch-none select-none items-center justify-between ${panelDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          onPointerDown={(e) => {
+            if (e.button !== 0 || (e.target as Element).closest('button,input,textarea,select,a')) return;
+            e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId);
+            const r = panel.current!.getBoundingClientRect(); panelDrag.current = { x: e.clientX, y: e.clientY, left: r.left, top: r.top }; setPanelDragging(true);
+          }} onPointerMove={movePanel} onPointerUp={(e) => { if (!panelDrag.current) return; movePanel(e); panelDrag.current = null; setPanelDragging(false); e.currentTarget.releasePointerCapture(e.pointerId); }}
+          onPointerCancel={() => { panelDrag.current = null; setPanelDragging(false); }} onLostPointerCapture={() => { panelDrag.current = null; setPanelDragging(false); }}>
+          <h2 className="font-display text-lg text-hud2">Send feedback</h2><button type="button" className={button} onClick={close} aria-label="Close feedback">Close</button></div>
         {phase === 'done' ? <p data-testid="feedback-done" role="status" className="py-6 text-hud2">Thanks! Your feedback has been sent.</p> : <form onSubmit={(e) => void submit(e)} className="space-y-3">
           <fieldset disabled={busy} className="space-y-3">
             <legend className="sr-only">Feedback details</legend>
@@ -176,7 +215,7 @@ export function Feedback() {
             <div hidden aria-hidden="true"><label>Leave empty<input name="hp" tabIndex={-1} autoComplete="off" value={hp} onChange={(e) => setHp(e.target.value)} /></label></div>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" role="switch" checked={include} data-testid="feedback-include" onChange={(e) => { setInclude(e.target.checked); try { localStorage.setItem(PREF, String(e.target.checked)); } catch { /* storage disabled */ } }} />Include screenshot</label>
           </fieldset>
-          {snapshot?.failed && <p role="status" className="text-xs text-amber-300">Screenshot unavailable. You can still send your message.</p>}
+          {snapshot?.failed && <p role="status" data-testid="feedback-capture-skipped" className="text-xs text-amber-300">Screenshot took too long, so it was skipped. You can still pin and describe the issue.</p>}
           <p className="text-xs text-slate-400">{include ? 'Pin, draw or cover private details with Redact. ' : ''}Your message and browser context will be emailed to the SC Mapper maintainer.</p>
           {include && anno.current.pins.length > 0 && <ul className="space-y-1 text-xs text-slate-400">{anno.current.pins.map((p) => <li key={p.n} className="flex items-center justify-between gap-2"><span>{p.n}. {p.element?.ariaLabel || p.element?.text || p.element?.tag || 'Screenshot'}</span><button type="button" aria-label={`Delete pin ${p.n}`} disabled={busy} onClick={() => dispatch({ type: 'deletePin', n: p.n })}>Remove</button></li>)}</ul>}
           {import.meta.env.VITE_TURNSTILE_SITE_KEY && <Turnstile key={verification} onToken={setToken} />}

@@ -86,22 +86,32 @@ const templateValue = (picker) => picker.getAttribute('data-value');
     await fp.goto(url + (url.includes('?') ? '&' : '?') + 'token=private&tab=feedback', { waitUntil: 'networkidle' });
     await fp.getByTestId('feedback-open').waitFor();
     check(getCount === 1, 'feedback configuration is requested once, including React StrictMode');
+    const captureStarted = Date.now();
     await fp.getByTestId('feedback-open').click();
     const layer = fp.getByTestId('feedback-layer');
-    await layer.waitFor();
+    await layer.waitFor({ timeout: 5000 });
+    check(Date.now() - captureStarted < 5000 && await fp.getByTestId('feedback-capture-skipped').count() === 0, `Chrome feedback capture opens within 5s (${Date.now() - captureStarted}ms)`);
     check(await layer.evaluate((el) => el.matches(':popover-open')), 'feedback opens in the browser top layer');
-    mkdirSync('/workspace/sc-feedback-shots', { recursive: true });
+    const panel = fp.getByTestId('feedback-panel'), handle = fp.getByTestId('feedback-panel-handle');
+    const beforeDrag = await panel.boundingBox(), grip = await handle.boundingBox();
+    await fp.mouse.move(grip.x + 40, grip.y + grip.height / 2); await fp.mouse.down();
+    await fp.mouse.move(grip.x - 60, grip.y + grip.height / 2 - 70, { steps: 5 }); await fp.mouse.up();
+    const afterDrag = await panel.boundingBox();
+    check(Math.abs(afterDrag.x - beforeDrag.x + 100) < 2 && Math.abs(afterDrag.y - beforeDrag.y + 70) < 2, 'feedback panel moves when its header is dragged');
+    check(await fp.getByTestId('feedback-pin').count() === 0, 'dragging the feedback panel does not drop a pin');
+    // Use the existing screenshot directory so the feedback tests work in restricted workspaces too.
+    mkdirSync(shots, { recursive: true });
     await fp.mouse.click(450, 230);
     check(await fp.getByTestId('feedback-pin').count() === 1, 'feedback drops a numbered pin');
     await fp.mouse.move(450, 230); await fp.mouse.down(); await fp.mouse.move(470, 250, { steps: 4 }); await fp.mouse.up();
     check(await fp.getByTestId('feedback-pin').evaluate((el) => el.style.left === '470px'), 'feedback pin can be dragged');
-    await fp.screenshot({ path: '/workspace/sc-feedback-shots/pin.png' });
+    await fp.screenshot({ path: shots + 'feedback-pin.png' });
     await stroke();
     check(await fp.getByTestId('feedback-stroke').count() === 1, 'feedback draws an SVG stroke');
-    await fp.screenshot({ path: '/workspace/sc-feedback-shots/stroke.png' });
+    await fp.screenshot({ path: shots + 'feedback-stroke.png' });
     await redact();
     check(await fp.getByTestId('feedback-redaction').count() === 1, 'feedback adds an opaque redaction');
-    await fp.screenshot({ path: '/workspace/sc-feedback-shots/redaction.png' });
+    await fp.screenshot({ path: shots + 'feedback-redaction.png' });
     await fp.getByTestId('feedback-undo').click();
     check(await fp.getByTestId('feedback-redaction').count() === 0, 'feedback Undo removes the last redaction');
     await fp.keyboard.press('Control+z');
@@ -130,6 +140,8 @@ const templateValue = (picker) => picker.getAttribute('data-value');
     check(pixel[0] < 10 && pixel[1] < 10 && pixel[2] < 10 && pixel[3] === 255, 'feedback upload contains opaque black redacted pixels');
     check(/Thanks!/.test(await fp.getByTestId('feedback-done').innerText()), 'feedback thanks message appears after delivery');
     await fp.keyboard.press('Escape'); await layer.waitFor({ state: 'detached' });
+    const savedPosition = await fp.evaluate(() => JSON.parse(sessionStorage.getItem('scm.feedback.panelPosition')));
+    check(Math.abs(savedPosition.x - afterDrag.x) < 2 && Math.abs(savedPosition.y - afterDrag.y) < 2, 'feedback panel position is saved for the session');
     await fp.getByTestId('search').fill('typed before feedback');
     await fp.getByTestId('search').press('Control+Shift+F');
     await layer.waitFor();
@@ -143,9 +155,41 @@ const templateValue = (picker) => picker.getAttribute('data-value');
     await fp.getByTestId('feedback-send').click(); await fp.getByTestId('feedback-done').waitFor();
     check(reports.at(-1).image === null && reports.at(-1).payload.pins.length === 0 && reports.at(-1).payload.kind === 'question', 'feedback supports text-only delivery without screenshot or pins');
     await fp.keyboard.press('Escape');
+    await fp.evaluate(() => { window.__feedbackCaptureStub = () => new Promise(() => {}); });
+    const stalledAt = Date.now();
+    await fp.getByTestId('feedback-open').click();
+    await fp.getByTestId('feedback-open').filter({ hasText: 'Capturing…' }).waitFor({ timeout: 1000 });
+    check(/Capturing…/i.test(await fp.getByTestId('feedback-open').innerText()), 'feedback shows Capturing… while a capture is pending');
+    await layer.waitFor({ timeout: 7000 });
+    check(Date.now() - stalledAt < 7000 && await fp.getByTestId('feedback-capture-skipped').isVisible(), `feedback skips a stalled capture within 7s (${Date.now() - stalledAt}ms)`);
+    await fp.getByTestId('feedback-include').check();
+    await fp.mouse.click(450, 230);
+    check(await fp.getByTestId('feedback-pin').count() === 1, 'feedback accepts a pin after capture times out');
+    await fp.getByTestId('feedback-body').fill('Capture timed out but this pin still identifies the issue.');
+    await fp.getByTestId('feedback-send').click(); await fp.getByTestId('feedback-done').waitFor();
+    check(reports.at(-1).image === null && reports.at(-1).payload.pins[0]?.element && !reports.at(-1).payload.pins[0].element.selector.includes('feedback'), 'timed-out capture sends underlying element information without an image');
+    await fp.getByRole('button', { name: 'Close feedback', exact: true }).click();
+    await layer.waitFor({ state: 'detached' });
+    await fp.getByTestId('feedback-open').click();
+    await fp.keyboard.press('Escape');
+    await fp.waitForTimeout(6500);
+    check(await layer.count() === 0 && await fp.getByTestId('feedback-open').isEnabled(), 'Escape cancels a pending capture and its timeout cannot reopen the layer');
     await fp.reload({ waitUntil: 'networkidle' });
     check(getCount === 1, 'feedback configuration is cached in sessionStorage across reload');
+    await fp.getByTestId('feedback-open').click(); await layer.waitFor({ timeout: 5000 });
+    const restored = await panel.boundingBox();
+    check(Math.abs(restored.x - afterDrag.x) < 2 && Math.abs(restored.y - afterDrag.y) < 2, 'feedback panel position survives reload');
+    await fp.evaluate(() => {
+      const encode = HTMLCanvasElement.prototype.toBlob;
+      HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) { if (type !== 'image/webp') encode.call(this, callback, type, quality); };
+    });
+    await fp.getByTestId('feedback-body').fill('Use PNG when the WebP encoder never calls back.');
+    await fp.getByTestId('feedback-send').click(); await fp.getByTestId('feedback-done').waitFor({ timeout: 4000 });
+    check(reports.at(-1).image?.type === 'image/png', 'feedback falls back to PNG if WebP encoding stalls');
     await fp.setViewportSize({ width: 360, height: 800 });
+    const resized = await panel.boundingBox();
+    check(resized.x >= 0 && resized.y >= 0 && resized.x + resized.width <= 360 && resized.y + resized.height <= 800, 'feedback panel resets inside the viewport after resize');
+    await fp.keyboard.press('Escape');
     check(await fp.evaluate(() => { const row = document.querySelector('header').firstElementChild; return row.scrollWidth <= row.clientWidth + 1; }), 'configured feedback fits the narrow header');
   } finally { await fc.close(); }
   for (const scenario of ['unconfigured', 'failed']) {
@@ -3306,6 +3350,49 @@ console.log('\nheader links (Chrome)');
   check(/Feedback/.test(ntip), `narrow: keyboard focus on the Feedback icon shows its tooltip ("${ntip}")`);
   await lp.screenshot({ path: shots + '161-header-links-narrow.png', clip: { x: 0, y: 0, width: 360, height: 400 } });
   await lc.close();
+}
+
+// ---- Firefox feedback: real capture, PNG encoding, unavailable speech recognition and multipart delivery.
+{
+  let gecko = null;
+  try { gecko = await firefox.launch(); } catch { console.log('  - feedback skipped: Playwright Firefox not installed (npx playwright install firefox)'); }
+  if (gecko) {
+    try {
+      const fc = await gecko.newContext({ viewport: { width: 1400, height: 900 }, deviceScaleFactor: 1 });
+      const reports = [];
+      await fc.route('**/api/feedback', async (route) => {
+        const req = route.request();
+        if (req.method() === 'GET') return route.fulfill({ json: { configured: true } });
+        const form = await new Request(req.url(), { method: 'POST', headers: req.headers(), body: req.postDataBuffer() }).formData();
+        const image = form.get('image');
+        reports.push({ payload: JSON.parse(form.get('payload')), imageType: image?.type, imageSize: image?.size });
+        return route.fulfill({ json: { ok: true, id: 'firefox-test' } });
+      });
+      const fp = await fc.newPage();
+      fp.on('pageerror', (e) => errors.push('[feedback Firefox] ' + String(e)));
+      await fp.goto(url, { waitUntil: 'networkidle' });
+      await fp.getByTestId('feedback-open').waitFor();
+      const started = Date.now();
+      await fp.getByTestId('feedback-open').click();
+      await fp.getByTestId('feedback-layer').waitFor({ timeout: 5000 });
+      check(Date.now() - started < 5000 && await fp.getByTestId('feedback-capture-skipped').count() === 0, `Firefox feedback capture opens within 5s (${Date.now() - started}ms)`);
+      check(await fp.getByTestId('feedback-mic').isDisabled(), 'Firefox feedback dictation is disabled without SpeechRecognition');
+      await fp.mouse.click(450, 230);
+      check(await fp.getByTestId('feedback-pin').count() === 1, 'Firefox feedback drops a pin');
+      await fp.getByTestId('feedback-body').fill('Firefox screenshot and pin test.');
+      await fp.evaluate(() => { window.__feedbackOriginalToBlob = HTMLCanvasElement.prototype.toBlob; HTMLCanvasElement.prototype.toBlob = () => {}; });
+      const encodeStarted = Date.now();
+      await fp.getByTestId('feedback-send').click();
+      await fp.getByTestId('feedback-error').waitFor({ timeout: 3000 });
+      check(Date.now() - encodeStarted < 3000 && reports.length === 0, 'Firefox feedback recovers from a toBlob callback that never fires');
+      await fp.evaluate(() => { HTMLCanvasElement.prototype.toBlob = window.__feedbackOriginalToBlob; delete window.__feedbackOriginalToBlob; });
+      await fp.getByTestId('feedback-send').click();
+      await fp.getByTestId('feedback-done').waitFor();
+      check(reports.length === 1 && reports[0].imageType === 'image/png' && reports[0].imageSize > 0 && reports[0].imageSize <= 3.5 * 1024 * 1024, 'Firefox feedback POST includes a bounded PNG screenshot');
+      check(reports[0].payload.body === 'Firefox screenshot and pin test.' && reports[0].payload.pins[0]?.element && !reports[0].payload.pins[0].element.selector.includes('feedback'), 'Firefox feedback POST includes the message and underlying pinned element');
+      check(/Thanks!/.test(await fp.getByTestId('feedback-done').innerText()), 'Firefox feedback confirms delivery');
+    } finally { await gecko.close(); }
+  }
 }
 
 // ---- drag & drop in a real Firefox (Gecko): synthetic file drags exercise the page's handlers there (types list, text-node
