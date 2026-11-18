@@ -1126,7 +1126,7 @@ export default function App() {
           <span className="hidden min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500 sm:block" data-testid="app-subtitle" title={`Star Citizen binding console · ${versionLabel}`}>Star Citizen binding console · {versionLabel}</span>
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             <button type="button" onClick={() => setUi('friendly')} data-testid="to-friendly" title="The simple SC Mapper: pictures, press to bind, drag to reorder, save for the game"
-              className="rounded border border-hud/50 px-2 py-1 text-xs font-semibold text-hud2 hover:bg-hud/10">Simple view</button>
+              className="rounded border border-hud/50 px-2 py-1 text-xs font-semibold text-hud2 hover:bg-hud/10 max-sm:hidden">Simple view</button>
             <Feedback />
             <HeaderLinks />
             <span className="mx-0.5 h-5 w-px bg-edge sm:mx-1" aria-hidden="true" />

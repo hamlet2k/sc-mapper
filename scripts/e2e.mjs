@@ -1061,12 +1061,12 @@ await page.waitForTimeout(300);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(150);
 }
-{ // the EVO R is a VKB Gladiator: its own drawing loads on demand; VKB numbering is configurable, so the callouts start unassigned
+{ // the EVO R is a VKB Gladiator: its own drawing loads on demand; its callouts carry the researched factory-default numbering (b0e686b)
   await page.waitForTimeout(500);
   const st = await dv.getByTestId('device-status').innerText();
   const src = await dv.locator('[data-testid=device-canvas] img').first().getAttribute('src').catch(() => '');
   check(/VKB Gladiator/.test(st) && /name “Gladiator”/.test(st) && /^data:image\/svg\+xml|\/device-photos\/vkb-gladiator-scg-[a-z]+\.webp$/.test(src ?? ''), `Gladiator EVO R auto-links to the VKB Gladiator template, drawing / photos lazy-loaded (${st.split('\n')[0]})`);
-  check(await dv.getByTestId('template-unassigned').isVisible() && /^A2 red button\s+no number yet/.test(await dv.locator('[data-callout="a2"]').innerText()), 'unassigned callouts flagged (“no number yet”) with an Assign numbers prompt');
+  check(await dv.getByTestId('template-unassigned').count() === 0 && /^A2 red button\s+3\b/.test(await dv.locator('[data-callout="a2"]').innerText()), 'Gladiator callouts are numbered (A2 = button 3), so no “no number yet” / Assign numbers prompt');
   check(await dv.getByTestId('chromium-button-notice').isVisible() && /Firefox/.test(await dv.getByTestId('chromium-button-notice').innerText()), 'a 32-button device in Chrome shows the prominent Chromium button-limit notice with the Firefox advice');
   check(await dv.getByTestId('chromium-button-notice').getByTestId('firefox-download').isVisible() && await dv.getByRole('button', { name: /Copy link for Firefox/ }).isVisible(),
     'button-limit notice: Firefox logo download link + Copy link for Firefox button');
@@ -1946,7 +1946,7 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   await selectTemplate(sel, '');
   await page.waitForTimeout(300);
 }
-{ // device templates: a >32-button device warns in Chrome; numbers can be assigned on a copy of an unassigned built-in
+{ // device templates: a >32-button device warns in Chrome; numbers can be changed on a customized copy of a built-in
   await selectTemplate(dv.getByTestId('template-select'), 'builtin-winctrl-orion');
   await page.waitForTimeout(600);
   const n = await dv.getByTestId('chromium-button-notice').innerText().catch(() => '');
@@ -1955,10 +1955,10 @@ check(/linked to this device/.test(await dv.getByTestId('device-status').innerTe
   check(/· \d+ buttons$/.test(opt), `template picker shows the button count of big devices (${opt})`);
   await selectTemplate(dv.getByTestId('template-select'), 'builtin-vkb-gladiator-scg');
   await page.waitForTimeout(600);
-  await dv.getByTestId('template-unassigned').getByRole('button', { name: /Assign numbers/ }).click();
+  await dv.getByTestId('template-customize').click(); // the built-in is fully numbered now: renumber on a customized copy
   await page.waitForTimeout(500);
   const te2 = page.getByTestId('template-editor');
-  check(await te2.isVisible() && (await te2.getByLabel('Template name').inputValue()) !== 'VKB Gladiator NXT EVO (Space Combat Grip)', `Assign numbers opens the editor on a copy (${await te2.getByLabel('Template name').inputValue()})`);
+  check(await te2.isVisible() && (await te2.getByLabel('Template name').inputValue()) !== 'VKB Gladiator NXT EVO (Space Combat Grip)', `Customize opens the editor on a copy (${await te2.getByLabel('Template name').inputValue()})`);
   await te2.getByTestId('tpl-callouts').getByRole('button', { name: /A2 red button/ }).click();
   await te2.getByLabel('Input input').fill('7');
   await te2.getByLabel('Input input').press('Enter');
