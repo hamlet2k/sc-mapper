@@ -2660,7 +2660,7 @@ photoTplExactViews({
 // The left rocker is marked STEER; FUNC is the separate round key beside HACK.
 photoTplExactViews({
   id: 'builtin-bfs-a10c-ufc', category: 'panel', name: 'Buddy-Fox A-10C UFC', brand: 'Buddy-Fox Simulations',
-  match: [{ name: 'Buddy-Fox', nameBoundary: true }, { name: 'A-10C UFC', nameBoundary: true }],
+  match: [{ vendor: '10C4', product: '8BE0' }, { name: 'Buddy-Fox', nameBoundary: true }, { name: 'A-10C UFC', nameBoundary: true }, { name: 'A10C UFC', nameBoundary: true }],
   notes: 'Buddy-Fox FAQ: INTEN left/right = button33/34, DEPR down = button35 (above 32: use Firefox; Chrome/Edge stop at 32). Other numbers are unpublished: press each control in the input tester and Customize a copy.',
 }, [
   { id: 'main', label: 'UFC', photo: 'bfs-a10c-ufc-main', width: 4300, height: 1400 },

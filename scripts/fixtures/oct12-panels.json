@@ -1070,11 +1070,19 @@
     "category": "panel",
     "match": [
       {
+        "vendor": "10C4",
+        "product": "8BE0"
+      },
+      {
         "name": "Buddy-Fox",
         "nameBoundary": true
       },
       {
         "name": "A-10C UFC",
+        "nameBoundary": true
+      },
+      {
+        "name": "A10C UFC",
         "nameBoundary": true
       }
     ],

@@ -1210,7 +1210,9 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
   t('Buddy-Fox UFC: specific name aliases exclude unrelated UFC panels', () => {
     const ufc = DEVICE_TEMPLATES.find((t) => t.id === 'builtin-bfs-a10c-ufc')!;
     const all = [...BUILTIN_TEMPLATES, ...DEVICE_TEMPLATES];
-    for (const name of ['Buddy-Fox', 'Buddy Fox Simulations UFC', 'A-10C UFC', 'A10C UFC Controller'])
+    assert.ok(ufc.match.some((m) => m.vendor === '10C4' && m.product === '8BE0'), 'HighCastle USB id');
+    assert.equal(tp.pickTemplate(all, { vendor: '10C4', productId: '8BE0', slot: 'js' }).template.id, ufc.id);
+    for (const name of ['Buddy-Fox', 'Buddy Fox Simulations UFC', 'A-10C UFC', 'A10C UFC', 'A10C UFC Controller'])
       assert.equal(tp.pickTemplate(all, { name, slot: 'js' }).template.id, ufc.id, name);
     for (const name of ['UFC', 'WINCTRL UFC', 'F/A-18 UFC', 'A-10C UFCExtra', 'Buddy-FoxExtra'])
       assert.equal(tp.matchScore(ufc, { name, slot: 'js' }), 0, name);
@@ -1236,7 +1238,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       'builtin-winctrl-orion-pedals', 'builtin-winctrl-carrierace-mfd-l', 'builtin-winctrl-carrierace-pto2', 'builtin-winctrl-carrierace-ufc-hud', 'builtin-azeron-keypad', 'builtin-honeycomb-bravo',
       'builtin-honeycomb-charlie', 'builtin-logitech-flight-rudder', 'builtin-mfg-crosswind', 'builtin-tm-tfrp', 'builtin-tm-tpr', 'builtin-vkb-t-rudder', 'builtin-winctrl-viperace-icp',
       'builtin-vkb-gunfighter-mcg', 'builtin-virpil-mt50cm', 'builtin-tm-cougar-mfd',
-      'builtin-winctrl-32-fcu-efis-l', 'builtin-winctrl-32-rmp', 'builtin-winctrl-32-tcas', 'builtin-winctrl-pfp-3n',
+      'builtin-winctrl-32-fcu-efis-l', 'builtin-winctrl-32-rmp', 'builtin-winctrl-32-tcas', 'builtin-winctrl-pfp-3n', 'builtin-bfs-a10c-ufc',
       "builtin-vkb-stecs-mini", "builtin-vkb-stecs-mini-plus", "builtin-vkb-stecs-max", "builtin-vkb-stecs-space-mini", "builtin-vkb-stecs-space-mini-plus", "builtin-vkb-stecs-space", "builtin-vkb-stecs-space-max"]);
     const PHOTO_ONLY = new Set(['builtin-azeron-keypad']);
     const ASPECTS = new Set<number>();
