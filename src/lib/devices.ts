@@ -1,6 +1,7 @@
-// Connected game controllers (Gamepad API) and which Star Citizen device instance (js1, js2..., gp1) each one is.
+// Connected game controllers (Gamepad API, plus a WebHID fallback) and which Star Citizen device instance (js1, js2..., gp1) each one is.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parsePadId, productString } from './capture';
+import { ensureHid, getHidPads, subscribeHid } from './hid';
 import type { ProfileDevice } from './types';
 
 export type PadKind = 'js' | 'gp';
@@ -16,12 +17,16 @@ export interface PadInfo {
   dup?: { n: number; of: number };
   /** the match to a profile device (or the numbering) among identical devices is a guess: which is which can't be told from the id */
   ambiguous?: boolean;
+  /** read through WebHID, so Chromium's 32-button Gamepad API cap does not apply */
+  hid?: boolean;
 }
 export type Assign = Record<string, { kind?: PadKind; instance?: number }>;
-/** the parts of a Gamepad this module reads (real Gamepad objects or test doubles) */
+/** the parts of a Gamepad this module reads (real Gamepad objects, WebHID adapters, or test doubles) */
 export interface PadLike {
   id: string; index: number; mapping: string; connected?: boolean; timestamp?: number;
   buttons: readonly { pressed: boolean; value: number; touched?: boolean }[]; axes: readonly number[];
+  /** WebHID fallback. Indexes are synthetic (from 1000) and stay put for the session. */
+  source?: 'hid';
 }
 const KEY = 'sc-mapper:devices:v1';
 
@@ -32,10 +37,25 @@ export function saveAssign(a: Assign) {
   try { localStorage.setItem(KEY, JSON.stringify(a)); } catch { /* ignore */ }
 }
 
-/** Re-query on every call: Chrome returns fresh snapshot objects, so a kept reference never updates */
-export const getPads = (): Gamepad[] =>
-  (typeof navigator !== 'undefined' && navigator.getGamepads ? Array.from(navigator.getGamepads() ?? []) : [])
+const usbKey = (id: string): string | undefined => {
+  const p = parsePadId(id);
+  return p.vendor && p.product ? `${p.vendor}:${p.product}` : undefined;
+};
+
+/**
+ * Re-query on every call: Chrome returns fresh snapshot objects, so a kept reference never updates.
+ * Gamepad API devices come first. WebHID pads (when navigator.hid exists) follow, except one whose
+ * vendor+product is already in that list — the same stick would otherwise show up twice.
+ */
+export function getPads(): PadLike[] {
+  ensureHid();
+  const gp = (typeof navigator !== 'undefined' && navigator.getGamepads ? Array.from(navigator.getGamepads() ?? []) : [])
     .filter((p): p is Gamepad => !!p && p.connected !== false);
+  const seen = new Set<string>();
+  for (const p of gp) { const k = usbKey(p.id); if (k) seen.add(k); }
+  const hid = getHidPads().filter((p) => { const k = usbKey(p.id); return !k || !seen.has(k); });
+  return hid.length ? [...gp, ...hid] : gp;
+}
 
 /**
  * Stable key per device for saved assignments. Identical ids are told apart by their button/axis counts first (a device can
@@ -86,7 +106,7 @@ export function describePads(pads: readonly PadLike[], assign: Assign, profileDe
     return {
       key: keys[i], index: p.index, id: p.id, name: id.name, vendor: id.vendor, productId: id.product, mapping: p.mapping,
       buttons: p.buttons.length, axes: p.axes.length, kind: p.mapping === 'standard' ? 'gp' : 'js', instance: 0,
-      product: productString(p.id), source: 'auto',
+      product: productString(p.id), source: 'auto', ...(p.source === 'hid' ? { hid: true } : {}),
     };
   });
   // identical devices (same USB vendor/product id)
@@ -157,7 +177,8 @@ export function usePads(active: boolean, profileDevices: readonly ProfileDevice[
     const t = setInterval(tick, 250);
     window.addEventListener('gamepadconnected', tick);
     window.addEventListener('gamepaddisconnected', tick);
-    return () => { clearInterval(t); window.removeEventListener('gamepadconnected', tick); window.removeEventListener('gamepaddisconnected', tick); };
+    const unsub = subscribeHid(tick);
+    return () => { clearInterval(t); unsub(); window.removeEventListener('gamepadconnected', tick); window.removeEventListener('gamepaddisconnected', tick); };
   }, [active, describe]);
   const update = useCallback((key: string, v: { kind?: PadKind; instance?: number }) => setAssign((prev) => {
     const n = { ...prev, [key]: { ...prev[key], ...v } };

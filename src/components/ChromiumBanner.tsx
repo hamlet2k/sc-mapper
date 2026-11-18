@@ -60,9 +60,10 @@ export function ChromiumBanner({ detected, compact }: { detected: number; compac
  * Devices view: a device (or the template picked for it) with more than 32 buttons in a Chromium browser. Those buttons are
  * invisible to the page there (no live highlight, no press-to-capture), although their bindings still show.
  */
-export function ChromiumButtonNotice({ templateMax, deviceButtons, device }: { templateMax: number; deviceButtons?: number; device: string }) {
+export function ChromiumButtonNotice({ templateMax, deviceButtons, device, direct }: { templateMax: number; deviceButtons?: number; device: string; direct?: boolean }) {
   const b = browserName();
-  if (!b.chromium || (templateMax <= CHROMIUM_BUTTON_CAP && (deviceButtons ?? 0) < CHROMIUM_BUTTON_CAP)) return null;
+  // A WebHID device reports every button; the Gamepad API's 32-button cap does not apply to it.
+  if (direct || !b.chromium || (templateMax <= CHROMIUM_BUTTON_CAP && (deviceButtons ?? 0) < CHROMIUM_BUTTON_CAP)) return null;
   const name = b.name.replace(/\s*\(.*\)$/, '').replace(/\s+\d+$/, '');
   const copy = () => { void navigator.clipboard?.writeText(location.href).catch(() => {}); };
   return (

@@ -341,7 +341,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
     if (r.top < top + PANEL_STICK_GAP) main.scrollTop -= top + PANEL_STICK_GAP - r.top;
     else if (r.bottom > mr.bottom - PANEL_STICK_GAP) main.scrollTop += Math.min(r.bottom - mr.bottom + PANEL_STICK_GAP, r.top - top - PANEL_STICK_GAP);
   }
-  const chromiumCap = browserName().chromium && (tplMax > CHROMIUM_BUTTON_CAP || (opt.pad?.buttons ?? 0) >= CHROMIUM_BUTTON_CAP);
+  const chromiumCap = !opt.pad?.hid && browserName().chromium && (tplMax > CHROMIUM_BUTTON_CAP || (opt.pad?.buttons ?? 0) >= CHROMIUM_BUTTON_CAP);
 
   // ---- press to bind (Edit mode only): the next button / hat / axis on THIS slot's device picks its control (or the raw
   // input when no callout shows it), opens it here with "Bind an action to" set to that exact input, and focuses the search.
@@ -506,7 +506,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
         )}
       </section>
       <div className="print:hidden"><ChromiumBanner detected={pads.length} compact /></div>
-      <ChromiumButtonNotice templateMax={tplMax} deviceButtons={opt.pad?.buttons} device={ident.name ?? `${slot.toUpperCase()}${instance}`} />
+      <ChromiumButtonNotice templateMax={tplMax} deviceButtons={opt.pad?.buttons} device={ident.name ?? `${slot.toUpperCase()}${instance}`} direct={opt.pad?.hid} />
       {unassigned > 0 && (
         <div data-testid="template-unassigned" className="flex flex-wrap items-center gap-2 rounded border border-mod/50 bg-mod/10 px-3 py-1.5 text-[11px] text-slate-200 print:hidden">
           <span><b className="text-mod">{unassigned} input{unassigned === 1 ? '' : 's'} on this picture have no number yet</b> (marked “?”): this device numbers its buttons the way you configured it.

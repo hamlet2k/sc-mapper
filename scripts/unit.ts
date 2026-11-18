@@ -17,6 +17,7 @@ const ed = await import('../src/lib/edit');
 const { normalizeCombo } = await import('../src/lib/inputs');
 const groups = await import('../src/lib/groups');
 const dev = await import('../src/lib/devices');
+const hid = await import('../src/lib/hid');
 const search = await import('../src/lib/search');
 const dvo = await import('../src/lib/devopts');
 const listen = await import('../src/lib/listen');
@@ -4368,5 +4369,259 @@ t('multi-view page layout: column width, minimum, grow, and nothing above the ca
   const wy = (wide[0].y + (wideLaid.nudges.w ?? 0)) * H;
   assert.ok(wy - wide[0].h / 2 >= -0.5, 'a too-wide box is still not pushed above the top');
 });
+
+console.log('webhid fallback');
+{
+  const pressedAt = (buttons: { pressed: boolean }[]) => buttons.map((b, i) => b.pressed ? i : -1).filter((i) => i >= 0);
+  const pack = (fields: { value: number; size: number }[], extra = 0) => {
+    const total = fields.reduce((s, f) => s + f.size, 0);
+    const bytes = new Uint8Array(Math.ceil(total / 8) + extra);
+    let off = 0;
+    for (const f of fields) {
+      for (let i = 0; i < f.size; i++) if (Math.floor(f.value / 2 ** i) % 2) bytes[(off + i) >> 3] |= 1 << ((off + i) & 7);
+      off += f.size;
+    }
+    return new DataView(bytes.buffer);
+  };
+  const ufc = [{
+    usagePage: 0x01, usage: 0x05,
+    inputReports: [{ reportId: 0, items: [
+      { isRange: true, usageMinimum: 0x00090001, usageMaximum: 0x00090023, usages: [], reportSize: 1, reportCount: 35, logicalMinimum: 0, logicalMaximum: 1, isConstant: false },
+      { isConstant: true, reportSize: 1, reportCount: 5, usages: [] },
+    ] }],
+  }];
+
+  t('Buddy-Fox A-10C UFC: 35 buttons, Chrome id, trailing byte ignored', () => {
+    const id = hid.hidId(0x10c4, 0x8be0, 'A10C UFC');
+    assert.equal(id, 'A10C UFC (Vendor: 10c4 Product: 8be0)');
+    assert.deepEqual(cap.parsePadId(id), { name: 'A10C UFC', vendor: '10C4', product: '8BE0' });
+    const layout = hid.buildLayout(ufc);
+    assert.equal(layout.buttonCount, 35);
+    assert.equal(layout.axisCount, 0);
+    const bytes = new Uint8Array(6);
+    bytes[0] = (1 << 1) | (1 << 3);
+    bytes[4] = 1 << 2;
+    bytes[5] = 0xff;
+    const state = hid.decodeReport(layout, 0, new DataView(bytes.buffer));
+    assert.ok(state);
+    assert.equal(state.buttons.length, 35);
+    assert.equal(state.axes.length, 0);
+    assert.deepEqual(pressedAt(state.buttons), [1, 3, 34]);
+    assert.ok(state.buttons.every((b, i) => b.value === (b.pressed ? 1 : 0) && b.pressed === (i === 1 || i === 3 || i === 34)));
+    const five = bytes.slice(0, 5);
+    assert.deepEqual(pressedAt(hid.decodeReport(layout, 0, new DataView(five.buffer))!.buttons), [1, 3, 34]);
+  });
+
+  t('report id, signed axes, hat at index 9, ignored report', () => {
+    const layout = hid.buildLayout([{
+      usagePage: 0x01, usage: 0x04,
+      inputReports: [{ reportId: 3, items: [
+        { usages: [0x00010030], reportSize: 16, reportCount: 1, logicalMinimum: 0, logicalMaximum: 65535 },
+        { usages: [0x00010031], reportSize: 16, reportCount: 1, logicalMinimum: 0, logicalMaximum: 65535 },
+        { usages: [0x00010032], reportSize: 8, reportCount: 1, logicalMinimum: -128, logicalMaximum: 127 },
+        { usages: [0x00010039], reportSize: 4, reportCount: 1, logicalMinimum: 0, logicalMaximum: 7 },
+        { isConstant: true, reportSize: 4, reportCount: 1, usages: [] },
+        { usages: Array.from({ length: 12 }, (_, i) => 0x00090001 + i), reportSize: 1, reportCount: 12, logicalMinimum: 0, logicalMaximum: 1 },
+      ] }],
+    }]);
+    assert.deepEqual(layout.hats, [9]);
+    assert.equal(layout.axisCount, 10);
+    assert.equal(layout.buttonCount, 12);
+    const rest = hid.restState(layout);
+    assert.equal(rest.axes[9], 9 / 7);
+    assert.deepEqual(rest.axes.slice(0, 9), [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const body = (x: number, y: number, z: number, hat: number, buttons = 0) => pack([
+      { value: x, size: 16 }, { value: y, size: 16 }, { value: z, size: 8 }, { value: hat, size: 4 }, { value: 0, size: 4 }, { value: buttons, size: 12 },
+    ]);
+    const low = hid.decodeReport(layout, 3, body(0, 0, 0x80, 2))!;
+    assert.equal(low.axes[0], -1);
+    assert.equal(low.axes[1], -1);
+    assert.equal(low.axes[2], -1);
+    assert.deepEqual(low.axes.slice(3, 9), [0, 0, 0, 0, 0, 0]);
+    assert.equal(low.axes[9], -1 + (2 * 2) / 7);
+    assert.equal(cap.hatDirection(low.axes[9]), 'right');
+    assert.equal(low.buttons.length, 12);
+    const high = hid.decodeReport(layout, 3, body(65535, 65535, 127, 8))!;
+    assert.equal(high.axes[0], 1);
+    assert.equal(high.axes[1], 1);
+    assert.equal(high.axes[2], 1);
+    assert.equal(high.axes[9], 9 / 7);
+    assert.equal(cap.isHatRest(high.axes[9]), true);
+    const upLeft = hid.decodeReport(layout, 3, body(0, 0, 0, 7))!;
+    assert.equal(upLeft.axes[9], 1);
+    assert.equal(cap.hatDirection(upLeft.axes[9]), undefined);
+    const btns = hid.decodeReport(layout, 3, body(0, 0, 0, 0, 1 | (1 << 11)), low)!;
+    assert.deepEqual(pressedAt(btns.buttons), [0, 11]);
+    assert.equal(btns, low, 'a known report updates the state it is given');
+    assert.equal(hid.decodeReport(layout, 0, body(65535, 65535, 127, 2), low), null);
+    assert.equal(low.axes[0], -1, 'a different report id does not change state');
+    const hat18 = hid.buildLayout([{ usagePage: 0x01, usage: 0x04, inputReports: [{ reportId: 1, items: [
+      { usages: [0x00010039], reportSize: 4, reportCount: 1, logicalMinimum: 1, logicalMaximum: 8 },
+    ] }] }]);
+    assert.equal(cap.hatDirection(hid.decodeReport(hat18, 1, pack([{ value: 1, size: 4 }]))!.axes[9]), 'up');
+    assert.equal(cap.hatDirection(hid.decodeReport(hat18, 1, pack([{ value: 3, size: 4 }]))!.axes[9]), 'right');
+    assert.equal(cap.isHatRest(hid.decodeReport(hat18, 1, pack([{ value: 0, size: 4 }]))!.axes[9]), true);
+    assert.equal(cap.hatDirection(hid.decodeReport(hat18, 1, pack([{ value: 8, size: 4 }]))!.axes[9]), undefined);
+  });
+
+  t('usage repetition, plain and extended ranges, second slider', () => {
+    const repeated = hid.buildLayout([{ usagePage: 0x01, usage: 0x04, inputReports: [{ reportId: 1, items: [
+      { usages: [0x00010030], reportSize: 8, reportCount: 2, logicalMinimum: 0, logicalMaximum: 255 },
+    ] }] }]);
+    const rep = hid.decodeReport(repeated, 1, pack([{ value: 0, size: 8 }, { value: 255, size: 8 }]))!;
+    assert.equal(rep.axes.length, 11, 'the repeated X is a duplicate past the hat slot');
+    assert.equal(rep.axes[0], -1);
+    assert.equal(rep.axes[10], 1);
+    assert.equal(rep.axes[9], 0);
+    assert.equal(hid.decodeReport(repeated, 0, pack([{ value: 255, size: 8 }])), null);
+    const extended = hid.buildLayout([{ usagePage: 0x01, usage: 0x05, inputReports: [{ reportId: 0, items: [
+      { isRange: true, usageMinimum: 0x00090001, usageMaximum: 0x00090004, reportSize: 1, reportCount: 4, logicalMinimum: 0, logicalMaximum: 1 },
+    ] }] }]);
+    const plain = hid.buildLayout([{ usagePage: 0x01, usage: 0x04, children: [{ usagePage: 0x09, usage: 0, inputReports: [{ reportId: 0, items: [
+      { isRange: true, usageMinimum: 1, usageMaximum: 4, reportSize: 1, reportCount: 4, logicalMinimum: 0, logicalMaximum: 1 },
+    ] }] }] }]);
+    const bits = pack([{ value: 0b1010, size: 4 }]);
+    assert.deepEqual(pressedAt(hid.decodeReport(extended, 0, bits)!.buttons), pressedAt(hid.decodeReport(plain, 0, bits)!.buttons));
+    assert.deepEqual(pressedAt(hid.decodeReport(plain, 0, bits)!.buttons), [1, 3]);
+    const nested = hid.buildLayout([{
+      usagePage: 0x01, usage: 0x05,
+      inputReports: [{ reportId: 2, items: [{ isConstant: true, reportSize: 8, reportCount: 1, usages: [] }] }],
+      children: [{ usagePage: 0x09, inputReports: [{ reportId: 2, items: [
+        { isRange: true, usageMinimum: 1, usageMaximum: 1, reportSize: 1, reportCount: 1, logicalMinimum: 0, logicalMaximum: 1 },
+      ] }] }],
+    }]);
+    assert.equal(nested.reports.get(2)!.fields[0].bitOffset, 8, 'a child collection continues the same report');
+    const sliders = hid.buildLayout([{ usagePage: 0x01, usage: 0x04, inputReports: [{ reportId: 0, items: [
+      { usages: [0x00010036], reportSize: 8, reportCount: 2, logicalMinimum: 0, logicalMaximum: 255 },
+    ] }] }]);
+    const s = hid.decodeReport(sliders, 0, pack([{ value: 0, size: 8 }, { value: 255, size: 8 }]))!;
+    assert.equal(s.axes.length, 8);
+    assert.equal(s.axes[6], -1);
+    assert.equal(s.axes[7], 1, 'second slider takes the dial slot when no dial is present');
+    const withDial = hid.buildLayout([{ usagePage: 0x01, usage: 0x04, inputReports: [{ reportId: 0, items: [
+      { usages: [0x00010037], reportSize: 8, reportCount: 1, logicalMinimum: 0, logicalMaximum: 255 },
+      { usages: [0x00010036], reportSize: 8, reportCount: 2, logicalMinimum: 0, logicalMaximum: 255 },
+    ] }] }]);
+    const d = hid.decodeReport(withDial, 0, pack([{ value: 255, size: 8 }, { value: 0, size: 8 }, { value: 255, size: 8 }]))!;
+    assert.equal(d.axes[7], 1, 'dial keeps index 7');
+    assert.equal(d.axes[6], -1);
+    assert.equal(d.axes[10], 1, 'the extra slider is appended after the hat slot');
+    assert.equal(d.axes[9], 0);
+  });
+
+  const navDesc = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const setNav = (value: object) => Object.defineProperty(globalThis, 'navigator', { configurable: true, writable: true, value });
+  const restoreNav = () => { if (navDesc) Object.defineProperty(globalThis, 'navigator', navDesc); };
+
+  t('getPads prefers the Gamepad API when vendor and product match', () => {
+    const id = 'A10C UFC (Vendor: 10c4 Product: 8be0)';
+    const gp = { id, index: 2, mapping: '', connected: true, timestamp: 1, buttons: [{ pressed: false, value: 0 }], axes: [0] };
+    const hidPad: hid.HidPad = {
+      id, index: 1000, mapping: '', connected: true, timestamp: 5,
+      buttons: Array.from({ length: 35 }, () => ({ pressed: false, value: 0 })), axes: [], source: 'hid',
+    };
+    const other: hid.HidPad = { ...hidPad, id: 'Other (Vendor: 10c4 Product: 0001)', index: 1001, buttons: [{ pressed: false, value: 0 }] };
+    setNav({ getGamepads: () => [null, gp] });
+    hid.setHidPadsForTest([hidPad, other]);
+    try {
+      assert.equal(hid.hidSupported(), false, 'no navigator.hid: the connect button stays hidden and HID is inert');
+      const pads = dev.getPads();
+      assert.equal(pads.length, 2);
+      assert.equal(pads[0], gp, 'the Gamepad API device wins over the WebHID twin');
+      assert.equal(pads[0].source, undefined);
+      assert.equal(pads[1].source, 'hid');
+      assert.equal(pads[1].index, 1001);
+      const described = dev.describePads(pads, {});
+      assert.equal(described[0].hid, undefined);
+      assert.equal(described[1].hid, true);
+      assert.equal(described[1].vendor, '10C4');
+      assert.equal(described[1].productId, '0001');
+      hid.setHidPadsForTest([hidPad]);
+      const only = dev.getPads();
+      assert.equal(only.length, 1);
+      assert.equal(only[0].index, 2);
+      setNav({ getGamepads: () => [] });
+      const alone = dev.getPads();
+      assert.equal(alone.length, 1);
+      assert.equal(alone[0].source, 'hid');
+      assert.equal(dev.describePads(alone, {})[0].name, 'A10C UFC');
+      assert.equal(dev.describePads(alone, {})[0].kind, 'js');
+    } finally {
+      hid.setHidPadsForTest(null);
+      restoreNav();
+    }
+  });
+
+  await t('WebHID registry decodes reports and keeps an open failure off the render path', async () => {
+    const reports: ((ev: { reportId: number; data: DataView; device: object }) => void)[] = [];
+    const bus: Record<string, (ev: { device: object }) => void> = {};
+    const device = {
+      vendorId: 0x10c4, productId: 0x8be0, productName: 'A10C UFC', collections: ufc, opened: false,
+      async open() { this.opened = true; },
+      addEventListener(_type: string, fn: (ev: { reportId: number; data: DataView; device: object }) => void) { reports.push(fn); },
+      removeEventListener() { reports.length = 0; },
+    };
+    const blocked = {
+      vendorId: 1, productId: 2, productName: 'Busy', collections: [], opened: false,
+      async open() { throw new DOMException('Access denied.', 'NotAllowedError'); },
+      addEventListener() {}, removeEventListener() {},
+    };
+    let granted: object[] = [];
+    let chooser: () => object[] | Promise<never> = () => [device];
+    setNav({
+      getGamepads: () => [],
+      hid: {
+        async getDevices() { return granted; },
+        requestDevice: () => chooser(),
+        addEventListener(type: string, fn: (ev: { device: object }) => void) { bus[type] = fn; },
+        removeEventListener(type: string) { delete bus[type]; },
+      },
+    });
+    hid.resetHidForTest();
+    try {
+      assert.equal(hid.hidSupported(), true);
+      granted = [device];
+      dev.getPads();
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+      let pads = hid.getHidPads();
+      assert.equal(pads.length, 1);
+      assert.equal(pads[0].id, 'A10C UFC (Vendor: 10c4 Product: 8be0)');
+      assert.ok(pads[0].index >= 1000);
+      assert.equal(pads[0].buttons.length, 35);
+      assert.ok(pads[0].buttons.every((b) => !b.pressed));
+      assert.deepEqual(pads[0].axes, []);
+      const index = pads[0].index;
+      const bytes = new Uint8Array([1 << 1, 0, 0, 0, 1 << 2]);
+      reports[0]({ reportId: 0, data: new DataView(bytes.buffer), device });
+      pads = hid.getHidPads();
+      assert.deepEqual(pressedAt(pads[0].buttons), [1, 34]);
+      assert.ok(pads[0].timestamp > 0);
+      const stamp = pads[0].timestamp;
+      reports[0]({ reportId: 4, data: new DataView(bytes.buffer), device });
+      assert.equal(hid.getHidPads()[0].timestamp, stamp, 'an unknown report id is ignored');
+      assert.deepEqual(pressedAt(hid.getHidPads()[0].buttons), [1, 34]);
+      const merged = dev.getPads();
+      assert.equal(merged.length, 1);
+      assert.equal(merged[0].index, index);
+      bus.disconnect({ device });
+      assert.equal(hid.getHidPads().length, 0);
+      chooser = () => [blocked];
+      const msg = await hid.requestHidDevice();
+      assert.match(msg ?? '', /denied/i);
+      assert.equal(hid.hidError(), msg);
+      assert.equal(hid.getHidPads().length, 0);
+      chooser = () => { throw new DOMException('No device selected.', 'NotFoundError'); };
+      assert.equal(await hid.requestHidDevice(), null);
+      assert.equal(hid.hidError(), msg, 'closing the chooser is not an error');
+      chooser = async () => [device];
+      assert.equal(await hid.requestHidDevice(), null);
+      assert.equal(hid.hidError(), null);
+      assert.equal(hid.getHidPads()[0].index, index, 'the same device keeps its index');
+    } finally {
+      hid.resetHidForTest();
+      restoreNav();
+    }
+  });
+}
 
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);

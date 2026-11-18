@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CHROMIUM_AXIS_CAP, CHROMIUM_BUTTON_CAP, GAME_BUTTON_CAP, gamepadInput, GP_AXES, GP_BUTTONS, hatDirection, isHatRest, joystickInput, JS_AXES, PadTracker, snapshot } from '../lib/capture';
 import { getPads, padLabel, type PadInfo, type PadLike } from '../lib/devices';
+import { ensureHid, hidError, hidSupported, requestHidDevice, subscribeHid } from '../lib/hid';
 import { formatInput } from '../lib/inputs';
 import { browserName } from '../lib/browser';
 import { shouldFollowScroll, TesterFollow, type FollowHit } from '../lib/testerFollow';
@@ -31,9 +32,34 @@ function nameOf(info: PadInfo, e: Parameters<typeof joystickInput>[0]): string |
   return formatInput(info.kind, info.instance, c.input);
 }
 
+/** "Connect a device directly": WebHID, for a controller Chromium's Gamepad API list leaves out. Hidden without navigator.hid. */
+export function HidConnect() {
+  const supported = hidSupported();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!supported) return;
+    ensureHid();
+    const sync = () => setError(hidError());
+    sync();
+    return subscribeHid(sync);
+  }, [supported]);
+  if (!supported) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid="hid-connect">
+      <button type="button" disabled={busy} data-testid="hid-connect-button" onClick={() => { setBusy(true); void requestHidDevice().finally(() => setBusy(false)); }}
+        className="rounded border border-hud/50 px-2 py-1 text-[11px] font-semibold text-hud2 hover:bg-hud/10 disabled:cursor-not-allowed disabled:opacity-40">
+        Connect a device directly
+      </button>
+      <span className="text-[10px] text-slate-500">Chrome/Edge: use this if a controller is plugged in but not listed — pick it once from the browser&apos;s list</span>
+      {error && <span role="alert" data-testid="hid-error" className="basis-full text-[10px] text-alert">{error}</span>}
+    </div>
+  );
+}
+
 /**
- * Live controller diagnostics: everything the browser exposes through the Gamepad API, updated every frame,
- * plus the Star Citizen input name each press/move would be captured as.
+ * Live controller diagnostics: everything the browser exposes through the Gamepad API (and WebHID, once a device is
+ * connected directly), updated every frame, plus the Star Citizen input name each press/move would be captured as.
  */
 export function InputTester({ describe, compact, only, follow = !compact }: {
   describe: (l: readonly PadLike[]) => PadInfo[]; compact?: boolean; only?: (p: PadInfo) => boolean;
@@ -99,7 +125,7 @@ export function InputTester({ describe, compact, only, follow = !compact }: {
       if (now - lastPaint > 60) {
         lastPaint = now;
         setLive(list.map((p, i) => ({
-          info: infos[i], timestamp: p.timestamp, axes: [...p.axes], hats: p.axes.map((v, j) => isHatRest(v) || isHatRest(tracker.restOf(infos[i].key)?.axes[j] ?? 0)),
+          info: infos[i], timestamp: p.timestamp ?? 0, axes: [...p.axes], hats: p.axes.map((v, j) => isHatRest(v) || isHatRest(tracker.restOf(infos[i].key)?.axes[j] ?? 0)),
           buttons: p.buttons.map((b) => ({ p: b.pressed || b.value > 0.5, v: b.value })),
           last: last.get(infos[i].key)?.name, lastAt: last.get(infos[i].key)?.at,
         })));
@@ -136,6 +162,7 @@ export function InputTester({ describe, compact, only, follow = !compact }: {
           <span className="rounded border border-edge px-1.5 py-0.5 text-slate-400" title="navigator.getGamepads() entries (null until a device is revealed)">getGamepads(): {env.slots} slot{env.slots === 1 ? '' : 's'}, {live.length} connected</span>
         </div>
       )}
+      <HidConnect />
       {!shown.length && (
         <div className="rounded-lg border-2 border-dashed border-mod/60 bg-mod/5 p-4 text-center" data-testid="tester-empty">
           <div className="flex items-center justify-center gap-2 font-display text-base font-bold uppercase tracking-widest text-mod">
@@ -162,19 +189,20 @@ export function InputTester({ describe, compact, only, follow = !compact }: {
               <span className="font-mono text-[10px] text-slate-500">#{d.index}</span>
               <span className="font-semibold text-slate-100">{padLabel(d)}</span>
               <span className="rounded bg-hud/15 px-1.5 font-mono text-[10px] font-bold text-hud2">→ {tag}</span>
+              {d.hid && <span className="rounded border border-hud/40 bg-hud/10 px-1.5 font-mono text-[10px] text-hud2" data-testid="tester-hid">direct (WebHID)</span>}
               <span className="font-mono text-[10px] text-slate-500">mapping: {d.mapping || '(none / raw)'} · {d.buttons} buttons · {d.axes} axes{d.vendor ? ` · USB ${d.vendor}:${d.productId}` : ''}</span>
               <span className={`ml-auto rounded border px-2 py-0.5 font-mono text-[11px] ${fresh ? 'border-mod bg-mod/15 text-mod' : 'border-edge text-slate-500'}`} data-testid="tester-last">
                 {l.last ? `last: ${l.last}` : 'press or move something'}
               </span>
             </div>
             {!compact && <div className="mt-0.5 break-all font-mono text-[9px] text-slate-600">id: {d.id}</div>}
-            {env.chromium && d.kind === 'js' && d.buttons >= CHROMIUM_BUTTON_CAP && (
+            {env.chromium && !d.hid && d.kind === 'js' && d.buttons >= CHROMIUM_BUTTON_CAP && (
               <p className="mt-1 flex items-start gap-2 text-[10px] text-mod"><FirefoxCta size="sm" /><span><Ico name="alert" /> {env.browser.replace(/\s*\d+$/, '')} reports at most {CHROMIUM_BUTTON_CAP} buttons per device. Buttons above {CHROMIUM_BUTTON_CAP} (common on VKB/Virpil) can&apos;t be seen here: type them in manual entry (e.g. js1_button40), or try Firefox.</span></p>
             )}
             {d.buttons > GAME_BUTTON_CAP && (
               <p className="mt-1 text-[10px] text-alert" data-testid="tester-over-cap"><Ico name="alert" /> This device reports {d.buttons} buttons. Star Citizen reads joysticks through DirectInput, which has {GAME_BUTTON_CAP} buttons per device, so buttons {GAME_BUTTON_CAP + 1}–{d.buttons} (outlined red) most likely can&apos;t be bound in game. Remap them in the device&apos;s software if you need them.</p>
             )}
-            {env.chromium && d.axes >= CHROMIUM_AXIS_CAP && <p className="mt-1 flex items-start gap-2 text-[10px] text-mod"><FirefoxCta size="sm" /><span><Ico name="alert" /> Only the first {CHROMIUM_AXIS_CAP} axes are visible in this browser.</span></p>}
+            {env.chromium && !d.hid && d.axes >= CHROMIUM_AXIS_CAP && <p className="mt-1 flex items-start gap-2 text-[10px] text-mod"><FirefoxCta size="sm" /><span><Ico name="alert" /> Only the first {CHROMIUM_AXIS_CAP} axes are visible in this browser.</span></p>}
             <div className="mt-2 flex flex-wrap gap-[3px]">
               {l.buttons.map((b, i) => (
                 <span key={fl?.hit.kind === 'button' && fl.hit.index === i ? `f${fl.n}` : i} data-tester-button={i} title={`${d.kind === 'gp' ? GP_BUTTONS[i] ?? `button ${i + 1}` : `button${i + 1}`}: ${b.v.toFixed(2)}`}

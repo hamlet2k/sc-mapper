@@ -12,7 +12,7 @@ import { TemplateCombobox } from './TemplateCombobox';
 import { ChromiumBanner } from './ChromiumBanner';
 import { GamePathHint, RefreshGameButton } from './GameState';
 import { CopyText } from './CopyButton';
-import { InputTester } from './InputTester';
+import { HidConnect, InputTester } from './InputTester';
 import { Ico } from './icons';
 import { useEscape } from './useEscape';
 
@@ -273,7 +273,10 @@ function SlotsTab({ profile, pads, describe, slots, onRefresh, initialSlot }: { 
         ))}
       </div>
       <section data-testid="detected-hardware">
-        <h3 className="font-display text-sm font-bold uppercase tracking-[0.2em] text-hud">Detected by this browser</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-display text-sm font-bold uppercase tracking-[0.2em] text-hud">Detected by this browser</h3>
+          <HidConnect />
+        </div>
         {!pads.length ? (
           <p className="mt-1 text-xs text-slate-500">No controllers visible yet. Browsers reveal a controller only after one of its buttons is pressed while this page has focus: press one now.</p>
         ) : (
@@ -283,6 +286,7 @@ function SlotsTab({ profile, pads, describe, slots, onRefresh, initialSlot }: { 
               return (
                 <li key={p.key} data-testid="hw-row" data-hw={p.name} className="flex flex-wrap items-center gap-2 rounded border border-edge/60 bg-black/20 px-3 py-1.5 text-xs">
                   <span className="font-semibold text-slate-100" title={p.id}>{padLabel(p)}</span>
+                  {p.hid && <span className="rounded border border-hud/40 bg-hud/10 px-1.5 font-mono text-[10px] text-hud2">direct (WebHID)</span>}
                   <span className="font-mono text-[10px] text-slate-500">{p.buttons} btn · {p.axes} axes{p.vendor ? ` · USB ${p.vendor}:${p.productId}` : ''}</span>
                   {s ? <span className="ml-auto rounded border border-ok/40 px-1.5 font-mono text-[10px] text-ok">in {slotId(s)}</span> : (
                     <span className="ml-auto flex items-center gap-1.5">
