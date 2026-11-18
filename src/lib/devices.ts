@@ -44,16 +44,17 @@ const usbKey = (id: string): string | undefined => {
 
 /**
  * Re-query on every call: Chrome returns fresh snapshot objects, so a kept reference never updates.
- * Gamepad API devices come first. WebHID pads (when navigator.hid exists) follow, except one whose
- * vendor+product is already in that list — the same stick would otherwise show up twice.
+ * Gamepad API devices come first, then WebHID pads (when navigator.hid exists). A device connected directly replaces
+ * its Gamepad API copy (same vendor+product): the WebHID reading has no 32-button cap, and the stick still shows once.
  */
 export function getPads(): PadLike[] {
   ensureHid();
+  const hid = getHidPads();
+  const direct = new Set<string>();
+  for (const p of hid) { const k = usbKey(p.id); if (k) direct.add(k); }
   const gp = (typeof navigator !== 'undefined' && navigator.getGamepads ? Array.from(navigator.getGamepads() ?? []) : [])
-    .filter((p): p is Gamepad => !!p && p.connected !== false);
-  const seen = new Set<string>();
-  for (const p of gp) { const k = usbKey(p.id); if (k) seen.add(k); }
-  const hid = getHidPads().filter((p) => { const k = usbKey(p.id); return !k || !seen.has(k); });
+    .filter((p): p is Gamepad => !!p && p.connected !== false)
+    .filter((p) => { const k = usbKey(p.id); return !k || !direct.has(k); });
   return hid.length ? [...gp, ...hid] : gp;
 }
 

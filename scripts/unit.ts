@@ -4513,33 +4513,37 @@ console.log('webhid fallback');
   const setNav = (value: object) => Object.defineProperty(globalThis, 'navigator', { configurable: true, writable: true, value });
   const restoreNav = () => { if (navDesc) Object.defineProperty(globalThis, 'navigator', navDesc); };
 
-  t('getPads prefers the Gamepad API when vendor and product match', () => {
+  t('getPads prefers the WebHID copy when vendor and product match', () => {
     const id = 'A10C UFC (Vendor: 10c4 Product: 8be0)';
     const gp = { id, index: 2, mapping: '', connected: true, timestamp: 1, buttons: [{ pressed: false, value: 0 }], axes: [0] };
+    const gp2 = { ...gp, id: 'Stick (Vendor: 044f Product: 0402)', index: 3 };
     const hidPad: hid.HidPad = {
       id, index: 1000, mapping: '', connected: true, timestamp: 5,
       buttons: Array.from({ length: 35 }, () => ({ pressed: false, value: 0 })), axes: [], source: 'hid',
     };
     const other: hid.HidPad = { ...hidPad, id: 'Other (Vendor: 10c4 Product: 0001)', index: 1001, buttons: [{ pressed: false, value: 0 }] };
-    setNav({ getGamepads: () => [null, gp] });
+    setNav({ getGamepads: () => [null, gp, gp2] });
     hid.setHidPadsForTest([hidPad, other]);
     try {
       assert.equal(hid.hidSupported(), false, 'no navigator.hid: the connect button stays hidden and HID is inert');
       const pads = dev.getPads();
-      assert.equal(pads.length, 2);
-      assert.equal(pads[0], gp, 'the Gamepad API device wins over the WebHID twin');
-      assert.equal(pads[0].source, undefined);
-      assert.equal(pads[1].source, 'hid');
-      assert.equal(pads[1].index, 1001);
+      assert.equal(pads.length, 3, 'the UFC shows once');
+      assert.equal(pads[0], gp2, 'a Gamepad API device with no direct twin stays');
+      assert.equal(pads[1].index, 1000, 'the WebHID twin replaces the Gamepad API copy');
+      assert.equal(pads[1].buttons.length, 35, 'past the Gamepad API copy\'s buttons');
+      assert.equal(pads[2].index, 1001);
       const described = dev.describePads(pads, {});
       assert.equal(described[0].hid, undefined);
       assert.equal(described[1].hid, true);
-      assert.equal(described[1].vendor, '10C4');
-      assert.equal(described[1].productId, '0001');
+      assert.equal(described[2].vendor, '10C4');
+      assert.equal(described[2].productId, '0001');
       hid.setHidPadsForTest([hidPad]);
       const only = dev.getPads();
-      assert.equal(only.length, 1);
-      assert.equal(only[0].index, 2);
+      assert.equal(only.length, 2);
+      assert.equal(only[1].index, 1000);
+      hid.setHidPadsForTest([]);
+      assert.equal(dev.getPads()[0], gp, 'no direct devices: the Gamepad API list is untouched');
+      hid.setHidPadsForTest([hidPad]);
       setNav({ getGamepads: () => [] });
       const alone = dev.getPads();
       assert.equal(alone.length, 1);
