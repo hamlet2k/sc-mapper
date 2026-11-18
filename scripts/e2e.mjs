@@ -4,7 +4,8 @@
 import { chromium, firefox } from 'playwright';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-const url = process.argv[2] ?? 'http://localhost:4173/';
+// the full app lives behind ?ui=advanced since the friendly front end became the default view
+const url = process.argv[2] ?? 'http://localhost:4173/?ui=advanced';
 const shots = new URL('../screenshots/', import.meta.url).pathname;
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 const ctx = await browser.newContext({ viewport: { width: 1680, height: 1000 }, deviceScaleFactor: 1, acceptDownloads: true });

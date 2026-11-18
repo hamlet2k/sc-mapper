@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ChromiumBanner, ChromiumButtonNotice } from './ChromiumBanner';
+import { HidConnect } from './InputTester';
+import { hidSupported } from '../lib/hid';
+import { isChromium } from '../lib/browser';
 import { createPortal } from 'react-dom';
 import { padLabel, type PadInfo, type PadLike } from '../lib/devices';
 import { UNKNOWN_DEVICE_HINT, isController, slotDeviceName, slotId, type GameSlot, type SlotMap } from '../lib/slots';
@@ -78,6 +81,8 @@ interface Props {
   onImportShared: () => void;
   /** a shared controller file picked in the template import: open its import preview instead */
   onSharedText: (text: string, name: string) => void;
+  /** friendly front end: a device picker strip, template tools and curves tucked away (they live in Advanced) */
+  simple?: boolean;
 }
 
 export const DEVICE_SEL_KEY = 'sc-mapper:device-view';
@@ -133,7 +138,18 @@ export function DeviceView(props: Props) {
   const shown = shownDeviceSlot(slots, selKey)!;
   const opt = options.find((o) => o.key === deviceSlotKey(shown.gs))!;
   const chosen = resolveSlotTemplate(T.templates, props.slotMap, opt.gs, opt.pad, T.picks);
-  const strip = compact ? (
+  const strip = props.simple ? (
+    <span className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Devices" data-testid="device-picker">
+      {options.map((o) => (
+        <button key={o.key} type="button" onClick={() => onSelect(o.key)} aria-pressed={o.key === opt.key} data-testid="device-pick" data-slot={slotId(o.gs)}
+          className={`flex max-w-[16rem] items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${o.key === opt.key ? 'border-hud bg-hud/15 text-hud2' : 'border-edge text-slate-300 hover:border-hud/50'}`}>
+          <span className="font-mono font-bold">{slotId(o.gs)}</span>
+          <span className="truncate">{o.name ?? 'Unnamed device'}</span>
+          {o.pad && <span className="text-ok" aria-label="connected">●</span>}
+        </button>
+      ))}
+    </span>
+  ) : compact ? (
     <label className="flex items-center gap-1.5 text-slate-400">
       <span className={LABEL}>Slot</span>
       <select value={opt.key} onChange={(e) => onSelect(e.target.value)} data-testid="device-slot-select" aria-label="Game slot"
@@ -167,7 +183,7 @@ function NoSlots({ onOpenControllers, onImportShared, hasKm }: { onOpenControlle
 }
 
 type Chosen = ReturnType<typeof resolveSlotTemplate>;
-function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, onRefresh, slotMap, highlight, scroll, query, chip, editMode, onEdit, onRemove, onBind, onShowInList, notify, onShare, onImportShared, onSharedText }:
+function SlotDeviceView({ simple, opt, chosen, T, strip, rows, conflictRows, pads, describe, onPickTemplate, onOpenControllers, onOpenAxis, axisLimit, onRefresh, slotMap, highlight, scroll, query, chip, editMode, onEdit, onRemove, onBind, onShowInList, notify, onShare, onImportShared, onSharedText }:
   Props & { opt: DevOption; chosen: Chosen; T: ReturnType<typeof useTemplates>; strip: ReactNode }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [group, setGroup] = useState<string | null>(null);
@@ -416,6 +432,16 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
               ? <span className="rounded border border-ok/40 px-1 font-mono text-[10px] text-ok">connected</span>
               : <span className="rounded border border-edge px-1 font-mono text-[10px] text-slate-500">not connected</span>)}
           </span>
+          {simple ? (
+            <span className="flex items-center gap-1.5 text-slate-400" data-testid="template-line">
+              <span className={LABEL}>Picture</span>
+              <span className="max-w-[16rem] truncate text-slate-200" title={chosen.how === 'fallback' ? 'No exact picture for this device yet: a generic one is shown. Pick or make one in Advanced.' : 'Picked automatically'}>{chosen.template.name}</span>
+              <span className={ICON_GROUP} role="group" aria-label="Picture" data-testid="picture-tools">
+                <IconButton icon="image" label="Save the picture with its bindings as PNG" onClick={() => void exportPng()} testid="device-png" />
+                <IconButton icon="print" label="Print the picture with its bindings" onClick={() => window.print()} testid="device-print" />
+              </span>
+            </span>
+          ) : (
           <span className="flex flex-wrap items-center gap-2" data-testid="template-line">
             <span className="flex items-center gap-1.5 text-slate-400">
               <span className={LABEL}>Template</span>
@@ -440,6 +466,7 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
             <input ref={importRef} type="file" accept=".json,application/json" className="hidden" data-testid="template-import-file"
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importFile(f); }} />
           </span>
+          )}
           <span className="-ml-2 flex items-center gap-2" data-testid="share-wrap">
             <span className="h-5 w-px bg-edge" aria-hidden="true" />
             <span className={ICON_GROUP} role="group" aria-label="Share" data-testid="share-tools">
@@ -459,7 +486,11 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
             </button>
             </Tip>
           )}
-          {!axisLocked && <Tip label={`Invert, exponent, custom response curves${slot === 'js' ? ' and deadzone / saturation' : ''} for ${slot}${instance} only`}>
+          {!axisLocked && simple && (
+            <button type="button" onClick={() => onOpenAxis(opt.gs)} data-testid="slot-axis-advanced" title="Invert, curves, deadzone: in the Advanced view"
+              className="rounded px-1.5 py-1 text-[11px] text-slate-400 underline-offset-2 hover:text-hud2 hover:underline">Curves (Advanced)</button>
+          )}
+          {!axisLocked && !simple && <Tip label={`Invert, exponent, custom response curves${slot === 'js' ? ' and deadzone / saturation' : ''} for ${slot}${instance} only`}>
           <button type="button" onClick={() => onOpenAxis(opt.gs)} data-testid="slot-axis-settings"
             aria-label={`Axis settings & curves for ${slot}${instance}`}
             className="flex items-center gap-1.5 rounded border border-hud/50 bg-hud/10 px-2.5 py-1 font-display text-[11px] font-semibold uppercase tracking-wider text-hud2 transition hover:bg-hud/20">
@@ -505,8 +536,20 @@ function SlotDeviceView({ opt, chosen, T, strip, rows, conflictRows, pads, descr
           </div>
         )}
       </section>
-      <div className="print:hidden"><ChromiumBanner detected={pads.length} compact /></div>
-      <ChromiumButtonNotice templateMax={tplMax} deviceButtons={opt.pad?.buttons} device={ident.name ?? `${slot.toUpperCase()}${instance}`} direct={opt.pad?.hid} />
+      {simple ? (
+        isChromium() && hidSupported() && !opt.pad?.hid && (tplMax > CHROMIUM_BUTTON_CAP || (opt.pad?.buttons ?? 0) >= CHROMIUM_BUTTON_CAP) && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-mod/50 bg-mod/[0.08] px-3 py-2 text-xs text-slate-200 print:hidden" data-testid="simple-button-cap">
+            <Ico name="alert" className="h-4 w-4 text-mod" />
+            <span className="min-w-0 flex-1">This browser&apos;s normal controller list stops at {CHROMIUM_BUTTON_CAP} buttons, so higher buttons on this device won&apos;t light up or capture. Connect it directly to read every button.</span>
+            <HidConnect />
+          </div>
+        )
+      ) : (
+        <>
+          <div className="print:hidden"><ChromiumBanner detected={pads.length} compact /></div>
+          <ChromiumButtonNotice templateMax={tplMax} deviceButtons={opt.pad?.buttons} device={ident.name ?? `${slot.toUpperCase()}${instance}`} direct={opt.pad?.hid} />
+        </>
+      )}
       {unassigned > 0 && (
         <div data-testid="template-unassigned" className="flex flex-wrap items-center gap-2 rounded border border-mod/50 bg-mod/10 px-3 py-1.5 text-[11px] text-slate-200 print:hidden">
           <span><b className="text-mod">{unassigned} input{unassigned === 1 ? '' : 's'} on this picture have no number yet</b> (marked “?”): this device numbers its buttons the way you configured it.

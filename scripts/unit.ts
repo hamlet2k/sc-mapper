@@ -4628,4 +4628,39 @@ console.log('webhid fallback');
   });
 }
 
+{
+  const ro = await import('../src/lib/reorder');
+  const sl2 = await import('../src/lib/slots');
+  const dvo2 = await import('../src/lib/devopts');
+  t('reorder: moveItem moves one entry and clamps the target', () => {
+    assert.deepEqual(ro.moveItem([1, 2, 3, 4], 0, 2), [2, 3, 1, 4]);
+    assert.deepEqual(ro.moveItem([1, 2, 3, 4], 3, 0), [4, 1, 2, 3]);
+    assert.deepEqual(ro.moveItem([1, 2, 3], 1, 99), [1, 3, 2], 'past the end goes last');
+    assert.deepEqual(ro.moveItem([1, 2, 3], 5, 0), [1, 2, 3], 'unknown index: unchanged copy');
+  });
+  t('reorder: a new list order renumbers in position order, keeping the numbers the kind already uses', () => {
+    assert.deepEqual([...ro.reorderPerm([2, 1, 3])], [[2, 1], [1, 2]], 'swap of the first two');
+    assert.deepEqual([...ro.reorderPerm([3, 1, 2])].sort(), [[1, 2], [2, 3], [3, 1]], 'js3 dragged to the top: everyone below shifts down one');
+    assert.equal(ro.reorderPerm([1, 2, 3]).size, 0, 'same order: nothing moves');
+    assert.deepEqual([...ro.reorderPerm([5, 1, 2])].sort(), [[1, 2], [2, 5], [5, 1]], 'gaps: js1, js2, js5 stay the numbers in use');
+    assert.deepEqual(ro.positionNumbers([5, 1, 2]), [1, 2, 5]);
+    assert.deepEqual([...ro.movePerm([1, 2, 3, 4], 4, 1)].sort(), [[2, 3], [3, 4], [4, 2]], 'js4 dropped in second place');
+  });
+  t('reorder: dragging remaps bindings, slot hardware and curves with the device', () => {
+    const rb: any = { spaceship_movement: { v_pitch: [{ slot: 'js', instance: 1, input: 'y' }], v_roll: [{ slot: 'js', instance: 3, input: 'x' }] } };
+    let m = sl2.addSlot(sl2.addSlot(sl2.addSlot(sl2.emptySlotMap(), 'js'), 'js'), 'js');
+    m = sl2.assignHardware(m, { slot: 'js', instance: 3 }, sl2.manualHardware('Pedals'));
+    const perm = ro.reorderPerm([3, 1, 2]); // pedals (js3) dragged to the top
+    const r = sl2.permuteSlotBindings(rb, idx, 'js', perm);
+    assert.deepEqual(r.rebinds.spaceship_movement.v_roll.filter((x: any) => x.slot === 'js'), [{ slot: 'js', instance: 1, input: 'x' }], 'js3 binding is on js1 now');
+    assert.deepEqual(r.rebinds.spaceship_movement.v_pitch.filter((x: any) => x.slot === 'js'), [{ slot: 'js', instance: 2, input: 'y' }], 'old js1 moved down to js2');
+    const m2 = sl2.permuteSlots(m, 'js', perm);
+    assert.equal(m2.slots.find((s) => s.slot === 'js' && s.instance === 1)!.hw!.name, 'Pedals');
+    let st = dvo2.emptySettings();
+    st = { ...st, blocks: [...st.blocks, { tag: 'options', attrs: [['type', 'joystick'], ['instance', '3'], ['Product', 'Pedals']], children: [] } as any] };
+    const st2 = dvo2.permuteOptionInstances(st, 'joystick', perm);
+    assert.equal(dvo2.blockInstance(st2.blocks.find((b: any) => b.tag === 'options')!), 1, 'curves block follows to js1');
+  });
+}
+
 console.log(`\n${passed} tests passed${extraFiles.length ? ` (real layouts: ${extraFiles.join(', ')})` : ' (no real layout files found; pass paths as args)'}${fixtureFiles.length ? `; device-settings fixtures: ${fixtureFiles.length}` : ' (no fixtures: npm run test:fixtures)'}`);

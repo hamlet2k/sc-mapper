@@ -17,12 +17,12 @@ import { ShareExportDialog, ShareImportDialog, type ImportTarget, type TemplateI
 import { findConflicts } from './lib/conflicts';
 import { GROUPS } from './lib/groups';
 import { getPads, loadAssign, padLabel, usePads, type PadInfo, type PadKind } from './lib/devices';
-import { blockInstance, blockProduct, blockType, optionsBlock, settingsOf, swapOptionInstances, type DeviceSettings } from './lib/devopts';
+import { blockInstance, blockProduct, blockType, optionsBlock, permuteOptionInstances, settingsOf, swapOptionInstances, type DeviceSettings } from './lib/devopts';
 import type { ExportDevice } from './lib/exporter';
 import {
   DEFAULTS_SLOT_KEY, addSlot, assignHardware, autoMatchHardware, copySlotBindings, dropSlotBindings, emptySlotMap, ensureUsedSlots, hardwareOf,
   isController, knownHardware, loadSlotStore, neighbourSlot, nextInstance, padAssign, planCopy, removeSlot, reservedJs, saveSlotStore, seedSlots, setSlotTemplate, slotBindingCount,
-  slotDeviceName, slotId, slotIdentity, slotProduct, swapProfileDevices, swapSlotBindings, swapSlots, type GameSlot, type SlotMap, type SlotStore,
+  slotDeviceName, slotId, slotIdentity, slotProduct, swapProfileDevices, swapSlotBindings, swapSlots, permuteSlotBindings, permuteSlots, permuteProfileDevices, type GameSlot, type SlotMap, type SlotStore,
 } from './lib/slots';
 import {
   applyAxisSettings, defaultTarget, deviceMatch, looksShared, parseShared, planImport, sameTemplate, slotAxisSettings, slotBindings,
@@ -43,6 +43,8 @@ import { useEscape } from './components/useEscape';
 import { effectiveGroup, indexDefaults, newProfile, setAction, setGroup, withRebinds, type CaptureConflict } from './lib/edit';
 import { bindKey, comboLabel, groupOfDevice, groupOfSlot, searchSpec } from './lib/inputs';
 import { parseActionMaps, parseDeviceList, readXmlFile } from './lib/importer';
+import { reorderPerm } from './lib/reorder';
+import { DeviceOrder, LimitNotes, Welcome, primaryBtn, quietBtn } from './components/Friendly';
 import { applyRematch, computeRematch, knownDevices, shiftToOrder, type Rematch } from './lib/rematch';
 import { DropOverlay, ImportShiftDialog, RematchBanner, type DropZone } from './components/GameState';
 import { CopyText } from './components/CopyButton';
@@ -114,7 +116,27 @@ function useWide() {
   return wide;
 }
 
+/** which front end: the friendly one (default) or today's full app ("Advanced"); ?ui=advanced / ?ui=friendly in the URL picks one */
+type Ui = 'friendly' | 'advanced';
+type FTab = 'devices' | 'keyboard' | 'order' | 'find';
+const UI_KEY = 'sc-mapper:ui:v1';
+function initialUi(): Ui {
+  if (typeof window === 'undefined') return 'friendly';
+  const q = new URLSearchParams(window.location.search).get('ui');
+  if (q === 'advanced' || q === 'friendly') { localStorage.setItem(UI_KEY, q); return q; }
+  return localStorage.getItem(UI_KEY) === 'advanced' ? 'advanced' : 'friendly';
+}
+const FTABS: { id: FTab; label: string; icon: IconName }[] = [
+  { id: 'devices', label: 'My devices', icon: 'joystick' },
+  { id: 'keyboard', label: 'Keyboard & mouse', icon: 'keyboard' },
+  { id: 'order', label: 'Device order', icon: 'move' },
+  { id: 'find', label: 'Find an action', icon: 'search' },
+];
+
 export default function App() {
+  const [ui, setUiState] = useState<Ui>(() => initialUi());
+  const friendly = ui === 'friendly';
+  const [ftab, setFtab] = useState<FTab>('devices');
   const wide = useWide();
   const [store, setStore] = useState<Persisted>(() => load());
   useEffect(() => save(store), [store]);
@@ -134,7 +156,13 @@ export default function App() {
   const [axisFor, setAxisFor] = useState<{ slot: 'js' | 'gp'; instance: number } | null>(null);
   const [selGroup, setSelGroup] = useState<string | null>(null);
   const [selMap, setSelMap] = useState<string | null>(null);
-  const [view, setView] = useState<View>('list');
+  const [view, setView] = useState<View>(() => (initialUi() === 'friendly' ? 'devices' : 'list'));
+  const goTab = (t: FTab) => { setFtab(t); setView(t === 'keyboard' ? 'keyboard' : t === 'find' ? 'list' : 'devices'); };
+  const setUi = (u: Ui) => {
+    setUiState(u); localStorage.setItem(UI_KEY, u);
+    const url = new URL(window.location.href); url.searchParams.set('ui', u); window.history.replaceState(null, '', url);
+    if (u === 'friendly') goTab(ftab);
+  };
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string; action?: { label: string; run: () => void } } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [dropZone, setDropZone] = useState<DropZone>('refresh');
@@ -144,6 +172,9 @@ export default function App() {
 
   // ---- editing state
   const [editMode, setEditMode] = useState(false);
+  // the friendly front end has no Edit toggle: clicking a binding edits it
+  const editOn = editMode || friendly;
+  const friendRef = useRef<HTMLInputElement>(null);
   const [capture, setCapture] = useState<CaptureRequest | null>(null);
   const [editorId, setEditorId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -198,7 +229,7 @@ export default function App() {
     if (moInst > 1 && !slotMap.slots.some((s) => s.slot === 'mo' && s.instance === moInst)) setMoInst(1);
   }, [slotMap, kbInst, moInst]);
   const slotPads = useMemo(() => ({ assign: padAssign(slotMap), reserved: reservedJs(slotMap) }), [slotMap]);
-  const { pads, describe: describePads } = usePads(!!capture || exportOpen || !!devicesOpen || pressMode || view === 'devices' || !!shareIn || !!slotMap.pendingMatch, profile?.devices, slotPads);
+  const { pads, describe: describePads } = usePads(!!capture || exportOpen || !!devicesOpen || pressMode || view === 'devices' || (friendly && ftab === 'order') || !!shareIn || !!slotMap.pendingMatch, profile?.devices, slotPads);
   const storeRef = useRef(store);
   // hardware auto-match of a fresh import: runs once, as soon as the browser shows controllers (they appear after a press)
   useEffect(() => {
@@ -525,6 +556,22 @@ export default function App() {
     updateSlots((m) => swapSlots(m, slot, a, b));
     setToast({ kind: 'ok', text: `${label}: ${slotDeviceName(gs) ?? `${slot}${a}`}'s mappings are on ${slot}${b} now${r.moved ? ` (${r.moved} binding${r.moved === 1 ? '' : 's'})` : ''}. The game's device order is unchanged. Undo reverts it.` });
   }, [slotMap, applyEdit, updateSlots]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** friendly Device order: drag a device to a new place in its kind's list; the kind's numbers renumber in list order */
+  const reorderSlotsNow = useCallback((slot: 'js' | 'gp', order: number[]) => {
+    const perm = reorderPerm(order);
+    if (!perm.size) return;
+    const prof = curProfile();
+    const r = permuteSlotBindings(prof?.rebinds ?? {}, IDX, slot, perm);
+    const label = `Reorder ${slot === 'js' ? 'joysticks' : 'gamepads'}`;
+    if (prof) {
+      const meta = { devices: prof.devices, settings: settingsOf(prof), slots: slotMap };
+      applyEdit(label, r.touched, () => r.rebinds, { meta });
+      patchProfile(prof.id, { devices: permuteProfileDevices(prof.devices, slot, perm), settings: permuteOptionInstances(meta.settings, EXPORT_TYPE[slot], perm) });
+    }
+    updateSlots((m) => permuteSlots(m, slot, perm));
+    const moved = [...perm].map(([a, b]) => `${slot}${a}→${slot}${b}`).join(', ');
+    setToast({ kind: 'ok', text: `Renumbered ${moved}${r.moved ? `: ${r.moved} binding${r.moved === 1 ? '' : 's'} moved with their devices` : ''}. Undo reverts it.` });
+  }, [slotMap, applyEdit, updateSlots]); // eslint-disable-line react-hooks/exhaustive-deps
   // ---- refresh game state: the game's current device order from a fresh export --------------------------------
   const [rematch, setRematch] = useState<{ file: string; r: Rematch; profileId: string } | null>(null);
   const [pendingImport, setPendingImport] = useState<{ p: Profile; r: Rematch } | null>(null);
@@ -606,7 +653,7 @@ export default function App() {
   usePadHits(pressMode, describePads, onPressHit);
   useKeyHits(pressMode, 'capture', onPressHit, stopPress);
   // ---- live highlight: when nothing else is listening, pressing an input flashes its bindings
-  const passiveOn = view !== 'devices' && highlightOn && !query && !chip && !pressMode && !(editMode && vf.edit) && !capture && !editorId && !exportOpen && !devicesOpen && !settingsOpen && !axisFor && !help && !shareOut && !shareIn;
+  const passiveOn = view !== 'devices' && highlightOn && !query && !chip && !pressMode && !(editOn && vf.edit) && !capture && !editorId && !exportOpen && !devicesOpen && !settingsOpen && !axisFor && !help && !shareOut && !shareIn;
   const onFlash = useCallback((h: PressHit) => {
     setFlash(null);
     requestAnimationFrame(() => setFlash({ hit: h, keys: hitKeys(h), at: Date.now() }));
@@ -885,6 +932,185 @@ export default function App() {
       onResetAll={resetAll} onOpenSlots={(gs) => openSlots(gs ?? (view === 'devices' ? shownDev?.gs : undefined))} onRefresh={() => refreshRef.current?.click()} picker={slotPicker} />
   );
 
+  const fileInputs = (
+    <>
+            <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" multiple hidden
+              onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
+            <input ref={shareFileRef} type="file" accept=".json,application/json" hidden data-testid="share-import-file"
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readXmlFile(f).then((t) => openSharedText(t, f.name)); }} />
+            <input ref={refreshRef} type="file" accept=".xml,text/xml,application/xml" hidden data-testid="refresh-file"
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void refreshGameState(f); }} />
+      <input ref={friendRef} type="file" accept=".xml,.json,text/xml,application/xml,application/json" hidden data-testid="friend-file"
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; void readXmlFile(f).then((t) => { if (/\.json$/i.test(f.name) || looksShared(t)) openSharedText(t, f.name); else void importFiles([f]); }); }} />
+    </>
+  );
+  const overlays = (
+    <>
+      {nameRequests[0] && <ImportNameDialog key={nameRequests[0].id} initial={nameRequests[0].initial} file={nameRequests[0].file}
+        onSave={(name) => finishImportName(name)} onCancel={() => finishImportName(null)} />}
+      {dragging && <DropOverlay withRefresh={!!profile} zone={dropZone} />}
+      {pendingImport && <ImportShiftDialog file={pendingImport.p.fileName} r={pendingImport.r} onShift={() => shiftImport(true)} onAsIs={() => shiftImport(false)} onCancel={() => setPendingImport(null)} />}
+      {flash && (
+        <div data-testid="flash-badge" className="pointer-events-none fixed bottom-5 left-5 z-40 max-w-md rounded-lg border border-mod/60 bg-panel/95 px-3 py-2 text-xs shadow-xl backdrop-blur">
+          <span className="font-mono font-bold text-mod">{hitSpecs(flash.hit)[0]}</span>
+          <span className="ml-2 text-slate-300">{hitLabel(flash.hit)}</span>
+          {flash.hit.device && <span className="ml-2 text-slate-500">{flash.hit.device}</span>}
+          <span className="ml-2 text-slate-200">→ {flashCount ? (view === 'conflicts' ? `${flashCount} conflict group${flashCount === 1 ? '' : 's'}` : `${flashCount} action${flashCount === 1 ? '' : 's'}`) : view === 'conflicts' ? 'no conflict on this input' : 'not bound in this view'}</span>
+          {flash.hit.note && <div className="mt-1 flex items-center gap-1 text-[10px] text-alert"><Ico name="alert" className="h-3 w-3" /> {flash.hit.note}</div>}
+        </div>
+      )}
+      {toast && (
+        <div className={`fixed bottom-5 right-5 z-50 max-w-md rounded-lg border px-4 py-3 text-sm shadow-xl backdrop-blur ${toast.kind === 'ok' ? 'border-ok/50 bg-panel/95 text-ok' : 'border-alert/60 bg-panel/95 text-alert'}`}>
+          {toast.text}
+          {toast.action && <button type="button" onClick={() => { toast.action!.run(); }} data-testid="toast-action" className="ml-2 rounded border border-current px-2 py-0.5 text-xs font-semibold hover:bg-white/10">{toast.action.label}</button>}
+        </div>
+      )}
+      {help && <HelpModal onClose={() => setHelp(false)} />}
+      {editorRow && (
+        <ActionEditor row={editorRow} action={IDX.get(editorRow.id)} rebinds={profile?.rebinds[editorRow.map]?.[editorRow.action]}
+          canUndo={canUndoRow(editorRow.id)} onUndo={() => undoLast(editorRow.id)} onReset={() => resetRow(editorRow)}
+          onSetGroup={(g, list) => setGroupFor(editorRow, g, list)} onCapture={(g, replace) => setCapture({ row: editorRow, group: g, replace })}
+          onClose={() => setEditorId(null)} />
+      )}
+      {capture && (
+        <CaptureDialog key={`${capture.row.id}:${capture.group}:${capture.replace?.input ?? '+'}`} {...capture} rows={rows} pads={pads} onAssign={assignPad}
+          describe={describePads} profileDevices={slotDevices} kmSlots={kmSlots} kmDefault={{ kb: kbInst, mo: moInst }}
+          onCommit={commitCapture} onClear={capture.replace ? clearCapture : undefined} onCancel={() => setCapture(null)} />
+      )}
+      {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} devices={exportDevices} slots={exportSlots} onClose={() => setExportOpen(false)} />}
+      {devicesOpen && (
+        <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(null)}
+          initialSlot={devicesOpen.target}
+          onRefresh={() => refreshRef.current?.click()} banner={rematchBanner} />
+      )}
+      {deleting && profile && (
+        <DeleteProfileDialog profile={profile} slotCount={slotMap.slots.length} onCancel={() => setDeleting(false)} onExport={() => { setDeleting(false); setExportOpen(true); }}
+          onConfirm={() => { const name = profile.name; removeProfile(profile.id); setDeleting(false); setToast({ kind: 'ok', text: `Deleted “${name}”` }); }} />
+      )}
+      {axisFor && (() => {
+        const gs = slotMap.slots.find((x) => x.slot === axisFor.slot && x.instance === axisFor.instance);
+        const pad = gs?.hw ? pads.find((p) => p.key === gs.hw!.key) : undefined;
+        const type = axisFor.slot === 'gp' ? 'gamepad' : 'joystick';
+        return <AxisSettingsModal slotLabel={`${axisFor.slot}${axisFor.instance}`} deviceName={pad?.name ?? (gs ? slotDeviceName(gs) : undefined)} onClose={() => setAxisFor(null)}
+          profile={profile} settings={settingsOf(profile)} tree={DEFAULTS.optionTrees?.[type]} pads={pads} onChange={applySettings}
+          type={type} instance={axisFor.instance} product={gs?.gameRawProduct ?? gs?.gameProduct ?? pad?.product} />;
+      })()}
+      {shareOut && <ShareExportDialog slotLabel={shareOut.slotLabel} input={shareOut.input} onClose={() => setShareOut(null)}
+        onSaved={(file, pack) => { setShareOut(null); setToast({ kind: 'ok', text: `Saved ${file}: ${pack.bindings.length} bindings${pack.template.kind === 'custom' ? ' + your template' : ''}${pack.axis ? ' + axis settings' : ''}. Send it to whoever has this device; they import it on their Devices page.` }); }} />}
+      {shareIn && <ShareImportDialog pack={shareIn.pack} fileName={shareIn.file} targets={shareTargets} initial={shareInitial} plan={sharePlan} templateInfo={shareTemplate}
+        gameVersion={DEFAULTS.meta.version} onConfirm={(t, mode) => void confirmShared(t, mode)} onCancel={() => setShareIn(null)} />}
+      {settingsOpen && <SettingsModal settings={appSettings} onChange={setAppSettings} onClose={() => setSettingsOpen(false)} meta={meta} versionLabel={versionLabel} />}
+    </>
+  );
+  // ---------------- the friendly front end: same state and engine, a short path through it ----------------
+  if (friendly) {
+    const hasPads = slotMap.slots.some(isController);
+    return (
+      <div className="relative flex h-full flex-col" data-ui="friendly">
+        <header className="relative z-30 border-b border-edge bg-panel/85 backdrop-blur">
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-5">
+            <svg viewBox="0 0 40 40" className="h-7 w-7 shrink-0 text-hud" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+              <path d="M20 2 36 11v18L20 38 4 29V11z" /><path d="M14 20h12M20 14v12" />
+            </svg>
+            <h1 className="shrink-0 text-lg font-bold text-slate-50" data-testid="app-title">SC Mapper</h1>
+            {store.profiles.length > 0 && (
+              <label className="flex min-w-0 items-center gap-1.5 text-sm text-slate-400">
+                <span className="sr-only">Profile</span>
+                <select value={store.activeId ?? ''} onChange={(e) => setStore((s) => ({ ...s, activeId: e.target.value || null }))} data-testid="profile-select"
+                  className="max-w-[14rem] truncate rounded-md border border-edge bg-black/40 px-2 py-1 text-slate-100">
+                  {store.profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  <option value="">Game defaults</option>
+                </select>
+              </label>
+            )}
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => fileRef.current?.click()} data-testid="f-import" className={quietBtn}><Ico name="import" className="h-4 w-4" /> Import from game</button>
+              <button type="button" onClick={() => friendRef.current?.click()} data-testid="f-friend" className={quietBtn}><Ico name="share" className="h-4 w-4" /> Friend&apos;s file</button>
+              <button type="button" onClick={() => setExportOpen(true)} disabled={!profile} data-testid="f-save" title={profile ? 'Save a file Star Citizen loads' : 'Import or edit something first'} className={primaryBtn}>
+                <Ico name="export" className="h-4 w-4" /> Save for Star Citizen
+              </button>
+              <button type="button" onClick={() => undoLast()} disabled={!undoCount} title="Undo (Ctrl+Z)" aria-label="Undo" data-testid="undo"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-edge text-slate-300 hover:border-hud/60 disabled:opacity-40"><Ico name="undo" className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setHelp(true)} aria-label="Help" title="Help: where are my keybind files?" data-testid="open-help"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-edge text-slate-300 hover:border-hud/60"><Ico name="help" className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings" data-testid="open-settings"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-edge text-slate-300 hover:border-hud/60"><Ico name="settings" className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setUi('advanced')} data-testid="to-advanced" title="The full app: curves and axis settings, templates, conflicts, game slots and every other power tool"
+                className="rounded-lg px-2 py-1 text-xs text-slate-400 underline-offset-2 hover:text-hud2 hover:underline">Advanced</button>
+              {fileInputs}
+            </div>
+          </div>
+          {(profile || hasPads) && (
+            <nav className="flex gap-1 overflow-x-auto px-3 sm:px-5" aria-label="Sections" data-testid="f-tabs">
+              {FTABS.map((t) => (
+                <button key={t.id} type="button" onClick={() => goTab(t.id)} aria-current={ftab === t.id ? 'page' : undefined} data-ftab={t.id}
+                  className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-sm font-semibold transition ${ftab === t.id ? 'border-hud text-hud2' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+                  <Ico name={t.icon} className="h-4 w-4" />{t.label}
+                </button>
+              ))}
+            </nav>
+          )}
+        </header>
+        <LimitNotes pads={pads} />
+        <StaleBuildBanner />
+        <main className="relative z-10 min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin" id="main">
+          {rematchBanner && !devicesOpen && <div className="mb-3">{rematchBanner}</div>}
+          {!profile && !hasPads ? (
+            <Welcome onImport={() => fileRef.current?.click()} onFriend={() => friendRef.current?.click()} onSample={() => { void loadSample(); goTab('devices'); }}
+              onDefaults={() => { createLayout(false); goTab('devices'); }} onHelp={() => setHelp(true)} />
+          ) : (
+            <>
+              {ftab === 'devices' && (
+                <>
+                  <p className="mb-3 text-sm text-slate-400" data-testid="f-devices-hint">Click a label on a picture to change it, or use <b className="text-slate-200">Press to bind</b> and press the control. Pick another device from the list above the picture.</p>
+                  <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads}
+                    slots={deviceSlots} slotMap={slotMap} selKey={devSel} onSelect={selectDevice} compact={!wide} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => goTab('order')} highlight={highlightOn} scroll={highlightOn && scrollOn}
+                    query={dq} chip={chip} onOpenAxis={(gs) => { setUi('advanced'); setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance }); }} axisLimit={AXIS_LIMIT} onRefresh={() => refreshRef.current?.click()} simple
+                    editMode={editOn} onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={(spec) => { pickInput(spec); goTab('find'); }} notify={(kind, text) => setToast({ kind, text })}
+                    templates={T} onShare={openShare} onImportShared={() => shareFileRef.current?.click()} onSharedText={openSharedText} />
+                </>
+              )}
+              {ftab === 'keyboard' && (
+                <>
+                  <p className="mb-3 text-sm text-slate-400">Click a key to see what it does and change it. Brighter keys have more bindings.</p>
+                  <KeyboardView rows={visible} conflictRows={conflicts.byRow} kb={kbInst} mo={moInst}
+                    editMode={editOn} onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onCapture={onCaptureCell} onShowInList={(spec) => { pickInput(spec); goTab('find'); }}
+                    flash={flash && (flash.hit.slot === 'kb' || flash.hit.slot === 'mo') ? { combo: flash.hit.inputs[0], at: flash.at } : null} />
+                </>
+              )}
+              {ftab === 'order' && (
+                <DeviceOrder slotMap={slotMap} pads={pads} templates={T} curveLimit={AXIS_LIMIT} onReorder={reorderSlotsNow}
+                  onOpen={(gs) => { selectDevice(deviceSlotKey(gs)); goTab('devices'); }} onRefresh={() => refreshRef.current?.click()} />
+              )}
+              {ftab === 'find' && (
+                <div className="mx-auto max-w-5xl">
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <div className="flex min-w-[min(100%,320px)] flex-1 items-center gap-2 rounded-lg border border-edge2 bg-black/40 px-3 focus-within:border-hud">
+                      <Ico name="search" className="h-4 w-4 text-hud/70" />
+                      {chip && <span data-testid="press-chip" className="flex shrink-0 items-center gap-1 rounded border border-mod/60 bg-mod/15 px-1.5 py-0.5 font-mono text-[11px] text-mod">{hitSpecs(chip)[0]}
+                        <button type="button" aria-label="Remove input filter" onClick={() => setChip(null)}><Ico name="close" className="h-3 w-3" /></button></span>}
+                      <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)} data-testid="search" placeholder="Search an action, e.g. landing gear or quantum"
+                        onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setChip(null); } }}
+                        className="min-w-[7rem] flex-1 bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500" />
+                    </div>
+                    <button type="button" onClick={() => setPressMode((v) => !v)} aria-pressed={pressMode} data-testid="press-search" className={pressMode ? primaryBtn : quietBtn}>
+                      <Ico name="target" className="h-4 w-4" /> {pressMode ? 'Press a key or button…' : 'Find by pressing'}
+                    </button>
+                    <Toggle on={customOnly} set={setCustomOnly} label="Only my changes" tone="mod" disabled={!profile} testid="filter-custom" />
+                  </div>
+                  {pressMode && <p className="mb-3 text-sm text-mod">Press a key, mouse button, controller button or hat, or move an axis. Esc stops.</p>}
+                  <ActionList rows={visible} grouped={!filtered.hasQuery} devices={devices} conflictsOf={conflictsOf} onBindingClick={onBindingClick}
+                    editMode={editOn} onCapture={onCaptureCell} onRemove={onRemoveCell} onEdit={onEditRow} flash={flash?.keys} />
+                </div>
+              )}
+            </>
+          )}
+        </main>
+        {overlays}
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-full flex-col">
       <div className="scanline" />
@@ -899,6 +1125,8 @@ export default function App() {
           <h1 className="glow-text shrink-0 whitespace-nowrap font-display text-lg font-bold uppercase leading-none tracking-[0.12em] text-hud2 sm:text-xl sm:tracking-[0.25em]" data-testid="app-title">SC Keymap</h1>
           <span className="hidden min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500 sm:block" data-testid="app-subtitle" title={`Star Citizen binding console · ${versionLabel}`}>Star Citizen binding console · {versionLabel}</span>
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+            <button type="button" onClick={() => setUi('friendly')} data-testid="to-friendly" title="The simple SC Mapper: pictures, press to bind, drag to reorder, save for the game"
+              className="rounded border border-hud/50 px-2 py-1 text-xs font-semibold text-hud2 hover:bg-hud/10">Simple view</button>
             <Feedback />
             <HeaderLinks />
             <span className="mx-0.5 h-5 w-px bg-edge sm:mx-1" aria-hidden="true" />
@@ -906,12 +1134,7 @@ export default function App() {
               className="flex h-8 w-8 items-center justify-center rounded border border-edge text-slate-300 hover:border-hud/60 hover:text-hud2"><Ico name="settings" className="h-4 w-4" /></button>
             <button type="button" onClick={() => setHelp(true)} data-testid="open-help" title="Help: where are my keybind files?" aria-label="Help"
               className="flex h-8 w-8 items-center justify-center rounded border border-edge text-slate-300 hover:border-hud/60 hover:text-hud2"><Ico name="help" className="h-4 w-4" /></button>
-            <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" multiple hidden
-              onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
-            <input ref={shareFileRef} type="file" accept=".json,application/json" hidden data-testid="share-import-file"
-              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readXmlFile(f).then((t) => openSharedText(t, f.name)); }} />
-            <input ref={refreshRef} type="file" accept=".xml,text/xml,application/xml" hidden data-testid="refresh-file"
-              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void refreshGameState(f); }} />
+            {fileInputs}
           </div>
         </div>
         <nav className="flex gap-1 px-4" aria-label="Views" data-testid="view-tabs">
@@ -1080,60 +1303,7 @@ export default function App() {
         </div>
       </div>
 
-      {nameRequests[0] && <ImportNameDialog key={nameRequests[0].id} initial={nameRequests[0].initial} file={nameRequests[0].file}
-        onSave={(name) => finishImportName(name)} onCancel={() => finishImportName(null)} />}
-      {dragging && <DropOverlay withRefresh={!!profile} zone={dropZone} />}
-      {pendingImport && <ImportShiftDialog file={pendingImport.p.fileName} r={pendingImport.r} onShift={() => shiftImport(true)} onAsIs={() => shiftImport(false)} onCancel={() => setPendingImport(null)} />}
-      {flash && (
-        <div data-testid="flash-badge" className="pointer-events-none fixed bottom-5 left-5 z-40 max-w-md rounded-lg border border-mod/60 bg-panel/95 px-3 py-2 text-xs shadow-xl backdrop-blur">
-          <span className="font-mono font-bold text-mod">{hitSpecs(flash.hit)[0]}</span>
-          <span className="ml-2 text-slate-300">{hitLabel(flash.hit)}</span>
-          {flash.hit.device && <span className="ml-2 text-slate-500">{flash.hit.device}</span>}
-          <span className="ml-2 text-slate-200">→ {flashCount ? (view === 'conflicts' ? `${flashCount} conflict group${flashCount === 1 ? '' : 's'}` : `${flashCount} action${flashCount === 1 ? '' : 's'}`) : view === 'conflicts' ? 'no conflict on this input' : 'not bound in this view'}</span>
-          {flash.hit.note && <div className="mt-1 flex items-center gap-1 text-[10px] text-alert"><Ico name="alert" className="h-3 w-3" /> {flash.hit.note}</div>}
-        </div>
-      )}
-      {toast && (
-        <div className={`fixed bottom-5 right-5 z-50 max-w-md rounded-lg border px-4 py-3 text-sm shadow-xl backdrop-blur ${toast.kind === 'ok' ? 'border-ok/50 bg-panel/95 text-ok' : 'border-alert/60 bg-panel/95 text-alert'}`}>
-          {toast.text}
-          {toast.action && <button type="button" onClick={() => { toast.action!.run(); }} data-testid="toast-action" className="ml-2 rounded border border-current px-2 py-0.5 text-xs font-semibold hover:bg-white/10">{toast.action.label}</button>}
-        </div>
-      )}
-      {help && <HelpModal onClose={() => setHelp(false)} />}
-      {editorRow && (
-        <ActionEditor row={editorRow} action={IDX.get(editorRow.id)} rebinds={profile?.rebinds[editorRow.map]?.[editorRow.action]}
-          canUndo={canUndoRow(editorRow.id)} onUndo={() => undoLast(editorRow.id)} onReset={() => resetRow(editorRow)}
-          onSetGroup={(g, list) => setGroupFor(editorRow, g, list)} onCapture={(g, replace) => setCapture({ row: editorRow, group: g, replace })}
-          onClose={() => setEditorId(null)} />
-      )}
-      {capture && (
-        <CaptureDialog key={`${capture.row.id}:${capture.group}:${capture.replace?.input ?? '+'}`} {...capture} rows={rows} pads={pads} onAssign={assignPad}
-          describe={describePads} profileDevices={slotDevices} kmSlots={kmSlots} kmDefault={{ kb: kbInst, mo: moInst }}
-          onCommit={commitCapture} onClear={capture.replace ? clearCapture : undefined} onCancel={() => setCapture(null)} />
-      )}
-      {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} devices={exportDevices} slots={exportSlots} onClose={() => setExportOpen(false)} />}
-      {devicesOpen && (
-        <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(null)}
-          initialSlot={devicesOpen.target}
-          onRefresh={() => refreshRef.current?.click()} banner={rematchBanner} />
-      )}
-      {deleting && profile && (
-        <DeleteProfileDialog profile={profile} slotCount={slotMap.slots.length} onCancel={() => setDeleting(false)} onExport={() => { setDeleting(false); setExportOpen(true); }}
-          onConfirm={() => { const name = profile.name; removeProfile(profile.id); setDeleting(false); setToast({ kind: 'ok', text: `Deleted “${name}”` }); }} />
-      )}
-      {axisFor && (() => {
-        const gs = slotMap.slots.find((x) => x.slot === axisFor.slot && x.instance === axisFor.instance);
-        const pad = gs?.hw ? pads.find((p) => p.key === gs.hw!.key) : undefined;
-        const type = axisFor.slot === 'gp' ? 'gamepad' : 'joystick';
-        return <AxisSettingsModal slotLabel={`${axisFor.slot}${axisFor.instance}`} deviceName={pad?.name ?? (gs ? slotDeviceName(gs) : undefined)} onClose={() => setAxisFor(null)}
-          profile={profile} settings={settingsOf(profile)} tree={DEFAULTS.optionTrees?.[type]} pads={pads} onChange={applySettings}
-          type={type} instance={axisFor.instance} product={gs?.gameRawProduct ?? gs?.gameProduct ?? pad?.product} />;
-      })()}
-      {shareOut && <ShareExportDialog slotLabel={shareOut.slotLabel} input={shareOut.input} onClose={() => setShareOut(null)}
-        onSaved={(file, pack) => { setShareOut(null); setToast({ kind: 'ok', text: `Saved ${file}: ${pack.bindings.length} bindings${pack.template.kind === 'custom' ? ' + your template' : ''}${pack.axis ? ' + axis settings' : ''}. Send it to whoever has this device; they import it on their Devices page.` }); }} />}
-      {shareIn && <ShareImportDialog pack={shareIn.pack} fileName={shareIn.file} targets={shareTargets} initial={shareInitial} plan={sharePlan} templateInfo={shareTemplate}
-        gameVersion={DEFAULTS.meta.version} onConfirm={(t, mode) => void confirmShared(t, mode)} onCancel={() => setShareIn(null)} />}
-      {settingsOpen && <SettingsModal settings={appSettings} onChange={setAppSettings} onClose={() => setSettingsOpen(false)} meta={meta} versionLabel={versionLabel} />}
+      {overlays}
     </div>
   );
 }
