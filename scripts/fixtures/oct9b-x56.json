@@ -14,9 +14,9 @@
       "id": "mode",
       "kind": "switch",
       "inputs": [
-        "",
-        "",
-        ""
+        "button34",
+        "button35",
+        "button36"
       ],
       "anchor": {
         "x": 0.25745660881174903,
@@ -53,7 +53,7 @@
       "id": "rty4",
       "kind": "encoder",
       "inputs": [
-        "",
+        "slider2",
         "button6"
       ],
       "anchor": {
@@ -206,7 +206,7 @@
       "id": "lthr",
       "kind": "axis",
       "inputs": [
-        ""
+        "x"
       ],
       "anchor": {
         "x": 0.46517645143995096,
@@ -224,7 +224,7 @@
       "id": "rthr",
       "kind": "axis",
       "inputs": [
-        ""
+        "y"
       ],
       "anchor": {
         "x": 0.5793057409879839,
@@ -260,12 +260,12 @@
       "id": "sw",
       "kind": "buttons",
       "inputs": [
-        "",
-        "",
-        "",
-        "",
-        "",
-        ""
+        "button6",
+        "button7",
+        "button8",
+        "button9",
+        "button10",
+        "button11"
       ],
       "anchor": {
         "x": 0.3986666570925245,
@@ -283,14 +283,14 @@
       "id": "tgl",
       "kind": "buttons",
       "inputs": [
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        ""
+        "button12",
+        "button13",
+        "button14",
+        "button15",
+        "button16",
+        "button17",
+        "button18",
+        "button19"
       ],
       "anchor": {
         "x": 0.7299607460171569,
@@ -400,7 +400,7 @@
     "id": "builtin-logitech-x56-throttle",
     "name": "Logitech G X56 throttle",
     "brand": "Logitech",
-    "notes": "Callout spots without numbers (shown as “?”): the numbering depends on the device configuration and is not published. Use “Customize a copy” and type the numbers you see in the input tester.",
+    "notes": "Community maps (EDRefCard and published charts). Button N = jsX_buttonN. Mode M1/M2/S1 = 34/35/36 (held in that position); SW 1-6 = 6-11; TGL 1-4 up/down = 12-19; left/right throttle = x/y. Buttons 33-36 need Firefox (Chrome/Edge stop at 32).",
     "match": [
       {
         "name": "X56 H.O.T.A.S. Throttle"

@@ -11,8 +11,6 @@ import { PHOTO_LABEL_GUTTER, pageSizeForPhoto } from './templatePages';
 
 const b = (...n: number[]) => n.map((i) => `button${i}`);
 const hat = (n: number) => ['up', 'right', 'down', 'left'].map((d) => `hat${n}_${d}`);
-/** n inputs without a number yet (devices whose numbering is not published / depends on the user's configuration) */
-const u = (n: number) => Array.from({ length: n }, () => '');
 const range = (a: number, z: number) => Array.from({ length: z - a + 1 }, (_, i) => a + i);
 /** callout spec: art control id, kind, inputs, label, group; side = which label column (default: the side the control is on) */
 interface Spec { id: string; art?: string; kind: CalloutKind; inputs: string[]; label?: string; group?: string; side?: 'L' | 'R' | 'B'; box?: [number, number] }
@@ -1296,18 +1294,19 @@ tpl('moza-mtq', {
 
 /* ------------------------------------------------------------------ devices without published numbers: art + callout spots only */
 const OPEN_NOTE = 'Callout spots without numbers (shown as “?”): the numbering depends on the device configuration and is not published. Use “Customize a copy” and type the numbers you see in the input tester.';
+const VKB_GLADIATOR_SCG_NOTE = 'Factory-default numbering from MobiFlight, EDCD and EDRefCard (button N = jsX_buttonN). VKBDevCfg remaps change everything: Customize a copy if yours differ. En1 clockwise / counter-clockwise is button23/24; press-test the direction.';
 tpl('vkb-gladiator-scg', {
-  id: 'builtin-vkb-gladiator-scg', category: 'stick', name: 'VKB Gladiator NXT EVO (Space Combat Grip)', brand: 'VKB', notes: OPEN_NOTE,
+  id: 'builtin-vkb-gladiator-scg', category: 'stick', name: 'VKB Gladiator NXT EVO (Space Combat Grip)', brand: 'VKB', notes: VKB_GLADIATOR_SCG_NOTE,
   match: [{ name: 'Gladiator' }],
 }, [
-  c('a4', 'hat', u(5), 'A4 hat', 'Grip head', { side: 'L' }), c('a2', 'button', u(1), 'A2 red button', 'Grip head', { side: 'L' }),
-  c('c1', 'hat', u(5), 'C1 thumb hat', 'Grip', { side: 'L' }), c('rf', 'switch', u(2), 'Rapid-fire trigger (up / down)', 'Grip', { side: 'L' }),
-  c('trig', 'switch', u(2), 'Trigger (stage 1 / 2)', 'Grip', { side: 'L' }), c('d1', 'button', u(1), 'D1 pinky button', 'Grip', { side: 'L' }),
-  c('thr', 'axis', [''], 'Throttle lever', 'Base', { side: 'L' }), c('sw1', 'switch', u(2), 'Sw1 switch', 'Base', { side: 'L' }),
-  c('a1', 'hat', u(5), 'A1 ministick (4-way + push)', 'Grip head', { side: 'R' }), c('a1x', 'axis', ['', ''], 'A1 ministick (analog)', 'Grip head', { art: 'a1', side: 'R' }),
-  c('a3', 'hat', u(5), 'A3 hat', 'Grip head', { side: 'R' }), c('b1', 'button', u(1), 'B1 side button', 'Grip', { side: 'R' }),
-  c('twist', 'axis', [''], 'Twist', 'Axes', { side: 'R' }), c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
-  c('fkeys', 'buttons', u(3), 'F1-F3', 'Base', { side: 'R' }), c('en1', 'encoder', u(2), 'En1 encoder', 'Base', { side: 'R' }),
+  c('a4', 'hat', b(11, 12, 13, 14, 15), 'A4 hat', 'Grip head', { side: 'L' }), c('a2', 'button', b(3), 'A2 red button', 'Grip head', { side: 'L' }),
+  c('c1', 'hat', b(16, 17, 18, 19, 20), 'C1 thumb hat', 'Grip', { side: 'L' }), c('rf', 'switch', b(21, 22), 'Rapid-fire trigger (up / down)', 'Grip', { side: 'L' }),
+  c('trig', 'switch', b(1, 2), 'Trigger (stage 1 / 2)', 'Grip', { side: 'L' }), c('d1', 'button', b(5), 'D1 pinky button', 'Grip', { side: 'L' }),
+  c('thr', 'axis', ['z'], 'Throttle lever', 'Base', { side: 'L' }), c('sw1', 'switch', b(25, 26), 'Sw1 switch', 'Base', { side: 'L' }),
+  c('a1', 'hat', [...hat(1), ...b(30)], 'A1 ministick (4-way + push)', 'Grip head', { side: 'R' }), c('a1x', 'axis', ['rotx', 'roty'], 'A1 ministick (analog)', 'Grip head', { art: 'a1', side: 'R' }),
+  c('a3', 'hat', b(6, 7, 8, 9, 10), 'A3 hat', 'Grip head', { side: 'R' }), c('b1', 'button', b(4), 'B1 side button', 'Grip', { side: 'R' }),
+  c('twist', 'axis', ['rotz'], 'Twist', 'Axes', { side: 'R' }), c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
+  c('fkeys', 'buttons', b(27, 28, 29), 'F1-F3', 'Base', { side: 'R' }), c('en1', 'encoder', b(23, 24), 'En1 encoder', 'Base', { side: 'R' }),
 ]);
 // Exact photos, view sizes and callouts from the supplied export (2026-10-10, corrected v2).
 photoTplExactViews({
@@ -1867,28 +1866,30 @@ photoTplExactViews({
 ]);
 
 /* ------------------------------------------------------------------ Logitech */
+const LOGITECH_X56_STICK_NOTE = 'Fixed hardware numbering from community maps (EDRefCard, EDCD and published charts). Button N = jsX_buttonN. The throttle M1/M2/S1 switch also reports as buttons 15-17 on the stick (no callout).';
 tpl('logitech-x56-stick', {
-  id: 'builtin-logitech-x56-stick', category: 'stick', name: 'Logitech G X56 stick', brand: 'Logitech', notes: OPEN_NOTE,
+  id: 'builtin-logitech-x56-stick', category: 'stick', name: 'Logitech G X56 stick', brand: 'Logitech', notes: LOGITECH_X56_STICK_NOTE,
   match: [{ name: 'X56 H.O.T.A.S. Stick' }, { name: 'X56 HOTAS Stick' }, { name: 'X-56 Rhino Stick' }],
 }, [
-  c('a', 'button', u(1), 'Fire button A (red)', 'Grip head', { side: 'L' }), c('h2', 'hat', u(4), 'Thumb hat', 'Grip', { side: 'L' }),
-  c('trig', 'button', u(1), 'Trigger', 'Grip', { side: 'L' }), c('mini', 'axis', ['', ''], 'Thumb ministick', 'Grip', { side: 'L' }),
-  c('d', 'button', u(1), 'Pinkie button', 'Grip', { side: 'L' }), c('fp', 'button', u(1), 'Flying pinkie', 'Grip', { side: 'L' }),
-  c('pov', 'hat', u(4), 'POV hat', 'Grip head', { side: 'R' }), c('b', 'button', u(1), 'Button B', 'Grip head', { side: 'R' }),
-  c('h1', 'hat', u(4), 'Hat 1', 'Grip head', { side: 'R' }), c('c', 'button', u(1), 'Button C', 'Grip', { side: 'R' }),
-  c('twist', 'axis', [''], 'Twist', 'Axes', { side: 'R' }), c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
+  c('a', 'button', b(2), 'Fire button A (red)', 'Grip head', { side: 'L' }), c('h2', 'hat', b(11, 12, 13, 14), 'Thumb hat', 'Grip', { side: 'L' }),
+  c('trig', 'button', b(1), 'Trigger', 'Grip', { side: 'L' }), c('mini', 'axis', ['rotx', 'roty'], 'Thumb ministick', 'Grip', { side: 'L' }),
+  c('d', 'button', b(5), 'Pinkie button', 'Grip', { side: 'L' }), c('fp', 'button', b(6), 'Flying pinkie', 'Grip', { side: 'L' }),
+  c('pov', 'hat', hat(1), 'POV hat', 'Grip head', { side: 'R' }), c('b', 'button', b(3), 'Button B', 'Grip head', { side: 'R' }),
+  c('h1', 'hat', b(7, 8, 9, 10), 'Hat 1', 'Grip head', { side: 'R' }), c('c', 'button', b(4), 'Button C', 'Grip', { side: 'R' }),
+  c('twist', 'axis', ['rotz'], 'Twist', 'Axes', { side: 'R' }), c('xy', 'axis', ['x', 'y'], 'Stick X / Y', 'Axes', { side: 'R' }),
 ]);
 photoTplExactViews({
-  id: 'builtin-logitech-x56-throttle', category: 'throttle', name: 'Logitech G X56 throttle', brand: 'Logitech', notes: OPEN_NOTE,
+  id: 'builtin-logitech-x56-throttle', category: 'throttle', name: 'Logitech G X56 throttle', brand: 'Logitech',
+  notes: 'Community maps (EDRefCard and published charts). Button N = jsX_buttonN. Mode M1/M2/S1 = 34/35/36 (held in that position); SW 1-6 = 6-11; TGL 1-4 up/down = 12-19; left/right throttle = x/y. Buttons 33-36 need Firefox (Chrome/Edge stop at 32).',
   match: [{ name: 'X56 H.O.T.A.S. Throttle' }, { name: 'X56 HOTAS Throttle' }, { name: 'X-56 Rhino Throttle' }],
 }, [
   {"id": "main", "label": "Front", "width": 1498, "height": 846, "photo": "logitech-x56-throttle-main"},
 ], [
-  {"id": "mode", "kind": "switch", "inputs": ["", "", ""], "label": "Mode switch (M1 / M2 / S1)", "group": "Base", "view": "main",
+  {"id": "mode", "kind": "switch", "inputs": ["button34", "button35", "button36"], "label": "Mode switch (M1 / M2 / S1)", "group": "Base", "view": "main",
     "anchor": {"x": 0.25745660881174903, "y": 0.509}, "box": {"x": 0.10564706839767157, "y": 0.616527811686198}},
   {"id": "rty3", "kind": "encoder", "inputs": ["button14", "button15"], "label": "Rotary 1", "group": "Base", "view": "main",
     "anchor": {"x": 0.5356875834445928, "y": 0.568}, "box": {"x": 0.49529411764705883, "y": 0.927638922797309}},
-  {"id": "rty4", "kind": "encoder", "inputs": ["", "button6"], "label": "Rotary 2", "group": "Base", "view": "main",
+  {"id": "rty4", "kind": "encoder", "inputs": ["slider2", "button6"], "label": "Rotary 2", "group": "Base", "view": "main",
     "anchor": {"x": 0.5971495327102804, "y": 0.568}, "box": {"x": 0.6433725394454657, "y": 0.9231944613986545}},
   {"id": "hat2", "kind": "hat", "inputs": ["button20", "button21", "button22", "button23"], "label": "Hat 4", "group": "Right grip", "view": "main",
     "anchor": {"x": 0.6044705978094362, "y": 0.4131944444444444}, "box": {"x": 0.9150587852328431, "y": 0.4765277862548828}},
@@ -1904,15 +1905,15 @@ photoTplExactViews({
     "anchor": {"x": 0.6527843520220589, "y": 0.09875000847710504}, "box": {"x": 0.519764715456495, "y": 0.03}},
   {"id": "rty2", "kind": "axis", "inputs": ["rotz"], "label": "Rotary 2", "group": "Right grip", "view": "main",
     "anchor": {"x": 0.6578038832720589, "y": 0.29875000847710503}, "box": {"x": 0.9288627833946078, "y": 0.19875000847710503}},
-  {"id": "lthr", "kind": "axis", "inputs": [""], "label": "Left throttle", "group": "Axes", "view": "main",
+  {"id": "lthr", "kind": "axis", "inputs": ["x"], "label": "Left throttle", "group": "Axes", "view": "main",
     "anchor": {"x": 0.46517645143995096, "y": 0.1609722137451172}, "box": {"x": 0.3836078239889706, "y": 0.03}},
-  {"id": "rthr", "kind": "axis", "inputs": [""], "label": "Right throttle", "group": "Axes", "view": "main",
+  {"id": "rthr", "kind": "axis", "inputs": ["y"], "label": "Right throttle", "group": "Axes", "view": "main",
     "anchor": {"x": 0.5793057409879839, "y": 0.18}, "box": {"x": 0.8479215494791666, "y": 0.03}},
   {"id": "lbtn", "kind": "button", "inputs": ["button5"], "label": "Left grip button", "group": "Left grip", "view": "main",
     "anchor": {"x": 0.4137254901960784, "y": 0.22652778625488282}, "box": {"x": 0.07427451937806373, "y": 0.13541666666666666}},
-  {"id": "sw", "kind": "buttons", "inputs": ["", "", "", "", "", ""], "label": "SW 1-6", "group": "Base", "view": "main",
+  {"id": "sw", "kind": "buttons", "inputs": ["button6", "button7", "button8", "button9", "button10", "button11"], "label": "SW 1-6", "group": "Base", "view": "main",
     "anchor": {"x": 0.3986666570925245, "y": 0.5765277438693577}, "box": {"x": 0.17529411764705882, "y": 0.8998611450195313}},
-  {"id": "tgl", "kind": "buttons", "inputs": ["", "", "", "", "", "", "", ""], "label": "TGL 1-4 (up / down)", "group": "Base", "view": "main",
+  {"id": "tgl", "kind": "buttons", "inputs": ["button12", "button13", "button14", "button15", "button16", "button17", "button18", "button19"], "label": "TGL 1-4 (up / down)", "group": "Base", "view": "main",
     "anchor": {"x": 0.7299607460171569, "y": 0.4776388804117839}, "box": {"x": 0.9345098039215687, "y": 0.6576388888888889}},
   {"id": "s1180l6l", "kind": "button", "inputs": ["button2"], "view": "main", "label": "Rotary 1 Push",
     "anchor": {"x": 0.6534117455575981, "y": 0.1009722179836697}, "box": {"x": 0.6195294309129902, "y": 0.03}},
@@ -2254,18 +2255,19 @@ pedalTpl({
 ]);
 
 // Always expose both base axes, including in the grip variants. X/Y are provisional axis-order assignments: no supplied
-// base diagram identifies their DirectInput names. The Plus idle button has no verified logical number, so keep it unassigned
-// (especially with a grip: assigning button1 here would collide with every supplied grip diagram).
+// base diagram identifies their DirectInput names. On the base-only template, Plus idle defaults to button 1 (community
+// report). Leave it unassigned on grip variants: assigning button1 there would collide with every supplied grip diagram.
 // The requested "Clutch" label denotes the Plus twist throttle axis; VIRPIL's clutch damper is mechanical, not another input.
 const ROTOR_NOTE = 'Default grip numbering: VIRPIL diagrams (button N = jsX_buttonN). VPC Configurator can renumber: Customize a copy. Base X/Y provisional (collective/Plus twist throttle). “Clutch” = twist throttle; damper/lock mechanical. Plus idle number unknown: assign in a copy.';
+const ROTOR_BASE_NOTE = 'Default numbering: VIRPIL diagrams (button N = jsX_buttonN). VPC Configurator can renumber: Customize a copy. Base X/Y provisional (collective/Plus twist throttle). “Clutch” = twist throttle; damper/lock mechanical. TCS Plus engine idle defaults to button 1 (community report; VPC can change it).';
 const ROTOR_AXES: Spec[] = [
   c('collective', 'axis', ['x'], 'Collective axis', 'Base'),
   c('clutch', 'axis', ['y'], 'Clutch (TCS Plus only)', 'Base'),
-  c('idle', 'button', u(1), 'Engine idle (TCS Plus only)', 'Base'),
+  c('idle', 'button', b(1), 'Engine idle (TCS Plus only)', 'Base'),
 ];
 photoTpl({
   id: 'builtin-virpil-rotor-tcs', category: 'collective', name: 'VIRPIL Rotor TCS / TCS Plus base', brand: 'VIRPIL',
-  notes: ROTOR_NOTE, match: [{ name: 'Rotor TCS' }],
+  notes: ROTOR_BASE_NOTE, match: [{ name: 'Rotor TCS' }],
 }, ROTOR_AXES);
 
 photoTplExactViews({
@@ -2659,7 +2661,7 @@ photoTplExactViews({
 photoTplExactViews({
   id: 'builtin-bfs-a10c-ufc', category: 'panel', name: 'Buddy-Fox A-10C UFC', brand: 'Buddy-Fox Simulations',
   match: [{ name: 'Buddy-Fox', nameBoundary: true }, { name: 'A-10C UFC', nameBoundary: true }],
-  notes: 'Numbering not published; press each control in the input tester and Customize a copy.',
+  notes: 'Buddy-Fox FAQ: INTEN left/right = button33/34, DEPR down = button35 (above 32: use Firefox; Chrome/Edge stop at 32). Other numbers are unpublished: press each control in the input tester and Customize a copy.',
 }, [
   { id: 'main', label: 'UFC', photo: 'bfs-a10c-ufc-main', width: 4300, height: 1400 },
 ], [
@@ -2697,13 +2699,13 @@ photoTplExactViews({
     anchor: {"x": 0.5826542, "y": 0.4719769}, box: {"x": 0.6711580102877082, "y": 0.25695776851220686} },
   {"id": "com2", "kind": "button", "inputs": [""], "label": "COM2", "group": "Systems", "view": "main",
     anchor: {"x": 0.4823291, "y": 0.5490404}, box: {"x": 0.48751206046704954, "y": 0.8225742198613806} },
-  {"id": "depr", "kind": "switch", "inputs": ["", ""], "label": "DEPR (up / down)", "group": "Controls", "view": "main",
+  {"id": "depr", "kind": "switch", "inputs": ["", "button35"], "label": "DEPR (up / down)", "group": "Controls", "view": "main",
     anchor: {"x": 0.777604, "y": 0.5735606}, box: {"x": 0.9169987068358175, "y": 0.5435367705291215} },
   {"id": "eccm", "kind": "button", "inputs": [""], "label": "ECCM", "group": "Systems", "view": "main",
     anchor: {"x": 0.5245112, "y": 0.5770635}, box: {"x": 0.5501965596176467, "y": 0.9311725324904373} },
   {"id": "idm", "kind": "button", "inputs": [""], "label": "IDM", "group": "Systems", "view": "main",
     anchor: {"x": 0.5723936, "y": 0.6015837}, box: {"x": 0.594761302634887, "y": 0.7727999261126687} },
-  {"id": "inten", "kind": "switch", "inputs": ["", ""], "label": "INTEN (left / right)", "group": "Controls", "view": "main",
+  {"id": "inten", "kind": "switch", "inputs": ["button33", "button34"], "label": "INTEN (left / right)", "group": "Controls", "view": "main",
     anchor: {"x": 0.6670184, "y": 0.6471212}, box: {"x": 0.7421677775516962, "y": 0.9040230118706539} },
 ]);
 
