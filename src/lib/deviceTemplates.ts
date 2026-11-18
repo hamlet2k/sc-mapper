@@ -1880,16 +1880,16 @@ tpl('logitech-x56-stick', {
 ]);
 photoTplExactViews({
   id: 'builtin-logitech-x56-throttle', category: 'throttle', name: 'Logitech G X56 throttle', brand: 'Logitech',
-  notes: 'Community maps (EDRefCard and published charts). Button N = jsX_buttonN. Mode M1/M2/S1 = 34/35/36 (held in that position); SW 1-6 = 6-11; TGL 1-4 up/down = 12-19; left/right throttle = x/y. Buttons 33-36 need Firefox (Chrome/Edge stop at 32).',
+  notes: 'Community maps (EDRefCard and published charts). Button N = jsX_buttonN. Mode M1/M2/S1 = 34/35/36 (held in that position); SW 1-6 = 6-11; TGL 1-4 up/down = 12-19; left/right throttle = x/y; ministick = rotx/roty; base Rotary 1/2 = slider1/slider2. Buttons 33-36 need Firefox (Chrome/Edge stop at 32).',
   match: [{ name: 'X56 H.O.T.A.S. Throttle' }, { name: 'X56 HOTAS Throttle' }, { name: 'X-56 Rhino Throttle' }],
 }, [
   {"id": "main", "label": "Front", "width": 1498, "height": 846, "photo": "logitech-x56-throttle-main"},
 ], [
   {"id": "mode", "kind": "switch", "inputs": ["button34", "button35", "button36"], "label": "Mode switch (M1 / M2 / S1)", "group": "Base", "view": "main",
     "anchor": {"x": 0.25745660881174903, "y": 0.509}, "box": {"x": 0.10564706839767157, "y": 0.616527811686198}},
-  {"id": "rty3", "kind": "encoder", "inputs": ["button14", "button15"], "label": "Rotary 1", "group": "Base", "view": "main",
+  {"id": "rty3", "kind": "axis", "inputs": ["slider1"], "label": "Rotary 1", "group": "Base", "view": "main",
     "anchor": {"x": 0.5356875834445928, "y": 0.568}, "box": {"x": 0.49529411764705883, "y": 0.927638922797309}},
-  {"id": "rty4", "kind": "encoder", "inputs": ["slider2", "button6"], "label": "Rotary 2", "group": "Base", "view": "main",
+  {"id": "rty4", "kind": "axis", "inputs": ["slider2"], "label": "Rotary 2", "group": "Base", "view": "main",
     "anchor": {"x": 0.5971495327102804, "y": 0.568}, "box": {"x": 0.6433725394454657, "y": 0.9231944613986545}},
   {"id": "hat2", "kind": "hat", "inputs": ["button20", "button21", "button22", "button23"], "label": "Hat 4", "group": "Right grip", "view": "main",
     "anchor": {"x": 0.6044705978094362, "y": 0.4131944444444444}, "box": {"x": 0.9150587852328431, "y": 0.4765277862548828}},
@@ -1897,7 +1897,7 @@ photoTplExactViews({
     "anchor": {"x": 0.6156542056074766, "y": 0.355}, "box": {"x": 0.9338823146446078, "y": 0.3576388888888889}},
   {"id": "slider", "kind": "switch", "inputs": ["button33", ""], "label": "Slider (aft/fwd)", "group": "Right grip", "view": "main",
     "anchor": {"x": 0.6019607843137255, "y": 0.24319445292154948}, "box": {"x": 0.8987451171875, "y": 0.11652776930067274}},
-  {"id": "mini", "kind": "axis", "inputs": ["x", "y"], "label": "Ministick", "group": "Right grip", "view": "main",
+  {"id": "mini", "kind": "axis", "inputs": ["rotx", "roty"], "label": "Ministick", "group": "Right grip", "view": "main",
     "anchor": {"x": 0.5467450788909314, "y": 0.4120833502875434}, "box": {"x": 0.0786666570925245, "y": 0.4554166581895616}},
   {"id": "thumb", "kind": "button", "inputs": ["button1"], "label": "Thumb button", "group": "Right grip", "view": "main",
     "anchor": {"x": 0.5660881174899867, "y": 0.34500000000000003}, "box": {"x": 0.0805490291819853, "y": 0.3443055470784505}},

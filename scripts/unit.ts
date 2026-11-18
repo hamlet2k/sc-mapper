@@ -1255,11 +1255,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         && !(d.id === 'builtin-winctrl-carrierace-mfd-l' && ['pwbznv1k', 'y0hu82ch'].includes(c.id)))
         .flatMap((c) => c.inputs.filter((i) => !(d.id === 'builtin-winctrl-blackshark-collective' && c.id === 'minihat' && i === 'button18')
           && !(['builtin-winctrl-viperace', 'builtin-moza-ab6-viperace'].includes(d.id) && c.id === 'minib' && i === 'button26')
-          && !(d.id === 'builtin-tm-cougar-mfd' && c.id === '21itljm4' && i === 'button28')
-          // X56 throttle: leftover export mismatches, left unchanged (ministick x/y vs levers; rty4 button6 vs SW1; rty3 14/15 vs TGL2).
-          && !(d.id === 'builtin-logitech-x56-throttle' && c.id === 'mini' && (i === 'x' || i === 'y'))
-          && !(d.id === 'builtin-logitech-x56-throttle' && c.id === 'rty4' && i === 'button6')
-          && !(d.id === 'builtin-logitech-x56-throttle' && c.id === 'rty3' && (i === 'button14' || i === 'button15')))).filter(Boolean);
+          && !(d.id === 'builtin-tm-cougar-mfd' && c.id === '21itljm4' && i === 'button28'))).filter(Boolean);
       assert.equal(new Set(inputs).size, inputs.length, `${d.id}: every input on one callout`);
       for (const i of inputs) assert.ok(jsName.test(i) || (d.id === 'builtin-virpil-cdt-aeromax' && /^mode[12]$/.test(i)), `${d.id}: ${i}`);
       const open = d.callouts.reduce((n, c) => n + tp.unassignedCount(c), 0);
@@ -2638,14 +2634,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
       }
       assert.equal(DEVICE_PHOTO_LAYOUTS[id], undefined, `${id}: bypass automatic re-boxing`);
       const assigned = actual.callouts.flatMap((c) => c.inputs).filter(Boolean);
-      if (id === 'builtin-logitech-x56-throttle') {
-        // Known leftover export mismatches, left unchanged: ministick x/y vs left/right throttle;
-        // Rotary 2 button6 vs SW1; Rotary 1 button14/15 vs TGL2.
-        const clashes = assigned.filter((v, i) => assigned.indexOf(v) !== i);
-        assert.deepEqual([...new Set(clashes)].sort(), ['button14', 'button15', 'button6', 'x', 'y'], `${id}: leftover clashes retained`);
-      } else {
-        assert.equal(new Set(assigned).size, assigned.length, `${id}: no duplicate numbering`);
-      }
+      assert.equal(new Set(assigned).size, assigned.length, `${id}: no duplicate numbering`);
     }
   });
   t('Oct 10 Orion: exact exported layout and photos, built-in metadata with normalized WINCTRL spelling', () => {

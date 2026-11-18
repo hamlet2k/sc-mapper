@@ -32,10 +32,9 @@
     },
     {
       "id": "rty3",
-      "kind": "encoder",
+      "kind": "axis",
       "inputs": [
-        "button14",
-        "button15"
+        "slider1"
       ],
       "anchor": {
         "x": 0.5356875834445928,
@@ -51,10 +50,9 @@
     },
     {
       "id": "rty4",
-      "kind": "encoder",
+      "kind": "axis",
       "inputs": [
-        "slider2",
-        "button6"
+        "slider2"
       ],
       "anchor": {
         "x": 0.5971495327102804,
@@ -133,8 +131,8 @@
       "id": "mini",
       "kind": "axis",
       "inputs": [
-        "x",
-        "y"
+        "rotx",
+        "roty"
       ],
       "anchor": {
         "x": 0.5467450788909314,
@@ -400,7 +398,7 @@
     "id": "builtin-logitech-x56-throttle",
     "name": "Logitech G X56 throttle",
     "brand": "Logitech",
-    "notes": "Community maps (EDRefCard and published charts). Button N = jsX_buttonN. Mode M1/M2/S1 = 34/35/36 (held in that position); SW 1-6 = 6-11; TGL 1-4 up/down = 12-19; left/right throttle = x/y. Buttons 33-36 need Firefox (Chrome/Edge stop at 32).",
+    "notes": "Community maps (EDRefCard and published charts). Button N = jsX_buttonN. Mode M1/M2/S1 = 34/35/36 (held in that position); SW 1-6 = 6-11; TGL 1-4 up/down = 12-19; left/right throttle = x/y; ministick = rotx/roty; base Rotary 1/2 = slider1/slider2. Buttons 33-36 need Firefox (Chrome/Edge stop at 32).",
     "match": [
       {
         "name": "X56 H.O.T.A.S. Throttle"
