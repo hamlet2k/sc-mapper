@@ -47,12 +47,14 @@ import { reorderPerm } from './lib/reorder';
 import { DeviceOrder, LimitNotes, Welcome, primaryBtn, quietBtn } from './components/Friendly';
 import { applyRematch, computeRematch, knownDevices, shiftToOrder, type Rematch } from './lib/rematch';
 import { DropOverlay, ImportShiftDialog, RematchBanner, type DropZone } from './components/GameState';
-import { CopyText } from './components/CopyButton';
+import { CopyText, copyText } from './components/CopyButton';
 import { useGamePaths } from './lib/gameFolder';
 import { buildRows } from './lib/merge';
 import { parseQuery, scoreRow } from './lib/search';
 import { load, save, type Persisted } from './lib/storage';
 import type { Binding, DefaultsData, Device, Group, Profile, ProfileDevice, Rebind, RebindMap, Row } from './lib/types';
+
+const GAME_MAPPINGS_PATH = 'StarCitizen\\LIVE\\USER\\Client\\0\\Controls\\Mappings';
 
 const DEFAULTS = defaultsJson as DefaultsData;
 const IDX = indexDefaults(DEFAULTS);
@@ -168,6 +170,13 @@ export default function App() {
   const [dropZone, setDropZone] = useState<DropZone>('refresh');
   const [help, setHelp] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** Friendly "Import from game": open the file picker and, in the same click, copy the game's mappings folder so it can be pasted
+   * into the picker's path box. The copy starts first (Chrome refuses clipboard writes once the picker takes focus); a denied or
+   * missing clipboard is ignored and never stops the picker opening. */
+  const importFromGame = () => {
+    try { void copyText(GAME_MAPPINGS_PATH).catch(() => {}); } catch { /* clipboard unsupported */ }
+    fileRef.current?.click();
+  };
   const searchRef = useRef<HTMLInputElement>(null);
 
   // ---- editing state
@@ -1024,7 +1033,7 @@ export default function App() {
               </label>
             )}
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => fileRef.current?.click()} data-testid="f-import" className={quietBtn}><Ico name="import" className="h-4 w-4" /> Import from game</button>
+              <button type="button" onClick={importFromGame} data-testid="f-import" className={quietBtn}><Ico name="import" className="h-4 w-4" /> Import from game</button>
               <button type="button" onClick={() => friendRef.current?.click()} data-testid="f-friend" className={quietBtn}><Ico name="share" className="h-4 w-4" /> Friend&apos;s file</button>
               <button type="button" onClick={() => setExportOpen(true)} disabled={!profile} data-testid="f-save" title={profile ? 'Save a file Star Citizen loads' : 'Import or edit something first'} className={primaryBtn}>
                 <Ico name="export" className="h-4 w-4" /> Save for Star Citizen
@@ -1056,7 +1065,7 @@ export default function App() {
         <main className="relative z-10 min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin" id="main">
           {rematchBanner && !devicesOpen && <div className="mb-3">{rematchBanner}</div>}
           {!profile && !hasPads ? (
-            <Welcome onImport={() => fileRef.current?.click()} onFriend={() => friendRef.current?.click()} onSample={() => { void loadSample(); goTab('devices'); }}
+            <Welcome onImport={importFromGame} onFriend={() => friendRef.current?.click()} onSample={() => { void loadSample(); goTab('devices'); }}
               onDefaults={() => { createLayout(false); goTab('devices'); }} onHelp={() => setHelp(true)} />
           ) : (
             <>
