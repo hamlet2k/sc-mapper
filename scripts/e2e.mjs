@@ -3158,7 +3158,11 @@ console.log('\nround 8: paths from Settings, copy buttons, export modal wrapping
   const clip = await p8.evaluate(() => navigator.clipboard.readText());
   check(clip === cmds[0] && (await ex.getByTestId('export-cmd-rebind-copy').getAttribute('data-copied')) === '1' && /Copied/.test(await ex.getByTestId('export-cmd-rebind').innerText()), `copy puts the command on the clipboard and says "Copied" (${clip})`);
   { const g = await ex.getByTestId('export-guide').boundingBox(); await p8.screenshot({ path: shots + '118-console-command-copy.png', clip: { x: g.x - 8, y: g.y - 8, width: g.width + 16, height: g.height + 16 } }); }
-  check(await ex.getByRole('button', { name: /Replace actionmaps\.xml/ }).count() === 0 && await ex.getByTestId('export-path-actionmaps').count() === 0, 'export: only the control profile is offered; no actionmaps.xml replacement');
+  await ex.getByRole('button', { name: /Replace actionmaps\.xml/ }).click();
+  await p8.waitForTimeout(150);
+  check((await txt('export-path-actionmaps-text')) === (L + '\\user\\client\\0\\Profiles\\default\\actionmaps.xml').replace(/\s+/g, '') && await ex.getByTestId('export-path-actionmaps-copy').isVisible(), 'export: the actionmaps.xml path comes from Settings too, with a copy button');
+  await ex.getByRole('button', { name: /Control profile/ }).click();
+  await p8.waitForTimeout(150);
   await p8.waitForTimeout(1600);
   await p8.screenshot({ path: shots + '118-export-paths.png' });
   // no horizontal overflow in the modal: wide and at 420 px

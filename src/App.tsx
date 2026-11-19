@@ -582,9 +582,10 @@ export default function App() {
    * picker has focus); a denied or missing clipboard is ignored and never stops the picker or the save. */
   const gameDirs = useGamePaths();
   const copyRoute = (route: string) => { try { void copyText(route.replace(/\\+$/, '')).catch(() => {}); } catch { /* clipboard unsupported */ } };
-  // Import from game: the live actionmaps.xml file; re-check, a friend's file, import shared and Save for Star Citizen: the mappings folder (where saved layouts go)
+  // reading from the game (Import from game, Refresh game state / Check against a new game file): the live actionmaps.xml file;
+  // a friend's file, import shared and Save for Star Citizen: the mappings folder (where saved layouts go)
   const importFromGame = () => { copyRoute(gameDirs.actionmaps); fileRef.current?.click(); };
-  const openRefresh = () => { copyRoute(gameDirs.mappings); refreshRef.current?.click(); };
+  const openRefresh = () => { copyRoute(gameDirs.actionmaps); refreshRef.current?.click(); };
   const openFriend = () => { copyRoute(gameDirs.mappings); friendRef.current?.click(); };
   const openSharedFile = () => { copyRoute(gameDirs.mappings); shareFileRef.current?.click(); };
   const openSave = () => { copyRoute(gameDirs.mappings); setExportOpen(true); };
@@ -989,7 +990,7 @@ export default function App() {
           describe={describePads} profileDevices={slotDevices} kmSlots={kmSlots} kmDefault={{ kb: kbInst, mo: moInst }}
           onCommit={commitCapture} onClear={capture.replace ? clearCapture : undefined} onCancel={() => setCapture(null)} />
       )}
-      {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} devices={exportDevices} slots={exportSlots} onClose={() => setExportOpen(false)} />}
+      {exportOpen && profile && <ExportDialog defaults={DEFAULTS} profile={profile} devices={exportDevices} slots={exportSlots} onClose={() => setExportOpen(false)} allowActionmaps={!friendly} />}
       {devicesOpen && (
         <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(null)}
           initialSlot={devicesOpen.target}
