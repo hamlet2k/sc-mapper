@@ -581,8 +581,14 @@ export default function App() {
    * the same click, so it can be pasted into the picker's path box. The copy starts first (Chrome refuses clipboard writes once the
    * picker has focus); a denied or missing clipboard is ignored and never stops the picker or the save. */
   const gameDirs = useGamePaths();
-  const copyRoute = (route: string) => { try { void copyText(route.replace(/\\+$/, '')).catch(() => {}); } catch { /* clipboard unsupported */ } };
-  // reading from the game (Import from game, Refresh game state / Check against a new game file): the live actionmaps.xml file;
+  // a route that ends in a file name (actionmaps.xml) copies the folder that holds it: pasting a file path into Explorer or a
+  // picker's address bar opens the file itself (often in the browser) instead of going to its folder. Folder routes copy as they are.
+  const copyRoute = (route: string) => {
+    const r = route.replace(/[\\/]+$/, '');
+    const dir = /\.[a-z0-9]+$/i.test(r.split(/[\\/]/).pop() ?? '') ? r.replace(/[\\/][^\\/]*$/, '') : r;
+    try { void copyText(dir).catch(() => {}); } catch { /* clipboard unsupported */ }
+  };
+  // reading from the game (Import from game, Refresh game state / Check against a new game file): the folder holding actionmaps.xml;
   // a friend's file, import shared and Save for Star Citizen: the mappings folder (where saved layouts go)
   const importFromGame = () => { copyRoute(gameDirs.actionmaps); fileRef.current?.click(); };
   const openRefresh = () => { copyRoute(gameDirs.actionmaps); refreshRef.current?.click(); };
