@@ -953,11 +953,11 @@ export default function App() {
 
   const fileInputs = (
     <>
-            <input ref={fileRef} type="file" accept=".xml,text/xml,application/xml" multiple hidden
+            <input ref={fileRef} type="file" accept=".xml" multiple hidden
               onChange={(e) => { if (e.target.files) importFiles(e.target.files); e.target.value = ''; }} />
             <input ref={shareFileRef} type="file" accept=".json,application/json" hidden data-testid="share-import-file"
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readXmlFile(f).then((t) => openSharedText(t, f.name)); }} />
-            <input ref={refreshRef} type="file" accept=".xml,text/xml,application/xml" hidden data-testid="refresh-file"
+            <input ref={refreshRef} type="file" accept=".xml" hidden data-testid="refresh-file"
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void refreshGameState(f); }} />
       <input ref={friendRef} type="file" accept=".xml,.json,text/xml,application/xml,application/json" hidden data-testid="friend-file"
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; void readXmlFile(f).then((t) => { if (/\.json$/i.test(f.name) || looksShared(t)) openSharedText(t, f.name); else void importFiles([f]); }); }} />
