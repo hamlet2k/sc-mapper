@@ -582,8 +582,8 @@ export default function App() {
    * picker has focus); a denied or missing clipboard is ignored and never stops the picker or the save. */
   const gameDirs = useGamePaths();
   const copyRoute = (route: string) => { try { void copyText(route.replace(/\\+$/, '')).catch(() => {}); } catch { /* clipboard unsupported */ } };
-  // game import / re-check: the mappings folder (exported layouts); a friend's file and the save dialog: the same folder, where the game loads layouts
-  const importFromGame = () => { copyRoute(gameDirs.mappings); fileRef.current?.click(); };
+  // Import from game: the live actionmaps.xml file; re-check, a friend's file and the save dialog: the same folder, where the game loads layouts
+  const importFromGame = () => { copyRoute(gameDirs.actionmaps); fileRef.current?.click(); };
   const openRefresh = () => { copyRoute(gameDirs.mappings); refreshRef.current?.click(); };
   const openFriend = () => { copyRoute(gameDirs.mappings); friendRef.current?.click(); };
   const openSharedFile = () => { copyRoute(gameDirs.mappings); shareFileRef.current?.click(); };
