@@ -54,7 +54,6 @@ import { parseQuery, scoreRow } from './lib/search';
 import { load, save, type Persisted } from './lib/storage';
 import type { Binding, DefaultsData, Device, Group, Profile, ProfileDevice, Rebind, RebindMap, Row } from './lib/types';
 
-const GAME_MAPPINGS_PATH = 'StarCitizen\\LIVE\\USER\\Client\\0\\Controls\\Mappings';
 
 const DEFAULTS = defaultsJson as DefaultsData;
 const IDX = indexDefaults(DEFAULTS);
@@ -170,13 +169,6 @@ export default function App() {
   const [dropZone, setDropZone] = useState<DropZone>('refresh');
   const [help, setHelp] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  /** Friendly "Import from game": open the file picker and, in the same click, copy the game's mappings folder so it can be pasted
-   * into the picker's path box. The copy starts first (Chrome refuses clipboard writes once the picker takes focus); a denied or
-   * missing clipboard is ignored and never stops the picker opening. */
-  const importFromGame = () => {
-    try { void copyText(GAME_MAPPINGS_PATH).catch(() => {}); } catch { /* clipboard unsupported */ }
-    fileRef.current?.click();
-  };
   const searchRef = useRef<HTMLInputElement>(null);
 
   // ---- editing state
@@ -585,6 +577,17 @@ export default function App() {
   const [rematch, setRematch] = useState<{ file: string; r: Rematch; profileId: string } | null>(null);
   const [pendingImport, setPendingImport] = useState<{ p: Profile; r: Rematch } | null>(null);
   const refreshRef = useRef<HTMLInputElement>(null);
+  /** Every button that opens a file picker or a save also copies the matching game folder from Settings (game folder + channel), in
+   * the same click, so it can be pasted into the picker's path box. The copy starts first (Chrome refuses clipboard writes once the
+   * picker has focus); a denied or missing clipboard is ignored and never stops the picker or the save. */
+  const gameDirs = useGamePaths();
+  const copyRoute = (route: string) => { try { void copyText(route.replace(/\\+$/, '')).catch(() => {}); } catch { /* clipboard unsupported */ } };
+  // game import / re-check: the mappings folder (exported layouts); a friend's file and the save dialog: the same folder, where the game loads layouts
+  const importFromGame = () => { copyRoute(gameDirs.mappings); fileRef.current?.click(); };
+  const openRefresh = () => { copyRoute(gameDirs.mappings); refreshRef.current?.click(); };
+  const openFriend = () => { copyRoute(gameDirs.mappings); friendRef.current?.click(); };
+  const openSharedFile = () => { copyRoute(gameDirs.mappings); shareFileRef.current?.click(); };
+  const openSave = () => { copyRoute(gameDirs.mappings); setExportOpen(true); };
   const slotMapRef = useRef(slotMap);
   useLayoutEffect(() => { slotMapRef.current = slotMap; }, [slotMap]);
   const refreshGameState = useCallback(async (f: File) => {
@@ -936,9 +939,9 @@ export default function App() {
     <ProfilePanel key={profile?.id ?? 'defaults'} profiles={store.profiles} profile={profile} versionLabel={versionLabel} slots={slotMap.slots} slotMap={slotMap}
       connected={(gs) => !!gs.hw && pads.some((p) => p.key === gs.hw!.key)}
       onRename={(id, name) => setStore((s) => renameProfile(s, id, name))}
-      onSelect={(id) => setStore((s) => ({ ...s, activeId: id }))} onImport={() => fileRef.current?.click()} onExport={() => setExportOpen(true)}
+      onSelect={(id) => setStore((s) => ({ ...s, activeId: id }))} onImport={importFromGame} onExport={openSave}
       onDelete={() => setDeleting(true)} onNew={() => createLayout(false)} onDuplicate={() => createLayout(true)} onRevert={profile?.original ? revertImported : undefined}
-      onResetAll={resetAll} onOpenSlots={(gs) => openSlots(gs ?? (view === 'devices' ? shownDev?.gs : undefined))} onRefresh={() => refreshRef.current?.click()} picker={slotPicker} />
+      onResetAll={resetAll} onOpenSlots={(gs) => openSlots(gs ?? (view === 'devices' ? shownDev?.gs : undefined))} onRefresh={openRefresh} picker={slotPicker} />
   );
 
   const fileInputs = (
@@ -990,10 +993,10 @@ export default function App() {
       {devicesOpen && (
         <ControllersPanel profile={profile} pads={pads} describe={describePads} slots={slotActions} onClose={() => setDevicesOpen(null)}
           initialSlot={devicesOpen.target}
-          onRefresh={() => refreshRef.current?.click()} banner={rematchBanner} />
+          onRefresh={openRefresh} banner={rematchBanner} />
       )}
       {deleting && profile && (
-        <DeleteProfileDialog profile={profile} slotCount={slotMap.slots.length} onCancel={() => setDeleting(false)} onExport={() => { setDeleting(false); setExportOpen(true); }}
+        <DeleteProfileDialog profile={profile} slotCount={slotMap.slots.length} onCancel={() => setDeleting(false)} onExport={() => { setDeleting(false); openSave(); }}
           onConfirm={() => { const name = profile.name; removeProfile(profile.id); setDeleting(false); setToast({ kind: 'ok', text: `Deleted “${name}”` }); }} />
       )}
       {axisFor && (() => {
@@ -1034,8 +1037,8 @@ export default function App() {
             )}
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <button type="button" onClick={importFromGame} data-testid="f-import" className={quietBtn}><Ico name="import" className="h-4 w-4" /> Import from game</button>
-              <button type="button" onClick={() => friendRef.current?.click()} data-testid="f-friend" className={quietBtn}><Ico name="share" className="h-4 w-4" /> Friend&apos;s file</button>
-              <button type="button" onClick={() => setExportOpen(true)} disabled={!profile} data-testid="f-save" title={profile ? 'Save a file Star Citizen loads' : 'Import or edit something first'} className={primaryBtn}>
+              <button type="button" onClick={openFriend} data-testid="f-friend" className={quietBtn}><Ico name="share" className="h-4 w-4" /> Friend&apos;s file</button>
+              <button type="button" onClick={openSave} disabled={!profile} data-testid="f-save" title={profile ? 'Save a file Star Citizen loads' : 'Import or edit something first'} className={primaryBtn}>
                 <Ico name="export" className="h-4 w-4" /> Save for Star Citizen
               </button>
               <button type="button" onClick={() => undoLast()} disabled={!undoCount} title="Undo (Ctrl+Z)" aria-label="Undo" data-testid="undo"
@@ -1065,7 +1068,7 @@ export default function App() {
         <main className="relative z-10 min-h-0 flex-1 overflow-y-auto p-4 scrollbar-thin" id="main">
           {rematchBanner && !devicesOpen && <div className="mb-3">{rematchBanner}</div>}
           {!profile && !hasPads ? (
-            <Welcome onImport={importFromGame} onFriend={() => friendRef.current?.click()} onSample={() => { void loadSample(); goTab('devices'); }}
+            <Welcome onImport={importFromGame} onFriend={openFriend} onSample={() => { void loadSample(); goTab('devices'); }}
               onDefaults={() => { createLayout(false); goTab('devices'); }} onHelp={() => setHelp(true)} />
           ) : (
             <>
@@ -1074,9 +1077,9 @@ export default function App() {
                   <p className="mb-3 text-sm text-slate-400" data-testid="f-devices-hint">Click a label on a picture to change it, or use <b className="text-slate-200">Press to bind</b> and press the control. Pick another device from the list above the picture.</p>
                   <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads}
                     slots={deviceSlots} slotMap={slotMap} selKey={devSel} onSelect={selectDevice} compact={!wide} onPickTemplate={onPickSlotTemplate} onOpenControllers={() => goTab('order')} highlight={highlightOn} scroll={highlightOn && scrollOn}
-                    query={dq} chip={chip} onOpenAxis={(gs) => { setUi('advanced'); setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance }); }} axisLimit={AXIS_LIMIT} onRefresh={() => refreshRef.current?.click()} simple
+                    query={dq} chip={chip} onOpenAxis={(gs) => { setUi('advanced'); setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance }); }} axisLimit={AXIS_LIMIT} onRefresh={openRefresh} simple
                     editMode={editOn} onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={(spec) => { pickInput(spec); goTab('find'); }} notify={(kind, text) => setToast({ kind, text })}
-                    templates={T} onShare={openShare} onImportShared={() => shareFileRef.current?.click()} onSharedText={openSharedText} />
+                    templates={T} onShare={openShare} onImportShared={openSharedFile} onSharedText={openSharedText} />
                 </>
               )}
               {ftab === 'keyboard' && (
@@ -1089,7 +1092,7 @@ export default function App() {
               )}
               {ftab === 'order' && (
                 <DeviceOrder slotMap={slotMap} pads={pads} templates={T} curveLimit={AXIS_LIMIT} onReorder={reorderSlotsNow}
-                  onOpen={(gs) => { selectDevice(deviceSlotKey(gs)); goTab('devices'); }} onRefresh={() => refreshRef.current?.click()} />
+                  onOpen={(gs) => { selectDevice(deviceSlotKey(gs)); goTab('devices'); }} onRefresh={openRefresh} />
               )}
               {ftab === 'find' && (
                 <div className="mx-auto max-w-5xl">
@@ -1303,9 +1306,9 @@ export default function App() {
             flash={flash && (flash.hit.slot === 'kb' || flash.hit.slot === 'mo') ? { combo: flash.hit.inputs[0], at: flash.at } : null} />}
           {view === 'devices' && <DeviceView rows={rows} conflictRows={conflicts.byRow} pads={pads} describe={describePads}
             slots={deviceSlots} slotMap={slotMap} selKey={devSel} onSelect={selectDevice} compact={!wide} onPickTemplate={onPickSlotTemplate} onOpenControllers={openSlots} highlight={highlightOn} scroll={highlightOn && scrollOn}
-            query={dq} chip={chip} onOpenAxis={(gs) => setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance })} axisLimit={AXIS_LIMIT} onRefresh={() => refreshRef.current?.click()}
+            query={dq} chip={chip} onOpenAxis={(gs) => setAxisFor({ slot: gs.slot as 'js' | 'gp', instance: gs.instance })} axisLimit={AXIS_LIMIT} onRefresh={openRefresh}
             editMode={editMode} onEdit={onEditRow} onRemove={onRemoveCell} onBind={onBindInput} onShowInList={pickInput} notify={(kind, text) => setToast({ kind, text })}
-            templates={T} onShare={openShare} onImportShared={() => shareFileRef.current?.click()} onSharedText={openSharedText} />}
+            templates={T} onShare={openShare} onImportShared={openSharedFile} onSharedText={openSharedText} />}
           {view === 'conflicts' && <ConflictsView groups={visibleConflicts} onPick={pickInput} includeDefault={includeDefaultOverlaps} hasProfile={!!profile} flash={flash?.keys}
             editMode={editMode} onEdit={onEditRow} onRemove={onRemoveCell} />}
         </main>
