@@ -17,7 +17,8 @@ interface Props {
 }
 
 export function ExportDialog({ defaults, profile, devices, slots, onClose }: Props) {
-  const [format, setFormat] = useState<ExportFormat>('layout');
+  // only the exported control profile (layout_<name>_exported.xml in the Mappings folder); replacing actionmaps.xml is not offered
+  const format: ExportFormat = 'layout';
   const [name, setName] = useState(() => safeName(profile.name.replace(/\(actionmaps\.xml\)/i, '').replace(/^layout_|_exported$/g, '')));
   const [copied, setCopied] = useState(false);
   const paths = useGamePaths();
@@ -51,13 +52,7 @@ export function ExportDialog({ defaults, profile, devices, slots, onClose }: Pro
         </div>
         <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto scrollbar-thin md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:overflow-hidden">
           <div className="min-w-0 space-y-4 border-edge p-5 scrollbar-thin md:min-h-0 md:overflow-y-auto md:border-r">
-            <div className="grid gap-2">
-              <FormatOption on={format === 'layout'} onClick={() => setFormat('layout')} title="Control profile (recommended)"
-                file="layout_<name>_exported.xml" text="Load it in game without touching your current settings file. Same format the game writes from Control Profiles → Save Control Settings." />
-              <FormatOption on={format === 'actionmaps'} onClick={() => setFormat('actionmaps')} title="Replace actionmaps.xml"
-                file="actionmaps.xml" text="The live bindings file the game reads at start-up. Only use this with the game closed, and back up the original first." />
-            </div>
-            {format === 'layout' && (
+            {(
               <label className="flex flex-col gap-1 text-[10px] uppercase tracking-widest text-slate-500">
                 Profile name
                 <input value={name} onChange={(e) => setName(e.target.value)} data-testid="export-name"
@@ -76,7 +71,7 @@ export function ExportDialog({ defaults, profile, devices, slots, onClose }: Pro
             </div>
             <div className="rounded border border-hud/30 bg-hud/5 p-3 text-xs leading-relaxed text-slate-300" data-testid="export-guide">
               <div className="font-display text-[11px] font-semibold uppercase tracking-[0.2em] text-hud">How to load it</div>
-              {format === 'layout' ? (
+              {(
                 <ol className="mt-1 list-decimal space-y-1.5 pl-4">
                   <li>Save <code className="text-hud2 [overflow-wrap:anywhere]">{file}</code> into
                     <CopyText text={paths.mappings} kind="folder" testid="export-path-mappings" block className="mt-0.5 rounded bg-black/40 px-1.5 py-1 text-[11px] text-hud2" />
@@ -88,14 +83,6 @@ export function ExportDialog({ defaults, profile, devices, slots, onClose }: Pro
                     <CopyText text={`pp_RebindKeys ${safeName(name)}`} kind="command" testid="export-cmd-rebind-bare" block className="mt-0.5 rounded bg-black/40 px-1.5 py-1 text-[11px] text-hud2" /></li>
                   <li>If your sticks come up swapped, run
                     <CopyText text="pp_resortdevices joystick 1 2" kind="command" testid="export-cmd-resort" block className="mt-0.5 rounded bg-black/40 px-1.5 py-1 text-[11px] text-hud2" /></li>
-                </ol>
-              ) : (
-                <ol className="mt-1 list-decimal space-y-1.5 pl-4">
-                  <li>Close Star Citizen completely.</li>
-                  <li>Back up
-                    <CopyText text={paths.actionmaps} kind="path" testid="export-path-actionmaps" block className="mt-0.5 rounded bg-black/40 px-1.5 py-1 text-[11px] text-hud2" />
-                    <span className="text-slate-500">({paths.channel}, from Settings → Star Citizen folder)</span></li>
-                  <li>Replace it with the downloaded <code className="text-hud2">actionmaps.xml</code> and start the game.</li>
                 </ol>
               )}
             </div>
@@ -111,18 +98,5 @@ export function ExportDialog({ defaults, profile, devices, slots, onClose }: Pro
         </div>
       </div>
     </div>
-  );
-}
-
-function FormatOption({ on, onClick, title, file, text }: { on: boolean; onClick: () => void; title: string; file: string; text: string }) {
-  return (
-    <button type="button" onClick={onClick} className={`rounded-lg border p-3 text-left transition ${on ? 'border-hud bg-hud/10' : 'border-edge hover:border-hud/50'}`}>
-      <div className="flex min-w-0 items-center gap-2">
-        <span className={`h-3 w-3 shrink-0 rounded-full border ${on ? 'border-hud bg-hud' : 'border-slate-500'}`} />
-        <span className="font-display text-sm font-bold uppercase tracking-wider text-slate-100">{title}</span>
-        <code className="ml-auto min-w-0 text-right font-mono text-[10px] text-hud/80 [overflow-wrap:anywhere]">{file}</code>
-      </div>
-      <p className="mt-1 pl-5 text-xs text-slate-400">{text}</p>
-    </button>
   );
 }
