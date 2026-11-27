@@ -998,6 +998,46 @@
         "image": "/device-photos/virpil-mt50cm-front.webp",
         "width": 1498,
         "height": 846
+      },
+      {
+        "id": "mode1",
+        "label": "Mode 1 (B93)",
+        "image": "/device-photos/virpil-mt50cm-modes.webp",
+        "width": 1014,
+        "height": 544,
+        "swap": "Mode"
+      },
+      {
+        "id": "mode2",
+        "label": "Mode 2 (B94)",
+        "image": "/device-photos/virpil-mt50cm-modes.webp",
+        "width": 1014,
+        "height": 544,
+        "swap": "Mode"
+      },
+      {
+        "id": "mode3",
+        "label": "Mode 3 (B95)",
+        "image": "/device-photos/virpil-mt50cm-modes.webp",
+        "width": 1014,
+        "height": 544,
+        "swap": "Mode"
+      },
+      {
+        "id": "mode4",
+        "label": "Mode 4 (B96)",
+        "image": "/device-photos/virpil-mt50cm-modes.webp",
+        "width": 1014,
+        "height": 544,
+        "swap": "Mode"
+      },
+      {
+        "id": "mode5",
+        "label": "Mode 5 (B97)",
+        "image": "/device-photos/virpil-mt50cm-modes.webp",
+        "width": 1014,
+        "height": 544,
+        "swap": "Mode"
       }
     ],
     "callouts": [
@@ -1374,15 +1414,111 @@
           "button39",
           "button40"
         ],
-        "view": "main",
-        "label": "B1-B8",
+        "view": "mode1",
+        "label": "B1-B8 (mode 1)",
         "anchor": {
-          "x": 0.4629803945503983,
-          "y": 0.48541666666666666
+          "x": 0.4467,
+          "y": 0.34
         },
         "box": {
           "x": 0.1,
-          "y": 0.28400000000000003
+          "y": 0.5
+        }
+      },
+      {
+        "id": "bank2",
+        "kind": "buttons",
+        "inputs": [
+          "button61",
+          "button62",
+          "button63",
+          "button64",
+          "button65",
+          "button66",
+          "button67",
+          "button68"
+        ],
+        "view": "mode2",
+        "label": "B1-B8 (mode 2)",
+        "anchor": {
+          "x": 0.4467,
+          "y": 0.34
+        },
+        "box": {
+          "x": 0.1,
+          "y": 0.5
+        }
+      },
+      {
+        "id": "bank3",
+        "kind": "buttons",
+        "inputs": [
+          "button69",
+          "button70",
+          "button71",
+          "button72",
+          "button73",
+          "button74",
+          "button75",
+          "button76"
+        ],
+        "view": "mode3",
+        "label": "B1-B8 (mode 3)",
+        "anchor": {
+          "x": 0.4467,
+          "y": 0.34
+        },
+        "box": {
+          "x": 0.1,
+          "y": 0.5
+        }
+      },
+      {
+        "id": "bank4",
+        "kind": "buttons",
+        "inputs": [
+          "button77",
+          "button78",
+          "button79",
+          "button80",
+          "button81",
+          "button82",
+          "button83",
+          "button84"
+        ],
+        "view": "mode4",
+        "label": "B1-B8 (mode 4)",
+        "anchor": {
+          "x": 0.4467,
+          "y": 0.34
+        },
+        "box": {
+          "x": 0.1,
+          "y": 0.5
+        }
+      },
+      {
+        "id": "bank5",
+        "kind": "buttons",
+        "inputs": [
+          "button85",
+          "button86",
+          "button87",
+          "button88",
+          "button89",
+          "button90",
+          "button91",
+          "button92"
+        ],
+        "view": "mode5",
+        "label": "B1-B8 (mode 5)",
+        "anchor": {
+          "x": 0.4467,
+          "y": 0.34
+        },
+        "box": {
+          "x": 0.1,
+          "y": 0.5
         }
       },
       {
@@ -1549,7 +1685,8 @@
     ],
     "photoSha256": {
       "/device-photos/virpil-mt50cm-panel.webp": "e665df6b56e8cf970fb1602afe67b4cf4b5e4168abf4dbdcd09eea1bbeb82485",
-      "/device-photos/virpil-mt50cm-front.webp": "5164f72bf0f748185f5ff9bc5c4e6c8cc8e338d588a1ec07468a1ced238b589f"
+      "/device-photos/virpil-mt50cm-front.webp": "5164f72bf0f748185f5ff9bc5c4e6c8cc8e338d588a1ec07468a1ced238b589f",
+      "/device-photos/virpil-mt50cm-modes.webp": "7e535251ee05c2ef498fea1e9b5b14040f3b37c0d553d8de859a4002c6bd6637"
     },
     "aspect": 1.7707070707070707
   },

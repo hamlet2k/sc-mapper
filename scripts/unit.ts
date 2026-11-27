@@ -2696,7 +2696,7 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
     assert.ok(!d.loadImage && d.views!.length === 2 && d.views!.every((v) => v.image!.startsWith('/device-photos/')), 'Orion uses its two exported photo views');
     assert.deepEqual(DEVICE_TEMPLATES.filter((x) => !x.views?.length).map((x) => x.id), [], 'every device template has a photo layout');
     assert.equal(DEVICE_TEMPLATES.filter((x) => x.views?.length).length, 61, 'all 61 device templates have photo views');
-    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 107, '91 existing + sixteen STECS variant photo views');
+    assert.equal(DEVICE_TEMPLATES.flatMap((x) => x.views ?? []).length, 112, '91 existing + sixteen STECS variant photo views + five MT-50CM mode banks');
     let calls = 0;
     const lazy = { ...d, id: 'test-lazy-picture', views: undefined, loadImage: async () => { calls++; return 'data:image/svg+xml,<svg/>'; } };
     const r = await tp.resolveTemplateImage(lazy);

@@ -161,7 +161,7 @@ function photoTplExact(
 }
 function photoTplExactViews(
   meta: Meta & { id: string },
-  views: { id: string; label: string; photo: string; width: number; height: number }[],
+  views: { id: string; label: string; photo: string; width: number; height: number; swap?: string }[],
   callouts: Callout[],
 ): void {
   for (const v of views) {
@@ -171,7 +171,7 @@ function photoTplExactViews(
   ALL.push({
     version: 1, builtin: true, slot: 'js', ...meta,
     aspect: width / height,
-    views: views.map((v) => ({ id: v.id, label: v.label, image: `/device-photos/${v.photo}.webp`, width: v.width, height: v.height })),
+    views: views.map((v) => ({ id: v.id, label: v.label, image: `/device-photos/${v.photo}.webp`, width: v.width, height: v.height, ...(v.swap ? { swap: v.swap } : {}) })),
     callouts,
   });
 }
@@ -654,11 +654,13 @@ photoTplExactViews({
 // Exact photos, view sizes and callouts from Federico’s export (2026-10-11).
 photoTplExactViews({
   id: 'builtin-virpil-mt50cm', category: 'throttle', name: 'VIRPIL MongoosT-50CM throttle', brand: 'VIRPIL',
-  notes: VPC_NOTE + ' Shown with the exported numbering and mode selector. Uses buttons above 32: Chrome / Edge only report the first 32, use Firefox.',
+  notes: VPC_NOTE + ' B1-B8 follow MODE 1-5: B33-40, 61-68, 69-76, 77-84, 85-92. Uses buttons above 32: Chrome / Edge only report the first 32, use Firefox.',
   match: [{ vendor: '3344', product: '0192' }, { name: 'MT-50CM', nameBoundary: true }, { name: 'MongoosT-50CM', nameBoundary: true }],
 }, [
   { id: "main", label: "Panel Side Grip", photo: "virpil-mt50cm-panel", width: 1753, height: 990 },
   { id: "p2", label: "Axis Front Grip", photo: "virpil-mt50cm-front", width: 1498, height: 846 },
+  // B1-B8 report a different bank per MODE selector position (B93-B97): one swappable close-up per position.
+  ...[1, 2, 3, 4, 5].map((m) => ({ id: `mode${m}`, label: `Mode ${m} (B${92 + m})`, photo: "virpil-mt50cm-modes", width: 1014, height: 544, swap: "Mode" })),
 ], [
   { id: "qlij6yto", kind: "hat", inputs: ["button17", "button14", "button15", "button16", "button13"], view: "main",
     anchor: {"x": 0.6756862386067708, "y": 0.20986111958821616}, box: {"x": 0.9009411980124081, "y": 0.06319444444444444} },
@@ -700,8 +702,11 @@ photoTplExactViews({
     anchor: {"x": 0.38705883549708947, "y": 0.5143055386013455}, box: {"x": 0.12541177188648897, "y": 0.7520833333333333} },
   { id: "yt7ylqz7", kind: "switch", inputs: ["button49", "button50"], view: "main", label: "T6",
     anchor: {"x": 0.41705883549708944, "y": 0.5443055386013456}, box: {"x": 0.23019609039905026, "y": 0.8165278116861979} },
-  { id: "d8bary6z", kind: "buttons", inputs: ["button33", "button34", "button35", "button36", "button37", "button38", "button39", "button40"], view: "main", label: "B1-B8",
-    anchor: {"x": 0.4629803945503983, "y": 0.48541666666666666}, box: {"x": 0.1, "y": 0.28400000000000003} },
+  // B1-B8 in MODE position 1 keep the exported id and numbers (B33-B40); positions 2-5 shift them to B61-68, B69-76, B77-84, B85-92.
+  ...[33, 61, 69, 77, 85].map((first, i) => ({
+    id: i === 0 ? "d8bary6z" : `bank${i + 1}`, kind: "buttons" as const, inputs: Array.from({ length: 8 }, (_, k) => `button${first + k}`),
+    view: `mode${i + 1}`, label: `B1-B8 (mode ${i + 1})`, anchor: { x: 0.4467, y: 0.34 }, box: { x: 0.1, y: 0.5 },
+  })),
   { id: "81twnl14", kind: "switch", inputs: ["button42", "button41"], view: "main", label: "T1",
     anchor: {"x": 0.5280784337660845, "y": 0.53125}, box: {"x": 0.9, "y": 0.605} },
   { id: "og69opzs", kind: "axis", inputs: ["x", "y", "button12"], view: "p2", label: "Ministick",

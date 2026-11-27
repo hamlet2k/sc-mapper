@@ -109,7 +109,7 @@ round-trips every file through it).
   "match": [{ "vendor": "044F", "product": "B10A" }, { "name": "T.16000M" }],
   "views": [                                           // photo templates: one or more pictures (pages)
     { "id": "main", "label": "Front", "image": "/device-photos/tm-t16000m-main.webp", "width": 1809, "height": 1270 }
-    // optional "swap": "Grip": views with the same swap key are alternatives (interchangeable grips); show one at a time, the first by default
+    // optional "swap": "Grip": views with the same swap key are alternatives (interchangeable grips, or the button banks of a mode selector: builtin-virpil-mt50cm "Mode"); show one at a time, the first by default
   ],
   "callouts": [
     { "id": "pov", "kind": "hat", "inputs": ["hat1_up", "hat1_right", "hat1_down", "hat1_left"], "label": "POV hat (8-way)",
