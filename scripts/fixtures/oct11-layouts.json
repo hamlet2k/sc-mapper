@@ -1003,40 +1003,40 @@
         "id": "mode1",
         "label": "Mode 1 (B93)",
         "image": "/device-photos/virpil-mt50cm-modes.webp",
-        "width": 1014,
-        "height": 544,
+        "width": 1753,
+        "height": 990,
         "swap": "Mode"
       },
       {
         "id": "mode2",
         "label": "Mode 2 (B94)",
         "image": "/device-photos/virpil-mt50cm-modes.webp",
-        "width": 1014,
-        "height": 544,
+        "width": 1753,
+        "height": 990,
         "swap": "Mode"
       },
       {
         "id": "mode3",
         "label": "Mode 3 (B95)",
         "image": "/device-photos/virpil-mt50cm-modes.webp",
-        "width": 1014,
-        "height": 544,
+        "width": 1753,
+        "height": 990,
         "swap": "Mode"
       },
       {
         "id": "mode4",
         "label": "Mode 4 (B96)",
         "image": "/device-photos/virpil-mt50cm-modes.webp",
-        "width": 1014,
-        "height": 544,
+        "width": 1753,
+        "height": 990,
         "swap": "Mode"
       },
       {
         "id": "mode5",
         "label": "Mode 5 (B97)",
         "image": "/device-photos/virpil-mt50cm-modes.webp",
-        "width": 1014,
-        "height": 544,
+        "width": 1753,
+        "height": 990,
         "swap": "Mode"
       }
     ],
@@ -1417,7 +1417,7 @@
         "view": "mode1",
         "label": "B1-B8 (mode 1)",
         "anchor": {
-          "x": 0.4467,
+          "x": 0.444,
           "y": 0.34
         },
         "box": {
@@ -1441,7 +1441,7 @@
         "view": "mode2",
         "label": "B1-B8 (mode 2)",
         "anchor": {
-          "x": 0.4467,
+          "x": 0.444,
           "y": 0.34
         },
         "box": {
@@ -1465,7 +1465,7 @@
         "view": "mode3",
         "label": "B1-B8 (mode 3)",
         "anchor": {
-          "x": 0.4467,
+          "x": 0.444,
           "y": 0.34
         },
         "box": {
@@ -1489,7 +1489,7 @@
         "view": "mode4",
         "label": "B1-B8 (mode 4)",
         "anchor": {
-          "x": 0.4467,
+          "x": 0.444,
           "y": 0.34
         },
         "box": {
@@ -1513,7 +1513,7 @@
         "view": "mode5",
         "label": "B1-B8 (mode 5)",
         "anchor": {
-          "x": 0.4467,
+          "x": 0.444,
           "y": 0.34
         },
         "box": {

@@ -660,7 +660,7 @@ photoTplExactViews({
   { id: "main", label: "Panel Side Grip", photo: "virpil-mt50cm-panel", width: 1753, height: 990 },
   { id: "p2", label: "Axis Front Grip", photo: "virpil-mt50cm-front", width: 1498, height: 846 },
   // B1-B8 report a different bank per MODE selector position (B93-B97): one swappable close-up per position.
-  ...[1, 2, 3, 4, 5].map((m) => ({ id: `mode${m}`, label: `Mode ${m} (B${92 + m})`, photo: "virpil-mt50cm-modes", width: 1014, height: 544, swap: "Mode" })),
+  ...[1, 2, 3, 4, 5].map((m) => ({ id: `mode${m}`, label: `Mode ${m} (B${92 + m})`, photo: "virpil-mt50cm-modes", width: 1753, height: 990, swap: "Mode" })),
 ], [
   { id: "qlij6yto", kind: "hat", inputs: ["button17", "button14", "button15", "button16", "button13"], view: "main",
     anchor: {"x": 0.6756862386067708, "y": 0.20986111958821616}, box: {"x": 0.9009411980124081, "y": 0.06319444444444444} },
@@ -705,7 +705,7 @@ photoTplExactViews({
   // B1-B8 in MODE position 1 keep the exported id and numbers (B33-B40); positions 2-5 shift them to B61-68, B69-76, B77-84, B85-92.
   ...[33, 61, 69, 77, 85].map((first, i) => ({
     id: i === 0 ? "d8bary6z" : `bank${i + 1}`, kind: "buttons" as const, inputs: Array.from({ length: 8 }, (_, k) => `button${first + k}`),
-    view: `mode${i + 1}`, label: `B1-B8 (mode ${i + 1})`, anchor: { x: 0.4467, y: 0.34 }, box: { x: 0.1, y: 0.5 },
+    view: `mode${i + 1}`, label: `B1-B8 (mode ${i + 1})`, anchor: { x: 0.444, y: 0.34 }, box: { x: 0.1, y: 0.5 },
   })),
   { id: "81twnl14", kind: "switch", inputs: ["button42", "button41"], view: "main", label: "T1",
     anchor: {"x": 0.5280784337660845, "y": 0.53125}, box: {"x": 0.9, "y": 0.605} },
