@@ -680,6 +680,8 @@ photoTplExactViews({
     anchor: {"x": 0.5837647082758884, "y": 0.5868055555555556}, box: {"x": 0.9037341642358173, "y": 0.7192356114037076} },
   { id: "gkvkfsko", kind: "button", inputs: ["button44"], view: "main", label: "T3",
     anchor: {"x": 0.5476862769033395, "y": 0.6201388888888889}, box: {"x": 0.9, "y": 0.819} },
+  { id: "p51yellow", kind: "button", inputs: ["button51"], view: "main", label: "B51",
+    anchor: {"x": 0.45092, "y": 0.59381}, box: {"x": 0.15, "y": 0.50} },
   { id: "7n6pzk47", kind: "switch", inputs: ["button93", "button94", "button95", "button96", "button97"], view: "main", label: "MODE",
     anchor: {"x": 0.4904313749425551, "y": 0.6368055555555555}, box: {"x": 0.7635293758616728, "y": 0.8754166497124566} },
   { id: "f2485x4t", kind: "encoder", inputs: ["button60", "button59", "button58"], view: "main", label: "E3",

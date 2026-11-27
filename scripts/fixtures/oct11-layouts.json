@@ -1179,6 +1179,23 @@
         }
       },
       {
+        "id": "p51yellow",
+        "kind": "button",
+        "inputs": [
+          "button51"
+        ],
+        "view": "main",
+        "label": "B51",
+        "anchor": {
+          "x": 0.45092,
+          "y": 0.59381
+        },
+        "box": {
+          "x": 0.15,
+          "y": 0.5
+        }
+      },
+      {
         "id": "7n6pzk47",
         "kind": "switch",
         "inputs": [
