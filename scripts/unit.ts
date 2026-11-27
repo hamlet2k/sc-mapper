@@ -1267,8 +1267,8 @@ console.log('controllers: duplicates, >128 buttons, Chromium');
         assert.deepEqual(d.callouts.find((c) => c.id === 'inten')!.inputs, ['button33', 'button34']);
         assert.deepEqual(d.callouts.find((c) => c.id === 'depr')!.inputs, ['', 'button35']);
         assert.match(d.notes!, /Customize a copy/);
-      } else if (d.id === 'builtin-vkb-gunfighter-mcg' || d.id === 'builtin-virpil-mt50cm') {
-        assert.equal(open, d.id === 'builtin-vkb-gunfighter-mcg' ? 1 : 2, `${d.id}: exported unassigned inputs preserved`);
+      } else if (d.id === 'builtin-vkb-gunfighter-mcg') {
+        assert.equal(open, 1, `${d.id}: exported unassigned inputs preserved`);
       } else if (['builtin-vkb-stecs-mini', 'builtin-vkb-stecs-mini-plus'].includes(d.id)) {
         assert.equal(open, 6, `${d.id}: four MB1 and two RADIO directions await a press test`);
       } else if (d.id === 'builtin-vkb-stecs') {

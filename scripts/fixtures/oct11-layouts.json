@@ -1146,10 +1146,9 @@
       },
       {
         "id": "sr5q7m2i",
-        "kind": "switch",
+        "kind": "button",
         "inputs": [
-          "button43",
-          ""
+          "button43"
         ],
         "view": "main",
         "label": "T2",
@@ -1164,10 +1163,9 @@
       },
       {
         "id": "gkvkfsko",
-        "kind": "switch",
+        "kind": "button",
         "inputs": [
-          "button44",
-          ""
+          "button44"
         ],
         "view": "main",
         "label": "T3",
